@@ -12,7 +12,8 @@
     "docs",
     "packages",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "SECURITY.md"
   ],
   "scripts": {
     "start": "node bin/granttap-mcp.mjs",

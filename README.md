@@ -20,6 +20,8 @@ GrantTap MCP complements the agents' native permission hooks:
 
 The iPhone and Apple Watch app is preparing for App Store release. Current
 status and target date are published at [granttap.com](https://granttap.com).
+Support, privacy, terms, and license information are linked below and from the
+app's About screen.
 
 ## Install
 
@@ -107,5 +109,6 @@ as `*.bak-granttap`.
 - Relay: [sergii-ziborov/granttap-relay](https://github.com/sergii-ziborov/granttap-relay)
 - Privacy: [granttap.com/privacy](https://granttap.com/privacy)
 - Support: [granttap.com/support](https://granttap.com/support)
+- Security policy: [SECURITY.md](SECURITY.md)
 
 GrantTap is not affiliated with Anthropic or OpenAI.
