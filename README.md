@@ -1,0 +1,88 @@
+# GrantTap MCP
+
+[![npm](https://img.shields.io/npm/v/granttap-mcp)](https://www.npmjs.com/package/granttap-mcp)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+The public, auditable machine-side bridge for [GrantTap](https://granttap.com):
+ask a person, send a status update, or request an approval on their iPhone or
+Apple Watch without sending agent traffic through a model proxy.
+
+GrantTap MCP complements the agents' native permission hooks:
+
+- MCP is the voluntary channel: the agent calls `ask`, `ask_yes_no`, or `notify`.
+- Hooks are the mandatory approval channel: Claude Code or Codex pauses before
+  a tool call and waits for Allow or Deny.
+- Both channels use the same end-to-end encrypted GrantTap pairing.
+
+## Install
+
+The shortest MCP-only setup is:
+
+```bash
+codex mcp add granttap -- npx -y granttap-mcp
+claude mcp add granttap -- npx -y granttap-mcp
+```
+
+For approval hooks, install the command globally so the hook path remains
+stable, then register both supported agents:
+
+```bash
+npm install -g granttap-mcp
+granttap-mcp setup
+```
+
+The GrantTap app and desktop bridge must already be paired. The pairing lives
+locally in `~/.granttap/machine.json`; this package reads it but never uploads
+the secret key. Existing beta installations using `~/.nodvox/` are migrated
+automatically.
+
+## MCP tools
+
+| Tool | Result |
+| --- | --- |
+| `ask` | Sends an open question and waits for a spoken or typed reply |
+| `ask_yes_no` | Sends a yes/no question and waits for a tap |
+| `notify` | Sends a non-blocking status message |
+| `setup` | Registers the Claude Code and Codex approval hooks |
+
+The default answer timeout is three minutes. Override it with
+`GRANTTAP_ASK_TIMEOUT_MS`.
+
+## Security model
+
+Message payloads are authenticated and encrypted locally with NaCl
+public-key boxes. The relay receives only routing metadata and opaque
+ciphertext. It has no device secret key and cannot decrypt questions,
+commands, replies, or approvals.
+
+This repository intentionally includes the protocol, crypto client, relay
+client, MCP server, and agent hook adapters so that the complete public
+machine-side trust boundary can be reviewed.
+
+The relay still observes metadata such as room identifiers, IP addresses,
+timing, and message sizes. Review or self-host the public
+[GrantTap relay](https://github.com/sergii-ziborov/granttap-relay) if that
+metadata matters to your deployment.
+
+## Development
+
+Requires Node.js 20 or newer.
+
+```bash
+git clone https://github.com/sergii-ziborov/granttap-mcp.git
+cd granttap-mcp
+npm install
+npm test
+npm run typecheck
+```
+
+Start the stdio server with `npm start`. Run `npm run setup` only on a machine
+where you want the hooks installed; existing config files are backed up once
+as `*.bak-granttap`.
+
+## Related
+
+- Product: [granttap.com](https://granttap.com)
+- Relay: [sergii-ziborov/granttap-relay](https://github.com/sergii-ziborov/granttap-relay)
+
+GrantTap is not affiliated with Anthropic or OpenAI.

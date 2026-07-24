@@ -1,0 +1,62 @@
+{
+  "name": "granttap-mcp",
+  "version": "0.1.0",
+  "description": "E2EE MCP bridge and approval hooks for GrantTap on iPhone and Apple Watch.",
+  "type": "module",
+  "bin": {
+    "granttap-mcp": "./bin/granttap-mcp.mjs"
+  },
+  "files": [
+    "apps",
+    "bin",
+    "packages",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "start": "node bin/granttap-mcp.mjs",
+    "setup": "node bin/granttap-mcp.mjs setup",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm test && npm run typecheck"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "tsx": "^4.19.2",
+    "tweetnacl": "^1.0.3",
+    "ws": "^8.18.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/ws": "^8.5.13",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sergii-ziborov/granttap-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sergii-ziborov/granttap-mcp/issues"
+  },
+  "homepage": "https://granttap.com",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude-code",
+    "codex",
+    "apple-watch",
+    "e2ee",
+    "approvals"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "overrides": {
+    "@hono/node-server": "2.0.11"
+  }
+}
