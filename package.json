@@ -1,6 +1,6 @@
 {
   "name": "granttap-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "E2EE MCP bridge and approval hooks for GrantTap on iPhone and Apple Watch.",
   "type": "module",
   "bin": {
@@ -9,6 +9,7 @@
   "files": [
     "apps",
     "bin",
+    "docs",
     "packages",
     "LICENSE",
     "README.md"
@@ -22,6 +23,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "qrcode": "^1.5.4",
     "tsx": "^4.19.2",
     "tweetnacl": "^1.0.3",
     "ws": "^8.18.0",
@@ -29,6 +31,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "@types/qrcode": "^1.5.6",
     "@types/ws": "^8.5.13",
     "typescript": "^5.7.2"
   },

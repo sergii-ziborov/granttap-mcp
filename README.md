@@ -14,6 +14,13 @@ GrantTap MCP complements the agents' native permission hooks:
   a tool call and waits for Allow or Deny.
 - Both channels use the same end-to-end encrypted GrantTap pairing.
 
+| Visible iPhone activity | Approval on Apple Watch |
+| --- | --- |
+| ![GrantTap activity on iPhone](docs/images/phone-activity.png) | ![GrantTap approval on Apple Watch](docs/images/watch-approval.png) |
+
+The iPhone and Apple Watch app is preparing for App Store release. Current
+status and target date are published at [granttap.com](https://granttap.com).
+
 ## Install
 
 The shortest MCP-only setup is:
@@ -23,18 +30,23 @@ codex mcp add granttap -- npx -y granttap-mcp
 claude mcp add granttap -- npx -y granttap-mcp
 ```
 
-For approval hooks, install the command globally so the hook path remains
-stable, then register both supported agents:
+Pair this computer with the GrantTap app, then register the approval hooks:
 
 ```bash
 npm install -g granttap-mcp
+granttap-mcp connect
 granttap-mcp setup
 ```
 
-The GrantTap app and desktop bridge must already be paired. The pairing lives
-locally in `~/.granttap/machine.json`; this package reads it but never uploads
-the secret key. Existing beta installations using `~/.nodvox/` are migrated
-automatically.
+`connect` prints a QR and an optional one-time eight-character code. It uses
+the production zero-knowledge relay by default; pass your own `wss://` URL as
+the first argument to self-host. The pairing lives locally in
+`~/.granttap/machine.json`; this package never uploads the device secret key.
+Existing beta installations using `~/.nodvox/` are migrated automatically.
+
+`connect` also registers both hooks. `setup` is an idempotent standalone
+command for upgrades: it preserves unrelated settings and writes a backup
+before changing a configuration file.
 
 ## MCP tools
 
@@ -43,6 +55,14 @@ automatically.
 | `ask` | Sends an open question and waits for a spoken or typed reply |
 | `ask_yes_no` | Sends a yes/no question and waits for a tap |
 | `notify` | Sends a non-blocking status message |
+| `setup` | Registers the Claude Code and Codex approval hooks |
+
+## CLI commands
+
+| Command | Purpose |
+| --- | --- |
+| *(no command)* | Starts the GrantTap MCP stdio server |
+| `connect [relayUrl]` | Creates an E2EE pairing and prints a QR/short code |
 | `setup` | Registers the Claude Code and Codex approval hooks |
 
 The default answer timeout is three minutes. Override it with
@@ -83,6 +103,9 @@ as `*.bak-granttap`.
 ## Related
 
 - Product: [granttap.com](https://granttap.com)
+- npm: [granttap-mcp](https://www.npmjs.com/package/granttap-mcp)
 - Relay: [sergii-ziborov/granttap-relay](https://github.com/sergii-ziborov/granttap-relay)
+- Privacy: [granttap.com/privacy](https://granttap.com/privacy)
+- Support: [granttap.com/support](https://granttap.com/support)
 
 GrantTap is not affiliated with Anthropic or OpenAI.
