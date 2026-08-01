@@ -17,6 +17,8 @@ const WORKING_MS = 90_000;
 const STALE_MS = 12 * 60 * 60 * 1000;
 export const TOKEN_WINDOW_HOURS = STALE_MS / (60 * 60 * 1000);
 const MAX_FILES = 40;
+const HISTORY_MS = 90 * 24 * 60 * 60 * 1000;
+const MAX_HISTORY_FILES = 160;
 
 type Scan = { sessions: SessionInfo[]; tokensRecent: number };
 
@@ -44,7 +46,7 @@ function timestamp(value: unknown): number {
   return 0;
 }
 
-function recentLogs(root: string, depth = 4): string[] {
+function recentLogs(root: string, depth = 4, maxAge = STALE_MS, maxFiles = MAX_FILES): string[] {
   const out: { path: string; mtime: number }[] = [];
   const walk = (dir: string, level: number): void => {
     if (level > depth) return;
@@ -63,13 +65,13 @@ function recentLogs(root: string, depth = 4): string[] {
         continue;
       }
       if (stat.isDirectory()) walk(full, level + 1);
-      else if (name.endsWith(".jsonl") && Date.now() - stat.mtimeMs <= STALE_MS) {
+      else if (name.endsWith(".jsonl") && Date.now() - stat.mtimeMs <= maxAge) {
         out.push({ path: full, mtime: stat.mtimeMs });
       }
     }
   };
   walk(root, 0);
-  return out.sort((a, b) => b.mtime - a.mtime).slice(0, MAX_FILES).map((file) => file.path);
+  return out.sort((a, b) => b.mtime - a.mtime).slice(0, maxFiles).map((file) => file.path);
 }
 
 function claudeProjectsRoot(): string {
@@ -121,11 +123,11 @@ function effectiveCodexUsage(usage: any): number | undefined {
   return Math.max(0, total - cached);
 }
 
-function scanClaude(): Scan {
+function scanClaude(maxAge = STALE_MS, maxFiles = MAX_FILES): Scan {
   const sessions: SessionInfo[] = [];
   let tokensRecent = 0;
 
-  for (const file of recentLogs(claudeProjectsRoot(), 2)) {
+  for (const file of recentLogs(claudeProjectsRoot(), 2, maxAge, maxFiles)) {
     let lines: string[];
     try {
       lines = readFileSync(file, "utf8").split("\n");
@@ -197,11 +199,11 @@ function scanClaude(): Scan {
   return { sessions, tokensRecent };
 }
 
-function scanCodex(): Scan {
+function scanCodex(maxAge = STALE_MS, maxFiles = MAX_FILES): Scan {
   const sessions: SessionInfo[] = [];
   let tokensRecent = 0;
 
-  for (const file of recentLogs(codexSessionsRoot(), 5)) {
+  for (const file of recentLogs(codexSessionsRoot(), 5, maxAge, maxFiles)) {
     let lines: string[];
     try {
       lines = readFileSync(file, "utf8").split("\n");
@@ -312,6 +314,20 @@ export function scanSessions(): { sessions: SessionInfo[]; tokensRecent: number 
   return { sessions, tokensRecent: claude.tokensRecent + codex.tokensRecent };
 }
 
+/** Bounded local history. Token totals are per chat; this does not affect the recent-usage counter. */
+export function scanSessionHistory(): SessionInfo[] {
+  const claude = scanClaude(HISTORY_MS, MAX_HISTORY_FILES);
+  const codex = scanCodex(HISTORY_MS, MAX_HISTORY_FILES);
+  const byId = new Map<string, SessionInfo>();
+  for (const session of [...claude.sessions, ...codex.sessions]) {
+    const previous = byId.get(session.sessionId);
+    if (!previous || session.lastActivityAt > previous.lastActivityAt) byId.set(session.sessionId, session);
+  }
+  return [...byId.values()]
+    .sort((a, b) => b.lastActivityAt - a.lastActivityAt)
+    .slice(0, MAX_HISTORY_FILES);
+}
+
 const MAX_ACTIVITY_ENTRIES = 120;
 const MAX_ACTIVITY_TEXT = 4_000;
 
@@ -335,6 +351,21 @@ function toolSummary(name: unknown, input: unknown): string {
   return detail == null ? tool : `${tool}: ${compact(detail, 420)}`;
 }
 
+type ToolMetadata = Pick<ActivityEntry, "toolName" | "mcpServer" | "skill">;
+
+function toolMetadata(name: unknown, input: unknown): ToolMetadata {
+  const toolName = compact(name || "tool", 180);
+  const parts = toolName.split("__");
+  const mcpServer = parts[0] === "mcp" && parts.length >= 3 ? compact(parts[1], 180) : undefined;
+  let skill: string | undefined;
+  if (toolName.toLowerCase() === "skill" && input && typeof input === "object") {
+    const fields = input as Record<string, unknown>;
+    const candidate = fields.skill ?? fields.name;
+    if (typeof candidate === "string" && candidate.trim()) skill = compact(candidate, 180);
+  }
+  return { toolName, mcpServer, skill };
+}
+
 function pushEntry(
   out: ActivityEntry[],
   seen: Set<string>,
@@ -343,6 +374,7 @@ function pushEntry(
   text: unknown,
   createdAt: number,
   ordinal: number,
+  metadata: ToolMetadata = {},
 ): void {
   const visible = kind === "user" ? visibleUserText(text) : text;
   const clean = activityText(visible);
@@ -350,7 +382,7 @@ function pushEntry(
   const duplicate = `${kind}:${clean}`;
   if (seen.has(duplicate)) return;
   seen.add(duplicate);
-  out.push({ id: `${sessionId}:${createdAt}:${ordinal}`, kind, text: clean, createdAt });
+  out.push({ id: `${sessionId}:${createdAt}:${ordinal}`, kind, text: clean, createdAt, ...metadata });
 }
 
 /** Remove host-injected context that is not a message the person typed. */
@@ -375,7 +407,8 @@ function visibleUserText(value: unknown): string {
 }
 
 function claudeActivity(session: SessionInfo): ActivityEntry[] {
-  const file = recentLogs(claudeProjectsRoot(), 2).find((path) => path.endsWith(`/${session.sessionId}.jsonl`));
+  const file = recentLogs(claudeProjectsRoot(), 2, HISTORY_MS, MAX_HISTORY_FILES)
+    .find((path) => path.endsWith(`/${session.sessionId}.jsonl`));
   if (!file) return [];
   let lines: string[];
   try {
@@ -417,6 +450,7 @@ function claudeActivity(session: SessionInfo): ActivityEntry[] {
           toolSummary(block.name, block.input),
           createdAt,
           index * 100 + blockIndex,
+          toolMetadata(block.name, block.input),
         );
       }
     });
@@ -426,7 +460,7 @@ function claudeActivity(session: SessionInfo): ActivityEntry[] {
 
 function codexActivity(session: SessionInfo): ActivityEntry[] {
   let lines: string[] | undefined;
-  for (const file of recentLogs(codexSessionsRoot(), 5)) {
+  for (const file of recentLogs(codexSessionsRoot(), 5, HISTORY_MS, MAX_HISTORY_FILES)) {
     try {
       const candidate = readFileSync(file, "utf8").split("\n");
       if (
@@ -483,7 +517,9 @@ function codexActivity(session: SessionInfo): ActivityEntry[] {
           // Retain the compact raw form.
         }
       }
-      pushEntry(out, seen, session.sessionId, "tool", toolSummary(payload.name ?? payload.type, args), createdAt, index);
+      const name = payload.name ?? payload.type;
+      pushEntry(out, seen, session.sessionId, "tool", toolSummary(name, args), createdAt, index,
+        toolMetadata(name, args));
     }
   });
   return out;

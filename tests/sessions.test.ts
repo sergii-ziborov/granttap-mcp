@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import {
   scanSessionActivity,
+  scanSessionHistory,
   scanSessions,
   TOKEN_WINDOW_HOURS,
 } from "../apps/bridge/src/sessions";
@@ -30,7 +31,7 @@ test("session activity exposes visible text/tools but never thinking blocks", as
         content: [
           { type: "thinking", thinking: "hidden chain of thought" },
           { type: "text", text: "Checking the working tree." },
-          { type: "tool_use", name: "Bash", input: { command: "git status --short" } },
+          { type: "tool_use", name: "mcp__github__status", input: { command: "git status --short" } },
           { type: "text", text: "Done. There are no changes." },
         ],
       },
@@ -60,11 +61,47 @@ test("session activity exposes visible text/tools but never thinking blocks", as
   assert.equal(activity.entries.length, 4);
   assert.equal(activity.entries.some((entry) => entry.kind === "user" && entry.text === "work"), true);
   assert.equal(activity.entries.some((entry) => entry.kind === "tool" && /git status/.test(entry.text)), true);
+  assert.equal(activity.entries.find((entry) => entry.kind === "tool")?.mcpServer, "github");
+  assert.equal(activity.entries.find((entry) => entry.kind === "tool")?.toolName, "mcp__github__status");
   assert.doesNotMatch(JSON.stringify(activity), /hidden chain of thought/);
 
   const completed = scanSessionActivity({ ...scan.sessions[0]!, state: "idle" });
   assert.deepEqual(completed.entries.map((entry) => entry.kind), ["user", "message", "tool", "final"]);
   assert.match(completed.entries.at(-1)?.text ?? "", /Done/);
+});
+
+test("older local chats are excluded from live usage but included in bounded history", async (t) => {
+  const claudeRoot = await mkdtemp(join(tmpdir(), "granttap-claude-history-"));
+  const codexRoot = await mkdtemp(join(tmpdir(), "granttap-codex-history-"));
+  const project = join(claudeRoot, "project");
+  await mkdir(project);
+  const oldDate = new Date(Date.now() - 2 * 24 * 60 * 60_000);
+  const sessionId = "older-chat";
+  const file = join(project, `${sessionId}.jsonl`);
+  await writeFile(file, [
+    { sessionId, cwd: "/repo", timestamp: oldDate.toISOString(), type: "user",
+      message: { role: "user", content: "Old task" } },
+    { sessionId, cwd: "/repo", timestamp: oldDate.toISOString(), type: "assistant",
+      message: { role: "assistant", usage: { input_tokens: 4, output_tokens: 2 }, content: "Finished." } },
+  ].map((row) => JSON.stringify(row)).join("\n"));
+  await utimes(file, oldDate, oldDate);
+
+  const previousClaude = process.env.GRANTTAP_CLAUDE_PROJECTS_DIR;
+  const previousCodex = process.env.GRANTTAP_CODEX_SESSIONS_DIR;
+  process.env.GRANTTAP_CLAUDE_PROJECTS_DIR = claudeRoot;
+  process.env.GRANTTAP_CODEX_SESSIONS_DIR = codexRoot;
+  t.after(() => {
+    if (previousClaude == null) delete process.env.GRANTTAP_CLAUDE_PROJECTS_DIR;
+    else process.env.GRANTTAP_CLAUDE_PROJECTS_DIR = previousClaude;
+    if (previousCodex == null) delete process.env.GRANTTAP_CODEX_SESSIONS_DIR;
+    else process.env.GRANTTAP_CODEX_SESSIONS_DIR = previousCodex;
+  });
+
+  assert.equal(scanSessions().sessions.length, 0);
+  const history = scanSessionHistory();
+  assert.equal(history.length, 1);
+  assert.equal(history[0]?.sessionId, sessionId);
+  assert.equal(history[0]?.tokensSession, 6);
 });
 
 test("Codex tasks and visible activity are discovered from local rollouts", async (t) => {

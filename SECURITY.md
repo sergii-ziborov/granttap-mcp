@@ -67,5 +67,11 @@ The delivery ledger and scheduler history are stored only on the paired Mac.
 They contain random message ids and local task metadata and are bounded and
 expired; do not attach real copies to bug reports.
 
+Chat history and capability metadata follow the same cryptographic boundary.
+The bridge reads a bounded set of local Codex/Claude logs, emits only chat
+metadata and visible activity, and places it inside the existing device or
+independent per-task NaCl box. Structured MCP/skill fields describe observed
+tool calls; hidden reasoning is never turned into activity or usage records.
+
 Relay vulnerabilities should be reported through the
 [GrantTap relay advisory form](https://github.com/sergii-ziborov/granttap-relay/security/advisories/new).

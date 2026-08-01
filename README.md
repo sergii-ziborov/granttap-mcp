@@ -63,12 +63,21 @@ app-server context compaction for an idle task. Claude Code currently has no
 supported remote compaction command, so the bridge reports that limitation
 instead of sending a prompt that only pretends to compact.
 
+The helper publishes older local chat metadata in a separate bounded history
+window (up to 90 days and 160 chats). Per-chat token/context totals remain
+available without being added to the 12-hour live usage counter. Historical
+activity is sent only after the phone explicitly subscribes to that task.
+
 Configured MCP servers are published to the phone and can be allowed or denied
 per task. The choice is enforced on later turns delivered by GrantTap and never
 re-enables a globally disabled server. Repository-scoped skills found under
 `.agents/skills` or `.claude/skills` can be selected explicitly for the next
 turn. For Codex tasks, the phone can also choose read-only, workspace, or full
 filesystem access for that turn.
+
+Visible tool entries include structured MCP/skill metadata when the source log
+actually reports it. This lets the iPhone maintain an exact local usage ledger
+without inferring capability use from ordinary message text.
 
 GrantTap's phone-managed local scheduler can create, edit, enable, delete, and
 run recurring Codex or Claude Code tasks using standard five-field cron in the

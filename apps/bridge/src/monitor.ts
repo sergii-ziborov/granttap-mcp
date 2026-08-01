@@ -23,7 +23,7 @@ import { createClaudeSession, createCodexSession, deliverToSession } from "./rep
 import { hasAcceptedDelivery, rememberAcceptedDelivery } from "./delivery";
 import { inspectAgentIntegrations } from "./install";
 import { primeSessionKeys, sendSessionPayload } from "./session-keys";
-import { scanSessionActivity, scanSessions, TOKEN_WINDOW_HOURS } from "./sessions";
+import { scanSessionActivity, scanSessionHistory, scanSessions, TOKEN_WINDOW_HOURS } from "./sessions";
 import {
   deleteSchedule,
   planSchedule,
@@ -52,22 +52,37 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
   const subscriptions = new Set<string>();
   const leadership = monitorLeadership();
   primeSessionKeys(client);
+  let historyCache: { generatedAt: number; sessions: SessionsStatus["sessions"] } | undefined;
+  let lastHistoryPublishedAt = 0;
 
-  const snapshot = (): SessionsStatus => {
+  const decorate = (sessions: SessionsStatus["sessions"]): SessionsStatus["sessions"] => {
+    const runtime = loadRuntimeConfig();
+    return sessions.map((session) => ({
+      ...session,
+      accessLevel: runtime.sessionAccess[session.sessionId] ?? session.accessLevel,
+      mcpServers: mcpServersForSession(
+        session,
+        runtime.sessionMcpDisabled[session.sessionId] ?? [],
+      ),
+      skills: workspaceSkills(session.cwd),
+    }));
+  };
+
+  const history = (): SessionsStatus["sessions"] => {
+    if (!historyCache || Date.now() - historyCache.generatedAt > 60_000) {
+      historyCache = { generatedAt: Date.now(), sessions: decorate(scanSessionHistory()) };
+    }
+    return historyCache.sessions;
+  };
+
+  const snapshot = (includeHistory: boolean): SessionsStatus => {
     const { sessions, tokensRecent } = scanSessions();
     const runtime = loadRuntimeConfig();
     return {
       type: "sessions.status",
       machine: hostname(),
-      sessions: sessions.map((session) => ({
-        ...session,
-        accessLevel: runtime.sessionAccess[session.sessionId] ?? session.accessLevel,
-        mcpServers: mcpServersForSession(
-          session,
-          runtime.sessionMcpDisabled[session.sessionId] ?? [],
-        ),
-        skills: workspaceSkills(session.cwd),
-      })),
+      sessions: decorate(sessions),
+      history: includeHistory ? history() : undefined,
       tokensRecent,
       tokenWindowHours: TOKEN_WINDOW_HOURS,
       tokensAllTime: tokensRecent,
@@ -82,8 +97,10 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
     if (!leadership.acquire()) return;
     tickSchedules();
     if (!client.isConnected) return;
-    const status = snapshot();
+    const includeHistory = Date.now() - lastHistoryPublishedAt >= 30_000;
+    const status = snapshot(includeHistory);
     await client.send(status, "phone", { ttlMs: INTERVAL_MS * 3 });
+    if (includeHistory) lastHistoryPublishedAt = Date.now();
     await client.send(
       {
         type: "schedules.status",
@@ -95,7 +112,8 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       { ttlMs: INTERVAL_MS * 3 },
     );
     for (const sessionId of subscriptions) {
-      const session = status.sessions.find((item) => item.sessionId === sessionId);
+      const session = [...status.sessions, ...(status.history ?? history())]
+        .find((item) => item.sessionId === sessionId);
       if (session) {
         await sendSessionPayload(client, scanSessionActivity(session), sessionId, "phone",
           { ttlMs: INTERVAL_MS * 3 });

@@ -122,6 +122,10 @@ export const ActivityEntry = z.object({
   kind: z.enum(["user", "message", "tool", "final", "status"]),
   text: z.string(),
   createdAt: z.number(),
+  /** Structured capability metadata, present only for an observed tool invocation. */
+  toolName: z.string().optional(),
+  mcpServer: z.string().optional(),
+  skill: z.string().optional(),
 });
 export type ActivityEntry = z.infer<typeof ActivityEntry>;
 
@@ -226,6 +230,8 @@ export const SessionsStatus = z.object({
   type: z.literal("sessions.status"),
   machine: z.string(),
   sessions: z.array(SessionInfo),
+  /** Older local chats, bounded by the helper's history window. */
+  history: z.array(SessionInfo).max(200).optional(),
   /** Tokens in the same recent-log window used to discover visible sessions. */
   tokensRecent: z.number().optional(),
   tokenWindowHours: z.number().optional(),
