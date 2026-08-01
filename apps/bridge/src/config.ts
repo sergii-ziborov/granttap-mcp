@@ -12,6 +12,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { hostname } from "node:os";
 import { generateKeyPair, randomId } from "../../../packages/core/crypto";
 import type { PeerConfig } from "../../../packages/core/relay-client";
+import type { AgentAccess } from "../../../packages/protocol/schema";
 
 export function configDir(): string {
   const overridden = process.env.GRANTTAP_CONFIG_DIR ?? process.env.NODVOX_CONFIG_DIR;
@@ -45,9 +46,17 @@ export function machineConfigPath(): string {
 export type RuntimeConfig = {
   enabled: boolean;
   excludedSessions: string[];
+  sessionAccess: Record<string, AgentAccess>;
+  /** MCP servers denied only for turns delivered by GrantTap into a task. */
+  sessionMcpDisabled: Record<string, string[]>;
 };
 
-const DEFAULT_RUNTIME: RuntimeConfig = { enabled: true, excludedSessions: [] };
+const DEFAULT_RUNTIME: RuntimeConfig = {
+  enabled: true,
+  excludedSessions: [],
+  sessionAccess: {},
+  sessionMcpDisabled: {},
+};
 
 export function runtimeConfigPath(): string {
   return join(configDir(), "config.json");
@@ -56,9 +65,21 @@ export function runtimeConfigPath(): string {
 export function loadRuntimeConfig(): RuntimeConfig {
   try {
     const raw = JSON.parse(readFileSync(runtimeConfigPath(), "utf8"));
+    const sessionAccess = Object.fromEntries(
+      Object.entries(raw.sessionAccess ?? {}).filter((entry): entry is [string, AgentAccess] =>
+        ["read-only", "workspace", "full"].includes(String(entry[1])),
+      ),
+    );
+    const sessionMcpDisabled = Object.fromEntries(
+      Object.entries(raw.sessionMcpDisabled ?? {})
+        .filter(([, value]) => Array.isArray(value))
+        .map(([sessionId, value]) => [sessionId, [...new Set((value as unknown[]).map(String).filter(Boolean))]]),
+    );
     return {
       enabled: raw.enabled !== false,
       excludedSessions: Array.isArray(raw.excludedSessions) ? raw.excludedSessions.map(String) : [],
+      sessionAccess,
+      sessionMcpDisabled,
     };
   } catch {
     return { ...DEFAULT_RUNTIME };

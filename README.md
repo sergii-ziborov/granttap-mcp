@@ -25,14 +25,52 @@ app's About screen.
 
 ## Install
 
-The shortest MCP-only setup is:
+Register the MCP server once:
 
 ```bash
 codex mcp add granttap -- npx -y granttap-mcp
 claude mcp add granttap -- npx -y granttap-mcp
 ```
 
-Pair this computer with the GrantTap app, then register the approval hooks:
+Then start a fresh chat and say **“Connect GrantTap.”** The `connect` tool
+creates the E2EE pairing, registers the approval hooks, and returns a scannable
+one-time QR directly in the chat. No terminal QR or copied pairing JSON is
+needed. The QR carries only a single-use 15-minute retrieval code; persistent
+device keys stay out of the chat transcript.
+
+The same MCP process also publishes recent Codex and Claude Code tasks to the
+phone. Sending from the home screen can create a new task in either agent;
+opening a task and replying continues that exact task. Photos, camera images,
+and documents are encrypted with the message and delivered as local agent
+inputs, with up to five attachments selected together. No separate monitor
+command is required. Task cards expose the latest human-readable agent update,
+while the five newest visible events and full formatted activity stay inside
+the selected task.
+
+Task detail distinguishes usage tokens from the agent's active context, reports
+the model context window when the agent exposes it, and can invoke Codex's real
+app-server context compaction for an idle task. Claude Code currently has no
+supported remote compaction command, so the bridge reports that limitation
+instead of sending a prompt that only pretends to compact.
+
+Configured MCP servers are published to the phone and can be allowed or denied
+per task. The choice is enforced on later turns delivered by GrantTap and never
+re-enables a globally disabled server. Repository-scoped skills found under
+`.agents/skills` or `.claude/skills` can be selected explicitly for the next
+turn. For Codex tasks, the phone can also choose read-only, workspace, or full
+filesystem access for that turn.
+
+GrantTap's phone-managed local scheduler can create, edit, enable, delete, and
+run recurring Codex or Claude Code tasks using standard five-field cron in the
+Mac's timezone. Codex runs the user's configured OpenAI model. These schedules
+are intentionally separate from private/native ChatGPT Scheduled Tasks, Codex
+Automations, and Claude Routines rather than pretending to mutate an
+unpublished provider API. On macOS, pairing installs a per-user `launchd`
+helper so task sync and local schedules remain available without an open
+terminal and without reopening agent chats that predate the MCP installation.
+
+The CLI remains available as a fallback for clients that cannot display MCP
+image content:
 
 ```bash
 npm install -g granttap-mcp
@@ -40,7 +78,7 @@ granttap-mcp connect
 granttap-mcp setup
 ```
 
-`connect` prints a QR and an optional one-time eight-character code. It uses
+CLI `connect` prints a one-time QR and eight-character code. It uses
 the production zero-knowledge relay by default; pass your own `wss://` URL as
 the first argument to self-host. The pairing lives locally in
 `~/.granttap/machine.json`; this package never uploads the device secret key.
@@ -54,17 +92,18 @@ before changing a configuration file.
 
 | Tool | Result |
 | --- | --- |
+| `connect` | Creates a pairing and returns a secure one-time QR directly in chat |
 | `ask` | Sends an open question and waits for a spoken or typed reply |
 | `ask_yes_no` | Sends a yes/no question and waits for a tap |
 | `notify` | Sends a non-blocking status message |
-| `setup` | Registers the Claude Code and Codex approval hooks |
+| `setup` | Registers agent approval hooks and terminal-free background task sync |
 
 ## CLI commands
 
 | Command | Purpose |
 | --- | --- |
 | *(no command)* | Starts the GrantTap MCP stdio server |
-| `connect [relayUrl]` | Creates an E2EE pairing and prints a QR/short code |
+| `connect [relayUrl]` | Fallback: creates an E2EE pairing and prints a one-time QR/short code |
 | `setup` | Registers the Claude Code and Codex approval hooks |
 
 The default answer timeout is three minutes. Override it with

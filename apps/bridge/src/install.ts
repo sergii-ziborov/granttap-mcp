@@ -13,6 +13,8 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
+import { configDir } from "./config";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
@@ -22,6 +24,94 @@ export function hookCommand(agent: "claude" | "codex"): string {
 }
 
 export type InstallResult = { status: "installed" | "already" | "manual"; detail: string };
+
+// ------------------------------------------------------- background task sync
+
+const launchAgentLabel = "com.granttap.monitor";
+
+function xml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
+/**
+ * Keep task/session sync alive without a terminal or a newly opened MCP chat.
+ * The MCP process and this helper share a leader lock, so phone messages are
+ * handled exactly once even when several agent chats are open.
+ */
+export function installMonitorHelper(): InstallResult {
+  if (process.platform !== "darwin") {
+    return { status: "manual", detail: "background task sync currently requires macOS" };
+  }
+
+  const agentsDir =
+    process.env.GRANTTAP_LAUNCH_AGENTS_DIR ?? join(homedir(), "Library", "LaunchAgents");
+  const path = join(agentsDir, `${launchAgentLabel}.plist`);
+  const logPath = join(configDir(), "monitor.log");
+  const executable = join(repoRoot, "bin", "granttap-mcp.mjs");
+  const workingDirectory = process.env.GRANTTAP_MONITOR_CWD ?? process.cwd();
+  const environmentPath = process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+  const plist = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
+    '<plist version="1.0">',
+    "<dict>",
+    "  <key>Label</key>",
+    `  <string>${launchAgentLabel}</string>`,
+    "  <key>ProgramArguments</key>",
+    "  <array>",
+    `    <string>${xml(process.execPath)}</string>`,
+    `    <string>${xml(executable)}</string>`,
+    "    <string>monitor</string>",
+    "  </array>",
+    "  <key>EnvironmentVariables</key>",
+    "  <dict>",
+    "    <key>PATH</key>",
+    `    <string>${xml(environmentPath)}</string>`,
+    "  </dict>",
+    "  <key>WorkingDirectory</key>",
+    `  <string>${xml(workingDirectory)}</string>`,
+    "  <key>RunAtLoad</key>",
+    "  <true/>",
+    "  <key>KeepAlive</key>",
+    "  <true/>",
+    "  <key>ProcessType</key>",
+    "  <string>Background</string>",
+    "  <key>ThrottleInterval</key>",
+    "  <integer>5</integer>",
+    "  <key>StandardErrorPath</key>",
+    `  <string>${xml(logPath)}</string>`,
+    "</dict>",
+    "</plist>",
+    "",
+  ].join("\n");
+
+  mkdirSync(agentsDir, { recursive: true });
+  mkdirSync(configDir(), { recursive: true });
+  const already = existsSync(path) && readFileSync(path, "utf8") === plist;
+  writeFileSync(path, plist, { mode: 0o644 });
+
+  if (process.env.GRANTTAP_SKIP_LAUNCHCTL === "1") {
+    return { status: already ? "already" : "installed", detail: path };
+  }
+
+  const uid = process.getuid?.();
+  if (uid == null) return { status: "manual", detail: `${path}: could not determine user id` };
+  const domain = `gui/${uid}`;
+  spawnSync("launchctl", ["bootout", domain, path], { stdio: "ignore" });
+  const loaded = spawnSync("launchctl", ["bootstrap", domain, path], {
+    encoding: "utf8",
+  });
+  if (loaded.status !== 0) {
+    const detail = (loaded.stderr || loaded.stdout || "launchctl bootstrap failed").trim();
+    return { status: "manual", detail: `${path}: ${detail}` };
+  }
+  return { status: already ? "already" : "installed", detail: path };
+}
 
 function backupOnce(path: string): void {
   const bak = path + ".bak-granttap";

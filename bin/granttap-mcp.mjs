@@ -13,6 +13,8 @@ if (command === "mcp") {
   entry = join(root, "apps", "bridge", "src", "bin", "setup.ts");
 } else if (command === "connect") {
   entry = join(root, "apps", "bridge", "src", "bin", "connect.ts");
+} else if (command === "monitor") {
+  entry = join(root, "apps", "bridge", "src", "bin", "monitor.ts");
 } else if (command === "hook" && (argument === "claude" || argument === "codex")) {
   entry = join(root, "apps", "bridge", "src", "bin", `${argument}-hook.ts`);
 } else {
@@ -22,6 +24,7 @@ if (command === "mcp") {
       "  granttap-mcp                 Start the MCP stdio server",
       "  granttap-mcp connect [url]   Pair this machine with iPhone/Apple Watch",
       "  granttap-mcp setup           Install Claude Code and Codex approval hooks",
+      "  granttap-mcp monitor         Internal background task sync",
       "  granttap-mcp hook <agent>    Internal hook entry point",
       "",
     ].join("\n"),

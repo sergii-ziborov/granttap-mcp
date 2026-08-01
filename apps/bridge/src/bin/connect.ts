@@ -1,15 +1,7 @@
 import QRCode from "qrcode";
-import { generatePairingCode, sealWithCode } from "../../../../packages/core/crypto";
-import { installClaudeHook, installCodexHook, type InstallResult } from "../install";
-import {
-  createPairing,
-  machineConfigPath,
-  pairingUri,
-  phonePairingPath,
-  saveConfig,
-} from "../config";
-
-const DEFAULT_RELAY = "wss://granttap-relay.sergii-ziborov.workers.dev";
+import type { InstallResult } from "../install";
+import { machineConfigPath, phonePairingPath } from "../config";
+import { createOneTimePairing, DEFAULT_RELAY, PAIRING_CODE_TTL_MINUTES } from "../pairing";
 
 function hookLine(name: string, result: InstallResult): string {
   switch (result.status) {
@@ -23,69 +15,47 @@ function hookLine(name: string, result: InstallResult): string {
 }
 
 async function connect(relayUrl: string): Promise<void> {
-  const { machineCfg, phoneCfg } = createPairing(relayUrl);
-  saveConfig(machineConfigPath(), machineCfg);
-  saveConfig(phonePairingPath(), phoneCfg);
-
-  const uri = pairingUri(phoneCfg);
-  const qr = await QRCode.toString(uri, {
+  const pairing = await createOneTimePairing(relayUrl);
+  const qr = await QRCode.toString(pairing.qrPayload, {
     type: "terminal",
     small: true,
     errorCorrectionLevel: "L",
   });
-  process.stdout.write(["", "  Scan this code in GrantTap on iPhone:", "", qr].join("\n"));
-
-  const code = generatePairingCode(8);
-  const sealed = sealWithCode(phoneCfg, code);
-  const httpBase = relayUrl.replace(/^ws:/, "http:").replace(/^wss:/, "https:");
-  let codeReady = false;
-  try {
-    const response = await fetch(`${httpBase}/pair/${code}`, {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(sealed),
-    });
-    codeReady = response.ok;
-  } catch {
-    codeReady = false;
-  }
-
   process.stdout.write(
-    codeReady
-      ? [
-          "",
-          "  Or enter this one-time code in the app:",
-          "",
-          `        ${code.slice(0, 4)} ${code.slice(4)}`,
-          "",
-          `  Relay: ${httpBase}`,
-          "  The code expires after 15 minutes and can be used once.",
-          "",
-        ].join("\n")
-      : [
-          "",
-          `  ! The relay at ${httpBase} did not accept a short code.`,
-          "    The QR still works. Check the relay and retry for code pairing.",
-          "",
-        ].join("\n"),
+    [
+      "",
+      "  Scan this one-time code in GrantTap on iPhone:",
+      "",
+      qr,
+      "",
+      "  Or enter this one-time code in the app:",
+      "",
+      `        ${pairing.formattedCode}`,
+      "",
+      `  Relay: ${pairing.httpBase}`,
+      `  The code expires after ${PAIRING_CODE_TTL_MINUTES} minutes and can be used once.`,
+      "",
+    ].join("\n"),
   );
 
-  const skipHooks = process.env.GRANTTAP_SKIP_HOOKS === "1";
-  const claude = skipHooks ? null : installClaudeHook();
-  const codex = skipHooks ? null : installCodexHook();
+  const skipHooks = pairing.claude == null || pairing.codex == null;
   process.stdout.write(
     [
       "",
       "  GrantTap is paired on this machine.",
       "",
-      `  room:        ${machineCfg.room}`,
+      `  room:        ${pairing.machineCfg.room}`,
       `  relay:       ${relayUrl}`,
       `  machine cfg: ${machineConfigPath()}`,
       `  phone cfg:   ${phonePairingPath()} (manual fallback; keep private)`,
       "",
       ...(skipHooks
         ? ["  Hooks: skipped (GRANTTAP_SKIP_HOOKS=1)"]
-        : [hookLine("Claude Code", claude!), hookLine("Codex", codex!)]),
+        : [
+            hookLine("Claude Code", pairing.claude!),
+            hookLine("Codex", pairing.codex!),
+            hookLine("Background task sync", pairing.monitor!),
+          ]),
       "",
       "  Keep the MCP server configured in your agent. Approval requests now",
       "  use the paired phone and watch; if the relay is unavailable, hooks fall",

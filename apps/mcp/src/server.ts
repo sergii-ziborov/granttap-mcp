@@ -7,6 +7,7 @@
  *   ask         — ask you a free-text question, wait for the spoken/typed answer
  *   ask_yes_no  — ask a yes/no question, get Да/Нет from the watch
  *   notify      — push a status/message to the phone (fire-and-forget)
+ *   connect     — return a secure one-time pairing QR directly in chat
  *   setup       — register the Claude/Codex approval hooks on this machine
  *
  * All traffic is E2E-encrypted through the same relay; the MCP server never sees
@@ -15,11 +16,19 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import QRCode from "qrcode";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { RelayClient } from "../../../packages/core/relay-client";
 import { loadConfig, machineConfigPath } from "../../bridge/src/config";
-import { installClaudeHook, installCodexHook } from "../../bridge/src/install";
+import { installClaudeHook, installCodexHook, installMonitorHelper } from "../../bridge/src/install";
 import { randomId } from "../../../packages/core/crypto";
 import type { Payload } from "../../../packages/protocol/schema";
+import {
+  createOneTimePairing,
+  DEFAULT_RELAY,
+  PAIRING_CODE_TTL_MINUTES,
+} from "../../bridge/src/pairing";
+import { startSessionMonitor, type SessionMonitor } from "../../bridge/src/monitor";
 
 const ASK_TIMEOUT_MS = Number(
   process.env.GRANTTAP_ASK_TIMEOUT_MS ?? process.env.NODVOX_ASK_TIMEOUT_MS ?? 180_000,
@@ -27,18 +36,28 @@ const ASK_TIMEOUT_MS = Number(
 
 /** One reconnecting relay client shared by all tool calls. Failed startup is not cached. */
 let client: RelayClient | null = null;
+let monitor: SessionMonitor | null = null;
 
 async function relay(): Promise<RelayClient | null> {
   try {
     if (!client) {
       const cfg = loadConfig(machineConfigPath());
       client = new RelayClient(cfg, { autoReconnect: true });
+      monitor = startSessionMonitor(client);
     }
     await client.connect();
+    await monitor?.publish().catch(() => {});
     return client;
   } catch {
     return null;
   }
+}
+
+function resetRelay(): void {
+  monitor?.close();
+  monitor = null;
+  client?.close();
+  client = null;
 }
 
 const NOT_PAIRED =
@@ -46,6 +65,58 @@ const NOT_PAIRED =
 
 async function main(): Promise<void> {
   const server = new McpServer({ name: "granttap", version: "0.1.0" });
+
+  server.tool(
+    "connect",
+    "Pair this computer with the GrantTap iPhone app. Use when the user asks to connect, pair, onboard, or show a pairing QR. Returns a one-time QR image directly in chat; no terminal command is needed.",
+    {
+      relayUrl: z
+        .string()
+        .url()
+        .optional()
+        .describe("Optional wss:// relay URL. Omit to use the GrantTap production relay."),
+    },
+    async ({ relayUrl }): Promise<CallToolResult> => {
+      try {
+        const pairing = await createOneTimePairing(
+          relayUrl ?? process.env.GRANTTAP_RELAY_URL ?? process.env.NODVOX_RELAY_URL ?? DEFAULT_RELAY,
+        );
+        resetRelay();
+        void relay();
+        const png = await QRCode.toBuffer(pairing.qrPayload, {
+          type: "png",
+          width: 900,
+          margin: 4,
+          errorCorrectionLevel: "L",
+        });
+        return {
+          content: [
+            {
+              type: "text",
+              text: [
+                "Scan this QR with GrantTap on iPhone to pair this computer.",
+                `One-time code: ${pairing.formattedCode}`,
+                `Relay: ${pairing.httpBase}`,
+                `The code is single-use and expires after ${PAIRING_CODE_TTL_MINUTES} minutes.`,
+                "The QR contains only the short-lived retrieval code, not a persistent device key.",
+              ].join("\n"),
+            },
+            { type: "image", data: png.toString("base64"), mimeType: "image/png" },
+          ],
+        };
+      } catch (error) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: "text",
+              text: `GrantTap pairing could not be created: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+        };
+      }
+    },
+  );
 
   server.tool(
     "notify",
@@ -125,20 +196,31 @@ async function main(): Promise<void> {
 
   server.tool(
     "setup",
-    "Register the GrantTap approval hooks for Claude Code and Codex on this machine.",
+    "Register GrantTap approval hooks and terminal-free background task sync on this machine.",
     {},
     async () => {
       const claude = installClaudeHook();
       const codex = installCodexHook();
+      const monitorHelper = installMonitorHelper();
       return {
         content: [
-          { type: "text", text: `Claude: ${claude.status} (${claude.detail})\nCodex: ${codex.status} (${codex.detail})` },
+          {
+            type: "text",
+            text: [
+              `Claude: ${claude.status} (${claude.detail})`,
+              `Codex: ${codex.status} (${codex.detail})`,
+              `Background task sync: ${monitorHelper.status} (${monitorHelper.detail})`,
+            ].join("\n"),
+          },
         ],
       };
     },
   );
 
   await server.connect(new StdioServerTransport());
+  // Start task publishing as soon as the MCP process starts. If the machine is
+  // not paired yet, the `connect` tool resets and starts it after onboarding.
+  void relay();
 }
 
 main().catch((err) => {

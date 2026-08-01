@@ -1,0 +1,150 @@
+import assert from "node:assert/strict";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+import {
+  scanSessionActivity,
+  scanSessions,
+  TOKEN_WINDOW_HOURS,
+} from "../apps/bridge/src/sessions";
+
+test("session activity exposes visible text/tools but never thinking blocks", async (t) => {
+  const claudeRoot = await mkdtemp(join(tmpdir(), "granttap-claude-"));
+  const codexRoot = await mkdtemp(join(tmpdir(), "granttap-codex-"));
+  const project = join(claudeRoot, "project");
+  await mkdir(project);
+  const sessionId = "session-visible";
+  const timestamp = new Date().toISOString();
+  const rows = [
+    { sessionId, cwd: "/repo", timestamp, type: "user", message: { role: "user", content: "work" } },
+    {
+      sessionId,
+      cwd: "/repo",
+      timestamp,
+      type: "assistant",
+      message: {
+        role: "assistant",
+        model: "claude-test",
+        usage: { input_tokens: 10, output_tokens: 5, cache_creation_input_tokens: 2, cache_read_input_tokens: 40 },
+        content: [
+          { type: "thinking", thinking: "hidden chain of thought" },
+          { type: "text", text: "Checking the working tree." },
+          { type: "tool_use", name: "Bash", input: { command: "git status --short" } },
+          { type: "text", text: "Done. There are no changes." },
+        ],
+      },
+    },
+  ];
+  await writeFile(join(project, `${sessionId}.jsonl`), rows.map((row) => JSON.stringify(row)).join("\n"));
+
+  const previousClaude = process.env.GRANTTAP_CLAUDE_PROJECTS_DIR;
+  const previousCodex = process.env.GRANTTAP_CODEX_SESSIONS_DIR;
+  process.env.GRANTTAP_CLAUDE_PROJECTS_DIR = claudeRoot;
+  process.env.GRANTTAP_CODEX_SESSIONS_DIR = codexRoot;
+  t.after(() => {
+    if (previousClaude == null) delete process.env.GRANTTAP_CLAUDE_PROJECTS_DIR;
+    else process.env.GRANTTAP_CLAUDE_PROJECTS_DIR = previousClaude;
+    if (previousCodex == null) delete process.env.GRANTTAP_CODEX_SESSIONS_DIR;
+    else process.env.GRANTTAP_CODEX_SESSIONS_DIR = previousCodex;
+  });
+
+  const scan = scanSessions();
+  assert.equal(TOKEN_WINDOW_HOURS, 12);
+  assert.equal(scan.tokensRecent, 17);
+  assert.equal(scan.sessions.length, 1);
+  assert.equal(scan.sessions[0]?.summary, "Done. There are no changes.");
+  assert.equal(scan.sessions[0]?.contextTokensUsed, 52);
+  assert.equal(scan.sessions[0]?.contextWindow, undefined);
+  const activity = scanSessionActivity(scan.sessions[0]!);
+  assert.equal(activity.entries.length, 4);
+  assert.equal(activity.entries.some((entry) => entry.kind === "user" && entry.text === "work"), true);
+  assert.equal(activity.entries.some((entry) => entry.kind === "tool" && /git status/.test(entry.text)), true);
+  assert.doesNotMatch(JSON.stringify(activity), /hidden chain of thought/);
+
+  const completed = scanSessionActivity({ ...scan.sessions[0]!, state: "idle" });
+  assert.deepEqual(completed.entries.map((entry) => entry.kind), ["user", "message", "tool", "final"]);
+  assert.match(completed.entries.at(-1)?.text ?? "", /Done/);
+});
+
+test("Codex tasks and visible activity are discovered from local rollouts", async (t) => {
+  const claudeRoot = await mkdtemp(join(tmpdir(), "granttap-claude-empty-"));
+  const codexRoot = await mkdtemp(join(tmpdir(), "granttap-codex-session-"));
+  const day = join(codexRoot, "2026", "07", "22");
+  await mkdir(day, { recursive: true });
+  const sessionId = "codex-visible";
+  const timestamp = new Date().toISOString();
+  const rows = [
+    { timestamp, type: "session_meta", payload: { id: sessionId, cwd: "/repo", git: { branch: "main" } } },
+    { timestamp, type: "turn_context", payload: { model: "gpt-test", sandbox_policy: { type: "workspace-write" } } },
+    { timestamp, type: "event_msg", payload: { type: "user_message", message: "Build the feature" } },
+    {
+      timestamp,
+      type: "response_item",
+      payload: {
+        type: "message",
+        role: "user",
+        content: [
+          { type: "input_text", text: "<recommended_plugins>internal list</recommended_plugins>" },
+          { type: "input_text", text: "<environment_context><cwd>/secret</cwd></environment_context>" },
+        ],
+      },
+    },
+    { timestamp, type: "event_msg", payload: { type: "agent_reasoning", text: "private reasoning" } },
+    { timestamp, type: "event_msg", payload: { type: "agent_message", phase: "commentary", message: "Checking files." } },
+    { timestamp, type: "event_msg", payload: { type: "agent_message", phase: "commentary", message: "**Plan**\n\n- First\n- Second" } },
+    {
+      timestamp,
+      type: "response_item",
+      payload: { type: "function_call", name: "exec_command", arguments: JSON.stringify({ cmd: "git status --short" }) },
+    },
+    { timestamp, type: "event_msg", payload: { type: "agent_message", phase: "final", message: "Done." } },
+    {
+      timestamp,
+      type: "response_item",
+      payload: { type: "function_call", name: "exec_command", arguments: JSON.stringify({ cmd: "echo cleanup" }) },
+    },
+    {
+      timestamp,
+      type: "event_msg",
+      payload: {
+        type: "token_count",
+        info: {
+          total_token_usage: { total_tokens: 30_000_000, cached_input_tokens: 29_999_970 },
+          last_token_usage: { total_tokens: 180_008, input_tokens: 180_004, cached_input_tokens: 180_000 },
+          model_context_window: 258_400,
+        },
+      },
+    },
+  ];
+  await writeFile(join(day, "rollout-test.jsonl"), rows.map((row) => JSON.stringify(row)).join("\n"));
+
+  const previousClaude = process.env.GRANTTAP_CLAUDE_PROJECTS_DIR;
+  const previousCodex = process.env.GRANTTAP_CODEX_SESSIONS_DIR;
+  process.env.GRANTTAP_CLAUDE_PROJECTS_DIR = claudeRoot;
+  process.env.GRANTTAP_CODEX_SESSIONS_DIR = codexRoot;
+  t.after(() => {
+    if (previousClaude == null) delete process.env.GRANTTAP_CLAUDE_PROJECTS_DIR;
+    else process.env.GRANTTAP_CLAUDE_PROJECTS_DIR = previousClaude;
+    if (previousCodex == null) delete process.env.GRANTTAP_CODEX_SESSIONS_DIR;
+    else process.env.GRANTTAP_CODEX_SESSIONS_DIR = previousCodex;
+  });
+
+  const scan = scanSessions();
+  assert.equal(scan.sessions[0]?.title, "Build the feature");
+  assert.equal(scan.sessions[0]?.model, "gpt-test");
+  assert.equal(scan.sessions[0]?.branch, "main");
+  assert.equal(scan.sessions[0]?.summary, "Done.");
+  assert.equal(scan.sessions[0]?.accessLevel, "workspace");
+  assert.equal(scan.tokensRecent, 30);
+  assert.equal(scan.sessions[0]?.tokensSession, 30);
+  assert.equal(scan.sessions[0]?.tokensLastTurn, 8);
+  assert.equal(scan.sessions[0]?.contextTokensUsed, 180_004);
+  assert.equal(scan.sessions[0]?.contextWindow, 258_400);
+  const activity = scanSessionActivity(scan.sessions[0]!);
+  assert.equal(activity.entries.some((entry) => entry.kind === "user" && /Build the feature/.test(entry.text)), true);
+  assert.equal(activity.entries.some((entry) => entry.kind === "tool" && /git status/.test(entry.text)), true);
+  assert.equal(activity.entries.some((entry) => entry.text.includes("**Plan**\n\n- First")), true);
+  assert.doesNotMatch(JSON.stringify(activity), /private reasoning/);
+  assert.doesNotMatch(JSON.stringify(activity), /recommended_plugins|environment_context|\/secret/);
+});

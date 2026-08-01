@@ -57,12 +57,26 @@ export type ApprovalDecision = z.infer<typeof ApprovalDecision>;
  * This is the foundation for the NEXT step (voice): speech-to-text on the
  * phone/watch simply produces `text` here — no protocol change needed.
  */
+export const UserAttachment = z.object({
+  name: z.string().min(1).max(180),
+  mimeType: z.string().min(1).max(120),
+  /** Base64 payload; clients resize images and cap raw files before sending. */
+  data: z.string().max(8_000_000),
+});
+export type UserAttachment = z.infer<typeof UserAttachment>;
+
 export const UserMessage = z.object({
   type: z.literal("user.message"),
   text: z.string(),
+  /** Agent to use when `sessionId` is absent. Existing sessions own their agent. */
+  agent: z.enum(["codex", "claude"]).optional(),
   /** Correlates a reply with an MCP `ask`; absent for ordinary session chat. */
   requestId: z.string().optional(),
   sessionId: z.string().optional(),
+  attachments: z.array(UserAttachment).max(5).optional(),
+  /** Optional real routing hints selected from this task's advertised capabilities. */
+  preferredMcp: z.string().min(1).max(180).optional(),
+  skill: z.string().min(1).max(180).optional(),
   createdAt: z.number(),
 });
 export type UserMessage = z.infer<typeof UserMessage>;
@@ -93,7 +107,7 @@ export type SessionSubscription = z.infer<typeof SessionSubscription>;
 
 export const ActivityEntry = z.object({
   id: z.string(),
-  kind: z.enum(["message", "tool", "final", "status"]),
+  kind: z.enum(["user", "message", "tool", "final", "status"]),
   text: z.string(),
   createdAt: z.number(),
 });
@@ -102,6 +116,25 @@ export type ActivityEntry = z.infer<typeof ActivityEntry>;
 /** Where a session currently stands. */
 export const SessionState = z.enum(["working", "waiting", "idle"]);
 export type SessionState = z.infer<typeof SessionState>;
+
+export const AgentAccess = z.enum(["read-only", "workspace", "full"]);
+export type AgentAccess = z.infer<typeof AgentAccess>;
+
+export const McpServerInfo = z.object({
+  name: z.string(),
+  /** Whether the server is enabled in the agent's own configuration. */
+  configuredEnabled: z.boolean(),
+  /** Effective permission for turns delivered from GrantTap into this task. */
+  allowed: z.boolean(),
+  authStatus: z.string().optional(),
+});
+export type McpServerInfo = z.infer<typeof McpServerInfo>;
+
+export const SkillInfo = z.object({
+  name: z.string(),
+  description: z.string().optional(),
+});
+export type SkillInfo = z.infer<typeof SkillInfo>;
 
 /** machine -> phone: visible agent output/tool summaries, never hidden reasoning. */
 export const SessionActivity = z.object({
@@ -122,12 +155,22 @@ export const SessionInfo = z.object({
   cwd: z.string().optional(),
   branch: z.string().optional(),
   model: z.string().optional(),
+  /** Latest user-visible agent update; never hidden reasoning. */
+  summary: z.string().optional(),
+  /** Effective filesystem/sandbox access for the next phone-delivered turn. */
+  accessLevel: AgentAccess.optional(),
   state: SessionState,
   startedAt: z.number(),
   lastActivityAt: z.number(),
   /** Tokens for this session, and for its most recent turn. */
   tokensSession: z.number(),
   tokensLastTurn: z.number(),
+  /** Current model-visible input size and the model's context capacity. */
+  contextTokensUsed: z.number().optional(),
+  contextWindow: z.number().optional(),
+  /** MCP servers and repository skills available to phone-delivered turns. */
+  mcpServers: z.array(McpServerInfo).optional(),
+  skills: z.array(SkillInfo).optional(),
 });
 export type SessionInfo = z.infer<typeof SessionInfo>;
 
@@ -162,6 +205,87 @@ export const ConfigSet = z.object({
 });
 export type ConfigSet = z.infer<typeof ConfigSet>;
 
+/** phone -> machine: choose sandbox access for subsequent turns in one task. */
+export const SessionAccessSet = z.object({
+  type: z.literal("session.access.set"),
+  sessionId: z.string(),
+  accessLevel: AgentAccess,
+  createdAt: z.number(),
+});
+export type SessionAccessSet = z.infer<typeof SessionAccessSet>;
+
+/** phone -> machine: allow or deny one configured MCP server for one task. */
+export const SessionMcpSet = z.object({
+  type: z.literal("session.mcp.set"),
+  sessionId: z.string(),
+  serverName: z.string().min(1).max(180),
+  allowed: z.boolean(),
+  createdAt: z.number(),
+});
+export type SessionMcpSet = z.infer<typeof SessionMcpSet>;
+
+/** phone -> machine: start real app-server compaction for a Codex task. */
+export const SessionCompact = z.object({
+  type: z.literal("session.compact"),
+  sessionId: z.string(),
+  createdAt: z.number(),
+});
+export type SessionCompact = z.infer<typeof SessionCompact>;
+
+export const SessionCompactResult = z.object({
+  type: z.literal("session.compact.result"),
+  sessionId: z.string(),
+  ok: z.boolean(),
+  message: z.string(),
+  createdAt: z.number(),
+});
+export type SessionCompactResult = z.infer<typeof SessionCompactResult>;
+
+/** One terminal-free local schedule owned by GrantTap, for Codex or Claude. */
+export const ScheduledTask = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1).max(180),
+  agent: z.enum(["codex", "claude"]),
+  prompt: z.string().min(1).max(20_000),
+  cwd: z.string().min(1),
+  cron: z.string().min(9).max(120),
+  enabled: z.boolean(),
+  createdAt: z.number(),
+  lastRunAt: z.number().optional(),
+  nextRunAt: z.number().optional(),
+  lastResult: z.string().max(500).optional(),
+  lastSessionId: z.string().optional(),
+});
+export type ScheduledTask = z.infer<typeof ScheduledTask>;
+
+export const SchedulesStatus = z.object({
+  type: z.literal("schedules.status"),
+  tasks: z.array(ScheduledTask),
+  generatedAt: z.number(),
+});
+export type SchedulesStatus = z.infer<typeof SchedulesStatus>;
+
+export const ScheduleSet = z.object({
+  type: z.literal("schedule.set"),
+  task: ScheduledTask.omit({ lastRunAt: true, nextRunAt: true, lastResult: true, lastSessionId: true }),
+  createdAt: z.number(),
+});
+export type ScheduleSet = z.infer<typeof ScheduleSet>;
+
+export const ScheduleDelete = z.object({
+  type: z.literal("schedule.delete"),
+  id: z.string(),
+  createdAt: z.number(),
+});
+export type ScheduleDelete = z.infer<typeof ScheduleDelete>;
+
+export const ScheduleRun = z.object({
+  type: z.literal("schedule.run"),
+  id: z.string(),
+  createdAt: z.number(),
+});
+export type ScheduleRun = z.infer<typeof ScheduleRun>;
+
 /** First payload each side sends after connecting (identifies the device). */
 export const Hello = z.object({
   type: z.literal("hello"),
@@ -180,6 +304,14 @@ export const Payload = z.discriminatedUnion("type", [
   SessionActivity,
   SessionsStatus,
   ConfigSet,
+  SessionAccessSet,
+  SessionMcpSet,
+  SessionCompact,
+  SessionCompactResult,
+  SchedulesStatus,
+  ScheduleSet,
+  ScheduleDelete,
+  ScheduleRun,
   Hello,
 ]);
 export type Payload = z.infer<typeof Payload>;
