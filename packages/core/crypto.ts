@@ -11,7 +11,6 @@
  * QR code scanned by the phone). Nothing here ever leaves the device unsealed.
  */
 import nacl from "tweetnacl";
-import { createHash } from "node:crypto";
 
 export type KeyPair = { publicKey: string; secretKey: string }; // base64
 
@@ -61,46 +60,44 @@ export function randomId(bytes = 8): string {
   return Buffer.from(nacl.randomBytes(bytes)).toString("hex");
 }
 
-// ------------------------------------------------- short pairing code (typed)
+// ------------------------------------------------ secure pairing hand-off v2
 //
-// A QR needs a camera; the simulator (and a tired thumb) needs something you can
-// type. The machine seals the pairing under a key derived from an 8-character
-// code and parks that ciphertext on the relay. The relay still learns nothing —
-// it only ever holds a blob it cannot open — and the code is single-use with a
-// short TTL, which is what keeps 8 characters from being brute-forceable.
+// The relay-visible mailbox id and the 256-bit transfer key are independent.
+// Only the mailbox id is sent to `/pair/<id>`; the key travels inside the QR or
+// a manually copied token. A relay operator (or a database dump) therefore has
+// the ciphertext but never the key needed to open it.
 
-/** Unambiguous alphabet: no 0/O/1/I/L to avoid transcription mistakes. */
-const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+const b64url = (u: Uint8Array): string => Buffer.from(u).toString("base64url");
+const ub64url = (s: string): Uint8Array => new Uint8Array(Buffer.from(s, "base64url"));
 
-export function generatePairingCode(length = 8): string {
-  const bytes = nacl.randomBytes(length);
-  let out = "";
-  for (let i = 0; i < length; i++) {
-    out += CODE_ALPHABET[bytes[i]! % CODE_ALPHABET.length];
+export function generateTransferKey(): string {
+  return b64url(nacl.randomBytes(nacl.secretbox.keyLength));
+}
+
+function transferKeyBytes(key: string): Uint8Array | null {
+  try {
+    const decoded = ub64url(key);
+    return decoded.length === nacl.secretbox.keyLength ? decoded : null;
+  } catch {
+    return null;
   }
-  return out;
 }
 
-export function normalizeCode(code: string): string {
-  return code.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
-}
-
-/** Key = SHA-256(normalized code). Mirrored byte-for-byte on the Swift side. */
-function codeKey(code: string): Uint8Array {
-  return new Uint8Array(createHash("sha256").update(normalizeCode(code), "utf8").digest());
-}
-
-export function sealWithCode(payload: unknown, code: string): { nonce: string; box: string } {
+export function sealWithTransferKey(payload: unknown, key: string): { nonce: string; box: string } {
+  const keyBytes = transferKeyBytes(key);
+  if (!keyBytes) throw new Error("invalid 256-bit transfer key");
   const msg = new TextEncoder().encode(JSON.stringify(payload));
   const nonce = nacl.randomBytes(nacl.secretbox.nonceLength);
-  const box = nacl.secretbox(msg, nonce, codeKey(code));
+  const box = nacl.secretbox(msg, nonce, keyBytes);
   return { nonce: b64(nonce), box: b64(box) };
 }
 
-export function openWithCode(nonce: string, box: string, code: string): unknown | null {
+export function openWithTransferKey(nonce: string, box: string, key: string): unknown | null {
+  const keyBytes = transferKeyBytes(key);
+  if (!keyBytes) return null;
   let opened: Uint8Array | null = null;
   try {
-    opened = nacl.secretbox.open(ub64(box), ub64(nonce), codeKey(code));
+    opened = nacl.secretbox.open(ub64(box), ub64(nonce), keyBytes);
   } catch {
     return null;
   }

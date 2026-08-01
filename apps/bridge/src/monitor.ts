@@ -20,6 +20,7 @@ import { mcpServersForSession, workspaceSkills } from "./capabilities";
 import { compactCodexSession } from "./codex-control";
 import { createClaudeSession, createCodexSession, deliverToSession } from "./reply";
 import { hasAcceptedDelivery, rememberAcceptedDelivery } from "./delivery";
+import { primeSessionKeys, sendSessionPayload } from "./session-keys";
 import { scanSessionActivity, scanSessions, TOKEN_WINDOW_HOURS } from "./sessions";
 import {
   deleteSchedule,
@@ -47,6 +48,7 @@ export type SessionMonitor = {
 export function startSessionMonitor(client: RelayClient): SessionMonitor {
   const subscriptions = new Set<string>();
   const leadership = monitorLeadership();
+  primeSessionKeys(client);
 
   const snapshot = (): SessionsStatus => {
     const { sessions, tokensRecent } = scanSessions();
@@ -91,7 +93,8 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
     for (const sessionId of subscriptions) {
       const session = status.sessions.find((item) => item.sessionId === sessionId);
       if (session) {
-        await client.send(scanSessionActivity(session), "phone", { ttlMs: INTERVAL_MS * 3 });
+        await sendSessionPayload(client, scanSessionActivity(session), sessionId, "phone",
+          { ttlMs: INTERVAL_MS * 3 });
       }
     }
   };
@@ -104,7 +107,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       if (payload.messageId) {
         const duplicate = hasAcceptedDelivery(payload.messageId);
         if (!duplicate) rememberAcceptedDelivery(payload.messageId);
-        void sendDeliveryReceipt(client, payload.messageId, "accepted");
+        void sendDeliveryReceipt(client, payload.messageId, "accepted", undefined, payload.sessionId);
         if (duplicate) return;
       }
       // Replies correlated with an MCP `ask` are consumed by that tool call.
@@ -156,12 +159,13 @@ async function sendDeliveryReceipt(
   messageId: string,
   status: "accepted" | "rejected",
   error?: string,
+  sessionId?: string,
 ): Promise<void> {
-  await client.send(
-    { type: "delivery.receipt", messageId, status, error, receivedAt: Date.now() },
-    "phone",
-    { ttlMs: 24 * 60 * 60_000 },
-  ).catch(() => {});
+  const payload = { type: "delivery.receipt" as const, messageId, status, error, receivedAt: Date.now() };
+  const options = { ttlMs: 24 * 60 * 60_000 };
+  await (sessionId
+    ? sendSessionPayload(client, payload, sessionId, "phone", options)
+    : client.send(payload, "phone", options)).catch(() => {});
 }
 
 function handleScheduleSet(message: ScheduleSet): void {
@@ -193,17 +197,14 @@ function handleMcpSet(message: SessionMcpSet): void {
 
 async function handleCompact(client: RelayClient, message: SessionCompact): Promise<void> {
   const resultMessage = async (ok: boolean, text: string): Promise<void> => {
-    await client.send(
-      {
+    const payload = {
         type: "session.compact.result",
         sessionId: message.sessionId,
         ok,
         message: text,
         createdAt: Date.now(),
-      },
-      "phone",
-      { ttlMs: 15 * 60_000 },
-    );
+      } as const;
+    await sendSessionPayload(client, payload, message.sessionId, "phone", { ttlMs: 15 * 60_000 });
   };
 
   const session = scanSessions().sessions.find((item) => item.sessionId === message.sessionId);
@@ -314,21 +315,20 @@ function handleConfigSet(message: ConfigSet): void {
 }
 
 async function handleUserMessage(client: RelayClient, message: UserMessage): Promise<void> {
-  const say = (text: string, sessionId?: string, wake = false) =>
-    client
-      .send(
-        {
+  const say = (text: string, sessionId?: string, wake = false) => {
+    const payload = {
           type: "agent.event",
           text,
           requestId: message.requestId,
           kind: "response",
           sessionId,
           createdAt: Date.now(),
-        },
-        "phone",
-        { ttlMs: 15 * 60_000, wake: wake ? "response" : undefined },
-      )
-      .catch(() => {});
+        } as const;
+    const options = { ttlMs: 15 * 60_000, wake: wake || undefined };
+    return (sessionId
+      ? sendSessionPayload(client, payload, sessionId, "phone", options)
+      : client.send(payload, "phone", options)).catch(() => {});
+  };
 
   if (!message.sessionId) {
     const agent = message.agent === "claude" ? "claude" : "codex";

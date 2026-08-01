@@ -12,7 +12,7 @@
 import WebSocket from "ws";
 import { randomUUID } from "node:crypto";
 import { Envelope, PROTOCOL_VERSION, Payload, type Role } from "../protocol/schema";
-import { open, seal } from "./crypto";
+import { open, openWithTransferKey, seal, sealWithTransferKey } from "./crypto";
 
 export type PeerConfig = {
   relayUrl: string;
@@ -40,7 +40,8 @@ export type SendOptions = {
   /** Delivery lifetime for relay hold queues. Omit only for non-expiring hello packets. */
   ttlMs?: number;
   deliveryId?: string;
-  wake?: "approval" | "response" | "schedule";
+  /** Ask the relay for a content-neutral APNs wake. Never carries a message kind. */
+  wake?: boolean;
 };
 
 export class RelayClient {
@@ -50,6 +51,7 @@ export class RelayClient {
   private connectPromise?: Promise<void>;
   private reconnectTimer?: NodeJS.Timeout;
   private reconnectDelay: number;
+  private readonly sessionKeys = new Map<string, string>();
 
   constructor(
     private readonly cfg: PeerConfig,
@@ -125,12 +127,24 @@ export class RelayClient {
     if (env.expiresAt != null && env.expiresAt <= Date.now()) return;
     const body = open(env.nonce, env.box, this.cfg.peerPublicKey, this.cfg.mySecretKey);
     if (body === null) return; // not for us, or tampered
-    const payload = Payload.safeParse(body);
-    if (!payload.success) return;
+    const parsedPayload = Payload.safeParse(body);
+    if (!parsedPayload.success) return;
+    let payload: Payload = parsedPayload.data;
+    if (payload.type === "session.key.grant") {
+      this.sessionKeys.set(payload.sessionId, payload.key);
+    } else if (payload.type === "session.sealed") {
+      const key = this.sessionKeys.get(payload.sessionId);
+      if (!key) return;
+      const inner = openWithTransferKey(payload.nonce, payload.box, key);
+      const parsedInner = Payload.safeParse(inner);
+      if (!parsedInner.success || parsedInner.data.type === "session.key.grant"
+          || parsedInner.data.type === "session.sealed") return;
+      payload = parsedInner.data;
+    }
     if (env.deliveryId && this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ type: "relay.ack", deliveryId: env.deliveryId }));
     }
-    for (const l of this.listeners) l(payload.data);
+    for (const l of this.listeners) l(payload);
   }
 
   async send(
@@ -154,6 +168,33 @@ export class RelayClient {
       box,
     };
     ws.send(JSON.stringify(env));
+  }
+
+  setSessionKey(sessionId: string, key: string): void {
+    this.sessionKeys.set(sessionId, key);
+  }
+
+  hasSessionKey(sessionId: string): boolean {
+    return this.sessionKeys.has(sessionId);
+  }
+
+  /** Add an independent authenticated-encryption layer for one task. */
+  async sendSession(
+    payload: Payload,
+    sessionId: string,
+    to: Role | "all" = this.otherRole(),
+    options: SendOptions = {},
+  ): Promise<void> {
+    const key = this.sessionKeys.get(sessionId);
+    if (!key) throw new Error(`no encryption key for task ${sessionId}`);
+    const sealed = sealWithTransferKey(payload, key);
+    await this.send({
+      type: "session.sealed",
+      sessionId,
+      nonce: sealed.nonce,
+      box: sealed.box,
+      createdAt: Date.now(),
+    }, to, options);
   }
 
   onMessage(l: Listener): () => void {

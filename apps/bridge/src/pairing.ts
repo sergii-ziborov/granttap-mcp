@@ -1,4 +1,4 @@
-import { generatePairingCode, normalizeCode, sealWithCode } from "../../../packages/core/crypto";
+import { generateTransferKey, randomId, sealWithTransferKey } from "../../../packages/core/crypto";
 import {
   installClaudeHook,
   installCodexHook,
@@ -19,8 +19,9 @@ export const PAIRING_CODE_TTL_MINUTES = 15;
 export type OneTimePairing = {
   machineCfg: PeerConfig;
   phoneCfg: PeerConfig;
-  code: string;
-  formattedCode: string;
+  mailboxId: string;
+  transferKey: string;
+  manualToken: string;
   httpBase: string;
   qrPayload: string;
   claude: InstallResult | null;
@@ -33,17 +34,18 @@ export function relayHttpBase(relayUrl: string): string {
 }
 
 /**
- * A chat-safe QR contains only the short-lived retrieval code, never the
- * phone's persistent secret key. The relay deletes the parked ciphertext after
- * the first successful GET and expires it after 15 minutes.
+ * The QR contains a random mailbox id plus an independent 256-bit transfer key.
+ * The mailbox id is the only part sent to the relay. The relay deletes the
+ * ciphertext after the first successful GET and expires it after 15 minutes.
  */
-export function oneTimePairingUri(relayUrl: string, code: string): string {
+export function oneTimePairingUri(relayUrl: string, mailboxId: string, transferKey: string): string {
   const query = new URLSearchParams({
-    v: "1",
+    v: "2",
     u: relayHttpBase(relayUrl),
-    c: normalizeCode(code),
+    m: mailboxId,
+    k: transferKey,
   });
-  return `granttap://pair-code?${query.toString()}`;
+  return `granttap://pair-v2?${query.toString()}`;
 }
 
 /** Create, park, and persist a new E2EE pairing for chat or CLI onboarding. */
@@ -52,13 +54,14 @@ export async function createOneTimePairing(
   options: { installHooks?: boolean } = {},
 ): Promise<OneTimePairing> {
   const { machineCfg, phoneCfg } = createPairing(relayUrl);
-  const code = generatePairingCode(8);
-  const sealed = sealWithCode(phoneCfg, code);
+  const mailboxId = randomId(16);
+  const transferKey = generateTransferKey();
+  const sealed = sealWithTransferKey(phoneCfg, transferKey);
   const httpBase = relayHttpBase(relayUrl);
 
   let response: Response;
   try {
-    response = await fetch(`${httpBase}/pair/${code}`, {
+    response = await fetch(`${httpBase}/pair/${mailboxId}`, {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(sealed),
@@ -86,10 +89,11 @@ export async function createOneTimePairing(
   return {
     machineCfg,
     phoneCfg,
-    code,
-    formattedCode: `${code.slice(0, 4)} ${code.slice(4)}`,
+    mailboxId,
+    transferKey,
+    manualToken: `${mailboxId}.${transferKey}`,
     httpBase,
-    qrPayload: oneTimePairingUri(relayUrl, code),
+    qrPayload: oneTimePairingUri(relayUrl, mailboxId, transferKey),
     claude,
     codex,
     monitor,

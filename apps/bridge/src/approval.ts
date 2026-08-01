@@ -8,6 +8,7 @@
 import type { PeerConfig } from "../../../packages/core/relay-client";
 import { RelayClient } from "../../../packages/core/relay-client";
 import type { ApprovalDecision, ApprovalRequest, Payload } from "../../../packages/protocol/schema";
+import { primeSessionKeys, sendSessionPayload } from "./session-keys";
 
 export type RequestApprovalOpts = {
   timeoutMs?: number;
@@ -23,6 +24,7 @@ export async function requestApproval(
   const timeoutMs = opts.timeoutMs ?? 60_000;
   const client = opts.client ?? new RelayClient(cfg);
   const ownsClient = !opts.client;
+  primeSessionKeys(client);
 
   try {
     if (ownsClient) {
@@ -40,11 +42,13 @@ export async function requestApproval(
     // The request id is random and carries no task content. Reusing it as the
     // opaque delivery id lets a generic APNs action answer the request even if
     // iOS has not yet pulled and decrypted the full card.
-    await client.send(req, "phone", {
+    const sendOptions = {
       ttlMs: timeoutMs,
-      wake: "approval",
+      wake: true,
       deliveryId: req.requestId,
-    });
+    };
+    if (req.sessionId) await sendSessionPayload(client, req, req.sessionId, "phone", sendOptions);
+    else await client.send(req, "phone", sendOptions);
     const decision = await client
       .waitFor(
         (p: Payload): p is ApprovalDecision =>

@@ -35,8 +35,9 @@ claude mcp add granttap -- npx -y granttap-mcp
 Then start a fresh chat and say **“Connect GrantTap.”** The `connect` tool
 creates the E2EE pairing, registers the approval hooks, and returns a scannable
 one-time QR directly in the chat. No terminal QR or copied pairing JSON is
-needed. The QR carries only a single-use 15-minute retrieval code; persistent
-device keys stay out of the chat transcript.
+needed. Pairing hand-off v2 parks ciphertext under a random mailbox id while an
+independent 256-bit key stays only in the QR/manual token. Cloudflare never
+receives that key; persistent device keys stay out of the chat transcript.
 
 The same MCP process also publishes recent Codex and Claude Code tasks to the
 phone. Sending from the home screen can create a new task in either agent;
@@ -117,7 +118,7 @@ before changing a configuration file.
 | Command | Purpose |
 | --- | --- |
 | *(no command)* | Starts the GrantTap MCP stdio server |
-| `connect [relayUrl]` | Fallback: creates an E2EE pairing and prints a one-time QR/short code |
+| `connect [relayUrl]` | Fallback: creates an E2EE pairing and prints a one-time QR/secure token |
 | `setup` | Registers the Claude Code and Codex approval hooks |
 
 The default answer timeout is three minutes. Override it with
@@ -129,6 +130,11 @@ Message payloads are authenticated and encrypted locally with NaCl
 public-key boxes. The relay receives only routing metadata and opaque
 ciphertext. It has no device secret key and cannot decrypt questions,
 commands, replies, or approvals.
+
+Pairing uses independent mailbox and transfer-key values; the transfer key is
+never sent to the relay. Attached tasks also receive independent random keys,
+so disclosure of one task key cannot open another task. See [SECURITY.md](SECURITY.md)
+for the exact guarantees, observable metadata, and endpoint-compromise limit.
 
 This repository intentionally includes the protocol, crypto client, relay
 client, MCP server, and agent hook adapters so that the complete public

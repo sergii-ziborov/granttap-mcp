@@ -68,15 +68,18 @@ test("legacy Nodvox environment and pairing links remain readable during migrati
   assert.deepEqual(migrated, phoneCfg);
 });
 
-test("chat pairing QR carries only a short-lived code and relay address", () => {
-  const uri = oneTimePairingUri("wss://relay.example.test/", "abcd-2345");
+test("chat pairing QR separates the relay mailbox from its 256-bit transfer key", () => {
+  const mailboxId = "ab".repeat(16);
+  const transferKey = "S".repeat(43);
+  const uri = oneTimePairingUri("wss://relay.example.test/", mailboxId, transferKey);
   const parsed = new URL(uri);
 
   assert.equal(parsed.protocol, "granttap:");
-  assert.equal(parsed.hostname, "pair-code");
-  assert.equal(parsed.searchParams.get("v"), "1");
+  assert.equal(parsed.hostname, "pair-v2");
+  assert.equal(parsed.searchParams.get("v"), "2");
   assert.equal(parsed.searchParams.get("u"), "https://relay.example.test");
-  assert.equal(parsed.searchParams.get("c"), "ABCD2345");
+  assert.equal(parsed.searchParams.get("m"), mailboxId);
+  assert.equal(parsed.searchParams.get("k"), transferKey);
   assert.equal(parsed.searchParams.has("s"), false);
   assert.equal(parsed.searchParams.has("p"), false);
   assert.equal(relayHttpBase("ws://127.0.0.1:8787/"), "http://127.0.0.1:8787");

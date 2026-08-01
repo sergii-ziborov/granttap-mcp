@@ -64,7 +64,7 @@ const NOT_PAIRED =
   "GrantTap is not paired on this machine. Pair the desktop bridge with the GrantTap app first.";
 
 async function main(): Promise<void> {
-  const server = new McpServer({ name: "granttap", version: "0.1.0" });
+  const server = new McpServer({ name: "granttap", version: "0.5.0" });
 
   server.tool(
     "connect",
@@ -95,10 +95,10 @@ async function main(): Promise<void> {
               type: "text",
               text: [
                 "Scan this QR with GrantTap on iPhone to pair this computer.",
-                `One-time code: ${pairing.formattedCode}`,
+                `Manual secure token: ${pairing.manualToken}`,
                 `Relay: ${pairing.httpBase}`,
-                `The code is single-use and expires after ${PAIRING_CODE_TTL_MINUTES} minutes.`,
-                "The QR contains only the short-lived retrieval code, not a persistent device key.",
+                `The encrypted mailbox is single-use and expires after ${PAIRING_CODE_TTL_MINUTES} minutes.`,
+                "The relay receives only a random mailbox id and ciphertext; the independent 256-bit transfer key stays in this QR/token.",
               ].join("\n"),
             },
             { type: "image", data: png.toString("base64"), mimeType: "image/png" },
@@ -128,7 +128,7 @@ async function main(): Promise<void> {
         await c.send(
           { type: "agent.event", text: message, kind: "status", createdAt: Date.now() },
           "phone",
-          { ttlMs: 15 * 60_000, wake: "response" },
+          { ttlMs: 15 * 60_000, wake: true },
         );
       return { content: [{ type: "text", text: "sent to phone" }] };
     },
@@ -154,7 +154,7 @@ async function main(): Promise<void> {
             createdAt: Date.now(),
           },
           "phone",
-          { ttlMs: ASK_TIMEOUT_MS, wake: "approval" },
+          { ttlMs: ASK_TIMEOUT_MS, wake: true },
         );
       const decision = await c
         .waitFor(
@@ -179,7 +179,7 @@ async function main(): Promise<void> {
         await c.send(
           { type: "agent.event", text: question, requestId, kind: "question", createdAt: Date.now() },
           "phone",
-          { ttlMs: ASK_TIMEOUT_MS, wake: "response" },
+          { ttlMs: ASK_TIMEOUT_MS, wake: true },
         );
         const reply = await c
           .waitFor(

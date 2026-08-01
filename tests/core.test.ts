@@ -3,9 +3,10 @@ import test from "node:test";
 import {
   generateKeyPair,
   open,
-  openWithCode,
+  generateTransferKey,
+  openWithTransferKey,
   seal,
-  sealWithCode,
+  sealWithTransferKey,
 } from "../packages/core/crypto";
 import { Envelope, Payload } from "../packages/protocol/schema";
 import {
@@ -28,10 +29,13 @@ test("NaCl payloads open only with the paired key", () => {
   assert.equal(open(sealed.nonce, sealed.box, stranger.publicKey, phone.secretKey), null);
 });
 
-test("short pairing code is case-insensitive and authenticated", () => {
-  const sealed = sealWithCode({ room: "r1" }, "ABCD2345");
-  assert.deepEqual(openWithCode(sealed.nonce, sealed.box, "abcd-2345"), { room: "r1" });
-  assert.equal(openWithCode(sealed.nonce, sealed.box, "WXYZ6789"), null);
+test("pairing transfer uses an independent authenticated 256-bit key", () => {
+  const key = generateTransferKey();
+  const otherKey = generateTransferKey();
+  const sealed = sealWithTransferKey({ room: "r1" }, key);
+  assert.deepEqual(openWithTransferKey(sealed.nonce, sealed.box, key), { room: "r1" });
+  assert.equal(openWithTransferKey(sealed.nonce, sealed.box, otherKey), null);
+  assert.equal(openWithTransferKey(sealed.nonce, sealed.box, "not-a-key"), null);
 });
 
 test("protocol accepts correlated questions, replies, activity, and expiring envelopes", () => {

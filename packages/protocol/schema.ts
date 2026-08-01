@@ -159,6 +159,29 @@ export const SessionActivity = z.object({
 });
 export type SessionActivity = z.infer<typeof SessionActivity>;
 
+/**
+ * Long-lived device channel grants one random key for one explicitly attached
+ * task. The grant itself is already inside the NaCl device box; task traffic is
+ * then additionally sealed with this independent key.
+ */
+export const SessionKeyGrant = z.object({
+  type: z.literal("session.key.grant"),
+  sessionId: z.string(),
+  key: z.string().min(43).max(44),
+  createdAt: z.number(),
+});
+export type SessionKeyGrant = z.infer<typeof SessionKeyGrant>;
+
+/** An inner task payload encrypted under its per-task key. */
+export const SessionSealed = z.object({
+  type: z.literal("session.sealed"),
+  sessionId: z.string(),
+  nonce: z.string(),
+  box: z.string(),
+  createdAt: z.number(),
+});
+export type SessionSealed = z.infer<typeof SessionSealed>;
+
 /** One live chat/session on a machine, with its real token spend. */
 export const SessionInfo = z.object({
   sessionId: z.string(),
@@ -330,6 +353,8 @@ export const Payload = z.discriminatedUnion("type", [
   AgentEvent,
   SessionSubscription,
   SessionActivity,
+  SessionKeyGrant,
+  SessionSealed,
   SessionsStatus,
   ConfigSet,
   SessionAccessSet,
@@ -353,8 +378,8 @@ export const Envelope = z.object({
   senderId: z.string(),
   /** Opaque transport id acknowledged after the peer decrypts the envelope. */
   deliveryId: z.string().optional(),
-  /** Coarse relay-visible APNs hint; message content remains encrypted. */
-  wake: z.enum(["approval", "response", "schedule"]).optional(),
+  /** Content-neutral APNs hint. The relay must not learn the payload kind. */
+  wake: z.boolean().optional(),
   /** Relay-visible delivery deadline; content stays encrypted. */
   expiresAt: z.number().optional(),
   nonce: z.string(), // base64
