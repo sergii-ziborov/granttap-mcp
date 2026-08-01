@@ -139,10 +139,17 @@ export function installClaudeHook(): InstallResult {
 
   const entries: any[] = (((settings.hooks ??= {}).PreToolUse ??= []) as any[]);
   const hooks = entries.flatMap((entry) => entry?.hooks ?? []);
-  const present = hooks.some(
+  const currentCommand = hookCommand("claude");
+  const present = hooks.find(
     (hook: any) => typeof hook?.command === "string" && hook.command.includes("granttap"),
   );
-  if (present) return { status: "already", detail: path };
+  if (present) {
+    if (present.command === currentCommand) return { status: "already", detail: path };
+    backupOnce(path);
+    present.command = currentCommand;
+    writeFileSync(path, JSON.stringify(settings, null, 2) + "\n");
+    return { status: "installed", detail: `${path}, GrantTap hook updated` };
+  }
 
   const legacy = hooks.find(
     (hook: any) =>
@@ -176,7 +183,6 @@ export function installCodexHook(): InstallResult {
   mkdirSync(dir, { recursive: true });
 
   const existing = existsSync(path) ? readFileSync(path, "utf8") : "";
-  if (existing.includes("granttap")) return { status: "already", detail: path };
   if (existing.includes("bin/nodvox.mjs") || /\bnpx\s+(?:-y\s+)?nodvox\b/.test(existing)) {
     const updated = existing
       .replace(
@@ -187,6 +193,15 @@ export function installCodexHook(): InstallResult {
     backupOnce(path);
     writeFileSync(path, updated);
     return { status: "installed", detail: `${path}, обновлён Nodvox → GrantTap` };
+  }
+  const currentCommand = hookCommand("codex");
+  const granttapHook = existing.match(/^command\s*=\s*'([^'\n]*granttap[^'\n]*)'$/m)
+    ?? existing.match(/^command\s*=\s*"([^"\n]*granttap[^"\n]*)"$/m);
+  if (granttapHook) {
+    if (granttapHook[1] === currentCommand) return { status: "already", detail: path };
+    backupOnce(path);
+    writeFileSync(path, existing.replace(granttapHook[0], `command = '${currentCommand}'`));
+    return { status: "installed", detail: `${path}, GrantTap hook updated` };
   }
 
   const hookBlock = [
