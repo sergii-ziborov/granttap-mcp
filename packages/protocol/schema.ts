@@ -336,6 +336,45 @@ export const ScheduleRun = z.object({
 });
 export type ScheduleRun = z.infer<typeof ScheduleRun>;
 
+export const SchedulePlanTurn = z.object({
+  role: z.enum(["user", "assistant"]),
+  text: z.string().min(1).max(8_000),
+});
+export type SchedulePlanTurn = z.infer<typeof SchedulePlanTurn>;
+
+export const SchedulePlanDraft = z.object({
+  title: z.string().min(1).max(180),
+  prompt: z.string().min(1).max(20_000),
+  cron: z.string().min(9).max(120),
+});
+export type SchedulePlanDraft = z.infer<typeof SchedulePlanDraft>;
+
+/** phone -> machine: ask a local agent to create or refine a schedule draft. */
+export const SchedulePlanRequest = z.object({
+  type: z.literal("schedule.plan.request"),
+  requestId: z.string().min(1),
+  plannerId: z.string().min(1),
+  agent: z.enum(["codex", "claude"]),
+  cwd: z.string().min(1),
+  locale: z.string().max(80).optional(),
+  turns: z.array(SchedulePlanTurn).min(1).max(30),
+  currentDraft: SchedulePlanDraft.optional(),
+  createdAt: z.number(),
+});
+export type SchedulePlanRequest = z.infer<typeof SchedulePlanRequest>;
+
+/** machine -> phone: conversational reply plus a validated schedule draft. */
+export const SchedulePlanResult = z.object({
+  type: z.literal("schedule.plan.result"),
+  requestId: z.string().min(1),
+  plannerId: z.string().min(1),
+  ok: z.boolean(),
+  message: z.string().min(1).max(8_000),
+  draft: SchedulePlanDraft.optional(),
+  createdAt: z.number(),
+});
+export type SchedulePlanResult = z.infer<typeof SchedulePlanResult>;
+
 /** First payload each side sends after connecting (identifies the device). */
 export const Hello = z.object({
   type: z.literal("hello"),
@@ -365,6 +404,8 @@ export const Payload = z.discriminatedUnion("type", [
   ScheduleSet,
   ScheduleDelete,
   ScheduleRun,
+  SchedulePlanRequest,
+  SchedulePlanResult,
   Hello,
 ]);
 export type Payload = z.infer<typeof Payload>;

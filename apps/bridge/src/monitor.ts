@@ -6,6 +6,7 @@ import { RelayClient } from "../../../packages/core/relay-client";
 import type {
   ConfigSet,
   ScheduleDelete,
+  SchedulePlanRequest,
   ScheduleRun,
   ScheduleSet,
   SessionAccessSet,
@@ -24,6 +25,7 @@ import { primeSessionKeys, sendSessionPayload } from "./session-keys";
 import { scanSessionActivity, scanSessions, TOKEN_WINDOW_HOURS } from "./sessions";
 import {
   deleteSchedule,
+  planSchedule,
   runScheduleNow,
   scheduledSnapshot,
   scheduleHistorySnapshot,
@@ -137,6 +139,8 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
     } else if (payload.type === "schedule.run") {
       handleScheduleRun(payload);
       void publish().catch(() => {});
+    } else if (payload.type === "schedule.plan.request") {
+      void handleSchedulePlan(client, payload);
     }
   });
 
@@ -178,6 +182,11 @@ function handleScheduleDelete(message: ScheduleDelete): void {
 
 function handleScheduleRun(message: ScheduleRun): void {
   runScheduleNow(message.id);
+}
+
+async function handleSchedulePlan(client: RelayClient, message: SchedulePlanRequest): Promise<void> {
+  const result = await planSchedule(message);
+  await client.send(result, "phone", { ttlMs: 5 * 60_000 }).catch(() => {});
 }
 
 function handleAccessSet(message: SessionAccessSet): void {

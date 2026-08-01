@@ -2,15 +2,19 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { z } from "zod";
 import {
   ScheduledTask as ScheduledTaskSchema,
+  SchedulePlanDraft as SchedulePlanDraftSchema,
   ScheduleRunRecord as ScheduleRunRecordSchema,
+  type SchedulePlanRequest,
+  type SchedulePlanResult,
   type ScheduleRunRecord,
   type ScheduleSet,
   type ScheduledTask,
 } from "../../../packages/protocol/schema";
 import { configDir } from "./config";
-import { createClaudeSession, createCodexSession } from "./reply";
+import { createClaudeSession, createCodexSession, createSchedulePlan } from "./reply";
 
 const inFlight = new Set<string>();
 
@@ -88,6 +92,82 @@ export function runScheduleNow(id: string): boolean {
   if (!task || inFlight.has(id)) return false;
   startTask(task, Date.now(), "manual");
   return true;
+}
+
+export function schedulePlannerPrompt(message: SchedulePlanRequest): string {
+  const locale = message.locale?.trim() || "the user's language";
+  const conversation = message.turns.map((turn) => ({ role: turn.role, text: turn.text }));
+  const currentDraft = message.currentDraft ?? null;
+  return [
+    "You are GrantTap's scheduler planning assistant.",
+    "Create or refine one recurring local coding-agent task from the conversation below.",
+    "You are planning only: do not edit files, run commands, create tasks, or change any system state.",
+    `Reply conversationally in ${locale}.`,
+    "Return only the required structured object with these fields:",
+    "- reply: a concise helpful answer; ask a focused question only if essential details are missing",
+    "- title: a short schedule title",
+    "- prompt: the complete instruction that the scheduled Codex or Claude Code run should execute",
+    "- cron: standard five-field cron (minute hour day-of-month month weekday)",
+    "Cron runs in the Mac's local timezone. Minimum frequency is once per minute.",
+    "Use numeric cron compatible with ordinary hourly, daily, weekdays, weekly, monthly, or custom recurrences.",
+    "Never use a sixth seconds field, @daily aliases, Quartz syntax, names, or timezone prefixes.",
+    "If clarification is needed, preserve the best usable draft instead of returning empty fields.",
+    `Current draft JSON: ${JSON.stringify(currentDraft)}`,
+    `Conversation JSON: ${JSON.stringify(conversation)}`,
+  ].join("\n");
+}
+
+export function parseSchedulePlannerOutput(text: string): {
+  reply: string;
+  title: string;
+  prompt: string;
+  cron: string;
+} {
+  const trimmed = text.trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "");
+  const raw = JSON.parse(trimmed) as unknown;
+  const parsed = SchedulePlanDraftSchema.extend({ reply: z.string().min(1).max(8_000) })
+    .safeParse(raw);
+  if (!parsed.success) throw new Error("The agent returned an invalid schedule draft.");
+  const cron = parsed.data.cron.split(/\s+/).join(" ");
+  if (nextOccurrence(cron, Date.now()) == null) {
+    throw new Error("The agent returned a cron expression GrantTap cannot run.");
+  }
+  return {
+    reply: parsed.data.reply.trim(),
+    title: parsed.data.title.trim(),
+    prompt: parsed.data.prompt.trim(),
+    cron,
+  };
+}
+
+export async function planSchedule(message: SchedulePlanRequest): Promise<SchedulePlanResult> {
+  const base = {
+    type: "schedule.plan.result" as const,
+    requestId: message.requestId,
+    plannerId: message.plannerId,
+    createdAt: Date.now(),
+  };
+  const result = await createSchedulePlan(
+    message.agent,
+    schedulePlannerPrompt(message),
+    message.cwd,
+  );
+  if (!result.ok) {
+    return { ...base, ok: false, message: result.error.slice(0, 8_000) };
+  }
+  try {
+    const parsed = parseSchedulePlannerOutput(result.text);
+    return {
+      ...base,
+      ok: true,
+      message: parsed.reply.slice(0, 8_000),
+      draft: { title: parsed.title, prompt: parsed.prompt, cron: parsed.cron },
+    };
+  } catch (error) {
+    return { ...base, ok: false, message: (error as Error).message.slice(0, 8_000) };
+  }
 }
 
 /** Called by the elected monitor every few seconds; starts each minute once. */

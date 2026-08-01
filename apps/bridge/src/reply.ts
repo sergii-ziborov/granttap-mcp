@@ -62,6 +62,105 @@ export function createClaudeSession(
   ));
 }
 
+const SCHEDULE_PLAN_OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    reply: { type: "string" },
+    title: { type: "string" },
+    prompt: { type: "string" },
+    cron: { type: "string" },
+  },
+  required: ["reply", "title", "prompt", "cron"],
+} as const;
+
+/**
+ * Ask the selected local agent to create/refine a scheduler draft without
+ * creating a persisted Codex task or Claude conversation. The caller still
+ * validates the structured response and cron before returning it to iPhone.
+ */
+export async function createSchedulePlan(
+  agent: "codex" | "claude",
+  text: string,
+  cwd = process.cwd(),
+  timeoutMs = 240_000,
+): Promise<ReplyResult> {
+  return queued(`__schedule_planner_${agent}__`, async () => {
+    if (agent === "claude") {
+      const args = [
+        "-p",
+        "--no-session-persistence",
+        "--permission-mode",
+        "plan",
+        "--output-format",
+        "json",
+        "--json-schema",
+        JSON.stringify(SCHEDULE_PLAN_OUTPUT_SCHEMA),
+        text,
+      ];
+      return runProcess(CLAUDE_BIN, args, cwd, timeoutMs, parseClaudeSchedulePlan);
+    }
+
+    const dir = await mkdtemp(join(tmpdir(), "granttap-schedule-plan-"));
+    try {
+      const schemaPath = join(dir, "output-schema.json");
+      await writeFile(schemaPath, `${JSON.stringify(SCHEDULE_PLAN_OUTPUT_SCHEMA)}\n`, { mode: 0o600 });
+      const args = [
+        "exec",
+        "--ephemeral",
+        "--sandbox",
+        "read-only",
+        "--skip-git-repo-check",
+        "--output-schema",
+        schemaPath,
+        "--json",
+        "-",
+      ];
+      return await runProcess(CODEX_BIN, args, cwd, timeoutMs, parseCodexSchedulePlan, text);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+function parseCodexSchedulePlan(stdout: string): ReplyResult {
+  let lastMessage = "";
+  for (const line of stdout.split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const event = JSON.parse(line) as { item?: { type?: string; text?: string } };
+      if (event.item?.type === "agent_message" && typeof event.item.text === "string") {
+        lastMessage = event.item.text;
+      }
+    } catch {
+      // Codex may emit diagnostics around the JSONL events.
+    }
+  }
+  return lastMessage
+    ? { ok: true, text: lastMessage }
+    : { ok: false, error: "Codex returned no scheduler draft." };
+}
+
+function parseClaudeSchedulePlan(stdout: string): ReplyResult {
+  try {
+    const parsed = JSON.parse(stdout) as {
+      is_error?: boolean;
+      result?: string;
+      structured_output?: unknown;
+    };
+    if (parsed.is_error) return { ok: false, error: parsed.result ?? "Claude planner error" };
+    if (parsed.structured_output && typeof parsed.structured_output === "object") {
+      return { ok: true, text: JSON.stringify(parsed.structured_output) };
+    }
+    if (typeof parsed.result === "string" && parsed.result.trim()) {
+      return { ok: true, text: parsed.result };
+    }
+  } catch {
+    // Fall through to an actionable error; planner output must be structured.
+  }
+  return { ok: false, error: "Claude returned no structured scheduler draft." };
+}
+
 function queued(key: string, run: () => Promise<ReplyResult>): Promise<ReplyResult> {
   const previous = inFlight.get(key) ?? Promise.resolve(null);
   const next = previous.then(run);

@@ -70,7 +70,13 @@ filesystem access for that turn.
 
 GrantTap's phone-managed local scheduler can create, edit, enable, delete, and
 run recurring Codex or Claude Code tasks using standard five-field cron in the
-Mac's timezone. Codex runs the user's configured OpenAI model. These schedules
+Mac's timezone. Its native series editor covers hourly, daily, weekday,
+selected-weekday, and monthly recurrence without making cron the primary UI.
+The phone also includes a real conversational planner: each turn invokes the
+selected local Codex in ephemeral read-only mode or Claude Code in plan mode,
+then returns a validated title, instruction, and cron draft for review. Planner
+turns do not create persistent agent chats or modify the workspace. Codex runs
+the user's configured OpenAI model. These schedules
 are intentionally separate from private/native ChatGPT Scheduled Tasks, Codex
 Automations, and Claude Routines rather than pretending to mutate an
 unpublished provider API. On macOS, pairing installs a per-user `launchd`

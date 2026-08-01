@@ -43,6 +43,10 @@ secret encryption key.
   transport, network, Cloudflare, Durable Objects, and APNs.
 - APNs is only a content-neutral wake. It contains no task kind, request id,
   delivery id, title, prompt, command, path, or response.
+- Scheduler-planner turns and their structured drafts cross Cloudflare only as
+  authenticated device-to-device ciphertext. The selected CLI runs locally in
+  ephemeral read-only/plan mode; it cannot silently turn planning into a
+  persistent task or workspace mutation.
 
 Cloudflare can observe service metadata required to operate the relay: an
 opaque room/mailbox id, routing role, timestamps/expiry, IP address, ciphertext

@@ -7,6 +7,8 @@ import {
   cronMatches,
   deleteSchedule,
   nextOccurrence,
+  parseSchedulePlannerOutput,
+  schedulePlannerPrompt,
   scheduleHistorySnapshot,
   scheduledSnapshot,
   setSchedule,
@@ -49,4 +51,39 @@ test("GrantTap schedules manage Codex and Claude tasks with standard cron", asyn
   deleteSchedule("morning-review");
   assert.deepEqual(scheduledSnapshot().map((task) => task.id), ["claude-review"]);
   assert.deepEqual(scheduleHistorySnapshot(), []);
+});
+
+test("scheduler planner is conversational but returns a validated draft", () => {
+  const request = {
+    type: "schedule.plan.request" as const,
+    requestId: "request-1",
+    plannerId: "planner-1",
+    agent: "claude" as const,
+    cwd: "/repo",
+    locale: "ru-RU",
+    turns: [{ role: "user" as const, text: "Проверяй зависимости по понедельникам" }],
+    currentDraft: {
+      title: "Аудит зависимостей",
+      prompt: "Проверь зависимости и дай отчёт.",
+      cron: "0 10 * * 1",
+    },
+    createdAt: Date.now(),
+  };
+  const prompt = schedulePlannerPrompt(request);
+  assert.match(prompt, /ru-RU/);
+  assert.match(prompt, /Conversation JSON/);
+  assert.match(prompt, /do not edit files, run commands, create tasks, or change any system state/);
+
+  assert.deepEqual(parseSchedulePlannerOutput(`\`\`\`json
+    {"reply":"Готово.","title":"Аудит зависимостей","prompt":"Проверь зависимости и дай отчёт.","cron":"0  10 * * 1"}
+  \`\`\``), {
+    reply: "Готово.",
+    title: "Аудит зависимостей",
+    prompt: "Проверь зависимости и дай отчёт.",
+    cron: "0 10 * * 1",
+  });
+  assert.throws(
+    () => parseSchedulePlannerOutput('{"reply":"Нет","title":"X","prompt":"Y","cron":"99 99 * * *"}'),
+    /cannot run/,
+  );
 });
