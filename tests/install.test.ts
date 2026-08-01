@@ -3,7 +3,12 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { installClaudeHook, installCodexHook, installMonitorHelper } from "../apps/bridge/src/install";
+import {
+  inspectAgentIntegrations,
+  installClaudeHook,
+  installCodexHook,
+  installMonitorHelper,
+} from "../apps/bridge/src/install";
 
 test("macOS background task sync is installed as a terminal-free LaunchAgent", async (t) => {
   if (process.platform !== "darwin") return t.skip("LaunchAgent is macOS-only");
@@ -78,4 +83,52 @@ test("setup replaces stale GrantTap and Nodvox hook paths for both agents", asyn
   const codex = await readFile(join(codexDir, "config.toml"), "utf8");
   assert.match(codex, /granttap-mcp\/bin\/granttap-mcp\.mjs/);
   assert.doesNotMatch(codex, /nodvox\.mjs/);
+});
+
+test("agent integration inspection is read-only and reports binaries and hooks separately", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-agent-status-"));
+  const binDir = join(root, "bin");
+  const claudeDir = join(root, "claude");
+  const codexDir = join(root, "codex");
+  await Promise.all([
+    mkdir(binDir, { recursive: true }),
+    mkdir(claudeDir, { recursive: true }),
+    mkdir(codexDir, { recursive: true }),
+  ]);
+  const fakeClaude = join(binDir, "claude");
+  const fakeCodex = join(binDir, "codex");
+  await Promise.all([
+    writeFile(fakeClaude, "#!/bin/sh\n", { mode: 0o755 }),
+    writeFile(fakeCodex, "#!/bin/sh\n", { mode: 0o755 }),
+    writeFile(join(claudeDir, "settings.json"), JSON.stringify({
+      hooks: { PreToolUse: [{ hooks: [{ command: "granttap hook claude" }] }] },
+    })),
+    writeFile(join(codexDir, "config.toml"), [
+      "[features]", "hooks = true", "[[hooks.PermissionRequest]]",
+      "command = 'node \"/tmp/granttap/bin/granttap-mcp.mjs\" hook codex'", "",
+    ].join("\n")),
+  ]);
+
+  const previous = {
+    path: process.env.PATH,
+    claudeDir: process.env.GRANTTAP_CLAUDE_DIR,
+    codexDir: process.env.GRANTTAP_CODEX_DIR,
+  };
+  process.env.PATH = binDir;
+  process.env.GRANTTAP_CLAUDE_DIR = claudeDir;
+  process.env.GRANTTAP_CODEX_DIR = codexDir;
+  t.after(() => {
+    const restore = (key: string, value: string | undefined) => {
+      if (value == null) delete process.env[key];
+      else process.env[key] = value;
+    };
+    restore("PATH", previous.path);
+    restore("GRANTTAP_CLAUDE_DIR", previous.claudeDir);
+    restore("GRANTTAP_CODEX_DIR", previous.codexDir);
+  });
+
+  assert.deepEqual(inspectAgentIntegrations(), [
+    { agent: "codex", installed: true, hookConfigured: true },
+    { agent: "claude", installed: true, hookConfigured: true },
+  ]);
 });

@@ -51,6 +51,7 @@ test("protocol accepts correlated questions, replies, activity, and expiring env
     machine: "legacy",
     sessions: [],
     tokensAllTime: 10,
+    agents: [{ agent: "claude", installed: true, hookConfigured: false }],
     generatedAt: 4,
   }).success, true);
   assert.equal(Payload.safeParse({

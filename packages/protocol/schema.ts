@@ -209,6 +209,14 @@ export const SessionInfo = z.object({
 });
 export type SessionInfo = z.infer<typeof SessionInfo>;
 
+/** Read-only local availability reported by the background helper. */
+export const AgentIntegrationStatus = z.object({
+  agent: z.enum(["codex", "claude"]),
+  installed: z.boolean(),
+  hookConfigured: z.boolean(),
+});
+export type AgentIntegrationStatus = z.infer<typeof AgentIntegrationStatus>;
+
 /**
  * machine -> phone: what's running right now.
  * Sent periodically so the phone can show live sessions even when nothing needs
@@ -226,6 +234,7 @@ export const SessionsStatus = z.object({
   /** Current gating switch + exclusions, so the phone can show/toggle them. */
   gatingEnabled: z.boolean().optional(),
   excludedSessions: z.array(z.string()).optional(),
+  agents: z.array(AgentIntegrationStatus).optional(),
   generatedAt: z.number(),
 });
 export type SessionsStatus = z.infer<typeof SessionsStatus>;

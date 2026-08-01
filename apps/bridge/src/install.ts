@@ -9,9 +9,17 @@
  * (any existing "granttap" hook counts), and if a TOML merge would be ambiguous,
  * say so instead of corrupting the file.
  */
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  accessSync,
+  constants,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { configDir } from "./config";
@@ -24,6 +32,66 @@ export function hookCommand(agent: "claude" | "codex"): string {
 }
 
 export type InstallResult = { status: "installed" | "already" | "manual"; detail: string };
+
+export type AgentIntegrationStatus = {
+  agent: "codex" | "claude";
+  installed: boolean;
+  hookConfigured: boolean;
+};
+
+function executableAvailable(command: string): boolean {
+  const candidates = command.includes("/")
+    ? [command]
+    : (process.env.PATH ?? "").split(delimiter).filter(Boolean).map((dir) => join(dir, command));
+  return candidates.some((candidate) => {
+    try {
+      accessSync(candidate, constants.X_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+}
+
+function claudeHookConfigured(): boolean {
+  const dir = process.env.GRANTTAP_CLAUDE_DIR
+    ?? process.env.NODVOX_CLAUDE_DIR
+    ?? join(homedir(), ".claude");
+  const path = join(dir, "settings.json");
+  if (!existsSync(path)) return false;
+  try {
+    const settings = JSON.parse(readFileSync(path, "utf8")) as {
+      hooks?: { PreToolUse?: Array<{ hooks?: Array<{ command?: unknown }> }> };
+    };
+    return (settings.hooks?.PreToolUse ?? []).some((entry) =>
+      (entry.hooks ?? []).some((hook) =>
+        typeof hook.command === "string" && hook.command.includes("granttap"),
+      ),
+    );
+  } catch {
+    return false;
+  }
+}
+
+function codexHookConfigured(): boolean {
+  const dir = process.env.GRANTTAP_CODEX_DIR
+    ?? process.env.NODVOX_CODEX_DIR
+    ?? join(homedir(), ".codex");
+  const path = join(dir, "config.toml");
+  if (!existsSync(path)) return false;
+  const config = readFileSync(path, "utf8");
+  return /^command\s*=\s*(?:'[^'\n]*granttap[^'\n]*'|"[^"\n]*granttap[^"\n]*")\s*$/m.test(config);
+}
+
+/** Read-only capability check used by phone/watch connection states. */
+export function inspectAgentIntegrations(): AgentIntegrationStatus[] {
+  const codex = process.env.GRANTTAP_CODEX_BIN ?? process.env.NODVOX_CODEX_BIN ?? "codex";
+  const claude = process.env.GRANTTAP_CLAUDE_BIN ?? process.env.NODVOX_CLAUDE_BIN ?? "claude";
+  return [
+    { agent: "codex", installed: executableAvailable(codex), hookConfigured: codexHookConfigured() },
+    { agent: "claude", installed: executableAvailable(claude), hookConfigured: claudeHookConfigured() },
+  ];
+}
 
 // ------------------------------------------------------- background task sync
 

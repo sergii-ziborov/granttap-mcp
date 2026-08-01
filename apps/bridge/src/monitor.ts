@@ -21,6 +21,7 @@ import { mcpServersForSession, workspaceSkills } from "./capabilities";
 import { compactCodexSession } from "./codex-control";
 import { createClaudeSession, createCodexSession, deliverToSession } from "./reply";
 import { hasAcceptedDelivery, rememberAcceptedDelivery } from "./delivery";
+import { inspectAgentIntegrations } from "./install";
 import { primeSessionKeys, sendSessionPayload } from "./session-keys";
 import { scanSessionActivity, scanSessions, TOKEN_WINDOW_HOURS } from "./sessions";
 import {
@@ -72,6 +73,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       tokensAllTime: tokensRecent,
       gatingEnabled: runtime.enabled,
       excludedSessions: runtime.excludedSessions,
+      agents: inspectAgentIntegrations(),
       generatedAt: Date.now(),
     };
   };

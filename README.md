@@ -44,9 +44,11 @@ phone. Sending from the home screen can create a new task in either agent;
 opening a task and replying continues that exact task. Photos, camera images,
 and documents are encrypted with the message and delivered as local agent
 inputs, with up to five attachments selected together. No separate monitor
-command is required. Task cards expose the latest human-readable agent update,
-while the five newest visible events and full formatted activity stay inside
-the selected task.
+command is required. Each status snapshot also reports read-only local agent
+availability and approval-hook configuration, so the phone/watch can distinguish
+"no tasks" from "not installed" or "hook not connected" without guessing or
+changing agent configuration. Task cards expose the latest human-readable agent
+update, while formatted activity stays inside the selected task.
 
 Phone-originated messages have stable random ids. The Mac records each id
 before launching an agent turn, rejects duplicate retries, and returns an
