@@ -1,7 +1,14 @@
 /** Terminal-free local schedules shared by Codex and Claude Code. */
+import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { ScheduledTask as ScheduledTaskSchema, type ScheduleSet, type ScheduledTask } from "../../../packages/protocol/schema";
+import {
+  ScheduledTask as ScheduledTaskSchema,
+  ScheduleRunRecord as ScheduleRunRecordSchema,
+  type ScheduleRunRecord,
+  type ScheduleSet,
+  type ScheduledTask,
+} from "../../../packages/protocol/schema";
 import { configDir } from "./config";
 import { createClaudeSession, createCodexSession } from "./reply";
 
@@ -9,6 +16,28 @@ const inFlight = new Set<string>();
 
 export function schedulesPath(): string {
   return join(configDir(), "schedules.json");
+}
+
+export function scheduleHistoryPath(): string {
+  return join(configDir(), "schedule-history.json");
+}
+
+export function scheduleHistorySnapshot(): ScheduleRunRecord[] {
+  try {
+    const raw = JSON.parse(readFileSync(scheduleHistoryPath(), "utf8"));
+    if (!Array.isArray(raw)) return [];
+    return raw.flatMap((item) => {
+      const parsed = ScheduleRunRecordSchema.safeParse(item);
+      return parsed.success ? [parsed.data] : [];
+    }).sort((a, b) => b.startedAt - a.startedAt).slice(0, 200);
+  } catch {
+    return [];
+  }
+}
+
+function saveHistory(history: ScheduleRunRecord[]): void {
+  mkdirSync(configDir(), { recursive: true });
+  writeFileSync(scheduleHistoryPath(), `${JSON.stringify(history.slice(0, 200), null, 2)}\n`, { mode: 0o600 });
 }
 
 export function loadSchedules(): ScheduledTask[] {
@@ -57,7 +86,7 @@ export function deleteSchedule(id: string): void {
 export function runScheduleNow(id: string): boolean {
   const task = loadSchedules().find((item) => item.id === id);
   if (!task || inFlight.has(id)) return false;
-  startTask(task);
+  startTask(task, Date.now(), "manual");
   return true;
 }
 
@@ -66,18 +95,42 @@ export function tickSchedules(now = Date.now()): void {
   const minute = Math.floor(now / 60_000) * 60_000;
   for (const task of loadSchedules()) {
     if (!task.enabled || inFlight.has(task.id)) continue;
-    if (cronMatches(task.cron, new Date(now)) && (task.lastRunAt ?? 0) < minute) startTask(task, minute);
+    if (cronMatches(task.cron, new Date(now)) && (task.lastRunAt ?? 0) < minute) {
+      startTask(task, minute, "schedule");
+    }
   }
 }
 
-function startTask(task: ScheduledTask, startedAt = Date.now()): void {
+function startTask(
+  task: ScheduledTask,
+  startedAt = Date.now(),
+  trigger: "schedule" | "manual" = "schedule",
+): void {
   inFlight.add(task.id);
+  const recordId = randomUUID();
+  saveHistory([{
+    id: recordId,
+    taskId: task.id,
+    taskTitle: task.title,
+    agent: task.agent,
+    trigger,
+    status: "running",
+    startedAt,
+  }, ...scheduleHistorySnapshot()]);
   updateRun(task.id, { lastRunAt: startedAt, lastResult: "Running…" });
   const run = task.agent === "claude"
     ? createClaudeSession(task.prompt, task.cwd)
     : createCodexSession(task.prompt, task.cwd);
   void run
     .then((result) => {
+      updateHistory(recordId, result.ok
+        ? {
+            status: "succeeded",
+            finishedAt: Date.now(),
+            result: result.text.replace(/\s+/g, " ").trim().slice(0, 500),
+            sessionId: result.sessionId,
+          }
+        : { status: "failed", finishedAt: Date.now(), result: result.error.slice(0, 500) });
       updateRun(task.id, result.ok
         ? {
             lastResult: result.text.replace(/\s+/g, " ").trim().slice(0, 500),
@@ -86,6 +139,14 @@ function startTask(task: ScheduledTask, startedAt = Date.now()): void {
         : { lastResult: `Failed: ${result.error}` });
     })
     .finally(() => inFlight.delete(task.id));
+}
+
+function updateHistory(id: string, patch: Partial<ScheduleRunRecord>): void {
+  const history = scheduleHistorySnapshot();
+  const index = history.findIndex((item) => item.id === id);
+  if (index < 0) return;
+  history[index] = { ...history[index]!, ...patch };
+  saveHistory(history);
 }
 
 function updateRun(id: string, patch: Partial<ScheduledTask>): void {

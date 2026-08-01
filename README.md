@@ -47,6 +47,13 @@ command is required. Task cards expose the latest human-readable agent update,
 while the five newest visible events and full formatted activity stay inside
 the selected task.
 
+Phone-originated messages have stable random ids. The Mac records each id
+before launching an agent turn, rejects duplicate retries, and returns an
+encrypted accepted/rejected receipt. The iPhone shows queued, sending,
+delivered, or failed state and retries temporary failures with bounded backoff;
+the relay retains an envelope until the receiver confirms successful
+decryption. A socket write alone is never shown as delivered.
+
 Task detail distinguishes usage tokens from the agent's active context, reports
 the model context window when the agent exposes it, and can invoke Codex's real
 app-server context compaction for an idle task. Claude Code currently has no
@@ -68,6 +75,13 @@ Automations, and Claude Routines rather than pretending to mutate an
 unpublished provider API. On macOS, pairing installs a per-user `launchd`
 helper so task sync and local schedules remain available without an open
 terminal and without reopening agent chats that predate the MCP installation.
+Every automatic or manual run is persisted locally with start/end time, agent,
+status, result, and created session id; the phone can inspect this history.
+
+New pairings also generate a separate random room credential for authenticated
+APNs token registration. It is not an E2EE key and reveals no payload. The
+public relay uses it only to protect the device-token record; notification
+content remains generic while the real task envelope stays encrypted.
 
 The CLI remains available as a fallback for clients that cannot display MCP
 image content:

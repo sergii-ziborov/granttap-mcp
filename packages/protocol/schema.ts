@@ -67,6 +67,8 @@ export type UserAttachment = z.infer<typeof UserAttachment>;
 
 export const UserMessage = z.object({
   type: z.literal("user.message"),
+  /** Stable id makes phone retries idempotent and powers delivery receipts. */
+  messageId: z.string().min(1).max(180).optional(),
   text: z.string(),
   /** Agent to use when `sessionId` is absent. Existing sessions own their agent. */
   agent: z.enum(["codex", "claude"]).optional(),
@@ -80,6 +82,16 @@ export const UserMessage = z.object({
   createdAt: z.number(),
 });
 export type UserMessage = z.infer<typeof UserMessage>;
+
+/** machine -> phone: the computer accepted one idempotent phone message. */
+export const DeliveryReceipt = z.object({
+  type: z.literal("delivery.receipt"),
+  messageId: z.string().min(1).max(180),
+  status: z.enum(["accepted", "rejected"]),
+  error: z.string().max(500).optional(),
+  receivedAt: z.number(),
+});
+export type DeliveryReceipt = z.infer<typeof DeliveryReceipt>;
 
 /**
  * machine -> phone: something the agent said / a status line.
@@ -258,9 +270,24 @@ export const ScheduledTask = z.object({
 });
 export type ScheduledTask = z.infer<typeof ScheduledTask>;
 
+export const ScheduleRunRecord = z.object({
+  id: z.string().min(1),
+  taskId: z.string().min(1),
+  taskTitle: z.string().min(1).max(180),
+  agent: z.enum(["codex", "claude"]),
+  trigger: z.enum(["schedule", "manual"]),
+  status: z.enum(["running", "succeeded", "failed"]),
+  startedAt: z.number(),
+  finishedAt: z.number().optional(),
+  result: z.string().max(500).optional(),
+  sessionId: z.string().optional(),
+});
+export type ScheduleRunRecord = z.infer<typeof ScheduleRunRecord>;
+
 export const SchedulesStatus = z.object({
   type: z.literal("schedules.status"),
   tasks: z.array(ScheduledTask),
+  history: z.array(ScheduleRunRecord).max(200).optional(),
   generatedAt: z.number(),
 });
 export type SchedulesStatus = z.infer<typeof SchedulesStatus>;
@@ -299,6 +326,7 @@ export const Payload = z.discriminatedUnion("type", [
   ApprovalRequest,
   ApprovalDecision,
   UserMessage,
+  DeliveryReceipt,
   AgentEvent,
   SessionSubscription,
   SessionActivity,
@@ -323,6 +351,10 @@ export const Envelope = z.object({
   from: Role,
   to: z.union([Role, z.literal("all")]),
   senderId: z.string(),
+  /** Opaque transport id acknowledged after the peer decrypts the envelope. */
+  deliveryId: z.string().optional(),
+  /** Coarse relay-visible APNs hint; message content remains encrypted. */
+  wake: z.enum(["approval", "response", "schedule"]).optional(),
   /** Relay-visible delivery deadline; content stays encrypted. */
   expiresAt: z.number().optional(),
   nonce: z.string(), // base64

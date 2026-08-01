@@ -10,6 +10,7 @@
  * the Cloudflare Durable Object deployment.
  */
 import WebSocket from "ws";
+import { randomUUID } from "node:crypto";
 import { Envelope, PROTOCOL_VERSION, Payload, type Role } from "../protocol/schema";
 import { open, seal } from "./crypto";
 
@@ -22,6 +23,8 @@ export type PeerConfig = {
   myPublicKey: string;
   mySecretKey: string;
   peerPublicKey: string;
+  /** Relay-only random credential for push-token registration; never an E2EE key. */
+  pushAuth?: string;
 };
 
 type Listener = (p: Payload) => void;
@@ -36,6 +39,8 @@ export type RelayClientOptions = {
 export type SendOptions = {
   /** Delivery lifetime for relay hold queues. Omit only for non-expiring hello packets. */
   ttlMs?: number;
+  deliveryId?: string;
+  wake?: "approval" | "response" | "schedule";
 };
 
 export class RelayClient {
@@ -67,7 +72,12 @@ export class RelayClient {
       // Object before the socket upgrades. The Node relay simply ignores it.
       const url = new URL(this.cfg.relayUrl);
       url.searchParams.set("room", this.cfg.room);
-      const ws = new WebSocket(url.toString());
+      const ws = new WebSocket(
+        url.toString(),
+        this.cfg.pushAuth
+          ? { headers: { Authorization: `Bearer ${this.cfg.pushAuth}` } }
+          : undefined,
+      );
       this.ws = ws;
       let opened = false;
       const timer = setTimeout(() => {
@@ -117,6 +127,9 @@ export class RelayClient {
     if (body === null) return; // not for us, or tampered
     const payload = Payload.safeParse(body);
     if (!payload.success) return;
+    if (env.deliveryId && this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "relay.ack", deliveryId: env.deliveryId }));
+    }
     for (const l of this.listeners) l(payload.data);
   }
 
@@ -134,6 +147,8 @@ export class RelayClient {
       from: this.cfg.role,
       to,
       senderId: this.cfg.senderId,
+      deliveryId: options.deliveryId ?? randomUUID(),
+      wake: options.wake,
       expiresAt: options.ttlMs == null ? undefined : Date.now() + options.ttlMs,
       nonce,
       box,

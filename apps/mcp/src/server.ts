@@ -128,7 +128,7 @@ async function main(): Promise<void> {
         await c.send(
           { type: "agent.event", text: message, kind: "status", createdAt: Date.now() },
           "phone",
-          { ttlMs: 15 * 60_000 },
+          { ttlMs: 15 * 60_000, wake: "response" },
         );
       return { content: [{ type: "text", text: "sent to phone" }] };
     },
@@ -154,7 +154,7 @@ async function main(): Promise<void> {
             createdAt: Date.now(),
           },
           "phone",
-          { ttlMs: ASK_TIMEOUT_MS },
+          { ttlMs: ASK_TIMEOUT_MS, wake: "approval" },
         );
       const decision = await c
         .waitFor(
@@ -179,7 +179,7 @@ async function main(): Promise<void> {
         await c.send(
           { type: "agent.event", text: question, requestId, kind: "question", createdAt: Date.now() },
           "phone",
-          { ttlMs: ASK_TIMEOUT_MS },
+          { ttlMs: ASK_TIMEOUT_MS, wake: "response" },
         );
         const reply = await c
           .waitFor(

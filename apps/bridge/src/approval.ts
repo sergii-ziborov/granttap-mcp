@@ -37,7 +37,14 @@ export async function requestApproval(
         };
       }
     }
-    await client.send(req, "phone", { ttlMs: timeoutMs });
+    // The request id is random and carries no task content. Reusing it as the
+    // opaque delivery id lets a generic APNs action answer the request even if
+    // iOS has not yet pulled and decrypted the full card.
+    await client.send(req, "phone", {
+      ttlMs: timeoutMs,
+      wake: "approval",
+      deliveryId: req.requestId,
+    });
     const decision = await client
       .waitFor(
         (p: Payload): p is ApprovalDecision =>

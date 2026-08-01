@@ -7,6 +7,7 @@ import {
   cronMatches,
   deleteSchedule,
   nextOccurrence,
+  scheduleHistorySnapshot,
   scheduledSnapshot,
   setSchedule,
 } from "../apps/bridge/src/scheduler";
@@ -47,4 +48,5 @@ test("GrantTap schedules manage Codex and Claude tasks with standard cron", asyn
 
   deleteSchedule("morning-review");
   assert.deepEqual(scheduledSnapshot().map((task) => task.id), ["claude-review"]);
+  assert.deepEqual(scheduleHistorySnapshot(), []);
 });

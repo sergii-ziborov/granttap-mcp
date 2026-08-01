@@ -19,11 +19,13 @@ import { configDir, loadRuntimeConfig, saveRuntimeConfig } from "./config";
 import { mcpServersForSession, workspaceSkills } from "./capabilities";
 import { compactCodexSession } from "./codex-control";
 import { createClaudeSession, createCodexSession, deliverToSession } from "./reply";
+import { hasAcceptedDelivery, rememberAcceptedDelivery } from "./delivery";
 import { scanSessionActivity, scanSessions, TOKEN_WINDOW_HOURS } from "./sessions";
 import {
   deleteSchedule,
   runScheduleNow,
   scheduledSnapshot,
+  scheduleHistorySnapshot,
   setSchedule,
   tickSchedules,
 } from "./scheduler";
@@ -77,7 +79,12 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
     const status = snapshot();
     await client.send(status, "phone", { ttlMs: INTERVAL_MS * 3 });
     await client.send(
-      { type: "schedules.status", tasks: scheduledSnapshot(), generatedAt: Date.now() },
+      {
+        type: "schedules.status",
+        tasks: scheduledSnapshot(),
+        history: scheduleHistorySnapshot(),
+        generatedAt: Date.now(),
+      },
       "phone",
       { ttlMs: INTERVAL_MS * 3 },
     );
@@ -94,6 +101,12 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
     // phone routing, so a single phone message can never create duplicate tasks.
     if (!leadership.acquire()) return;
     if (payload.type === "user.message") {
+      if (payload.messageId) {
+        const duplicate = hasAcceptedDelivery(payload.messageId);
+        if (!duplicate) rememberAcceptedDelivery(payload.messageId);
+        void sendDeliveryReceipt(client, payload.messageId, "accepted");
+        if (duplicate) return;
+      }
       // Replies correlated with an MCP `ask` are consumed by that tool call.
       if (!payload.requestId) {
         void handleUserMessage(client, payload).finally(() => publish().catch(() => {}));
@@ -136,6 +149,19 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       leadership.release();
     },
   };
+}
+
+async function sendDeliveryReceipt(
+  client: RelayClient,
+  messageId: string,
+  status: "accepted" | "rejected",
+  error?: string,
+): Promise<void> {
+  await client.send(
+    { type: "delivery.receipt", messageId, status, error, receivedAt: Date.now() },
+    "phone",
+    { ttlMs: 24 * 60 * 60_000 },
+  ).catch(() => {});
 }
 
 function handleScheduleSet(message: ScheduleSet): void {
@@ -288,7 +314,7 @@ function handleConfigSet(message: ConfigSet): void {
 }
 
 async function handleUserMessage(client: RelayClient, message: UserMessage): Promise<void> {
-  const say = (text: string, sessionId?: string) =>
+  const say = (text: string, sessionId?: string, wake = false) =>
     client
       .send(
         {
@@ -300,7 +326,7 @@ async function handleUserMessage(client: RelayClient, message: UserMessage): Pro
           createdAt: Date.now(),
         },
         "phone",
-        { ttlMs: 15 * 60_000 },
+        { ttlMs: 15 * 60_000, wake: wake ? "response" : undefined },
       )
       .catch(() => {});
 
@@ -311,9 +337,9 @@ async function handleUserMessage(client: RelayClient, message: UserMessage): Pro
       ? await createClaudeSession(message.text, process.cwd(), 240_000, message.attachments)
       : await createCodexSession(message.text, process.cwd(), 240_000, message.attachments);
     if (result.ok) {
-      await say(result.text, result.sessionId);
+      await say(result.text, result.sessionId, true);
     } else {
-      await say(`Could not create a ${agent === "claude" ? "Claude Code" : "Codex"} task: ${result.error}`);
+      await say(`Could not create a ${agent === "claude" ? "Claude Code" : "Codex"} task: ${result.error}`, undefined, true);
     }
     return;
   }
@@ -346,8 +372,8 @@ async function handleUserMessage(client: RelayClient, message: UserMessage): Pro
     skill: message.skill,
   });
   if (result.ok) {
-    await say(result.text, result.sessionId ?? target.sessionId);
+    await say(result.text, result.sessionId ?? target.sessionId, true);
   } else {
-    await say(`Could not deliver the message: ${result.error}`, target.sessionId);
+    await say(`Could not deliver the message: ${result.error}`, target.sessionId, true);
   }
 }

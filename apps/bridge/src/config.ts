@@ -132,6 +132,7 @@ export function pairingUri(cfg: PeerConfig): string {
     p: b64url(cfg.peerPublicKey),
     k: b64url(cfg.myPublicKey),
     i: cfg.senderId,
+    ...(cfg.pushAuth ? { a: cfg.pushAuth } : {}),
   });
   return `granttap://pair?${q.toString()}`;
 }
@@ -157,6 +158,7 @@ export function parsePairingUri(uri: string): PeerConfig | null {
     myPublicKey: unb64url(get("k")),
     mySecretKey: unb64url(get("s")),
     peerPublicKey: unb64url(get("p")),
+    pushAuth: get("a") || undefined,
   };
 }
 
@@ -165,6 +167,7 @@ export function createPairing(relayUrl: string): { machineCfg: PeerConfig; phone
   const machine = generateKeyPair();
   const phone = generateKeyPair();
   const room = randomId(8);
+  const pushAuth = randomId(32);
 
   const machineCfg: PeerConfig = {
     relayUrl,
@@ -175,6 +178,7 @@ export function createPairing(relayUrl: string): { machineCfg: PeerConfig; phone
     myPublicKey: machine.publicKey,
     mySecretKey: machine.secretKey,
     peerPublicKey: phone.publicKey,
+    pushAuth,
   };
   const phoneCfg: PeerConfig = {
     relayUrl,
@@ -185,6 +189,7 @@ export function createPairing(relayUrl: string): { machineCfg: PeerConfig; phone
     myPublicKey: phone.publicKey,
     mySecretKey: phone.secretKey,
     peerPublicKey: machine.publicKey,
+    pushAuth,
   };
   return { machineCfg, phoneCfg };
 }
