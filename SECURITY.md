@@ -38,6 +38,9 @@ secret encryption key.
 - Task keys are delivered only inside the already authenticated device-to-device
   NaCl channel and are stored in device-only Keychain on iOS and a mode `0600`
   file on the agent Mac.
+- Plaintext exists only at an authorized endpoint. Every route between the Mac
+  and iPhone remains authenticated ciphertext while it crosses the app
+  transport, network, Cloudflare, Durable Objects, and APNs.
 - APNs is only a content-neutral wake. It contains no task kind, request id,
   delivery id, title, prompt, command, path, or response.
 
@@ -47,8 +50,10 @@ size, APNs device token/environment, and a content-neutral wake flag. It cannot
 derive plaintext from those fields or from its stored database.
 
 The honest limit: a device can decrypt every task key that was explicitly
-granted to that device. Cryptography cannot both authorize a device for a task
-and prevent that same device from reading it. Compromise of the agent Mac is
+granted to that device. Possession of a device authorized for task A alone
+cannot decrypt another pairing or task B unless B's independent key was also
+granted to it. Cryptography cannot both authorize a device for a task and
+prevent that same device from reading it. Compromise of the agent Mac is
 also outside the relay threat model because the Mac necessarily has the local
 agent transcripts and keys. The isolation guarantee is against Cloudflare,
 database/network compromise, other pairings/devices, and disclosure of a

@@ -133,7 +133,8 @@ commands, replies, or approvals.
 
 Pairing uses independent mailbox and transfer-key values; the transfer key is
 never sent to the relay. Attached tasks also receive independent random keys,
-so disclosure of one task key cannot open another task. See [SECURITY.md](SECURITY.md)
+so disclosure of one task key cannot open another task. A paired device can
+open only tasks whose independent keys were explicitly granted to it. See [SECURITY.md](SECURITY.md)
 for the exact guarantees, observable metadata, and endpoint-compromise limit.
 
 This repository intentionally includes the protocol, crypto client, relay
