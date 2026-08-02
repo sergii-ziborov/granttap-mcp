@@ -150,10 +150,68 @@ function stringRecord(value: unknown): Record<string, string> {
     typeof entry[1] === "string"));
 }
 
-function normalizedIcons(
+const MAX_MCP_ICON_BYTES = 16 * 1024;
+
+function imageMime(bytes: Buffer): "image/png" | "image/jpeg" | undefined {
+  if (bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+    return "image/png";
+  }
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+  return undefined;
+}
+
+async function safeIconData(src: string, remoteUrl?: URL): Promise<{
+  src: string;
+  mimeType: "image/png" | "image/jpeg";
+} | undefined> {
+  const dataMatch = src.match(/^data:image\/(png|jpe?g);base64,([a-z0-9+/=\s]+)$/i);
+  if (dataMatch) {
+    const bytes = Buffer.from(dataMatch[2]!, "base64");
+    const mimeType = imageMime(bytes);
+    if (!mimeType || bytes.length > MAX_MCP_ICON_BYTES) return undefined;
+    return { src: `data:${mimeType};base64,${bytes.toString("base64")}`, mimeType };
+  }
+
+  const initial = safeHttpsUrl(src);
+  if (!initial || (remoteUrl && initial.origin !== remoteUrl.origin)) return undefined;
+  let current: URL = initial;
+  const allowedOrigin = initial.origin;
+  try {
+    for (let redirect = 0; redirect <= 2; redirect += 1) {
+      const response = await fetch(current, {
+        method: "GET",
+        redirect: "manual",
+        credentials: "omit",
+        headers: { Accept: "image/png, image/jpeg" },
+        signal: AbortSignal.timeout(5_000),
+      });
+      if ([301, 302, 303, 307, 308].includes(response.status)) {
+        const location = response.headers.get("location");
+        const target: URL | undefined = location
+          ? safeHttpsUrl(new URL(location, current).toString())
+          : undefined;
+        if (!target || target.origin !== allowedOrigin) return undefined;
+        current = target;
+        continue;
+      }
+      if (!response.ok) return undefined;
+      const length = Number(response.headers.get("content-length") ?? 0);
+      if (Number.isFinite(length) && length > MAX_MCP_ICON_BYTES) return undefined;
+      const bytes = Buffer.from(await response.arrayBuffer());
+      const mimeType = imageMime(bytes);
+      if (!mimeType || bytes.length > MAX_MCP_ICON_BYTES) return undefined;
+      return { src: `data:${mimeType};base64,${bytes.toString("base64")}`, mimeType };
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
+async function normalizedIcons(
   info: Implementation,
   descriptor: McpDescriptor,
-): NonNullable<McpServerInfo["icons"]> | undefined {
+): Promise<NonNullable<McpServerInfo["icons"]> | undefined> {
   const remoteUrl = typeof descriptor.transport?.url === "string"
     ? safeHttpsUrl(descriptor.transport.url)
     : undefined;
@@ -165,27 +223,16 @@ function normalizedIcons(
     const mime = typeof icon.mimeType === "string" ? icon.mimeType.toLowerCase() : undefined;
     if (mime && !["image/png", "image/jpeg", "image/jpg"].includes(mime)) continue;
 
-    let sourceOrigin: string | undefined;
-    if (/^data:image\/(?:png|jpe?g);base64,/i.test(src)) {
-      if (src.length > 180_000) continue;
-    } else {
-      const iconUrl = safeHttpsUrl(src);
-      if (!iconUrl) continue;
-      // Remote MCP icons must remain on the MCP server's origin. For stdio
-      // there is no server origin, so the declared icon origin becomes the
-      // redirect boundary enforced by the iPhone downloader.
-      if (remoteUrl && iconUrl.origin !== remoteUrl.origin) continue;
-      sourceOrigin = iconUrl.origin;
-    }
+    const safe = await safeIconData(src, remoteUrl);
+    if (!safe) continue;
 
     icons.push({
-      src,
-      mimeType: mime,
+      src: safe.src,
+      mimeType: safe.mimeType,
       sizes: Array.isArray(icon.sizes)
         ? icon.sizes.filter((size): size is string => typeof size === "string").slice(0, 8)
         : undefined,
       theme: icon.theme === "light" || icon.theme === "dark" ? icon.theme : undefined,
-      sourceOrigin,
     });
   }
   return icons.length ? icons : undefined;
@@ -201,10 +248,10 @@ function safeHttpsUrl(value: string): URL | undefined {
   }
 }
 
-function normalizeServerMetadata(
+async function normalizeServerMetadata(
   info: Implementation | undefined,
   descriptor: McpDescriptor,
-): ServerMetadata | undefined {
+): Promise<ServerMetadata | undefined> {
   if (!info) return undefined;
   const title = typeof info.title === "string" && info.title.trim()
     ? info.title.trim().slice(0, 160)
@@ -217,7 +264,7 @@ function normalizeServerMetadata(
     title,
     websiteUrl: website?.toString(),
     version,
-    icons: normalizedIcons(info, descriptor),
+    icons: await normalizedIcons(info, descriptor),
     metadataSource: "mcp",
   };
 }
@@ -283,7 +330,7 @@ async function probeMetadata(descriptor: McpDescriptor): Promise<ServerMetadata 
     } else {
       return undefined;
     }
-    return normalizeServerMetadata(client.getServerVersion(), descriptor);
+    return await normalizeServerMetadata(client.getServerVersion(), descriptor);
   } catch {
     return undefined;
   } finally {

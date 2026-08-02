@@ -23,7 +23,7 @@ test("task capabilities expose configured MCP servers and repository skills", as
     "      jsonrpc: '2.0', id: request.id, result: {",
     "        protocolVersion: '2025-11-25', capabilities: {},",
     "        serverInfo: {name: 'real-github-mcp', title: 'GitHub MCP', version: '9.1.0',",
-    "          websiteUrl: 'https://example.test/mcp', icons: [{src: 'https://example.test/icon.png', mimeType: 'image/png', sizes: ['64x64']}]}",
+    "          websiteUrl: 'https://example.test/mcp', icons: [{src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', mimeType: 'image/png', sizes: ['64x64']}]}",
     "      }",
     "    }) + '\\n');",
     "  }",
@@ -91,11 +91,10 @@ test("task capabilities expose configured MCP servers and repository skills", as
     websiteUrl: "https://example.test/mcp",
     version: "9.1.0",
     icons: [{
-      src: "https://example.test/icon.png",
+      src: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
       mimeType: "image/png",
       sizes: ["64x64"],
       theme: undefined,
-      sourceOrigin: "https://example.test",
     }],
     metadataSource: "mcp",
   });

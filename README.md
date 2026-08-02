@@ -79,8 +79,9 @@ Server identity is discovered through the real MCP `initialize` exchange.
 GrantTap forwards only `serverInfo.title`, `version`, `websiteUrl`, and
 `serverInfo.icons`; it never invents a provider logo from a configuration name.
 Servers that do not publish icon metadata receive a neutral MCP placeholder.
-The phone accepts bounded PNG/JPEG icons only, fetches without credentials or
-cookies, and rejects cross-origin redirects.
+The local helper accepts small PNG/JPEG icons only, fetches without credentials
+or cookies, rejects cross-origin redirects, and embeds validated bytes in the
+encrypted phone payload. The iPhone never contacts an icon host itself.
 
 Visible tool entries include structured MCP/skill metadata when the source log
 actually reports it. This lets the iPhone maintain an exact local usage ledger
