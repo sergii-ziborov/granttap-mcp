@@ -277,7 +277,7 @@ function scanCodex(maxAge = STALE_MS, maxFiles = MAX_FILES): Scan {
       }
       if (!title && data.type === "event_msg" && data.payload?.type === "user_message") {
         const message = data.payload.message ?? data.payload.text;
-        if (typeof message === "string") title = compact(message, 80);
+        if (typeof message === "string") title = compact(userFacingMessage(message), 80);
       }
     }
 
@@ -336,6 +336,19 @@ const MAX_ACTIVITY_TEXT = 4_000;
 function compact(value: unknown, max = MAX_ACTIVITY_TEXT): string {
   const text = String(value ?? "").replace(/\s+/g, " ").trim();
   return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
+}
+
+/**
+ * Codex prepends attachment metadata to some user turns. That metadata is not
+ * the task title: presenting it makes unrelated image-based chats all look
+ * like duplicate "# Files mentioned by the…" rows on the phone.
+ */
+function userFacingMessage(value: unknown): string {
+  const raw = String(value ?? "").trim();
+  const marker = /^##\s+My request(?: for Codex)?:\s*$/im;
+  const match = marker.exec(raw);
+  if (!match) return raw;
+  return raw.slice(match.index + match[0].length).trim();
 }
 
 function activityText(value: unknown, max = MAX_ACTIVITY_TEXT): string {
@@ -551,7 +564,8 @@ function codexActivity(session: SessionInfo): ActivityEntry[] {
     const payload = data.payload ?? {};
     const createdAt = timestamp(data.timestamp) || session.lastActivityAt;
     if (data.type === "event_msg" && payload.type === "user_message") {
-      pushEntry(out, seen, session.sessionId, "user", payload.message ?? payload.text, createdAt, index);
+      pushEntry(out, seen, session.sessionId, "user",
+        userFacingMessage(payload.message ?? payload.text), createdAt, index);
       return;
     }
     if (data.type === "event_msg" && payload.type === "agent_message") {

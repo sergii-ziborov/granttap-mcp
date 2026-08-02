@@ -123,7 +123,14 @@ test("Codex tasks and visible activity are discovered from local rollouts", asyn
   const rows = [
     { timestamp, type: "session_meta", payload: { id: sessionId, cwd: "/repo", git: { branch: "main" } } },
     { timestamp, type: "turn_context", payload: { model: "gpt-test", sandbox_policy: { type: "workspace-write" } } },
-    { timestamp, type: "event_msg", payload: { type: "user_message", message: "Build the feature" } },
+    {
+      timestamp,
+      type: "event_msg",
+      payload: {
+        type: "user_message",
+        message: "# Files mentioned by the user:\n\n## Photo 1.jpg: /tmp/example.jpg\n\n## My request for Codex:\n\nBuild the feature",
+      },
+    },
     {
       timestamp,
       type: "response_item",
@@ -201,6 +208,7 @@ test("Codex tasks and visible activity are discovered from local rollouts", asyn
   assert.equal(scan.sessions[0]?.contextTokensUsed, 180_004);
   assert.equal(scan.sessions[0]?.contextWindow, 258_400);
   const activity = scanSessionActivity(scan.sessions[0]!);
+  assert.equal(activity.entries.find((entry) => entry.kind === "user")?.text, "Build the feature");
   assert.equal(activity.entries.some((entry) => entry.kind === "user" && /Build the feature/.test(entry.text)), true);
   assert.equal(activity.entries.some((entry) => entry.kind === "tool" && /git status/.test(entry.text)), true);
   assert.equal(activity.entries.some((entry) => entry.text.includes("**Plan**\n\n- First")), true);
