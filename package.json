@@ -1,7 +1,7 @@
 {
   "name": "granttap-mcp",
   "version": "0.6.4",
-  "description": "E2EE MCP bridge and approval hooks for GrantTap on iPhone and Apple Watch.",
+  "description": "Control Codex and Claude Code from iPhone and Apple Watch with zero-knowledge E2EE approvals, replies, and task sync.",
   "type": "module",
   "bin": {
     "granttap-mcp": "bin/granttap-mcp.mjs"
@@ -9,7 +9,6 @@
   "files": [
     "apps",
     "bin",
-    "docs",
     "packages",
     "LICENSE",
     "README.md",
@@ -52,6 +51,7 @@
     "model-context-protocol",
     "claude-code",
     "codex",
+    "iphone",
     "apple-watch",
     "e2ee",
     "approvals"
