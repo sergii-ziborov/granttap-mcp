@@ -37,6 +37,36 @@ test("a home-screen phone message creates a persisted Codex task", async (t) => 
   assert.equal(result.text, "Answer: Hello from iPhone");
 });
 
+test("a new task without a selected project uses an isolated GrantTap workspace", async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), "granttap-general-workspace-"));
+  const configDir = join(dir, "config");
+  const stub = join(dir, "codex-stub.mjs");
+  await writeFile(stub, [
+    "#!/usr/bin/env node",
+    "process.stdin.resume();",
+    "process.stdin.on('end', () => {",
+    "  process.stdout.write(JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: process.cwd() } }) + '\\n');",
+    "});",
+  ].join("\n"), { mode: 0o755 });
+
+  const previousBin = process.env.GRANTTAP_CODEX_BIN;
+  const previousConfig = process.env.GRANTTAP_CONFIG_DIR;
+  process.env.GRANTTAP_CODEX_BIN = stub;
+  process.env.GRANTTAP_CONFIG_DIR = configDir;
+  t.after(() => {
+    if (previousBin == null) delete process.env.GRANTTAP_CODEX_BIN;
+    else process.env.GRANTTAP_CODEX_BIN = previousBin;
+    if (previousConfig == null) delete process.env.GRANTTAP_CONFIG_DIR;
+    else process.env.GRANTTAP_CONFIG_DIR = previousConfig;
+  });
+
+  const { createCodexSession } = await import(`../apps/bridge/src/reply.ts?general=${Date.now()}`);
+  const result = await createCodexSession("General task", undefined, 5_000);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.text.endsWith("/config/workspaces/general-codex"), true);
+});
+
 test("a phone-selected access level is passed to the resumed Codex task", async (t) => {
   const dir = await mkdtemp(join(tmpdir(), "granttap-codex-access-stub-"));
   const configDir = join(dir, "config");

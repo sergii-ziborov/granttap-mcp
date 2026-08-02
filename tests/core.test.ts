@@ -57,6 +57,7 @@ test("protocol accepts correlated questions, replies, activity, and expiring env
   assert.equal(Payload.safeParse({
     type: "user.message",
     text: "yes",
+    cwd: "/known/project",
     requestId: "q1",
     createdAt: 2,
   }).success, true);
@@ -67,6 +68,19 @@ test("protocol accepts correlated questions, replies, activity, and expiring env
     state: "working",
     entries: [{ id: "e1", kind: "tool", text: "git status", createdAt: 3 }],
     generatedAt: 3,
+  }).success, true);
+  assert.equal(Payload.safeParse({
+    type: "capability.usage.status",
+    events: [{
+      sourceId: "s1:3:1:mcp",
+      sessionId: "s1",
+      kind: "mcp",
+      name: "github",
+      toolName: "mcp__github__status",
+      createdAt: 3,
+      estimatedContextTokens: 42,
+    }],
+    generatedAt: 4,
   }).success, true);
   assert.equal(Envelope.safeParse({
     v: 1,

@@ -50,6 +50,11 @@ availability and approval-hook configuration, so the phone/watch can distinguish
 changing agent configuration. Task cards expose the latest human-readable agent
 update, while formatted activity stays inside the selected task.
 
+A new task never inherits the MCP/helper process directory. With no explicit
+selection it starts in a private GrantTap general workspace; the phone may
+instead send one of the same-agent folders already advertised by recent local
+tasks. The helper rejects an unadvertised project path.
+
 Phone-originated messages have stable random ids. The Mac records each id
 before launching an agent turn, rejects duplicate retries, and returns an
 encrypted accepted/rejected receipt. The iPhone shows queued, sending,
@@ -84,8 +89,12 @@ or cookies, rejects cross-origin redirects, and embeds validated bytes in the
 encrypted phone payload. The iPhone never contacts an icon host itself.
 
 Visible tool entries include structured MCP/skill metadata when the source log
-actually reports it. This lets the iPhone maintain an exact local usage ledger
-without inferring capability use from ordinary message text.
+actually reports it. Codex's generic JavaScript tool wrapper is inspected for
+real nested `tools.mcp__server__tool(...)` invocations. A bounded encrypted
+aggregate is published independently of task-detail subscriptions, with stable
+source ids so the iPhone can merge without double-counting. The optional token
+figure is explicitly an estimate of tool name/arguments/result occupying the
+normal model context; it is not presented as separate MCP billing.
 
 GrantTap's phone-managed local scheduler can create, edit, enable, delete, and
 run recurring Codex or Claude Code tasks using standard five-field cron in the
@@ -94,7 +103,9 @@ selected-weekday, and monthly recurrence without making cron the primary UI.
 The phone also includes a real conversational planner: each turn invokes the
 selected local Codex in ephemeral read-only mode or Claude Code in plan mode,
 then returns a validated title, instruction, and cron draft for review. Planner
-turns do not create persistent agent chats or modify the workspace. Codex runs
+turns do not create persistent agent chats or modify the workspace. Agent and
+workspace are explicit in the planner; the general-workspace option uses the
+same isolated per-agent folder as a new task. Codex runs
 the user's configured OpenAI model. These schedules
 are intentionally separate from private/native ChatGPT Scheduled Tasks, Codex
 Automations, and Claude Routines rather than pretending to mutate an

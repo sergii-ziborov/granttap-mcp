@@ -8,6 +8,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type {
   ActivityEntry,
+  CapabilityUsageStatus,
+  ObservedCapability,
   SessionActivity,
   SessionInfo,
   SessionState,
@@ -351,19 +353,59 @@ function toolSummary(name: unknown, input: unknown): string {
   return detail == null ? tool : `${tool}: ${compact(detail, 420)}`;
 }
 
-type ToolMetadata = Pick<ActivityEntry, "toolName" | "mcpServer" | "skill">;
+type ToolMetadata = Pick<ActivityEntry, "toolName" | "mcpServer" | "skill" | "capabilities">;
 
-function toolMetadata(name: unknown, input: unknown): ToolMetadata {
+function tokenEstimate(...values: unknown[]): number {
+  const text = values.map((value) => {
+    if (typeof value === "string") return value;
+    try { return JSON.stringify(value) ?? ""; } catch { return String(value ?? ""); }
+  }).join("\n");
+  // This is deliberately labelled as an estimate. Agent logs do not expose
+  // token attribution per tool, but name + arguments + result do occupy model context.
+  return Math.max(1, Math.ceil([...text].length / 4));
+}
+
+function observedCapabilities(name: unknown, input: unknown, output: unknown): ObservedCapability[] {
   const toolName = compact(name || "tool", 180);
+  const found: Omit<ObservedCapability, "estimatedContextTokens">[] = [];
   const parts = toolName.split("__");
-  const mcpServer = parts[0] === "mcp" && parts.length >= 3 ? compact(parts[1], 180) : undefined;
-  let skill: string | undefined;
+  if (parts[0] === "mcp" && parts.length >= 3) {
+    found.push({ kind: "mcp", name: compact(parts[1], 180), toolName });
+  }
+
+  // Current Codex rollouts record calls made through the generic exec wrapper
+  // as JavaScript such as tools.mcp__github__status(...). Inspect that real
+  // invocation instead of assuming the outer wrapper itself is the MCP tool.
+  const source = typeof input === "string" ? input : (() => {
+    try { return JSON.stringify(input) ?? ""; } catch { return ""; }
+  })();
+  const nested = /\btools\.(mcp__([A-Za-z0-9_-]+)__([A-Za-z0-9_-]+))\s*\(/g;
+  for (const match of source.matchAll(nested)) {
+    found.push({ kind: "mcp", name: compact(match[2], 180), toolName: compact(match[1], 240) });
+  }
+
   if (toolName.toLowerCase() === "skill" && input && typeof input === "object") {
     const fields = input as Record<string, unknown>;
     const candidate = fields.skill ?? fields.name;
-    if (typeof candidate === "string" && candidate.trim()) skill = compact(candidate, 180);
+    if (typeof candidate === "string" && candidate.trim()) {
+      found.push({ kind: "skill", name: compact(candidate, 180), toolName });
+    }
   }
-  return { toolName, mcpServer, skill };
+
+  if (found.length === 0) return [];
+  const perCapability = Math.max(1, Math.ceil(tokenEstimate(toolName, input, output) / found.length));
+  return found.map((capability) => ({ ...capability, estimatedContextTokens: perCapability }));
+}
+
+function toolMetadata(name: unknown, input: unknown, output?: unknown): ToolMetadata {
+  const toolName = compact(name || "tool", 180);
+  const capabilities = observedCapabilities(name, input, output);
+  return {
+    toolName,
+    mcpServer: capabilities.find((item) => item.kind === "mcp")?.name,
+    skill: capabilities.find((item) => item.kind === "skill")?.name,
+    capabilities: capabilities.length > 0 ? capabilities : undefined,
+  };
 }
 
 function pushEntry(
@@ -380,7 +422,9 @@ function pushEntry(
   const clean = activityText(visible);
   if (!clean) return;
   const duplicate = `${kind}:${clean}`;
-  if (seen.has(duplicate)) return;
+  // Repeated identical tool calls are distinct usage, while Codex can mirror
+  // the same visible message in both event_msg and response_item records.
+  if (kind !== "tool" && seen.has(duplicate)) return;
   seen.add(duplicate);
   out.push({ id: `${sessionId}:${createdAt}:${ordinal}`, kind, text: clean, createdAt, ...metadata });
 }
@@ -418,6 +462,17 @@ function claudeActivity(session: SessionInfo): ActivityEntry[] {
   }
   const out: ActivityEntry[] = [];
   const seen = new Set<string>();
+  const toolOutputs = new Map<string, unknown>();
+  lines.forEach((line) => {
+    const data = safeParse(line);
+    const content = data?.message?.content;
+    if (!Array.isArray(content)) return;
+    for (const block of content) {
+      if (block?.type === "tool_result" && typeof block.tool_use_id === "string") {
+        toolOutputs.set(block.tool_use_id, block.content ?? block);
+      }
+    }
+  });
   lines.forEach((line, index) => {
     const data = safeParse(line);
     if (!data) return;
@@ -450,7 +505,7 @@ function claudeActivity(session: SessionInfo): ActivityEntry[] {
           toolSummary(block.name, block.input),
           createdAt,
           index * 100 + blockIndex,
-          toolMetadata(block.name, block.input),
+          toolMetadata(block.name, block.input, toolOutputs.get(block.id)),
         );
       }
     });
@@ -480,6 +535,16 @@ function codexActivity(session: SessionInfo): ActivityEntry[] {
 
   const out: ActivityEntry[] = [];
   const seen = new Set<string>();
+  const toolOutputs = new Map<string, unknown>();
+  lines.forEach((line) => {
+    const data = safeParse(line);
+    const payload = data?.payload ?? {};
+    if (data?.type === "response_item" &&
+        ["function_call_output", "custom_tool_call_output"].includes(payload.type) &&
+        typeof payload.call_id === "string") {
+      toolOutputs.set(payload.call_id, payload.output);
+    }
+  });
   lines.forEach((line, index) => {
     const data = safeParse(line);
     if (!data) return;
@@ -519,14 +584,57 @@ function codexActivity(session: SessionInfo): ActivityEntry[] {
       }
       const name = payload.name ?? payload.type;
       pushEntry(out, seen, session.sessionId, "tool", toolSummary(name, args), createdAt, index,
-        toolMetadata(name, args));
+        toolMetadata(name, args, toolOutputs.get(payload.call_id)));
     }
   });
   return out;
 }
 
+function activityForSession(session: SessionInfo): ActivityEntry[] {
+  return session.agent === "claude" ? claudeActivity(session) : codexActivity(session);
+}
+
+const capabilitySessionCache = new Map<string, {
+  lastActivityAt: number;
+  events: CapabilityUsageStatus["events"];
+}>();
+
+/**
+ * Build a bounded, encrypted usage snapshot even when no task detail is open
+ * on the phone. Source ids are stable, so the phone can merge snapshots without
+ * double-counting calls it has already persisted locally.
+ */
+export function scanCapabilityUsage(sessions: SessionInfo[]): CapabilityUsageStatus {
+  const visibleIds = new Set(sessions.map((session) => session.sessionId));
+  for (const id of capabilitySessionCache.keys()) {
+    if (!visibleIds.has(id)) capabilitySessionCache.delete(id);
+  }
+  const events = sessions.flatMap((session) => {
+    const cached = capabilitySessionCache.get(session.sessionId);
+    if (cached && cached.lastActivityAt === session.lastActivityAt) return cached.events;
+    const sessionEvents = activityForSession(session).flatMap((entry) =>
+      (entry.capabilities ?? []).map((capability, index) => ({
+        sourceId: `${entry.id}:${capability.kind}:${index}:${capability.toolName}`,
+        sessionId: session.sessionId,
+        kind: capability.kind,
+        name: capability.name,
+        toolName: capability.toolName,
+        createdAt: entry.createdAt,
+        estimatedContextTokens: capability.estimatedContextTokens,
+      })),
+    );
+    capabilitySessionCache.set(session.sessionId, {
+      lastActivityAt: session.lastActivityAt,
+      events: sessionEvents,
+    });
+    return sessionEvents;
+  });
+  events.sort((a, b) => b.createdAt - a.createdAt);
+  return { type: "capability.usage.status", events: events.slice(0, 1_000), generatedAt: Date.now() };
+}
+
 export function scanSessionActivity(session: SessionInfo): SessionActivity {
-  const all = session.agent === "claude" ? claudeActivity(session) : codexActivity(session);
+  const all = activityForSession(session);
   let entries = all.slice(-MAX_ACTIVITY_ENTRIES);
   if (session.state !== "working") {
     for (let index = entries.length - 1; index >= 0; index -= 1) {

@@ -67,7 +67,7 @@ async function main(): Promise<void> {
   const server = new McpServer({
     name: "granttap",
     title: "GrantTap",
-    version: "0.6.3",
+    version: "0.6.4",
     websiteUrl: "https://granttap.com",
     icons: [
       {

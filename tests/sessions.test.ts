@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import {
+  scanCapabilityUsage,
   scanSessionActivity,
   scanSessionHistory,
   scanSessions,
@@ -31,11 +32,15 @@ test("session activity exposes visible text/tools but never thinking blocks", as
         content: [
           { type: "thinking", thinking: "hidden chain of thought" },
           { type: "text", text: "Checking the working tree." },
-          { type: "tool_use", name: "mcp__github__status", input: { command: "git status --short" } },
+          { type: "tool_use", id: "tool-github", name: "mcp__github__status",
+            input: { command: "git status --short" } },
           { type: "text", text: "Done. There are no changes." },
         ],
       },
     },
+    { sessionId, cwd: "/repo", timestamp, type: "user", message: { role: "user", content: [
+      { type: "tool_result", tool_use_id: "tool-github", content: "clean working tree" },
+    ] } },
   ];
   await writeFile(join(project, `${sessionId}.jsonl`), rows.map((row) => JSON.stringify(row)).join("\n"));
 
@@ -63,6 +68,10 @@ test("session activity exposes visible text/tools but never thinking blocks", as
   assert.equal(activity.entries.some((entry) => entry.kind === "tool" && /git status/.test(entry.text)), true);
   assert.equal(activity.entries.find((entry) => entry.kind === "tool")?.mcpServer, "github");
   assert.equal(activity.entries.find((entry) => entry.kind === "tool")?.toolName, "mcp__github__status");
+  const capabilityUsage = scanCapabilityUsage(scan.sessions);
+  assert.equal(capabilityUsage.events.length, 1);
+  assert.equal(capabilityUsage.events[0]?.name, "github");
+  assert.equal((capabilityUsage.events[0]?.estimatedContextTokens ?? 0) > 0, true);
   assert.doesNotMatch(JSON.stringify(activity), /hidden chain of thought/);
 
   const completed = scanSessionActivity({ ...scan.sessions[0]!, state: "idle" });
@@ -135,6 +144,19 @@ test("Codex tasks and visible activity are discovered from local rollouts", asyn
       type: "response_item",
       payload: { type: "function_call", name: "exec_command", arguments: JSON.stringify({ cmd: "git status --short" }) },
     },
+    {
+      timestamp,
+      type: "response_item",
+      payload: {
+        type: "custom_tool_call", call_id: "call-node-repl", name: "exec",
+        input: "const result = await tools.mcp__node_repl__js({ code: '1 + 1' }); text(result);",
+      },
+    },
+    {
+      timestamp,
+      type: "response_item",
+      payload: { type: "custom_tool_call_output", call_id: "call-node-repl", output: "2" },
+    },
     { timestamp, type: "event_msg", payload: { type: "agent_message", phase: "final", message: "Done." } },
     {
       timestamp,
@@ -184,4 +206,9 @@ test("Codex tasks and visible activity are discovered from local rollouts", asyn
   assert.equal(activity.entries.some((entry) => entry.text.includes("**Plan**\n\n- First")), true);
   assert.doesNotMatch(JSON.stringify(activity), /private reasoning/);
   assert.doesNotMatch(JSON.stringify(activity), /recommended_plugins|environment_context|\/secret/);
+  const capabilityUsage = scanCapabilityUsage(scan.sessions);
+  assert.equal(capabilityUsage.events.length, 1);
+  assert.equal(capabilityUsage.events[0]?.name, "node_repl");
+  assert.equal(capabilityUsage.events[0]?.toolName, "mcp__node_repl__js");
+  assert.equal((capabilityUsage.events[0]?.estimatedContextTokens ?? 0) > 0, true);
 });

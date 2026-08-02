@@ -272,7 +272,7 @@ async function normalizeServerMetadata(
 async function probeMetadata(descriptor: McpDescriptor): Promise<ServerMetadata | undefined> {
   const config = descriptor.transport;
   if (!config || !descriptor.configuredEnabled) return undefined;
-  const client = new Client({ name: "granttap-metadata", version: "0.6.3" });
+  const client = new Client({ name: "granttap-metadata", version: "0.6.4" });
   try {
     const type = typeof config.type === "string" ? config.type : undefined;
     if ((type === "streamable_http" || type === "http" || type === "sse") &&

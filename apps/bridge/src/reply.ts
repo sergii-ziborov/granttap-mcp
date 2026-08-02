@@ -1,13 +1,22 @@
 /** Deliver phone messages into existing sessions or start a new Codex task. */
 import { spawn } from "node:child_process";
+import { mkdirSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import type { SessionInfo, UserAttachment } from "../../../packages/protocol/schema";
-import { loadRuntimeConfig } from "./config";
+import { configDir, loadRuntimeConfig } from "./config";
 
 const CLAUDE_BIN = process.env.GRANTTAP_CLAUDE_BIN ?? process.env.NODVOX_CLAUDE_BIN ?? "claude";
 const CODEX_BIN = process.env.GRANTTAP_CODEX_BIN ?? process.env.NODVOX_CODEX_BIN ?? "codex";
+export const GENERAL_WORKSPACE = "granttap:general";
+
+export function resolveAgentWorkspace(cwd: string | undefined, agent: "codex" | "claude"): string {
+  if (cwd && cwd !== GENERAL_WORKSPACE) return cwd;
+  const path = join(configDir(), "workspaces", `general-${agent}`);
+  mkdirSync(path, { recursive: true, mode: 0o700 });
+  return path;
+}
 
 export type ReplyResult =
   | { ok: true; text: string; sessionId?: string }
@@ -41,24 +50,26 @@ export function deliverToSession(
 /** A message from the phone home screen intentionally creates a new task. */
 export function createCodexSession(
   text: string,
-  cwd = process.cwd(),
+  cwd?: string,
   timeoutMs = 240_000,
   attachments: UserAttachment[] = [],
 ): Promise<ReplyResult> {
+  const workspace = resolveAgentWorkspace(cwd, "codex");
   return queued("__new_codex_task__", () => withAttachments(attachments, text, (prepared) =>
-    runCodexNew(prepared.prompt, cwd, timeoutMs, prepared.images),
+    runCodexNew(prepared.prompt, workspace, timeoutMs, prepared.images),
   ));
 }
 
 /** Start a persisted non-interactive Claude Code task for local scheduling. */
 export function createClaudeSession(
   text: string,
-  cwd = process.cwd(),
+  cwd?: string,
   timeoutMs = 240_000,
   attachments: UserAttachment[] = [],
 ): Promise<ReplyResult> {
+  const workspace = resolveAgentWorkspace(cwd, "claude");
   return queued("__new_claude_task__", () => withAttachments(attachments, text, (prepared) =>
-    runClaudeNew(prepared.claudePrompt, cwd, timeoutMs),
+    runClaudeNew(prepared.claudePrompt, workspace, timeoutMs),
   ));
 }
 
@@ -82,9 +93,10 @@ const SCHEDULE_PLAN_OUTPUT_SCHEMA = {
 export async function createSchedulePlan(
   agent: "codex" | "claude",
   text: string,
-  cwd = process.cwd(),
+  cwd?: string,
   timeoutMs = 240_000,
 ): Promise<ReplyResult> {
+  const workspace = resolveAgentWorkspace(cwd, agent);
   return queued(`__schedule_planner_${agent}__`, async () => {
     if (agent === "claude") {
       const args = [
@@ -98,7 +110,7 @@ export async function createSchedulePlan(
         JSON.stringify(SCHEDULE_PLAN_OUTPUT_SCHEMA),
         text,
       ];
-      return runProcess(CLAUDE_BIN, args, cwd, timeoutMs, parseClaudeSchedulePlan);
+      return runProcess(CLAUDE_BIN, args, workspace, timeoutMs, parseClaudeSchedulePlan);
     }
 
     const dir = await mkdtemp(join(tmpdir(), "granttap-schedule-plan-"));
@@ -116,7 +128,7 @@ export async function createSchedulePlan(
         "--json",
         "-",
       ];
-      return await runProcess(CODEX_BIN, args, cwd, timeoutMs, parseCodexSchedulePlan, text);
+      return await runProcess(CODEX_BIN, args, workspace, timeoutMs, parseCodexSchedulePlan, text);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

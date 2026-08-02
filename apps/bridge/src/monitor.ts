@@ -23,7 +23,13 @@ import { createClaudeSession, createCodexSession, deliverToSession } from "./rep
 import { hasAcceptedDelivery, rememberAcceptedDelivery } from "./delivery";
 import { inspectAgentIntegrations } from "./install";
 import { primeSessionKeys, sendSessionPayload } from "./session-keys";
-import { scanSessionActivity, scanSessionHistory, scanSessions, TOKEN_WINDOW_HOURS } from "./sessions";
+import {
+  scanCapabilityUsage,
+  scanSessionActivity,
+  scanSessionHistory,
+  scanSessions,
+  TOKEN_WINDOW_HOURS,
+} from "./sessions";
 import {
   deleteSchedule,
   planSchedule,
@@ -54,6 +60,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
   primeSessionKeys(client);
   let historyCache: { generatedAt: number; sessions: SessionsStatus["sessions"] } | undefined;
   let lastHistoryPublishedAt = 0;
+  let lastCapabilityPublishedAt = 0;
 
   const decorate = (sessions: SessionsStatus["sessions"]): SessionsStatus["sessions"] => {
     const runtime = loadRuntimeConfig();
@@ -101,6 +108,10 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
     const status = snapshot(includeHistory);
     await client.send(status, "phone", { ttlMs: INTERVAL_MS * 3 });
     if (includeHistory) lastHistoryPublishedAt = Date.now();
+    if (Date.now() - lastCapabilityPublishedAt >= 30_000) {
+      await client.send(scanCapabilityUsage(status.sessions), "phone", { ttlMs: 90_000 });
+      lastCapabilityPublishedAt = Date.now();
+    }
     await client.send(
       {
         type: "schedules.status",
@@ -361,10 +372,20 @@ async function handleUserMessage(client: RelayClient, message: UserMessage): Pro
 
   if (!message.sessionId) {
     const agent = message.agent === "claude" ? "claude" : "codex";
+    const requestedCwd = message.cwd?.trim();
+    if (requestedCwd) {
+      const known = [...scanSessions().sessions, ...scanSessionHistory()].some((session) =>
+        session.agent === agent && session.cwd === requestedCwd);
+      if (!known) {
+        await say("That project folder is not one of the agent workspaces currently advertised to this phone.",
+          undefined, true);
+        return;
+      }
+    }
     await say(`Creating a new ${agent === "claude" ? "Claude Code" : "Codex"} task…`);
     const result = agent === "claude"
-      ? await createClaudeSession(message.text, process.cwd(), 240_000, message.attachments)
-      : await createCodexSession(message.text, process.cwd(), 240_000, message.attachments);
+      ? await createClaudeSession(message.text, requestedCwd, 240_000, message.attachments)
+      : await createCodexSession(message.text, requestedCwd, 240_000, message.attachments);
     if (result.ok) {
       await say(result.text, result.sessionId, true);
     } else {

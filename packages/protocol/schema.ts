@@ -72,6 +72,8 @@ export const UserMessage = z.object({
   text: z.string(),
   /** Agent to use when `sessionId` is absent. Existing sessions own their agent. */
   agent: z.enum(["codex", "claude"]).optional(),
+  /** Explicit workspace selected from known local tasks; absent means GrantTap's isolated general workspace. */
+  cwd: z.string().max(4_096).optional(),
   /** Correlates a reply with an MCP `ask`; absent for ordinary session chat. */
   requestId: z.string().optional(),
   sessionId: z.string().optional(),
@@ -117,6 +119,19 @@ export const SessionSubscription = z.object({
 });
 export type SessionSubscription = z.infer<typeof SessionSubscription>;
 
+export const CapabilityUsageKind = z.enum(["mcp", "skill"]);
+export type CapabilityUsageKind = z.infer<typeof CapabilityUsageKind>;
+
+/** One capability invocation observed in the agent's own local task log. */
+export const ObservedCapability = z.object({
+  kind: CapabilityUsageKind,
+  name: z.string().min(1).max(180),
+  toolName: z.string().min(1).max(240),
+  /** Approximate context occupied by the tool name, arguments, and result. */
+  estimatedContextTokens: z.number().int().nonnegative().optional(),
+});
+export type ObservedCapability = z.infer<typeof ObservedCapability>;
+
 export const ActivityEntry = z.object({
   id: z.string(),
   kind: z.enum(["user", "message", "tool", "final", "status"]),
@@ -126,8 +141,29 @@ export const ActivityEntry = z.object({
   toolName: z.string().optional(),
   mcpServer: z.string().optional(),
   skill: z.string().optional(),
+  /** Supports multiple MCP calls made inside one Codex tool-wrapper invocation. */
+  capabilities: z.array(ObservedCapability).max(32).optional(),
 });
 export type ActivityEntry = z.infer<typeof ActivityEntry>;
+
+export const CapabilityUsageEvent = z.object({
+  sourceId: z.string().min(1).max(520),
+  sessionId: z.string().optional(),
+  kind: CapabilityUsageKind,
+  name: z.string().min(1).max(180),
+  toolName: z.string().min(1).max(240),
+  createdAt: z.number(),
+  estimatedContextTokens: z.number().int().nonnegative().optional(),
+});
+export type CapabilityUsageEvent = z.infer<typeof CapabilityUsageEvent>;
+
+/** Encrypted aggregate independent of whether a task detail screen is open. */
+export const CapabilityUsageStatus = z.object({
+  type: z.literal("capability.usage.status"),
+  events: z.array(CapabilityUsageEvent).max(1_000),
+  generatedAt: z.number(),
+});
+export type CapabilityUsageStatus = z.infer<typeof CapabilityUsageStatus>;
 
 /** Where a session currently stands. */
 export const SessionState = z.enum(["working", "waiting", "idle"]);
@@ -425,6 +461,7 @@ export const Payload = z.discriminatedUnion("type", [
   AgentEvent,
   SessionSubscription,
   SessionActivity,
+  CapabilityUsageStatus,
   SessionKeyGrant,
   SessionSealed,
   SessionsStatus,
