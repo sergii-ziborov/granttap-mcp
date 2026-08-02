@@ -75,6 +75,13 @@ re-enables a globally disabled server. Repository-scoped skills found under
 turn. For Codex tasks, the phone can also choose read-only, workspace, or full
 filesystem access for that turn.
 
+Server identity is discovered through the real MCP `initialize` exchange.
+GrantTap forwards only `serverInfo.title`, `version`, `websiteUrl`, and
+`serverInfo.icons`; it never invents a provider logo from a configuration name.
+Servers that do not publish icon metadata receive a neutral MCP placeholder.
+The phone accepts bounded PNG/JPEG icons only, fetches without credentials or
+cookies, and rejects cross-origin redirects.
+
 Visible tool entries include structured MCP/skill metadata when the source log
 actually reports it. This lets the iPhone maintain an exact local usage ledger
 without inferring capability use from ordinary message text.

@@ -136,6 +136,17 @@ export type SessionState = z.infer<typeof SessionState>;
 export const AgentAccess = z.enum(["read-only", "workspace", "full"]);
 export type AgentAccess = z.infer<typeof AgentAccess>;
 
+/** An icon reported by the MCP server itself during initialize. */
+export const McpIcon = z.object({
+  src: z.string().max(180_000),
+  mimeType: z.string().max(80).optional(),
+  sizes: z.array(z.string().max(32)).max(8).optional(),
+  theme: z.enum(["light", "dark"]).optional(),
+  /** Origin GrantTap must keep across redirects when downloading an HTTPS icon. */
+  sourceOrigin: z.string().url().optional(),
+});
+export type McpIcon = z.infer<typeof McpIcon>;
+
 export const McpServerInfo = z.object({
   name: z.string(),
   /** Whether the server is enabled in the agent's own configuration. */
@@ -143,6 +154,13 @@ export const McpServerInfo = z.object({
   /** Effective permission for turns delivered from GrantTap into this task. */
   allowed: z.boolean(),
   authStatus: z.string().optional(),
+  /** Human-facing identity returned by the server, never inferred from its config name. */
+  title: z.string().max(160).optional(),
+  websiteUrl: z.string().url().optional(),
+  version: z.string().max(80).optional(),
+  icons: z.array(McpIcon).max(2).optional(),
+  /** Present only when title/version/icons came from a real MCP initialize response. */
+  metadataSource: z.literal("mcp").optional(),
 });
 export type McpServerInfo = z.infer<typeof McpServerInfo>;
 

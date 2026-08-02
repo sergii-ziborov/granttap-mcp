@@ -7,10 +7,33 @@ import test from "node:test";
 test("task capabilities expose configured MCP servers and repository skills", async (t) => {
   const dir = await mkdtemp(join(tmpdir(), "granttap-capabilities-"));
   const stub = join(dir, "codex-stub.mjs");
+  const mcpStub = join(dir, "real-mcp-stub.mjs");
+  await writeFile(mcpStub, [
+    "let pending = '';",
+    "process.stdin.setEncoding('utf8');",
+    "process.stdin.on('data', chunk => {",
+    "  pending += chunk;",
+    "  for (;;) {",
+    "    const newline = pending.indexOf('\\n');",
+    "    if (newline < 0) break;",
+    "    const line = pending.slice(0, newline); pending = pending.slice(newline + 1);",
+    "    if (!line.trim()) continue;",
+    "    const request = JSON.parse(line);",
+    "    if (request.method === 'initialize') process.stdout.write(JSON.stringify({",
+    "      jsonrpc: '2.0', id: request.id, result: {",
+    "        protocolVersion: '2025-11-25', capabilities: {},",
+    "        serverInfo: {name: 'real-github-mcp', title: 'GitHub MCP', version: '9.1.0',",
+    "          websiteUrl: 'https://example.test/mcp', icons: [{src: 'https://example.test/icon.png', mimeType: 'image/png', sizes: ['64x64']}]}",
+    "      }",
+    "    }) + '\\n');",
+    "  }",
+    "});",
+    "process.stdin.on('end', () => process.exit(0));",
+  ].join("\n"), { mode: 0o755 });
   await writeFile(
     stub,
     "#!/usr/bin/env node\nprocess.stdout.write(JSON.stringify([" +
-      "{name:'github',enabled:true,auth_status:'bearer_token'}," +
+      `{name:'github',enabled:true,auth_status:'bearer_token',transport:{type:'stdio',command:${JSON.stringify(process.execPath)},args:[${JSON.stringify(mcpStub)}]}},` +
       "{name:'disabled-global',enabled:false,auth_status:'unsupported'}]));\n",
     { mode: 0o755 },
   );
@@ -31,7 +54,7 @@ test("task capabilities expose configured MCP servers and repository skills", as
     else process.env.GRANTTAP_CODEX_BIN = previous;
   });
 
-  const { mcpServersForSession, workspaceSkills } = await import(
+  const { mcpServersForSession, refreshMcpMetadataForSession, workspaceSkills } = await import(
     `../apps/bridge/src/capabilities.ts?test=${Date.now()}`
   );
   const session = {
@@ -58,6 +81,24 @@ test("task capabilities expose configured MCP servers and repository skills", as
       authStatus: "bearer_token",
     },
   ]);
+  await refreshMcpMetadataForSession(session);
+  assert.deepEqual(mcpServersForSession(session, ["github"])[1], {
+    name: "github",
+    configuredEnabled: true,
+    allowed: false,
+    authStatus: "bearer_token",
+    title: "GitHub MCP",
+    websiteUrl: "https://example.test/mcp",
+    version: "9.1.0",
+    icons: [{
+      src: "https://example.test/icon.png",
+      mimeType: "image/png",
+      sizes: ["64x64"],
+      theme: undefined,
+      sourceOrigin: "https://example.test",
+    }],
+    metadataSource: "mcp",
+  });
   assert.deepEqual(workspaceSkills(dir), [
     { name: "release-check", description: "Verify a release before publishing." },
   ]);

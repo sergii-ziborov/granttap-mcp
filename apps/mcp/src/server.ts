@@ -64,7 +64,19 @@ const NOT_PAIRED =
   "GrantTap is not paired on this machine. Pair the desktop bridge with the GrantTap app first.";
 
 async function main(): Promise<void> {
-  const server = new McpServer({ name: "granttap", version: "0.5.0" });
+  const server = new McpServer({
+    name: "granttap",
+    title: "GrantTap",
+    version: "0.6.3",
+    websiteUrl: "https://granttap.com",
+    icons: [
+      {
+        src: "https://granttap.com/favicon.png",
+        mimeType: "image/png",
+        sizes: ["64x64"],
+      },
+    ],
+  });
 
   server.tool(
     "connect",

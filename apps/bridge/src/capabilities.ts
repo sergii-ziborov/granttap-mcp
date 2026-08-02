@@ -2,13 +2,48 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import {
+  StdioClientTransport,
+  getDefaultEnvironment,
+} from "@modelcontextprotocol/sdk/client/stdio.js";
+import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import type { Implementation } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServerInfo, SessionInfo, SkillInfo } from "../../../packages/protocol/schema";
 
 type CodexMcpRow = {
   name?: unknown;
   enabled?: unknown;
   auth_status?: unknown;
+  transport?: unknown;
 };
+
+type McpTransportConfig = {
+  type?: unknown;
+  command?: unknown;
+  args?: unknown;
+  env?: unknown;
+  env_vars?: unknown;
+  cwd?: unknown;
+  url?: unknown;
+  bearer_token_env_var?: unknown;
+  http_headers?: unknown;
+  env_http_headers?: unknown;
+  headers?: unknown;
+};
+
+type McpDescriptor = {
+  name: string;
+  configuredEnabled: boolean;
+  authStatus?: string;
+  transport?: McpTransportConfig;
+};
+
+type ServerMetadata = Pick<
+  McpServerInfo,
+  "title" | "websiteUrl" | "version" | "icons" | "metadataSource"
+>;
 
 let codexCache: { at: number; rows: CodexMcpRow[] } | undefined;
 const CACHE_MS = 30_000;
@@ -52,20 +87,26 @@ function ancestors(cwd: string): string[] {
   return out;
 }
 
-function claudeMcpNames(cwd: string | undefined): string[] {
+function claudeMcpDescriptors(cwd: string | undefined): McpDescriptor[] {
   const config = jsonFile(join(homedir(), ".claude.json"));
-  const names = new Set(Object.keys(config.mcpServers ?? {}));
+  const configs = new Map<string, McpTransportConfig>();
+  for (const [name, value] of Object.entries(config.mcpServers ?? {})) {
+    if (value && typeof value === "object") configs.set(name, value as McpTransportConfig);
+  }
   if (cwd) {
     for (const dir of ancestors(cwd)) {
       const project = jsonFile(join(dir, ".mcp.json"));
-      for (const name of Object.keys(project.mcpServers ?? {})) names.add(name);
+      for (const [name, value] of Object.entries(project.mcpServers ?? {})) {
+        if (value && typeof value === "object") configs.set(name, value as McpTransportConfig);
+      }
     }
   }
-  return [...names].sort((a, b) => a.localeCompare(b));
+  return [...configs.entries()]
+    .map(([name, transport]) => ({ name, configuredEnabled: true, transport }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export function mcpServersForSession(session: SessionInfo, disabled: string[]): McpServerInfo[] {
-  const denied = new Set(disabled);
+function descriptorsForSession(session: SessionInfo): McpDescriptor[] {
   if (session.agent === "codex") {
     return codexMcpRows()
       .filter((row) => typeof row.name === "string")
@@ -75,18 +116,215 @@ export function mcpServersForSession(session: SessionInfo, disabled: string[]): 
         return {
           name,
           configuredEnabled,
-          allowed: configuredEnabled && !denied.has(name),
           authStatus: typeof row.auth_status === "string" ? row.auth_status : undefined,
+          transport: row.transport && typeof row.transport === "object"
+            ? row.transport as McpTransportConfig
+            : undefined,
         };
       })
       .sort((a, b) => a.name.localeCompare(b.name));
   }
+  return claudeMcpDescriptors(session.cwd);
+}
 
-  return claudeMcpNames(session.cwd).map((name) => ({
-    name,
-    configuredEnabled: true,
-    allowed: !denied.has(name),
-  }));
+const metadataCache = new Map<string, { at: number; value?: ServerMetadata }>();
+const metadataPending = new Map<string, Promise<void>>();
+const METADATA_SUCCESS_TTL_MS = 6 * 60 * 60_000;
+const METADATA_FAILURE_TTL_MS = 10 * 60_000;
+
+function descriptorKey(descriptor: McpDescriptor): string {
+  const transport = descriptor.transport;
+  return JSON.stringify([
+    descriptor.name,
+    transport?.type,
+    transport?.url,
+    transport?.command,
+    transport?.args,
+    transport?.cwd,
+  ]);
+}
+
+function stringRecord(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object") return {};
+  return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] =>
+    typeof entry[1] === "string"));
+}
+
+function normalizedIcons(
+  info: Implementation,
+  descriptor: McpDescriptor,
+): NonNullable<McpServerInfo["icons"]> | undefined {
+  const remoteUrl = typeof descriptor.transport?.url === "string"
+    ? safeHttpsUrl(descriptor.transport.url)
+    : undefined;
+  const icons: NonNullable<McpServerInfo["icons"]> = [];
+  for (const icon of info.icons ?? []) {
+    if (icons.length >= 2) break;
+    if (typeof icon.src !== "string") continue;
+    const src = icon.src.trim();
+    const mime = typeof icon.mimeType === "string" ? icon.mimeType.toLowerCase() : undefined;
+    if (mime && !["image/png", "image/jpeg", "image/jpg"].includes(mime)) continue;
+
+    let sourceOrigin: string | undefined;
+    if (/^data:image\/(?:png|jpe?g);base64,/i.test(src)) {
+      if (src.length > 180_000) continue;
+    } else {
+      const iconUrl = safeHttpsUrl(src);
+      if (!iconUrl) continue;
+      // Remote MCP icons must remain on the MCP server's origin. For stdio
+      // there is no server origin, so the declared icon origin becomes the
+      // redirect boundary enforced by the iPhone downloader.
+      if (remoteUrl && iconUrl.origin !== remoteUrl.origin) continue;
+      sourceOrigin = iconUrl.origin;
+    }
+
+    icons.push({
+      src,
+      mimeType: mime,
+      sizes: Array.isArray(icon.sizes)
+        ? icon.sizes.filter((size): size is string => typeof size === "string").slice(0, 8)
+        : undefined,
+      theme: icon.theme === "light" || icon.theme === "dark" ? icon.theme : undefined,
+      sourceOrigin,
+    });
+  }
+  return icons.length ? icons : undefined;
+}
+
+function safeHttpsUrl(value: string): URL | undefined {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.username || url.password) return undefined;
+    return url;
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizeServerMetadata(
+  info: Implementation | undefined,
+  descriptor: McpDescriptor,
+): ServerMetadata | undefined {
+  if (!info) return undefined;
+  const title = typeof info.title === "string" && info.title.trim()
+    ? info.title.trim().slice(0, 160)
+    : undefined;
+  const website = typeof info.websiteUrl === "string" ? safeHttpsUrl(info.websiteUrl) : undefined;
+  const version = typeof info.version === "string" && info.version.trim()
+    ? info.version.trim().slice(0, 80)
+    : undefined;
+  return {
+    title,
+    websiteUrl: website?.toString(),
+    version,
+    icons: normalizedIcons(info, descriptor),
+    metadataSource: "mcp",
+  };
+}
+
+async function probeMetadata(descriptor: McpDescriptor): Promise<ServerMetadata | undefined> {
+  const config = descriptor.transport;
+  if (!config || !descriptor.configuredEnabled) return undefined;
+  const client = new Client({ name: "granttap-metadata", version: "0.6.3" });
+  try {
+    const type = typeof config.type === "string" ? config.type : undefined;
+    if ((type === "streamable_http" || type === "http" || type === "sse") &&
+        typeof config.url === "string") {
+      const url = safeHttpsUrl(config.url);
+      if (!url) return undefined;
+      const headers = { ...stringRecord(config.http_headers), ...stringRecord(config.headers) };
+      for (const [header, variable] of Object.entries(stringRecord(config.env_http_headers))) {
+        if (process.env[variable]) headers[header] = process.env[variable]!;
+      }
+      if (typeof config.bearer_token_env_var === "string" &&
+          process.env[config.bearer_token_env_var]) {
+        headers.Authorization = `Bearer ${process.env[config.bearer_token_env_var]}`;
+      }
+      const authenticatedFetch = (input: string | URL | globalThis.Request,
+                                  init?: RequestInit) => fetch(input, {
+        ...init,
+        credentials: "omit",
+        headers: { ...headers, ...stringRecord(init?.headers) },
+      });
+      const transport = type === "sse"
+        ? new SSEClientTransport(url, {
+            requestInit: { headers, credentials: "omit" },
+            fetch: authenticatedFetch,
+          })
+        : new StreamableHTTPClientTransport(url, {
+            requestInit: { headers, credentials: "omit" },
+            fetch: authenticatedFetch,
+            reconnectionOptions: {
+              maxReconnectionDelay: 1_000,
+              initialReconnectionDelay: 250,
+              reconnectionDelayGrowFactor: 1.2,
+              maxRetries: 0,
+            },
+          });
+      await client.connect(transport, { timeout: 7_000 });
+    } else if (typeof config.command === "string") {
+      const inherited = getDefaultEnvironment();
+      const env = { ...inherited, ...stringRecord(config.env) };
+      if (Array.isArray(config.env_vars)) {
+        for (const variable of config.env_vars) {
+          if (typeof variable === "string" && process.env[variable]) env[variable] = process.env[variable]!;
+        }
+      }
+      const transport = new StdioClientTransport({
+        command: config.command,
+        args: Array.isArray(config.args)
+          ? config.args.filter((arg): arg is string => typeof arg === "string")
+          : [],
+        env,
+        cwd: typeof config.cwd === "string" ? config.cwd : undefined,
+        stderr: "ignore",
+      });
+      await client.connect(transport, { timeout: 7_000 });
+    } else {
+      return undefined;
+    }
+    return normalizeServerMetadata(client.getServerVersion(), descriptor);
+  } catch {
+    return undefined;
+  } finally {
+    await client.close().catch(() => {});
+  }
+}
+
+async function refreshDescriptor(descriptor: McpDescriptor): Promise<void> {
+  const key = descriptorKey(descriptor);
+  const cached = metadataCache.get(key);
+  const ttl = cached?.value ? METADATA_SUCCESS_TTL_MS : METADATA_FAILURE_TTL_MS;
+  if (cached && Date.now() - cached.at < ttl) return;
+  const existing = metadataPending.get(key);
+  if (existing) return existing;
+  const pending = probeMetadata(descriptor)
+    .then((value) => { metadataCache.set(key, { at: Date.now(), value }); })
+    .finally(() => { metadataPending.delete(key); });
+  metadataPending.set(key, pending);
+  return pending;
+}
+
+/** Resolve the real serverInfo returned by MCP initialize and cache it. */
+export async function refreshMcpMetadataForSession(session: SessionInfo): Promise<void> {
+  await Promise.all(descriptorsForSession(session).map(refreshDescriptor));
+}
+
+export function mcpServersForSession(session: SessionInfo, disabled: string[]): McpServerInfo[] {
+  const descriptors = descriptorsForSession(session);
+  void Promise.all(descriptors.map(refreshDescriptor));
+  const denied = new Set(disabled);
+  return descriptors.map((descriptor) => {
+    const configuredEnabled = descriptor.configuredEnabled;
+    const base: McpServerInfo = {
+      name: descriptor.name,
+      configuredEnabled,
+      allowed: configuredEnabled && !denied.has(descriptor.name),
+      ...(descriptor.authStatus ? { authStatus: descriptor.authStatus } : {}),
+    };
+    const metadata = metadataCache.get(descriptorKey(descriptor))?.value;
+    return metadata ? { ...base, ...metadata } : base;
+  });
 }
 
 function frontmatter(path: string): SkillInfo | undefined {
