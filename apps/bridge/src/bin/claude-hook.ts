@@ -28,7 +28,16 @@ async function main(): Promise<void> {
   try {
     input = JSON.parse(raw) as HookInput;
   } catch {
-    // Unparseable input -> deny, but don't crash the agent.
+    process.stdout.write(
+      JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          permissionDecision: "deny",
+          permissionDecisionReason: "GrantTap received invalid hook JSON",
+        },
+      }),
+    );
+    return;
   }
 
   // Gating paused, or this session is exempt → abstain (empty output = Claude

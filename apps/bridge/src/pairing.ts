@@ -8,6 +8,7 @@ import {
 import {
   createPairing,
   machineConfigPath,
+  normalizeRelayUrl,
   phonePairingPath,
   saveConfig,
 } from "./config";
@@ -30,7 +31,9 @@ export type OneTimePairing = {
 };
 
 export function relayHttpBase(relayUrl: string): string {
-  return relayUrl.replace(/^ws:/, "http:").replace(/^wss:/, "https:").replace(/\/$/, "");
+  const url = new URL(normalizeRelayUrl(relayUrl));
+  url.protocol = url.protocol === "wss:" ? "https:" : "http:";
+  return url.toString().replace(/\/$/, "");
 }
 
 /**
@@ -66,6 +69,7 @@ export async function createOneTimePairing(
       headers: { "content-type": "application/json" },
       body: JSON.stringify(sealed),
       signal: AbortSignal.timeout(10_000),
+      redirect: "error",
     });
   } catch (error) {
     throw new Error(

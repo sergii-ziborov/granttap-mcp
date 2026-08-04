@@ -19,7 +19,7 @@ import { z } from "zod";
 import QRCode from "qrcode";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { RelayClient } from "../../../packages/core/relay-client";
-import { loadConfig, machineConfigPath } from "../../bridge/src/config";
+import { loadConfig, machineConfigPath, normalizeRelayUrl } from "../../bridge/src/config";
 import { installClaudeHook, installCodexHook, installMonitorHelper } from "../../bridge/src/install";
 import { randomId } from "../../../packages/core/crypto";
 import type { Payload } from "../../../packages/protocol/schema";
@@ -67,7 +67,7 @@ async function main(): Promise<void> {
   const server = new McpServer({
     name: "granttap",
     title: "GrantTap",
-    version: "0.6.4",
+    version: "0.6.5",
     websiteUrl: "https://granttap.com",
     icons: [
       {
@@ -84,7 +84,13 @@ async function main(): Promise<void> {
     {
       relayUrl: z
         .string()
+        .max(2_048)
         .url()
+        .refine((value) => {
+          try { normalizeRelayUrl(value); return true; } catch { return false; }
+        }, {
+          message: "Relay URL must use wss:// (or loopback ws:// for local development)",
+        })
         .optional()
         .describe("Optional wss:// relay URL. Omit to use the GrantTap production relay."),
     },
@@ -107,13 +113,18 @@ async function main(): Promise<void> {
               type: "text",
               text: [
                 "Scan this QR with GrantTap on iPhone to pair this computer.",
-                `Manual secure token: ${pairing.manualToken}`,
                 `Relay: ${pairing.httpBase}`,
                 `The encrypted mailbox is single-use and expires after ${PAIRING_CODE_TTL_MINUTES} minutes.`,
-                "The relay receives only a random mailbox id and ciphertext; the independent 256-bit transfer key stays in this QR/token.",
+                "The relay receives only a random mailbox id and ciphertext; the independent 256-bit transfer key stays in this user-only QR.",
               ].join("\n"),
+              annotations: { audience: ["user"] },
             },
-            { type: "image", data: png.toString("base64"), mimeType: "image/png" },
+            {
+              type: "image",
+              data: png.toString("base64"),
+              mimeType: "image/png",
+              annotations: { audience: ["user"] },
+            },
           ],
         };
       } catch (error) {
@@ -133,7 +144,7 @@ async function main(): Promise<void> {
   server.tool(
     "notify",
     "Push a short status/message to the user's phone. Fire-and-forget — use it to keep them informed without blocking.",
-    { message: z.string().describe("Text to show on the phone") },
+    { message: z.string().min(1).max(8_000).describe("Text to show on the phone") },
     async ({ message }) => {
       const c = await relay();
       if (!c) return { content: [{ type: "text", text: NOT_PAIRED }] };
@@ -149,7 +160,7 @@ async function main(): Promise<void> {
   server.tool(
     "ask_yes_no",
     "Ask the user a yes/no question on their phone/watch and wait for the tap. Returns 'yes' or 'no'.",
-    { question: z.string().describe("A question answerable with yes/no") },
+    { question: z.string().min(1).max(8_000).describe("A question answerable with yes/no") },
     async ({ question }) => {
       const c = await relay();
       if (!c) return { content: [{ type: "text", text: NOT_PAIRED }] };
@@ -183,7 +194,7 @@ async function main(): Promise<void> {
   server.tool(
     "ask",
     "Ask the user an open question on their phone/watch and wait for their spoken or typed reply. Returns their answer text.",
-    { question: z.string().describe("The question to ask") },
+    { question: z.string().min(1).max(8_000).describe("The question to ask") },
     async ({ question }) => {
       const c = await relay();
       if (!c) return { content: [{ type: "text", text: NOT_PAIRED }] };

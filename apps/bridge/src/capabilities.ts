@@ -166,7 +166,9 @@ async function safeIconData(src: string, remoteUrl?: URL): Promise<{
 } | undefined> {
   const dataMatch = src.match(/^data:image\/(png|jpe?g);base64,([a-z0-9+/=\s]+)$/i);
   if (dataMatch) {
-    const bytes = Buffer.from(dataMatch[2]!, "base64");
+    const encoded = dataMatch[2]!.replace(/\s/g, "");
+    if (encoded.length > Math.ceil(MAX_MCP_ICON_BYTES * 4 / 3) + 4) return undefined;
+    const bytes = Buffer.from(encoded, "base64");
     const mimeType = imageMime(bytes);
     if (!mimeType || bytes.length > MAX_MCP_ICON_BYTES) return undefined;
     return { src: `data:${mimeType};base64,${bytes.toString("base64")}`, mimeType };
@@ -197,7 +199,8 @@ async function safeIconData(src: string, remoteUrl?: URL): Promise<{
       if (!response.ok) return undefined;
       const length = Number(response.headers.get("content-length") ?? 0);
       if (Number.isFinite(length) && length > MAX_MCP_ICON_BYTES) return undefined;
-      const bytes = Buffer.from(await response.arrayBuffer());
+      const bytes = await readResponseBodyLimited(response, MAX_MCP_ICON_BYTES);
+      if (!bytes) return undefined;
       const mimeType = imageMime(bytes);
       if (!mimeType || bytes.length > MAX_MCP_ICON_BYTES) return undefined;
       return { src: `data:${mimeType};base64,${bytes.toString("base64")}`, mimeType };
@@ -206,6 +209,24 @@ async function safeIconData(src: string, remoteUrl?: URL): Promise<{
     return undefined;
   }
   return undefined;
+}
+
+async function readResponseBodyLimited(response: Response, maxBytes: number): Promise<Buffer | undefined> {
+  if (!response.body) return undefined;
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => {});
+      return undefined;
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)), total);
 }
 
 async function normalizedIcons(
@@ -272,7 +293,7 @@ async function normalizeServerMetadata(
 async function probeMetadata(descriptor: McpDescriptor): Promise<ServerMetadata | undefined> {
   const config = descriptor.transport;
   if (!config || !descriptor.configuredEnabled) return undefined;
-  const client = new Client({ name: "granttap-metadata", version: "0.6.4" });
+  const client = new Client({ name: "granttap-metadata", version: "0.6.5" });
   try {
     const type = typeof config.type === "string" ? config.type : undefined;
     if ((type === "streamable_http" || type === "http" || type === "sse") &&

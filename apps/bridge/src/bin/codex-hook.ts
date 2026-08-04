@@ -37,7 +37,8 @@ async function main(): Promise<void> {
   try {
     input = JSON.parse(raw) as HookInput;
   } catch {
-    // fall through: unparseable -> deny
+    process.stdout.write(denyOutput("GrantTap received invalid hook JSON"));
+    return;
   }
 
   // Gating paused or this session exempt → stay silent (Codex uses its own flow).

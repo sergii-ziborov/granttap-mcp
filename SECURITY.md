@@ -18,8 +18,8 @@ to an issue, or pasted into logs. The package avoids printing device secret
 keys. Existing configuration files are backed up before hook installation.
 
 Current pairings contain three independent secret classes: NaCl endpoint keys,
-random per-task keys, and a random `pushAuth` room credential that only
-authorizes APNs device-token registration at the relay. None may be logged.
+random per-task keys, and a random `pushAuth` room credential that authorizes
+the room WebSocket and APNs device-token registration at the relay. None may be logged.
 The relay receives only a hash of `pushAuth` and never receives an endpoint's
 secret encryption key.
 
@@ -31,6 +31,11 @@ secret encryption key.
   separate random 256-bit transfer key. Only the mailbox id is used in the HTTP
   path. The key stays in the QR/manual token, so a relay operator or a Durable
   Object database dump cannot open the parked pairing blob.
+- The terminal `connect` flow keeps that transfer key outside model context.
+  The MCP `connect` tool deliberately returns a QR in chat for convenience and
+  marks it user-only, but MCP audience annotations are not a cryptographic
+  boundary: depending on the host, the chat/model provider may receive tool
+  images. Use terminal pairing when the model provider is in your threat model.
 - Every attached Codex or Claude Code task receives a separate random 256-bit
   task key. Task messages, attachments, visible activity, access/MCP changes,
   compaction results, and task-bound approvals use this additional authenticated
@@ -43,6 +48,8 @@ secret encryption key.
   transport, network, Cloudflare, Durable Objects, and APNs.
 - APNs is only a content-neutral wake. It contains no task kind, request id,
   delivery id, title, prompt, command, path, or response.
+  It is a best-effort silent background notification; after waking, iOS pulls
+  and decrypts the queue and creates the single actionable local notification.
 - Scheduler-planner turns and their structured drafts cross Cloudflare only as
   authenticated device-to-device ciphertext. The selected CLI runs locally in
   ephemeral read-only/plan mode; it cannot silently turn planning into a
@@ -65,7 +72,10 @@ different task's key—not against an already authorized endpoint.
 
 The delivery ledger and scheduler history are stored only on the paired Mac.
 They contain random message ids and local task metadata and are bounded and
-expired; do not attach real copies to bug reports.
+expired; do not attach real copies to bug reports. Delivery ACK is emitted only
+after a consumer accepts the decrypted payload. A processing lease recovers
+after a crash; agent execution is at-least-once across that rare crash window,
+because third-party Codex/Claude CLIs do not expose a transactional idempotency key.
 
 Chat history and capability metadata follow the same cryptographic boundary.
 The bridge reads a bounded set of local Codex/Claude logs, emits only chat

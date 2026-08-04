@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp } from "node:fs/promises";
+import { chmod, mkdtemp, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -7,8 +7,10 @@ import {
   createPairing,
   isGatingSkipped,
   loadRuntimeConfig,
+  machineConfigPath,
   pairingUri,
   parsePairingUri,
+  saveConfig,
   saveRuntimeConfig,
 } from "../apps/bridge/src/config";
 import { oneTimePairingUri, relayHttpBase } from "../apps/bridge/src/pairing";
@@ -37,6 +39,14 @@ test("gating can exclude exactly one chat without disabling every chat", async (
   assert.deepEqual(loadRuntimeConfig().sessionMcpDisabled["chat-a"], ["github"]);
   assert.equal(isGatingSkipped("chat-a"), true);
   assert.equal(isGatingSkipped("chat-b"), false);
+  assert.equal((await stat(join(configDir, "config.json"))).mode & 0o777, 0o600);
+
+  const { machineCfg } = createPairing("wss://relay.example.test");
+  await writeFile(machineConfigPath(), "legacy", { mode: 0o644 });
+  await chmod(machineConfigPath(), 0o644);
+  saveConfig(machineConfigPath(), machineCfg);
+  assert.equal((await stat(machineConfigPath())).mode & 0o777, 0o600);
+  assert.match(machineCfg.room, /^[a-f0-9]{32}$/);
 
   saveRuntimeConfig({ enabled: false, excludedSessions: [], sessionAccess: {}, sessionMcpDisabled: {} });
   assert.equal(isGatingSkipped("chat-a"), true);
@@ -83,4 +93,18 @@ test("chat pairing QR separates the relay mailbox from its 256-bit transfer key"
   assert.equal(parsed.searchParams.has("s"), false);
   assert.equal(parsed.searchParams.has("p"), false);
   assert.equal(relayHttpBase("ws://127.0.0.1:8787/"), "http://127.0.0.1:8787");
+});
+
+test("pairing accepts only authenticated WebSocket relay endpoints and complete keys", () => {
+  assert.throws(() => createPairing("https://relay.example.test"), /wss:\/\//);
+  assert.throws(() => createPairing("wss://user:pass@relay.example.test"), /credentials/);
+  assert.throws(() => createPairing("ws://relay.example.test"), /loopback/);
+  assert.doesNotThrow(() => createPairing("ws://127.0.0.1:8787"));
+
+  const { phoneCfg } = createPairing("wss://relay.example.test/");
+  const valid = pairingUri(phoneCfg);
+  assert.equal(parsePairingUri(valid)?.relayUrl, "wss://relay.example.test");
+  assert.equal(parsePairingUri(valid.replace("v=1", "v=9")), null);
+  assert.equal(parsePairingUri(valid.replace(/([?&])k=[^&]+/, "$1k=short")), null);
+  assert.equal(parsePairingUri(valid.replace("wss%3A%2F%2F", "https%3A%2F%2F")), null);
 });

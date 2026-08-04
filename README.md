@@ -109,7 +109,7 @@ Existing beta state under `~/.nodvox/` is migrated automatically.
 | Approval hook | `PermissionRequest` when Codex hooks are enabled | `PreToolUse` |
 | Resume an existing task | Yes, through the local Codex CLI | Yes, through the local Claude CLI |
 | Start a new persistent task | Yes | Yes |
-| Up to five attachments | Images through Codex image inputs; documents as local paths | Local image/document paths in the turn |
+| Up to five attachments within one encrypted-frame budget | Images through Codex image inputs; documents as local paths | Local image/document paths in the turn |
 | Change filesystem access from iPhone | Read-only, workspace, or full for the next GrantTap turn | Not exposed; the existing Claude policy remains authoritative |
 | Disable MCP per task | Enforced for later GrantTap-delivered turns | Enforced for later GrantTap-delivered turns |
 | Usage and context | Reported when present in local task logs | Reported when present in local task logs |
@@ -152,6 +152,14 @@ The default answer timeout is three minutes. Override it with
   Durable Objects, and APNs path.
 - APNs carries only a content-neutral wake. It contains no title, prompt,
   command, path, task kind, or response.
+- Cloudflare accepts at most a 32 MiB WebSocket frame. Because task messages are
+  sealed and base64-encoded twice, attachments share a 16,000,000-character
+  base64 budget (about 12 MB raw total); five small files fit, five 6 MB files do not.
+
+The in-chat QR is marked user-only for MCP hosts, but that annotation is not a
+cryptographic separation from the model provider. Use CLI `connect` when the
+model provider itself is part of your threat model; Cloudflare still receives
+only the mailbox id and ciphertext in either flow.
 
 The relay can still observe operational metadata: opaque room/mailbox IDs, IP
 addresses, timing, ciphertext sizes, and APNs device token/environment. A

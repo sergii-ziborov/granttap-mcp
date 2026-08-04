@@ -32,7 +32,8 @@ if (command === "mcp") {
   process.exit(1);
 }
 
-const child = spawn(process.execPath, ["--import", "tsx", entry], {
+const forwardedArgs = command === "connect" ? process.argv.slice(3) : [];
+const child = spawn(process.execPath, ["--import", "tsx", entry, ...forwardedArgs], {
   stdio: "inherit",
   env: process.env,
 });

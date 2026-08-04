@@ -1,6 +1,6 @@
 /** Terminal-free local schedules shared by Codex and Claude Code. */
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import {
@@ -42,6 +42,7 @@ export function scheduleHistorySnapshot(): ScheduleRunRecord[] {
 function saveHistory(history: ScheduleRunRecord[]): void {
   mkdirSync(configDir(), { recursive: true });
   writeFileSync(scheduleHistoryPath(), `${JSON.stringify(history.slice(0, 200), null, 2)}\n`, { mode: 0o600 });
+  chmodSync(scheduleHistoryPath(), 0o600);
 }
 
 export function loadSchedules(): ScheduledTask[] {
@@ -60,6 +61,7 @@ export function loadSchedules(): ScheduledTask[] {
 function saveSchedules(tasks: ScheduledTask[]): void {
   mkdirSync(configDir(), { recursive: true });
   writeFileSync(schedulesPath(), `${JSON.stringify(tasks, null, 2)}\n`, { mode: 0o600 });
+  chmodSync(schedulesPath(), 0o600);
 }
 
 export function scheduledSnapshot(now = Date.now()): ScheduledTask[] {

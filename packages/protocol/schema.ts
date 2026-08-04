@@ -65,6 +65,13 @@ export const UserAttachment = z.object({
 });
 export type UserAttachment = z.infer<typeof UserAttachment>;
 
+/**
+ * Task messages are sealed twice (task key, then device key), and each NaCl
+ * layer base64-encodes its ciphertext. This budget keeps the final frame below
+ * Cloudflare's 32 MiB WebSocket receive limit with JSON overhead.
+ */
+export const MAX_ATTACHMENT_BASE64_CHARS = 16_000_000;
+
 export const UserMessage = z.object({
   type: z.literal("user.message"),
   /** Stable id makes phone retries idempotent and powers delivery receipts. */
@@ -477,7 +484,17 @@ export const Payload = z.discriminatedUnion("type", [
   SchedulePlanRequest,
   SchedulePlanResult,
   Hello,
-]);
+]).superRefine((payload, ctx) => {
+  if (payload.type !== "user.message") return;
+  const encodedCharacters = payload.attachments?.reduce((total, item) => total + item.data.length, 0) ?? 0;
+  if (encodedCharacters > MAX_ATTACHMENT_BASE64_CHARS) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["attachments"],
+      message: `attachments exceed the ${MAX_ATTACHMENT_BASE64_CHARS}-character encrypted transport budget`,
+    });
+  }
+});
 export type Payload = z.infer<typeof Payload>;
 
 /** The routed unit. `nonce`+`box` are the sealed Payload; relay can't open it. */

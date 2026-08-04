@@ -23,7 +23,7 @@ test("macOS background task sync is installed as a terminal-free LaunchAgent", a
   };
   process.env.GRANTTAP_LAUNCH_AGENTS_DIR = agentsDir;
   process.env.GRANTTAP_CONFIG_DIR = configDir;
-  process.env.GRANTTAP_MONITOR_CWD = "/tmp/granttap-default-workspace";
+  process.env.GRANTTAP_MONITOR_CWD = `/tmp/granttap-default-workspace&<>'"`;
   process.env.GRANTTAP_SKIP_LAUNCHCTL = "1";
   t.after(() => {
     const restore = (key: string, value: string | undefined) => {
@@ -42,7 +42,10 @@ test("macOS background task sync is installed as a terminal-free LaunchAgent", a
   const plist = await readFile(path, "utf8");
   assert.match(plist, /<string>monitor<\/string>/);
   assert.match(plist, /<key>KeepAlive<\/key>\s*<true\/>/);
-  assert.match(plist, /<string>\/tmp\/granttap-default-workspace<\/string>/);
+  assert.match(
+    plist,
+    /<string>\/tmp\/granttap-default-workspace&amp;&lt;&gt;&apos;&quot;<\/string>/,
+  );
   assert.match(plist, /monitor\.log/);
 
   const second = installMonitorHelper();

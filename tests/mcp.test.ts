@@ -72,12 +72,14 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
     text?: string;
     data?: string;
     mimeType?: string;
+    annotations?: { audience?: string[] };
   }>;
   const pairingText = pairingContent.find((item) => item.type === "text")?.text ?? "";
   const pairingImage = pairingContent.find((item) => item.type === "image");
-  assert.match(pairingText, /manual secure token:/i);
+  assert.doesNotMatch(pairingText, /manual secure token:/i);
   assert.match(pairingText, /single-use/i);
   assert.equal(pairingImage?.mimeType, "image/png");
+  assert.deepEqual(pairingImage?.annotations?.audience, ["user"]);
   assert.deepEqual(
     Buffer.from(pairingImage?.data ?? "", "base64").subarray(0, 8),
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
@@ -91,6 +93,6 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   assert.equal(pairingText.includes(phoneSecret), false);
   assert.equal(Buffer.from(pairingImage?.data ?? "", "base64").includes(Buffer.from(phoneSecret)), false);
   const mailboxId = parkedPath.split("/").at(-1)!;
-  assert.equal(pairingText.includes(mailboxId), true);
+  assert.equal(pairingText.includes(mailboxId), false);
   assert.equal(parkedBody.includes(mailboxId), false);
 });

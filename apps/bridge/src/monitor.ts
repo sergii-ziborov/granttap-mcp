@@ -20,7 +20,7 @@ import { configDir, loadRuntimeConfig, saveRuntimeConfig } from "./config";
 import { mcpServersForSession, workspaceSkills } from "./capabilities";
 import { compactCodexSession } from "./codex-control";
 import { createClaudeSession, createCodexSession, deliverToSession } from "./reply";
-import { hasAcceptedDelivery, rememberAcceptedDelivery } from "./delivery";
+import { abandonDelivery, beginDelivery, completeDelivery } from "./delivery";
 import { inspectAgentIntegrations } from "./install";
 import { primeSessionKeys, sendSessionPayload } from "./session-keys";
 import {
@@ -132,47 +132,72 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
     }
   };
 
-  const off = client.onMessage((payload) => {
+  const off = client.onMessage(async (payload) => {
     // Codex may start one MCP server per open task. Exactly one instance owns
     // phone routing, so a single phone message can never create duplicate tasks.
-    if (!leadership.acquire()) return;
+    if (!leadership.acquire()) return false;
     if (payload.type === "user.message") {
+      // Correlated replies belong to the MCP `ask` waiter in one process.
+      if (payload.requestId) return false;
+      let deliveryStarted = false;
       if (payload.messageId) {
-        const duplicate = hasAcceptedDelivery(payload.messageId);
-        if (!duplicate) rememberAcceptedDelivery(payload.messageId);
-        void sendDeliveryReceipt(client, payload.messageId, "accepted", undefined, payload.sessionId);
-        if (duplicate) return;
+        const state = beginDelivery(payload.messageId);
+        if (state === "completed") {
+          await sendDeliveryReceipt(client, payload.messageId, "accepted", undefined, payload.sessionId);
+          return true;
+        }
+        if (state === "processing") return false;
+        deliveryStarted = true;
       }
-      // Replies correlated with an MCP `ask` are consumed by that tool call.
-      if (!payload.requestId) {
-        void handleUserMessage(client, payload).finally(() => publish().catch(() => {}));
+      try {
+        await handleUserMessage(client, payload);
+        if (payload.messageId && deliveryStarted) {
+          completeDelivery(payload.messageId);
+          await sendDeliveryReceipt(client, payload.messageId, "accepted", undefined, payload.sessionId);
+        }
+        void publish().catch(() => {});
+        return true;
+      } catch {
+        if (payload.messageId && deliveryStarted) abandonDelivery(payload.messageId);
+        return false;
       }
     } else if (payload.type === "config.set") {
       handleConfigSet(payload);
       void publish().catch(() => {});
+      return true;
     } else if (payload.type === "session.subscribe") {
       handleSubscription(subscriptions, payload);
       void publish().catch(() => {});
+      return true;
     } else if (payload.type === "session.access.set") {
       handleAccessSet(payload);
       void publish().catch(() => {});
+      return true;
     } else if (payload.type === "session.mcp.set") {
       handleMcpSet(payload);
       void publish().catch(() => {});
+      return true;
     } else if (payload.type === "session.compact") {
-      void handleCompact(client, payload).finally(() => publish().catch(() => {}));
+      await handleCompact(client, payload);
+      void publish().catch(() => {});
+      return true;
     } else if (payload.type === "schedule.set") {
       handleScheduleSet(payload);
       void publish().catch(() => {});
+      return true;
     } else if (payload.type === "schedule.delete") {
       handleScheduleDelete(payload);
       void publish().catch(() => {});
+      return true;
     } else if (payload.type === "schedule.run") {
       handleScheduleRun(payload);
       void publish().catch(() => {});
+      return true;
     } else if (payload.type === "schedule.plan.request") {
-      void handleSchedulePlan(client, payload);
+      await handleSchedulePlan(client, payload);
+      return true;
     }
+    return false;
   });
 
   const timer = setInterval(() => void publish().catch(() => {}), INTERVAL_MS);

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { generateTransferKey } from "../../../packages/core/crypto";
 import { RelayClient, type SendOptions } from "../../../packages/core/relay-client";
@@ -25,6 +25,7 @@ function load(): SessionKeys {
 function save(keys: SessionKeys): void {
   mkdirSync(configDir(), { recursive: true });
   writeFileSync(sessionKeysPath(), `${JSON.stringify(keys, null, 2)}\n`, { mode: 0o600 });
+  chmodSync(sessionKeysPath(), 0o600);
 }
 
 export function sessionKey(sessionId: string): string {
