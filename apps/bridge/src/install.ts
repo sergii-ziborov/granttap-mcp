@@ -13,22 +13,52 @@ import {
   accessSync,
   constants,
   copyFileSync,
+  cpSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
+  rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { delimiter, dirname, join } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { configDir } from "./config";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
+export const GRANTTAP_HTTP_MCP_URL = "http://127.0.0.1:17342/mcp";
+const httpServeLaunchAgentLabel = "com.granttap.mcp-http";
+
 /** The stable command agents will call. */
 export function hookCommand(agent: "claude" | "codex"): string {
   return `node "${join(repoRoot, "bin", "granttap-mcp.mjs")}" hook ${agent}`;
+}
+
+/**
+ * Absolute Node binary for LaunchAgents. launchd often has a thin PATH, so
+ * preferring process.execPath (or GRANTTAP_NODE_BIN) avoids a dead monitor.
+ */
+export function resolveMonitorNodeBin(): string {
+  const overridden = process.env.GRANTTAP_NODE_BIN;
+  if (overridden && existsSync(overridden)) return resolve(overridden);
+  if (process.execPath && existsSync(process.execPath)) return process.execPath;
+  const fromPath = (process.env.PATH ?? "")
+    .split(delimiter)
+    .filter(Boolean)
+    .map((dir) => join(dir, "node"))
+    .find((candidate) => {
+      try {
+        accessSync(candidate, constants.X_OK);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+  return fromPath ?? "node";
 }
 
 export type InstallResult = { status: "installed" | "already" | "manual"; detail: string };
@@ -106,6 +136,72 @@ function xml(value: string): string {
     .replaceAll("'", "&apos;");
 }
 
+function writeLaunchAgentPlist(options: {
+  label: string;
+  path: string;
+  nodeBin: string;
+  executable: string;
+  args: string[];
+  workingDirectory: string;
+  logPath: string;
+  environmentPath: string;
+}): string {
+  const programArgs = [options.nodeBin, options.executable, ...options.args]
+    .map((arg) => `    <string>${xml(arg)}</string>`)
+    .join("\n");
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
+    '<plist version="1.0">',
+    "<dict>",
+    "  <key>Label</key>",
+    `  <string>${options.label}</string>`,
+    "  <key>ProgramArguments</key>",
+    "  <array>",
+    programArgs,
+    "  </array>",
+    "  <key>EnvironmentVariables</key>",
+    "  <dict>",
+    "    <key>PATH</key>",
+    `    <string>${xml(options.environmentPath)}</string>`,
+    "  </dict>",
+    "  <key>WorkingDirectory</key>",
+    `  <string>${xml(options.workingDirectory)}</string>`,
+    "  <key>RunAtLoad</key>",
+    "  <true/>",
+    "  <key>KeepAlive</key>",
+    "  <true/>",
+    "  <key>ProcessType</key>",
+    "  <string>Background</string>",
+    "  <key>ThrottleInterval</key>",
+    "  <integer>5</integer>",
+    "  <key>StandardErrorPath</key>",
+    `  <string>${xml(options.logPath)}</string>`,
+    "</dict>",
+    "</plist>",
+    "",
+  ].join("\n");
+}
+
+function bootstrapLaunchAgent(path: string, already: boolean): InstallResult {
+  if (process.env.GRANTTAP_SKIP_LAUNCHCTL === "1") {
+    return { status: already ? "already" : "installed", detail: path };
+  }
+
+  const uid = process.getuid?.();
+  if (uid == null) return { status: "manual", detail: `${path}: could not determine user id` };
+  const domain = `gui/${uid}`;
+  spawnSync("launchctl", ["bootout", domain, path], { stdio: "ignore" });
+  const loaded = spawnSync("launchctl", ["bootstrap", domain, path], {
+    encoding: "utf8",
+  });
+  if (loaded.status !== 0) {
+    const detail = (loaded.stderr || loaded.stdout || "launchctl bootstrap failed").trim();
+    return { status: "manual", detail: `${path}: ${detail}` };
+  }
+  return { status: already ? "already" : "installed", detail: path };
+}
+
 /**
  * Keep task/session sync alive without a terminal or a newly opened MCP chat.
  * The MCP process and this helper share a leader lock, so phone messages are
@@ -123,62 +219,152 @@ export function installMonitorHelper(): InstallResult {
   const executable = join(repoRoot, "bin", "granttap-mcp.mjs");
   const workingDirectory = process.env.GRANTTAP_MONITOR_CWD ?? process.cwd();
   const environmentPath = process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
-  const plist = [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
-    '<plist version="1.0">',
-    "<dict>",
-    "  <key>Label</key>",
-    `  <string>${launchAgentLabel}</string>`,
-    "  <key>ProgramArguments</key>",
-    "  <array>",
-    `    <string>${xml(process.execPath)}</string>`,
-    `    <string>${xml(executable)}</string>`,
-    "    <string>monitor</string>",
-    "  </array>",
-    "  <key>EnvironmentVariables</key>",
-    "  <dict>",
-    "    <key>PATH</key>",
-    `    <string>${xml(environmentPath)}</string>`,
-    "  </dict>",
-    "  <key>WorkingDirectory</key>",
-    `  <string>${xml(workingDirectory)}</string>`,
-    "  <key>RunAtLoad</key>",
-    "  <true/>",
-    "  <key>KeepAlive</key>",
-    "  <true/>",
-    "  <key>ProcessType</key>",
-    "  <string>Background</string>",
-    "  <key>ThrottleInterval</key>",
-    "  <integer>5</integer>",
-    "  <key>StandardErrorPath</key>",
-    `  <string>${xml(logPath)}</string>`,
-    "</dict>",
-    "</plist>",
-    "",
-  ].join("\n");
+  const plist = writeLaunchAgentPlist({
+    label: launchAgentLabel,
+    path,
+    nodeBin: resolveMonitorNodeBin(),
+    executable,
+    args: ["monitor"],
+    workingDirectory,
+    logPath,
+    environmentPath,
+  });
 
   mkdirSync(agentsDir, { recursive: true });
   mkdirSync(configDir(), { recursive: true });
   const already = existsSync(path) && readFileSync(path, "utf8") === plist;
   writeFileSync(path, plist, { mode: 0o644 });
+  return bootstrapLaunchAgent(path, already);
+}
 
-  if (process.env.GRANTTAP_SKIP_LAUNCHCTL === "1") {
-    return { status: already ? "already" : "installed", detail: path };
+/**
+ * Keep loopback HTTP MCP alive for Cursor Authorize
+ * (`http://127.0.0.1:17342/mcp`). Stdio MCP never shows Authorize.
+ */
+export function installHttpServeHelper(): InstallResult {
+  if (process.platform !== "darwin") {
+    return {
+      status: "manual",
+      detail: `run «granttap-mcp serve» on this machine for Cursor Authorize (${GRANTTAP_HTTP_MCP_URL})`,
+    };
   }
 
-  const uid = process.getuid?.();
-  if (uid == null) return { status: "manual", detail: `${path}: could not determine user id` };
-  const domain = `gui/${uid}`;
-  spawnSync("launchctl", ["bootout", domain, path], { stdio: "ignore" });
-  const loaded = spawnSync("launchctl", ["bootstrap", domain, path], {
-    encoding: "utf8",
+  const agentsDir =
+    process.env.GRANTTAP_LAUNCH_AGENTS_DIR ?? join(homedir(), "Library", "LaunchAgents");
+  const path = join(agentsDir, `${httpServeLaunchAgentLabel}.plist`);
+  const logPath = join(configDir(), "mcp-http.log");
+  const executable = join(repoRoot, "bin", "granttap-mcp.mjs");
+  const workingDirectory = process.env.GRANTTAP_MONITOR_CWD ?? process.cwd();
+  const environmentPath = process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+  const plist = writeLaunchAgentPlist({
+    label: httpServeLaunchAgentLabel,
+    path,
+    nodeBin: resolveMonitorNodeBin(),
+    executable,
+    args: ["serve"],
+    workingDirectory,
+    logPath,
+    environmentPath,
   });
-  if (loaded.status !== 0) {
-    const detail = (loaded.stderr || loaded.stdout || "launchctl bootstrap failed").trim();
-    return { status: "manual", detail: `${path}: ${detail}` };
+
+  mkdirSync(agentsDir, { recursive: true });
+  mkdirSync(configDir(), { recursive: true });
+  const already = existsSync(path) && readFileSync(path, "utf8") === plist;
+  writeFileSync(path, plist, { mode: 0o644 });
+  return bootstrapLaunchAgent(path, already);
+}
+
+/** Point ~/.cursor/mcp.json granttap at the HTTP Authorize URL; backup once. */
+export function installCursorMcpHttpConfig(): InstallResult {
+  const cursorDir =
+    process.env.GRANTTAP_CURSOR_DIR ?? join(homedir(), ".cursor");
+  const path = join(cursorDir, "mcp.json");
+  mkdirSync(cursorDir, { recursive: true });
+
+  let config: { mcpServers?: Record<string, unknown> } = {};
+  if (existsSync(path)) {
+    try {
+      config = JSON.parse(readFileSync(path, "utf8")) as typeof config;
+    } catch {
+      return {
+        status: "manual",
+        detail: `${path} — не парсится как JSON, не трогаю. Добавь HTTP MCP вручную: ${GRANTTAP_HTTP_MCP_URL}`,
+      };
+    }
   }
-  return { status: already ? "already" : "installed", detail: path };
+
+  const desired = { type: "http", url: GRANTTAP_HTTP_MCP_URL };
+  const current = config.mcpServers?.granttap;
+  if (
+    current &&
+    typeof current === "object" &&
+    (current as { type?: string }).type === "http" &&
+    (current as { url?: string }).url === GRANTTAP_HTTP_MCP_URL
+  ) {
+    return { status: "already", detail: path };
+  }
+
+  backupOnce(path);
+  config.mcpServers = { ...(config.mcpServers ?? {}), granttap: desired };
+  writeFileSync(path, JSON.stringify(config, null, 2) + "\n");
+  return { status: "installed", detail: path };
+}
+
+function pluginTreesEqual(source: string, target: string): boolean {
+  if (!existsSync(target)) return false;
+  const walk = (dir: string, base: string): string[] => {
+    const entries = readdirSync(dir, { withFileTypes: true });
+    const files: string[] = [];
+    for (const entry of entries) {
+      if (entry.name === ".git" || entry.name === "node_modules") continue;
+      const abs = join(dir, entry.name);
+      const rel = join(base, entry.name);
+      if (entry.isDirectory()) files.push(...walk(abs, rel));
+      else if (entry.isFile()) files.push(rel);
+    }
+    return files.sort();
+  };
+  const sourceFiles = walk(source, "");
+  const targetFiles = walk(target, "");
+  if (sourceFiles.length !== targetFiles.length) return false;
+  for (let i = 0; i < sourceFiles.length; i++) {
+    const rel = sourceFiles[i];
+    if (rel == null || rel !== targetFiles[i]) return false;
+    const a = readFileSync(join(source, rel));
+    const b = readFileSync(join(target, rel));
+    if (!a.equals(b)) return false;
+  }
+  return true;
+}
+
+/** Sync repo cursor-plugin/ into ~/.cursor/plugins/local/granttap for Local Plugins UI. */
+export function installCursorPluginLocal(): InstallResult {
+  const source =
+    process.env.GRANTTAP_CURSOR_PLUGIN_SRC ?? join(repoRoot, "cursor-plugin");
+  if (!existsSync(source) || !statSync(source).isDirectory()) {
+    return { status: "manual", detail: `cursor-plugin source missing: ${source}` };
+  }
+  if (!existsSync(join(source, ".cursor-plugin", "plugin.json"))) {
+    return {
+      status: "manual",
+      detail: `${source}: missing .cursor-plugin/plugin.json`,
+    };
+  }
+
+  const pluginsLocal =
+    process.env.GRANTTAP_CURSOR_PLUGINS_LOCAL ??
+    join(homedir(), ".cursor", "plugins", "local");
+  const target = join(pluginsLocal, "granttap");
+  mkdirSync(pluginsLocal, { recursive: true });
+
+  if (pluginTreesEqual(source, target)) {
+    return { status: "already", detail: target };
+  }
+
+  rmSync(target, { recursive: true, force: true });
+  mkdirSync(target, { recursive: true });
+  cpSync(source, target, { recursive: true });
+  return { status: "installed", detail: target };
 }
 
 function backupOnce(path: string): void {

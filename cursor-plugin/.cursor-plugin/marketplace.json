@@ -1,0 +1,14 @@
+{
+  "name": "granttap",
+  "owner": { "name": "GrantTap" },
+  "metadata": {
+    "description": "GrantTap Cursor plugin — HTTP MCP Authorize, dual-channel rules, connect skill"
+  },
+  "plugins": [
+    {
+      "name": "granttap",
+      "source": "./",
+      "description": "Phone + Cursor dual-channel approvals via GrantTap HTTP MCP (Authorize)"
+    }
+  ]
+}

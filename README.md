@@ -102,6 +102,24 @@ it preserves unrelated agent settings and backs up a configuration file before
 changing it. The pairing is stored locally in `~/.granttap/machine.json`.
 Existing beta state under `~/.nodvox/` is migrated automatically.
 
+### Cursor Plugins (Authorize)
+
+Cursor’s **Authorize** button requires **HTTP** MCP, not stdio. A Local
+`~/.cursor/plugins/local/granttap` folder that only contains `.git` (or a stdio
+`mcp.json`) shows an empty stub with no description and no Authorize control.
+
+From this repo:
+
+```bash
+granttap-mcp setup   # hooks + com.granttap.mcp-http + ~/.cursor/mcp.json + local plugin sync
+# or keep a foreground listener:
+granttap-mcp serve   # http://127.0.0.1:17342/mcp
+```
+
+The `cursor-plugin/` package ships HTTP `mcp.json`, dual-channel rules, and the
+`granttap-connect` skill. Details: [docs/cursor-authorize.md](docs/cursor-authorize.md)
+and [cursor-plugin/README.md](cursor-plugin/README.md).
+
 ## Codex and Claude Code: honest capability matrix
 
 | Capability | Codex | Claude Code |
@@ -133,7 +151,7 @@ Repository skills are discovered only in the selected task workspace under
 | `ask` | Sends an open question and waits for a spoken or typed reply |
 | `ask_yes_no` | Sends a yes/no question and waits for a tap |
 | `notify` | Sends a non-blocking status update |
-| `setup` | Registers both approval hooks and the terminal-free helper |
+| `setup` | Registers approval hooks, monitor + HTTP serve helpers, Cursor MCP HTTP config, and the local Cursor plugin |
 
 The default answer timeout is three minutes. Override it with
 `GRANTTAP_ASK_TIMEOUT_MS`.
@@ -189,8 +207,9 @@ time, agent, status, result, and created task ID.
 | Command | Purpose |
 | --- | --- |
 | *(no command)* | Starts the GrantTap MCP stdio server |
+| `serve` | Starts loopback HTTP MCP (`http://127.0.0.1:17342/mcp`) for Cursor Authorize |
 | `connect [relayUrl]` | Creates an E2EE pairing; optionally targets a self-hosted `wss://` relay |
-| `setup` | Registers the Codex/Claude hooks and background helper |
+| `setup` | Registers Codex/Claude hooks, monitor + HTTP serve LaunchAgents, Cursor HTTP MCP config, and syncs the local Cursor plugin |
 
 ## Development
 

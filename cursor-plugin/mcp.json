@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "granttap": {
+      "type": "http",
+      "url": "http://127.0.0.1:17342/mcp"
+    }
+  }
+}

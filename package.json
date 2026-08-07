@@ -9,6 +9,8 @@
   "files": [
     "apps",
     "bin",
+    "cursor-plugin",
+    "docs",
     "packages",
     "LICENSE",
     "README.md",
@@ -16,6 +18,7 @@
   ],
   "scripts": {
     "start": "node bin/granttap-mcp.mjs",
+    "serve": "node bin/granttap-mcp.mjs serve",
     "setup": "node bin/granttap-mcp.mjs setup",
     "test": "node --import tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",

@@ -1,0 +1,22 @@
+---
+description: Never gut GrantTap in-chat product UI to work around hangs
+alwaysApply: true
+---
+
+# GrantTap — no feature strip
+
+Never remove GrantTap in-chat functionality to make a sheet open or a build “green.”
+
+## Forbidden
+
+- Stripping `SessionDetailSheet` (or other product UI) down to placeholders like title + Close + `"ok"`.
+- Shipping emergency empty / barren chat builds as a hang workaround.
+- Deleting or permanently `#if false`-ing Skills, Shell/CLI, MCP (+ tokens/toggles), agents/subagents, in-chat Allow (`InChatApprovalsBar`), messages, or composer.
+
+## Required instead
+
+- Diagnose and fix the hang/crash root cause (main-thread work, remount thrash, attribute-graph cycles, sync I/O, etc.).
+- Deferred / lazy load is OK: open the sheet with real structure, then populate heavy sections after first paint.
+- Keep known hang fixes: stable `OpenSession` sheet identity, no 800ms auto-dismiss, no `ScenePhase.active` chat clear (Face ID lock only), no `liveStamp` / Timer remount thrash.
+
+Empty product UI is not a fix. Fix the bug; keep the product.

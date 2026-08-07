@@ -1,0 +1,20 @@
+---
+description: Hard-won GrantTap anti-thrashing and release safeguards
+alwaysApply: true
+---
+
+# GrantTap anti-thrash rules
+
+Treat wasted iteration as a serious failure mode: the user burned a huge share of monthly tokens with little result. Optimize for one evidence-driven path to a verified install.
+
+1. Do not spawn many parallel agents for the same GrantTap phone fix. Prefer one agent with one coherent diagnosis and implementation.
+2. Do not pull `main`, stash WIP, and install unless the Face ID fix is present and the session monitor is working.
+3. Empty chats after an install usually mean the monitor is dead, commonly because the LaunchAgent cannot find Node via `PATH`. Fix and verify the monitor before blaming the iOS UI.
+4. Never call `unlock()` automatically from `ScenePhase.active`; this causes an infinite Face ID loop.
+5. Every real user question or approval must use identical complete text in both Cursor chat and GrantTap phone. Either response is sufficient because the user may lack access to the Mac or phone.
+6. Do not flood the phone with Claude shell approvals for routine `rg`, `ls`, or similar safe operations. Auto-accept them when permitted, or use the Mac-only shell execution path without creating a second approval gate. This does not weaken the dual-channel requirement for real user decisions.
+7. Prefer one agent, ship the install, then verify that sessions appear in the monitor log.
+8. For recurring bugs such as empty chats or a white **Accept** control, restore the known prior fix first; do not reinvent the solution.
+9. Keep files around 300 lines and avoid monoliths, but never block a working shipment on a refactor.
+
+Before declaring success, confirm the installed build contains the intended fixes and the monitor log shows live sessions.

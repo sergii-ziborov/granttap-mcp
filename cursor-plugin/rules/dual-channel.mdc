@@ -1,0 +1,22 @@
+---
+description: Require every interactive prompt in both Cursor chat and GrantTap
+alwaysApply: true
+---
+
+# GrantTap dual-channel interaction
+
+## Rationale
+
+> Sometimes the user has phone access but no Mac access.
+> Sometimes the user has Mac access but no phone access.
+> Therefore, either device alone must be enough to receive and answer every interactive question or approval.
+
+- **BOTH CHANNELS, EVERY TIME:** Send every interactive user question or approval to Cursor chat **and** the GrantTap phone.
+- **IDENTICAL TEXT:** The complete decision sentence must be identical in both channels. Post it in Cursor chat before or at the same time as the matching GrantTap `ask` or `ask_yes_no`.
+- **EITHER RESPONSE IS SUFFICIENT:** Accept the first valid answer from Cursor chat or GrantTap and continue. Never require answers from both channels.
+- **FORBIDDEN:** Mac-only prompts, phone-only prompts, different wording between channels, or splitting related choices across channels.
+- **CURSOR SHELL ALLOW (one tap):** `~/.cursor/hooks.json` `beforeShellExecution` → GrantTap is the dual-channel gate. Phone Yes must return `permission: allow` to the hook so Cursor continues without a second Mac tap. Parallel shells + MCP `ask_yes_no` share one global decision id; first Yes/No resolves all waiters.
+- **Do not manually mirror** a second `ask_yes_no` for the same shell gate when the Cursor hook is installed — MCP will join the open hook decision automatically; stacking duplicates is a bug.
+- **Cursor native blue Allow (`required_permissions: ["all"]`):** Often bypasses or sits beside `beforeShellExecution`. Agents MUST NOT use `required_permissions: ["all"]` for routine work — prefer sandbox / narrower permissions so only hook-gated shells appear. Phone Yes clears the hook path; leftover native Allow may still need a Mac tap if Accessibility click fails.
+- **ONE_TAP:** Phone Yes must resolve open shell-gates (monitor bridge + hook stdout `permission: allow`). A Yes+Reply MCP hybrid card that only returns to ask_yes_no without resolving shell-gates is a bug.
+- Prefer non-blocking `notify` for informational updates; do not turn ordinary notifications into approval gates.
