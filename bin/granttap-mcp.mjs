@@ -9,6 +9,8 @@ const [command = "mcp", argument] = process.argv.slice(2);
 let entry;
 if (command === "mcp") {
   entry = join(root, "apps", "mcp", "src", "server.ts");
+} else if (command === "serve") {
+  entry = join(root, "apps", "mcp", "src", "serve.ts");
 } else if (command === "setup") {
   entry = join(root, "apps", "bridge", "src", "bin", "setup.ts");
 } else if (command === "connect") {
@@ -22,8 +24,9 @@ if (command === "mcp") {
     [
       "Usage:",
       "  granttap-mcp                 Start the MCP stdio server",
+      "  granttap-mcp serve           Start loopback HTTP MCP for Cursor Authorize",
       "  granttap-mcp connect [url]   Pair this machine with iPhone/Apple Watch",
-      "  granttap-mcp setup           Install Claude Code and Codex approval hooks",
+      "  granttap-mcp setup           Install hooks, HTTP serve helper, Cursor plugin",
       "  granttap-mcp monitor         Internal background task sync",
       "  granttap-mcp hook <agent>    Internal hook entry point",
       "",

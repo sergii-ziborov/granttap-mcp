@@ -1,0 +1,29 @@
+{
+  "name": "granttap",
+  "displayName": "GrantTap",
+  "version": "0.1.0",
+  "description": "GrantTap for Cursor: Authorize (HTTP MCP OAuth), dual-channel phone + chat approvals (connect, ask, notify), agent rules, and connect/reconnect skill. Run granttap-mcp serve locally so Cursor can Authorize.",
+  "author": {
+    "name": "GrantTap",
+    "url": "https://granttap.com"
+  },
+  "publisher": "GrantTap",
+  "homepage": "https://granttap.com",
+  "repository": "https://github.com/sergii-ziborov/granttap-mcp",
+  "license": "MIT",
+  "category": "integrations",
+  "keywords": [
+    "granttap",
+    "mcp",
+    "approvals",
+    "iphone",
+    "apple-watch",
+    "dual-channel",
+    "cursor",
+    "oauth",
+    "authorize"
+  ],
+  "logo": "assets/logo.svg",
+  "skills": "./skills/",
+  "mcpServers": "./mcp.json"
+}
