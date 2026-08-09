@@ -70,6 +70,11 @@ export class RelayClient {
     this.reconnectDelay = opts.minReconnectMs ?? 1_000;
   }
 
+  /** Authenticated pairing room used to scope E2EE chat deep links. */
+  get room(): string {
+    return this.cfg.room;
+  }
+
   private otherRole(): Role {
     return this.cfg.role === "machine" ? "phone" : "machine";
   }
@@ -156,7 +161,12 @@ export class RelayClient {
         parsedInner.data.type === "session.sealed"
       ) return;
       const innerSessionId = "sessionId" in parsedInner.data ? parsedInner.data.sessionId : undefined;
-      if (typeof innerSessionId === "string" && innerSessionId !== payload.sessionId) return;
+      if (
+        !payload.sessionId.trim() ||
+        typeof innerSessionId !== "string" ||
+        !innerSessionId.trim() ||
+        innerSessionId !== payload.sessionId
+      ) return;
       payload = parsedInner.data;
     }
 

@@ -10,6 +10,8 @@ import {
 } from "../packages/core/crypto";
 import { Envelope, Payload } from "../packages/protocol/schema";
 import { RelayClient, type PeerConfig } from "../packages/core/relay-client";
+import { scopeCapabilityUsageToRoom } from "../apps/bridge/src/sessions";
+import { commandPreviewFromInput } from "../apps/bridge/src/sessions/telemetry";
 import {
   claudeToRequest,
   codexToRequest,
@@ -83,6 +85,15 @@ test("protocol accepts correlated questions, replies, activity, and expiring env
     }],
     generatedAt: 4,
   }).success, true);
+  assert.equal(Payload.safeParse({
+    type: "session.events",
+    sessionId: "s1",
+    createdAt: 5,
+  }).success, true);
+  assert.equal(Payload.safeParse({
+    type: "sessions.refresh",
+    createdAt: 6,
+  }).success, true);
   assert.equal(Envelope.safeParse({
     v: 1,
     room: "r",
@@ -93,6 +104,76 @@ test("protocol accepts correlated questions, replies, activity, and expiring env
     nonce: "AA==",
     box: "AA==",
   }).success, true);
+});
+
+test("chat capability controls and CLI deep links stay scoped inside E2EE", () => {
+  for (const payload of [
+    { type: "session.skill.set", sessionId: "chat-a", skillName: "review", allowed: false, createdAt: 1 },
+    { type: "session.shell.set", sessionId: "chat-a", allowed: false, createdAt: 1 },
+  ]) {
+    assert.equal(Payload.safeParse(payload).success, true);
+  }
+  assert.equal(Payload.safeParse({
+    type: "session.skill.set",
+    sessionId: "chat-a",
+    skillName: " ",
+    allowed: false,
+    createdAt: 1,
+  }).success, false);
+
+  const secret = "sk-proj-never-leak-this-value";
+  const commandPreview = commandPreviewFromInput({
+    command: `OPENAI_API_KEY=${secret} npm test`,
+  });
+  assert.match(commandPreview ?? "", /\[REDACTED\]/);
+  assert.doesNotMatch(commandPreview ?? "", /never-leak/);
+
+  const machine = generateKeyPair();
+  const phone = generateKeyPair();
+  const config: PeerConfig = {
+    relayUrl: "ws://127.0.0.1:1",
+    room: "room-capabilities",
+    role: "machine",
+    deviceName: "machine",
+    senderId: "machine-1",
+    myPublicKey: machine.publicKey,
+    mySecretKey: machine.secretKey,
+    peerPublicKey: phone.publicKey,
+  };
+  const client = new RelayClient(config);
+  assert.equal(client.room, config.room);
+  const scoped = scopeCapabilityUsageToRoom({
+    type: "capability.usage.status",
+    events: [{
+      sourceId: "chat-a:shell-1",
+      sessionId: "chat-a",
+      kind: "cli",
+      name: "shell",
+      toolName: "exec_command",
+      commandPreview: commandPreview!,
+      createdAt: 2,
+    }],
+    generatedAt: 3,
+  }, client.room);
+  assert.deepEqual(scoped.events[0]?.deepLinkTarget, {
+    kind: "chat",
+    roomId: config.room,
+    sessionId: "chat-a",
+  });
+  assert.equal(Payload.safeParse(scoped).success, true);
+
+  const envelope = encryptedEnvelope(
+    scoped,
+    config.room,
+    "machine",
+    "phone",
+    machine.publicKey,
+    machine.secretKey,
+    phone.publicKey,
+  );
+  const wire = JSON.stringify(envelope);
+  assert.doesNotMatch(wire, /chat-a|npm test|commandPreview/);
+  assert.deepEqual(open(envelope.nonce, envelope.box, machine.publicKey, phone.secretKey), scoped);
 });
 
 test("attachment transport budget accounts for double-sealed Cloudflare frames", () => {
@@ -317,7 +398,66 @@ test("per-task sealed traffic is bound to its outer task and only machine grants
     phone.publicKey,
     "sealed",
   ));
+
+  for (const [deliveryId, inner] of [
+    ["sealed-missing", {
+      type: "agent.event",
+      text: "missing inner scope",
+      createdAt: Date.now(),
+    }],
+    ["sealed-null", {
+      type: "agent.event",
+      sessionId: null,
+      text: "null inner scope",
+      createdAt: Date.now(),
+    }],
+  ] as const) {
+    const sealed = sealWithTransferKey(inner, transferKey);
+    await receiveRaw(phoneClient, encryptedEnvelope(
+      {
+        type: "session.sealed",
+        sessionId: "task-a",
+        nonce: sealed.nonce,
+        box: sealed.box,
+        createdAt: Date.now(),
+      },
+      phoneCfg.room,
+      "machine",
+      "phone",
+      machine.publicKey,
+      machine.secretKey,
+      phone.publicKey,
+      deliveryId,
+    ));
+  }
   assert.deepEqual(received.map((payload) => payload.type), ["session.key.grant"]);
+
+  const matchingInner = sealWithTransferKey({
+    type: "agent.event",
+    sessionId: "task-a",
+    text: "exact task",
+    createdAt: Date.now(),
+  } satisfies Payload, transferKey);
+  await receiveRaw(phoneClient, encryptedEnvelope(
+    {
+      type: "session.sealed",
+      sessionId: "task-a",
+      nonce: matchingInner.nonce,
+      box: matchingInner.box,
+      createdAt: Date.now(),
+    },
+    phoneCfg.room,
+    "machine",
+    "phone",
+    machine.publicKey,
+    machine.secretKey,
+    phone.publicKey,
+    "sealed-matching",
+  ));
+  assert.deepEqual(received.map((payload) => payload.type), [
+    "session.key.grant",
+    "agent.event",
+  ]);
 
   const machineCfg: PeerConfig = {
     ...phoneCfg,

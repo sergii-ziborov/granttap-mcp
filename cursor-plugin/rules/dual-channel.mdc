@@ -1,0 +1,11 @@
+---
+description: Correlate each GrantTap response to the same complete Cursor prompt
+alwaysApply: true
+---
+
+# GrantTap exact dual-channel correlation
+
+- Send the same complete interactive prompt to Cursor chat and GrantTap under
+  one exact correlation identity.
+- The first answer with that exact correlation wins. Never resolve a request
+  with a response from another chat, agent task, prompt, or correlation.

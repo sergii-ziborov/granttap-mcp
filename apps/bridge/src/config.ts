@@ -49,6 +49,10 @@ export type RuntimeConfig = {
   sessionAccess: Record<string, AgentAccess>;
   /** MCP servers denied only for turns delivered by GrantTap into a task. */
   sessionMcpDisabled: Record<string, string[]>;
+  /** Skills denied only in the exact originating chat. */
+  sessionSkillsDisabled: Record<string, string[]>;
+  /** Chats where local shell/CLI execution is disabled. */
+  sessionShellDisabled: string[];
 };
 
 const DEFAULT_RUNTIME: RuntimeConfig = {
@@ -56,10 +60,40 @@ const DEFAULT_RUNTIME: RuntimeConfig = {
   excludedSessions: [],
   sessionAccess: {},
   sessionMcpDisabled: {},
+  sessionSkillsDisabled: {},
+  sessionShellDisabled: [],
 };
 
 export function runtimeConfigPath(): string {
   return join(configDir(), "config.json");
+}
+
+function boundedIdentifier(raw: unknown, maxLength: number): string | null {
+  if (typeof raw !== "string") return null;
+  const value = raw.trim();
+  return value && value.length <= maxLength ? value : null;
+}
+
+function capabilitySessionId(raw: unknown): string | null {
+  return boundedIdentifier(raw, 256);
+}
+
+function capabilityName(raw: unknown): string | null {
+  return boundedIdentifier(raw, 160);
+}
+
+function parseDisabledCapabilities(raw: unknown): Record<string, string[]> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const result: Record<string, string[]> = {};
+  for (const [rawSessionId, names] of Object.entries(raw as Record<string, unknown>)) {
+    const sessionId = capabilitySessionId(rawSessionId);
+    if (!sessionId || !Array.isArray(names)) continue;
+    const clean = [...new Set(
+      names.map(capabilityName).filter((name): name is string => name != null),
+    )];
+    if (clean.length > 0) result[sessionId] = clean;
+  }
+  return result;
 }
 
 export function loadRuntimeConfig(): RuntimeConfig {
@@ -70,20 +104,186 @@ export function loadRuntimeConfig(): RuntimeConfig {
         ["read-only", "workspace", "full"].includes(String(entry[1])),
       ),
     );
-    const sessionMcpDisabled = Object.fromEntries(
-      Object.entries(raw.sessionMcpDisabled ?? {})
-        .filter(([, value]) => Array.isArray(value))
-        .map(([sessionId, value]) => [sessionId, [...new Set((value as unknown[]).map(String).filter(Boolean))]]),
-    );
     return {
       enabled: raw.enabled !== false,
       excludedSessions: Array.isArray(raw.excludedSessions) ? raw.excludedSessions.map(String) : [],
       sessionAccess,
-      sessionMcpDisabled,
+      sessionMcpDisabled: parseDisabledCapabilities(raw.sessionMcpDisabled),
+      sessionSkillsDisabled: parseDisabledCapabilities(raw.sessionSkillsDisabled),
+      sessionShellDisabled: Array.isArray(raw.sessionShellDisabled)
+        ? [...new Set<string>(
+            (raw.sessionShellDisabled as unknown[])
+              .map(capabilitySessionId)
+              .filter((sessionId): sessionId is string => sessionId != null),
+          )]
+        : [],
     };
   } catch {
-    return { ...DEFAULT_RUNTIME };
+    return {
+      ...DEFAULT_RUNTIME,
+      sessionAccess: {},
+      sessionMcpDisabled: {},
+      sessionSkillsDisabled: {},
+      sessionShellDisabled: [],
+    };
   }
+}
+
+/** Phone toggled one MCP server for one exact session. */
+export function setSessionMcpAllowed(
+  rawSessionId: string,
+  rawServerName: string,
+  allowed: boolean,
+): void {
+  const sessionId = capabilitySessionId(rawSessionId);
+  const serverName = capabilityName(rawServerName);
+  if (!sessionId || !serverName) throw new TypeError("invalid session MCP toggle");
+  const runtime = loadRuntimeConfig();
+  const denied = new Set(runtime.sessionMcpDisabled[sessionId] ?? []);
+  if (allowed) denied.delete(serverName);
+  else denied.add(serverName);
+  if (denied.size === 0) delete runtime.sessionMcpDisabled[sessionId];
+  else runtime.sessionMcpDisabled[sessionId] = [...denied].sort();
+  saveRuntimeConfig(runtime);
+}
+
+/** Phone toggled one skill for one exact session. */
+export function setSessionSkillAllowed(
+  rawSessionId: string,
+  rawSkillName: string,
+  allowed: boolean,
+): void {
+  const sessionId = capabilitySessionId(rawSessionId);
+  const skillName = capabilityName(rawSkillName);
+  if (!sessionId || !skillName) throw new TypeError("invalid session skill toggle");
+  const runtime = loadRuntimeConfig();
+  const denied = new Set(runtime.sessionSkillsDisabled[sessionId] ?? []);
+  if (allowed) denied.delete(skillName);
+  else denied.add(skillName);
+  if (denied.size === 0) delete runtime.sessionSkillsDisabled[sessionId];
+  else runtime.sessionSkillsDisabled[sessionId] = [...denied].sort();
+  saveRuntimeConfig(runtime);
+}
+
+/** Phone toggled shell/CLI for one exact session. */
+export function setSessionShellAllowed(rawSessionId: string, allowed: boolean): void {
+  const sessionId = capabilitySessionId(rawSessionId);
+  if (!sessionId) throw new TypeError("invalid session shell toggle");
+  const runtime = loadRuntimeConfig();
+  const denied = new Set(runtime.sessionShellDisabled);
+  if (allowed) denied.delete(sessionId);
+  else denied.add(sessionId);
+  runtime.sessionShellDisabled = [...denied].sort();
+  saveRuntimeConfig(runtime);
+}
+
+export type SessionCapabilityBlock = {
+  kind: "mcp" | "skill" | "cli";
+  name: string;
+  reason: string;
+};
+
+function mcpBlock(server: string): SessionCapabilityBlock {
+  return {
+    kind: "mcp",
+    name: server,
+    reason: `GrantTap disabled MCP server “${server}” for this chat`,
+  };
+}
+
+function skillBlock(skill: string): SessionCapabilityBlock {
+  return {
+    kind: "skill",
+    name: skill,
+    reason: `GrantTap disabled skill “${skill}” for this chat`,
+  };
+}
+
+export function blockedSessionMcpServer(
+  rawSessionId: string | null | undefined,
+  rawServerName: string | null | undefined,
+): SessionCapabilityBlock | null {
+  const sessionId = capabilitySessionId(rawSessionId);
+  const server = capabilityName(rawServerName);
+  if (!sessionId || !server) return null;
+  const runtime = loadRuntimeConfig();
+  return (runtime.sessionMcpDisabled[sessionId] ?? []).includes(server)
+    ? mcpBlock(server)
+    : null;
+}
+
+export function blockedSessionSkill(
+  rawSessionId: string | null | undefined,
+  rawSkillName: string | null | undefined,
+): SessionCapabilityBlock | null {
+  const sessionId = capabilitySessionId(rawSessionId);
+  const skill = capabilityName(rawSkillName);
+  if (!sessionId || !skill) return null;
+  const runtime = loadRuntimeConfig();
+  return (runtime.sessionSkillsDisabled[sessionId] ?? []).includes(skill)
+    ? skillBlock(skill)
+    : null;
+}
+
+const SESSION_CLI_TOOL_NAMES = new Set([
+  "bash",
+  "shell",
+  "powershell",
+  "terminal",
+  "exec_command",
+  "execute_command",
+  "local_shell_call",
+  "run_command",
+  "run_in_terminal",
+  "run_terminal_cmd",
+  "shell_command",
+]);
+
+function isSessionCliTool(toolName: string): boolean {
+  const normalized = toolName.trim().toLowerCase();
+  if (SESSION_CLI_TOOL_NAMES.has(normalized)) return true;
+  const leaf = normalized.split(/[.:/]/).at(-1);
+  return leaf != null && SESSION_CLI_TOOL_NAMES.has(leaf);
+}
+
+function mcpServerFromTool(toolName: string): string | null {
+  return capabilityName(/^mcp__(.+?)__(.+)$/i.exec(toolName.trim())?.[1]);
+}
+
+function skillFromTool(toolName: string, input: unknown): string | null {
+  const named = capabilityName(/^(?:skill__|Skill\()(.+?)\)?$/i.exec(toolName.trim())?.[1]);
+  if (named) return named;
+  if (!/^Skill$/i.test(toolName.trim()) || !input || typeof input !== "object") return null;
+  return capabilityName((input as Record<string, unknown>).skill);
+}
+
+/** Exact-session capability enforcement. Unscoped or ambiguous calls abstain. */
+export function blockedSessionCapability(
+  rawSessionId: string | null | undefined,
+  rawToolName: string | null | undefined,
+  toolInput?: unknown,
+): SessionCapabilityBlock | null {
+  const sessionId = capabilitySessionId(rawSessionId);
+  const toolName = boundedIdentifier(rawToolName, 240);
+  if (!sessionId || !toolName) return null;
+  const runtime = loadRuntimeConfig();
+
+  const server = mcpServerFromTool(toolName);
+  if (server && (runtime.sessionMcpDisabled[sessionId] ?? []).includes(server)) {
+    return mcpBlock(server);
+  }
+  const skill = skillFromTool(toolName, toolInput);
+  if (skill && (runtime.sessionSkillsDisabled[sessionId] ?? []).includes(skill)) {
+    return skillBlock(skill);
+  }
+  if (isSessionCliTool(toolName) && runtime.sessionShellDisabled.includes(sessionId)) {
+    return {
+      kind: "cli",
+      name: "CLI",
+      reason: "GrantTap disabled CLI/shell for this chat",
+    };
+  }
+  return null;
 }
 
 export function saveRuntimeConfig(cfg: RuntimeConfig): void {
@@ -93,7 +293,7 @@ export function saveRuntimeConfig(cfg: RuntimeConfig): void {
 }
 
 /** True when the hook should stay out of the way for this session. */
-export function isGatingSkipped(sessionId: string | undefined): boolean {
+export function isGatingSkipped(sessionId: string | null | undefined): boolean {
   const cfg = loadRuntimeConfig();
   if (!cfg.enabled) return true;
   return sessionId != null && cfg.excludedSessions.includes(sessionId);
@@ -105,6 +305,22 @@ export function phonePairingPath(): string {
 
 export function saveConfig(path: string, cfg: PeerConfig): void {
   mkdirSync(configDir(), { recursive: true });
+  // Never silently destroy the previous room — MCP connect thrash left phones
+  // on dead rooms while Mac published elsewhere with nothing to restore.
+  if (existsSync(path)) {
+    try {
+      const prev = JSON.parse(readFileSync(path, "utf8")) as { room?: string };
+      const room = typeof prev.room === "string" && prev.room.length >= 8
+        ? prev.room.slice(0, 16)
+        : "unknown";
+      const bak = `${path}.bak-${room}-${Date.now()}`;
+      writeFileSync(bak, readFileSync(path), { mode: 0o600 });
+      chmodSync(bak, 0o600);
+      process.stderr.write(`[granttap] backed up previous pairing → ${bak}\n`);
+    } catch {
+      /* best-effort */
+    }
+  }
   writeFileSync(path, JSON.stringify(cfg, null, 2), { mode: 0o600 });
   // `mode` only applies when creating a file; repair permissive legacy files too.
   chmodSync(path, 0o600);

@@ -4,11 +4,14 @@
   "description": "Control Codex and Claude Code from iPhone and Apple Watch with zero-knowledge E2EE approvals, replies, and task sync.",
   "type": "module",
   "bin": {
+    "granttap": "bin/granttap-mcp.mjs",
     "granttap-mcp": "bin/granttap-mcp.mjs"
   },
   "files": [
     "apps",
     "bin",
+    "cursor-plugin",
+    "docs",
     "packages",
     "LICENSE",
     "README.md",
@@ -16,13 +19,17 @@
   ],
   "scripts": {
     "start": "node bin/granttap-mcp.mjs",
+    "serve": "node bin/granttap-mcp.mjs serve",
+    "authorize": "node bin/granttap-mcp.mjs authorize",
     "setup": "node bin/granttap-mcp.mjs setup",
+    "status": "node bin/granttap-mcp.mjs status",
     "test": "node --import tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm test && npm run typecheck"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "express": "^5.2.1",
     "qrcode": "^1.5.4",
     "tsx": "^4.23.4",
     "tweetnacl": "^1.0.3",
@@ -30,6 +37,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/express": "^5.0.3",
     "@types/node": "^22.10.2",
     "@types/qrcode": "^1.5.6",
     "@types/ws": "^8.5.13",

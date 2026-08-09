@@ -2,6 +2,7 @@ import { generateTransferKey, randomId, sealWithTransferKey } from "../../../pac
 import {
   installClaudeHook,
   installCodexHook,
+  installCursorHook,
   installMonitorHelper,
   type InstallResult,
 } from "./install";
@@ -25,6 +26,7 @@ export type OneTimePairing = {
   manualToken: string;
   httpBase: string;
   qrPayload: string;
+  cursor: InstallResult | null;
   claude: InstallResult | null;
   codex: InstallResult | null;
   monitor: InstallResult | null;
@@ -86,6 +88,7 @@ export async function createOneTimePairing(
   saveConfig(phonePairingPath(), phoneCfg);
 
   const installHooks = options.installHooks ?? process.env.GRANTTAP_SKIP_HOOKS !== "1";
+  const cursor = installHooks ? installCursorHook() : null;
   const claude = installHooks ? installClaudeHook() : null;
   const codex = installHooks ? installCodexHook() : null;
   const monitor = installHooks ? installMonitorHelper() : null;
@@ -98,6 +101,7 @@ export async function createOneTimePairing(
     manualToken: `${mailboxId}.${transferKey}`,
     httpBase,
     qrPayload: oneTimePairingUri(relayUrl, mailboxId, transferKey),
+    cursor,
     claude,
     codex,
     monitor,

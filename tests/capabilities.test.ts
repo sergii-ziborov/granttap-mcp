@@ -4,8 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-test("task capabilities expose configured MCP servers and repository skills", async (t) => {
+test("task capabilities expose configured MCP servers plus global and repository skills", async (t) => {
   const dir = await mkdtemp(join(tmpdir(), "granttap-capabilities-"));
+  const home = join(dir, "home");
   const stub = join(dir, "codex-stub.mjs");
   const mcpStub = join(dir, "real-mcp-stub.mjs");
   await writeFile(mcpStub, [
@@ -46,12 +47,32 @@ test("task capabilities expose configured MCP servers and repository skills", as
     "---",
     "# Release check",
   ].join("\n"));
+  const globalSkillDir = join(home, ".agents", "skills", "global-check");
+  await mkdir(globalSkillDir, { recursive: true });
+  await writeFile(join(globalSkillDir, "SKILL.md"), [
+    "---",
+    "name: global-check",
+    "description: Check every task on this machine.",
+    "---",
+  ].join("\n"));
+  const cursorSkillDir = join(home, ".cursor", "skills-cursor", "cursor-check");
+  await mkdir(cursorSkillDir, { recursive: true });
+  await writeFile(join(cursorSkillDir, "SKILL.md"), [
+    "---",
+    "name: cursor-check",
+    "description: Check tasks opened by Cursor.",
+    "---",
+  ].join("\n"));
 
   const previous = process.env.GRANTTAP_CODEX_BIN;
+  const previousHome = process.env.HOME;
   process.env.GRANTTAP_CODEX_BIN = stub;
+  process.env.HOME = home;
   t.after(() => {
     if (previous == null) delete process.env.GRANTTAP_CODEX_BIN;
     else process.env.GRANTTAP_CODEX_BIN = previous;
+    if (previousHome == null) delete process.env.HOME;
+    else process.env.HOME = previousHome;
   });
 
   const { mcpServersForSession, refreshMcpMetadataForSession, workspaceSkills } = await import(
@@ -99,6 +120,8 @@ test("task capabilities expose configured MCP servers and repository skills", as
     metadataSource: "mcp",
   });
   assert.deepEqual(workspaceSkills(dir), [
+    { name: "cursor-check", description: "Check tasks opened by Cursor." },
+    { name: "global-check", description: "Check every task on this machine." },
     { name: "release-check", description: "Verify a release before publishing." },
   ]);
 });

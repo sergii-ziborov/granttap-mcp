@@ -46,11 +46,43 @@ export const ApprovalDecision = z.object({
   type: z.literal("approval.decision"),
   requestId: z.string(),
   decision: z.enum(["allow", "deny"]),
-  note: z.string().optional(),
-  decidedBy: z.string().optional(), // "watch", "phone", "web"
+  /** Exact request scope. Scoped approvals reject a missing/mismatched value. */
+  sessionId: z.string().nullish(),
+  note: z.string().nullish(),
+  decidedBy: z.string().nullish(), // "watch", "phone", "web"
   decidedAt: z.number(),
 });
 export type ApprovalDecision = z.infer<typeof ApprovalDecision>;
+
+/** machine -> phone: durable terminal outcome for one exact request. */
+export const ApprovalResolved = z.object({
+  type: z.literal("approval.resolved"),
+  requestId: z.string(),
+  status: z.enum(["applied", "cancelled", "expired"]),
+  decision: z.enum(["allow", "deny"]).nullish(),
+  decidedBy: z.string().nullish(),
+  note: z.string().nullish(),
+  sessionId: z.string().nullish(),
+  nativeUiCleared: z.boolean().nullish(),
+  resolvedAt: z.number(),
+});
+export type ApprovalResolved = z.infer<typeof ApprovalResolved>;
+
+/** Bounded snapshot shared with the desktop bridge registry. */
+const ApprovalStatusScope = z.object({
+  requestId: z.string(),
+  sessionId: z.string().nullish(),
+});
+
+export const ApprovalsStatus = z.object({
+  type: z.literal("approvals.status"),
+  pending: z.array(ApprovalRequest).max(100),
+  /** False means merge safely; `covered` is the exact authoritative subset. */
+  complete: z.boolean(),
+  covered: z.array(ApprovalStatusScope).max(300).nullish(),
+  generatedAt: z.number(),
+});
+export type ApprovalsStatus = z.infer<typeof ApprovalsStatus>;
 
 /**
  * phone -> machine: free-text sent to the agent's session.
@@ -96,6 +128,8 @@ export type UserMessage = z.infer<typeof UserMessage>;
 export const DeliveryReceipt = z.object({
   type: z.literal("delivery.receipt"),
   messageId: z.string().min(1).max(180),
+  /** Required semantically when this payload is inside session.sealed. */
+  sessionId: z.string().nullish(),
   status: z.enum(["accepted", "rejected"]),
   error: z.string().max(500).optional(),
   receivedAt: z.number(),
@@ -113,6 +147,8 @@ export const AgentEvent = z.object({
   requestId: z.string().optional(),
   kind: z.enum(["question", "status", "response"]).optional(),
   sessionId: z.string().optional(),
+  /** Correlates status/response rows with the phone message that started them. */
+  originMessageId: z.string().nullish(),
   createdAt: z.number(),
 });
 export type AgentEvent = z.infer<typeof AgentEvent>;
@@ -126,16 +162,50 @@ export const SessionSubscription = z.object({
 });
 export type SessionSubscription = z.infer<typeof SessionSubscription>;
 
-export const CapabilityUsageKind = z.enum(["mcp", "skill"]);
+/** phone -> machine: fetch the latest visible events immediately. */
+export const SessionEventsRequest = z.object({
+  type: z.literal("session.events"),
+  sessionId: z.string(),
+  createdAt: z.number(),
+});
+export type SessionEventsRequest = z.infer<typeof SessionEventsRequest>;
+
+/** phone -> machine: rescan local chats and push a history-bearing catalog now. */
+export const SessionsRefresh = z.object({
+  type: z.literal("sessions.refresh"),
+  createdAt: z.number(),
+});
+export type SessionsRefresh = z.infer<typeof SessionsRefresh>;
+
+export const CapabilityUsageKind = z.enum(["mcp", "skill", "cli"]);
 export type CapabilityUsageKind = z.infer<typeof CapabilityUsageKind>;
+
+/** Canonical bounded identifiers used by chat-scoped capability controls. */
+const CapabilitySessionId = z.string().trim().min(1).max(256);
+const CapabilityName = z.string().trim().min(1).max(160);
+const CapabilityRoomId = z.string().trim().min(1).max(256);
+
+/** Stable Usage -> Chat navigation target. Relay room authentication is authoritative. */
+export const CapabilityChatTarget = z.object({
+  kind: z.literal("chat"),
+  roomId: CapabilityRoomId,
+  sessionId: CapabilitySessionId,
+});
+export type CapabilityChatTarget = z.infer<typeof CapabilityChatTarget>;
 
 /** One capability invocation observed in the agent's own local task log. */
 export const ObservedCapability = z.object({
   kind: CapabilityUsageKind,
-  name: z.string().min(1).max(180),
+  name: CapabilityName,
   toolName: z.string().min(1).max(240),
-  /** Approximate context occupied by the tool name, arguments, and result. */
+  /** One-line, bounded command prefix for CLI observations; never command output. */
+  commandPreview: z.string().trim().min(1).max(160).optional(),
+  /** Approximate tool args + result text occupying normal chat context. */
   estimatedContextTokens: z.number().int().nonnegative().optional(),
+  /** Optional whole-resource baseline used to derive estimated tokens saved. */
+  estimatedBaselineTokens: z.number().int().nonnegative().optional(),
+  /** tool_use -> tool_result wall time when both sides are present in the log. */
+  durationMs: z.number().int().nonnegative().optional(),
 });
 export type ObservedCapability = z.infer<typeof ObservedCapability>;
 
@@ -148,26 +218,42 @@ export const ActivityEntry = z.object({
   toolName: z.string().optional(),
   mcpServer: z.string().optional(),
   skill: z.string().optional(),
+  /** Rough context tokens for this tool call (args/result), not billing. */
+  estimatedContextTokens: z.number().int().nonnegative().optional(),
   /** Supports multiple MCP calls made inside one Codex tool-wrapper invocation. */
   capabilities: z.array(ObservedCapability).max(32).optional(),
+  durationMs: z.number().int().nonnegative().optional(),
+  /** Nested agent conversation this visible row belongs to. Omitted for root chat rows. */
+  childThreadId: z.string().max(256).optional(),
+  childThreadTitle: z.string().max(160).optional(),
+  childThreadDepth: z.number().int().min(1).max(16).optional(),
 });
 export type ActivityEntry = z.infer<typeof ActivityEntry>;
 
 export const CapabilityUsageEvent = z.object({
-  sourceId: z.string().min(1).max(520),
-  sessionId: z.string().optional(),
+  sourceId: z.string().min(1).max(512),
+  /** Compatibility-optional on decode; current publishers always provide both refs. */
+  roomId: CapabilityRoomId.optional(),
+  sessionId: CapabilitySessionId.optional(),
   kind: CapabilityUsageKind,
-  name: z.string().min(1).max(180),
+  name: CapabilityName,
   toolName: z.string().min(1).max(240),
+  commandPreview: z.string().trim().min(1).max(160).optional(),
+  deepLinkTarget: CapabilityChatTarget.optional(),
   createdAt: z.number(),
   estimatedContextTokens: z.number().int().nonnegative().optional(),
+  estimatedBaselineTokens: z.number().int().nonnegative().optional(),
+  durationMs: z.number().int().nonnegative().optional(),
 });
 export type CapabilityUsageEvent = z.infer<typeof CapabilityUsageEvent>;
+/** Nodvox compatibility name used by the provider scanners. */
+export const RemoteCapabilityUsageEvent = CapabilityUsageEvent;
+export type RemoteCapabilityUsageEvent = CapabilityUsageEvent;
 
 /** Encrypted aggregate independent of whether a task detail screen is open. */
 export const CapabilityUsageStatus = z.object({
   type: z.literal("capability.usage.status"),
-  events: z.array(CapabilityUsageEvent).max(1_000),
+  events: z.array(CapabilityUsageEvent).max(200),
   generatedAt: z.number(),
 });
 export type CapabilityUsageStatus = z.infer<typeof CapabilityUsageStatus>;
@@ -210,8 +296,25 @@ export type McpServerInfo = z.infer<typeof McpServerInfo>;
 export const SkillInfo = z.object({
   name: z.string(),
   description: z.string().optional(),
+  /** Phone toggle — false means GrantTap should not route this skill. */
+  allowed: z.boolean().optional(),
 });
 export type SkillInfo = z.infer<typeof SkillInfo>;
+
+/** Bounded metadata for a provider-native agent/subagent conversation. */
+export const ChildThreadInfo = z.object({
+  threadId: z.string().max(256),
+  parentThreadId: z.string().max(256),
+  title: z.string().max(160).optional(),
+  agentName: z.string().max(160).optional(),
+  depth: z.number().int().min(1).max(16),
+  state: SessionState,
+  startedAt: z.number(),
+  lastActivityAt: z.number(),
+  tokensSession: z.number().nonnegative(),
+  tokensLastTurn: z.number().nonnegative(),
+});
+export type ChildThreadInfo = z.infer<typeof ChildThreadInfo>;
 
 /** machine -> phone: visible agent output/tool summaries, never hidden reasoning. */
 export const SessionActivity = z.object({
@@ -271,6 +374,10 @@ export const SessionInfo = z.object({
   /** MCP servers and repository skills available to phone-delivered turns. */
   mcpServers: z.array(McpServerInfo).optional(),
   skills: z.array(SkillInfo).optional(),
+  /** Nested agent conversations never become top-level session rows. */
+  childThreads: z.array(ChildThreadInfo).max(32).optional(),
+  /** When false, GrantTap should not auto-route shell/CLI for this chat. */
+  shellAllowed: z.boolean().optional(),
 });
 export type SessionInfo = z.infer<typeof SessionInfo>;
 
@@ -302,6 +409,8 @@ export const SessionsStatus = z.object({
   gatingEnabled: z.boolean().optional(),
   excludedSessions: z.array(z.string()).optional(),
   agents: z.array(AgentIntegrationStatus).optional(),
+  /** Optional bounded transcript previews; full detail uses session.activity. */
+  activities: z.array(SessionActivity).optional(),
   generatedAt: z.number(),
 });
 export type SessionsStatus = z.infer<typeof SessionsStatus>;
@@ -328,12 +437,31 @@ export type SessionAccessSet = z.infer<typeof SessionAccessSet>;
 /** phone -> machine: allow or deny one configured MCP server for one task. */
 export const SessionMcpSet = z.object({
   type: z.literal("session.mcp.set"),
-  sessionId: z.string(),
-  serverName: z.string().min(1).max(180),
+  sessionId: CapabilitySessionId,
+  serverName: CapabilityName,
   allowed: z.boolean(),
   createdAt: z.number(),
 });
 export type SessionMcpSet = z.infer<typeof SessionMcpSet>;
+
+/** phone -> machine: toggle one skill for a session. */
+export const SessionSkillSet = z.object({
+  type: z.literal("session.skill.set"),
+  sessionId: CapabilitySessionId,
+  skillName: CapabilityName,
+  allowed: z.boolean(),
+  createdAt: z.number(),
+});
+export type SessionSkillSet = z.infer<typeof SessionSkillSet>;
+
+/** phone -> machine: toggle shell/CLI for a session. */
+export const SessionShellSet = z.object({
+  type: z.literal("session.shell.set"),
+  sessionId: CapabilitySessionId,
+  allowed: z.boolean(),
+  createdAt: z.number(),
+});
+export type SessionShellSet = z.infer<typeof SessionShellSet>;
 
 /** phone -> machine: start real app-server compaction for a Codex task. */
 export const SessionCompact = z.object({
@@ -463,10 +591,14 @@ export type Hello = z.infer<typeof Hello>;
 export const Payload = z.discriminatedUnion("type", [
   ApprovalRequest,
   ApprovalDecision,
+  ApprovalResolved,
+  ApprovalsStatus,
   UserMessage,
   DeliveryReceipt,
   AgentEvent,
   SessionSubscription,
+  SessionEventsRequest,
+  SessionsRefresh,
   SessionActivity,
   CapabilityUsageStatus,
   SessionKeyGrant,
@@ -475,6 +607,8 @@ export const Payload = z.discriminatedUnion("type", [
   ConfigSet,
   SessionAccessSet,
   SessionMcpSet,
+  SessionSkillSet,
+  SessionShellSet,
   SessionCompact,
   SessionCompactResult,
   SchedulesStatus,

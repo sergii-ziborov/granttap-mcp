@@ -1,0 +1,16 @@
+{
+  "name": "granttap",
+  "owner": {
+    "name": "GrantTap"
+  },
+  "metadata": {
+    "description": "GrantTap for Cursor — local HTTP MCP authorization and exactly correlated phone approvals"
+  },
+  "plugins": [
+    {
+      "name": "granttap",
+      "source": "./",
+      "description": "Pair Cursor with GrantTap through loopback OAuth and keep each approval in its originating chat"
+    }
+  ]
+}

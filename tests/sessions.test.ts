@@ -79,6 +79,43 @@ test("session activity exposes visible text/tools but never thinking blocks", as
   assert.match(completed.entries.at(-1)?.text ?? "", /Done/);
 });
 
+test("session detail is bounded to 24 entries and 700 characters per entry", async (t) => {
+  const claudeRoot = await mkdtemp(join(tmpdir(), "granttap-claude-bounded-"));
+  const codexRoot = await mkdtemp(join(tmpdir(), "granttap-codex-bounded-"));
+  const project = join(claudeRoot, "project");
+  await mkdir(project);
+  const sessionId = "session-bounded";
+  const timestamp = new Date().toISOString();
+  const rows = Array.from({ length: 40 }, (_, index) => ({
+    sessionId,
+    cwd: "/repo",
+    timestamp,
+    type: "assistant",
+    message: {
+      role: "assistant",
+      content: `${index}: ${"x".repeat(1_200)}`,
+    },
+  }));
+  await writeFile(join(project, `${sessionId}.jsonl`), rows.map((row) => JSON.stringify(row)).join("\n"));
+
+  const previousClaude = process.env.GRANTTAP_CLAUDE_PROJECTS_DIR;
+  const previousCodex = process.env.GRANTTAP_CODEX_SESSIONS_DIR;
+  process.env.GRANTTAP_CLAUDE_PROJECTS_DIR = claudeRoot;
+  process.env.GRANTTAP_CODEX_SESSIONS_DIR = codexRoot;
+  t.after(() => {
+    if (previousClaude == null) delete process.env.GRANTTAP_CLAUDE_PROJECTS_DIR;
+    else process.env.GRANTTAP_CLAUDE_PROJECTS_DIR = previousClaude;
+    if (previousCodex == null) delete process.env.GRANTTAP_CODEX_SESSIONS_DIR;
+    else process.env.GRANTTAP_CODEX_SESSIONS_DIR = previousCodex;
+  });
+
+  const session = scanSessions().sessions[0];
+  assert.ok(session);
+  const activity = scanSessionActivity(session);
+  assert.equal(activity.entries.length, 24);
+  assert.equal(activity.entries.every((entry) => entry.text.length <= 700), true);
+});
+
 test("older local chats are excluded from live usage but included in bounded history", async (t) => {
   const claudeRoot = await mkdtemp(join(tmpdir(), "granttap-claude-history-"));
   const codexRoot = await mkdtemp(join(tmpdir(), "granttap-codex-history-"));
@@ -215,8 +252,13 @@ test("Codex tasks and visible activity are discovered from local rollouts", asyn
   assert.doesNotMatch(JSON.stringify(activity), /private reasoning/);
   assert.doesNotMatch(JSON.stringify(activity), /recommended_plugins|environment_context|\/secret/);
   const capabilityUsage = scanCapabilityUsage(scan.sessions);
-  assert.equal(capabilityUsage.events.length, 1);
-  assert.equal(capabilityUsage.events[0]?.name, "node_repl");
-  assert.equal(capabilityUsage.events[0]?.toolName, "mcp__node_repl__js");
-  assert.equal((capabilityUsage.events[0]?.estimatedContextTokens ?? 0) > 0, true);
+  const nestedMcp = capabilityUsage.events.find((event) => event.kind === "mcp");
+  const cli = capabilityUsage.events.filter((event) => event.kind === "cli");
+  assert.equal(nestedMcp?.name, "node_repl");
+  assert.equal(nestedMcp?.toolName, "mcp__node_repl__js");
+  assert.equal((nestedMcp?.estimatedContextTokens ?? 0) > 0, true);
+  assert.deepEqual(cli.map((event) => event.commandPreview).sort(), [
+    "echo cleanup",
+    "git status --short",
+  ]);
 });

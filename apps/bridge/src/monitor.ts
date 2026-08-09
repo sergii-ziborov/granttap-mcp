@@ -4,6 +4,7 @@ import { closeSync, mkdirSync, openSync, readFileSync, unlinkSync, writeFileSync
 import { join } from "node:path";
 import { RelayClient } from "../../../packages/core/relay-client";
 import type {
+  AgentEvent,
   ConfigSet,
   ScheduleDelete,
   SchedulePlanRequest,
@@ -11,23 +12,35 @@ import type {
   ScheduleSet,
   SessionAccessSet,
   SessionCompact,
+  SessionInfo,
   SessionMcpSet,
+  SessionShellSet,
+  SessionSkillSet,
   SessionSubscription,
   SessionsStatus,
   UserMessage,
 } from "../../../packages/protocol/schema";
-import { configDir, loadRuntimeConfig, saveRuntimeConfig } from "./config";
+import {
+  configDir,
+  loadRuntimeConfig,
+  saveRuntimeConfig,
+  setSessionMcpAllowed,
+  setSessionShellAllowed,
+  setSessionSkillAllowed,
+} from "./config";
 import { mcpServersForSession, workspaceSkills } from "./capabilities";
 import { compactCodexSession } from "./codex-control";
 import { createClaudeSession, createCodexSession, deliverToSession } from "./reply";
 import { abandonDelivery, beginDelivery, completeDelivery } from "./delivery";
 import { inspectAgentIntegrations } from "./install";
+import { approvalsStatus } from "./approval-state";
 import { primeSessionKeys, sendSessionPayload } from "./session-keys";
 import {
   scanCapabilityUsage,
   scanSessionActivity,
   scanSessionHistory,
   scanSessions,
+  scopeCapabilityUsageToRoom,
   TOKEN_WINDOW_HOURS,
 } from "./sessions";
 import {
@@ -43,6 +56,53 @@ import {
 const INTERVAL_MS = Number(
   process.env.GRANTTAP_MONITOR_INTERVAL_MS ?? process.env.NODVOX_MONITOR_INTERVAL_MS ?? 5_000,
 );
+const HISTORY_INTERVAL_MS = 10_000;
+export const HISTORY_PUBLISH_LIMIT = Number(
+  process.env.GRANTTAP_MONITOR_HISTORY_LIMIT ?? 40,
+);
+
+/**
+ * Keep the catalog bounded while retaining an explicitly open history task.
+ * The phone can therefore reopen an older chat without restoring the previous
+ * unbounded history + capability frame.
+ */
+export function boundedCatalogHistory(
+  sessions: SessionInfo[],
+  pinnedIds: ReadonlySet<string> = new Set(),
+  limit = HISTORY_PUBLISH_LIMIT,
+): SessionInfo[] {
+  const safeLimit = Number.isFinite(limit) ? Math.max(0, Math.trunc(limit)) : 40;
+  if (sessions.length <= safeLimit) return sessions;
+  const pinned = sessions.filter((session) => pinnedIds.has(session.sessionId)).slice(0, safeLimit);
+  const pinnedSet = new Set(pinned.map((session) => session.sessionId));
+  const rest = sessions
+    .filter((session) => !pinnedSet.has(session.sessionId))
+    .slice(0, Math.max(0, safeLimit - pinned.length));
+  return [...pinned, ...rest].sort((a, b) => b.lastActivityAt - a.lastActivityAt);
+}
+
+function resolveSession(sessionId: string, status?: SessionsStatus): SessionInfo | undefined {
+  if (status) {
+    return status.sessions.find((session) => session.sessionId === sessionId)
+      ?? status.history?.find((session) => session.sessionId === sessionId);
+  }
+  return scanSessions().sessions.find((session) => session.sessionId === sessionId)
+    ?? scanSessionHistory().find((session) => session.sessionId === sessionId);
+}
+
+/** Send one bounded transcript under the task-specific E2EE key. */
+export async function publishSessionEvents(
+  client: RelayClient,
+  sessionId: string,
+  status?: SessionsStatus,
+): Promise<boolean> {
+  const session = resolveSession(sessionId, status);
+  if (!session) return false;
+  await sendSessionPayload(client, scanSessionActivity(session), sessionId, "phone", {
+    ttlMs: INTERVAL_MS * 24,
+  });
+  return true;
+}
 
 export type SessionMonitor = {
   publish: () => Promise<void>;
@@ -64,32 +124,47 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
 
   const decorate = (sessions: SessionsStatus["sessions"]): SessionsStatus["sessions"] => {
     const runtime = loadRuntimeConfig();
-    return sessions.map((session) => ({
-      ...session,
-      accessLevel: runtime.sessionAccess[session.sessionId] ?? session.accessLevel,
-      mcpServers: mcpServersForSession(
-        session,
-        runtime.sessionMcpDisabled[session.sessionId] ?? [],
-      ),
-      skills: workspaceSkills(session.cwd),
-    }));
+    return sessions.map((session) => {
+      const base: SessionInfo = {
+        ...session,
+        accessLevel: runtime.sessionAccess[session.sessionId] ?? session.accessLevel,
+        mcpServers: mcpServersForSession(
+          session,
+          runtime.sessionMcpDisabled[session.sessionId] ?? [],
+        ),
+        shellAllowed: !runtime.sessionShellDisabled.includes(session.sessionId),
+      };
+      // Global/repository skill arrays can be large. The open task gets the
+      // complete row immediately after session.subscribe; list-only rows stay lean.
+      return subscriptions.has(session.sessionId)
+        ? {
+            ...base,
+            skills: workspaceSkills(session.cwd).map((skill) => ({
+              ...skill,
+              allowed: !(runtime.sessionSkillsDisabled[session.sessionId] ?? []).includes(skill.name),
+            })),
+          }
+        : base;
+    });
   };
 
-  const history = (): SessionsStatus["sessions"] => {
-    if (!historyCache || Date.now() - historyCache.generatedAt > 60_000) {
-      historyCache = { generatedAt: Date.now(), sessions: decorate(scanSessionHistory()) };
+  const history = (force = false): SessionsStatus["sessions"] => {
+    if (force || !historyCache || Date.now() - historyCache.generatedAt > 60_000) {
+      historyCache = { generatedAt: Date.now(), sessions: scanSessionHistory() };
     }
     return historyCache.sessions;
   };
 
-  const snapshot = (includeHistory: boolean): SessionsStatus => {
+  const snapshot = (includeHistory: boolean, forceHistory = false): SessionsStatus => {
     const { sessions, tokensRecent } = scanSessions();
     const runtime = loadRuntimeConfig();
     return {
       type: "sessions.status",
       machine: hostname(),
       sessions: decorate(sessions),
-      history: includeHistory ? history() : undefined,
+      history: includeHistory
+        ? decorate(boundedCatalogHistory(history(forceHistory), subscriptions))
+        : undefined,
       tokensRecent,
       tokenWindowHours: TOKEN_WINDOW_HOURS,
       tokensAllTime: tokensRecent,
@@ -100,16 +175,27 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
     };
   };
 
-  const publish = async (): Promise<void> => {
+  const publish = async (forceHistory = false): Promise<void> => {
     if (!leadership.acquire()) return;
     tickSchedules();
     if (!client.isConnected) return;
-    const includeHistory = Date.now() - lastHistoryPublishedAt >= 30_000;
-    const status = snapshot(includeHistory);
-    await client.send(status, "phone", { ttlMs: INTERVAL_MS * 3 });
+    const includeHistory = forceHistory || Date.now() - lastHistoryPublishedAt >= HISTORY_INTERVAL_MS;
+    const status = snapshot(includeHistory, forceHistory);
+    await client.send(status, "phone", { ttlMs: INTERVAL_MS * 24 });
     if (includeHistory) lastHistoryPublishedAt = Date.now();
+
+    // Detail follows the lean catalog, before unrelated snapshots can delay it.
+    for (const sessionId of subscriptions) {
+      await publishSessionEvents(client, sessionId, status).catch(() => false);
+    }
+
+    await client.send(approvalsStatus(), "phone", { ttlMs: INTERVAL_MS * 3 });
     if (Date.now() - lastCapabilityPublishedAt >= 30_000) {
-      await client.send(scanCapabilityUsage(status.sessions), "phone", { ttlMs: 90_000 });
+      const usage = scanCapabilityUsage([
+        ...status.sessions,
+        ...history(false),
+      ]);
+      await client.send(scopeCapabilityUsageToRoom(usage, client.room), "phone", { ttlMs: 90_000 });
       lastCapabilityPublishedAt = Date.now();
     }
     await client.send(
@@ -122,14 +208,6 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       "phone",
       { ttlMs: INTERVAL_MS * 3 },
     );
-    for (const sessionId of subscriptions) {
-      const session = [...status.sessions, ...(status.history ?? history())]
-        .find((item) => item.sessionId === sessionId);
-      if (session) {
-        await sendSessionPayload(client, scanSessionActivity(session), sessionId, "phone",
-          { ttlMs: INTERVAL_MS * 3 });
-      }
-    }
   };
 
   const off = client.onMessage(async (payload) => {
@@ -167,7 +245,17 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       return true;
     } else if (payload.type === "session.subscribe") {
       handleSubscription(subscriptions, payload);
-      void publish().catch(() => {});
+      // Re-publish now: the subscribed row gains its complete Skills catalog,
+      // and publish sends the bounded transcript immediately after that row.
+      void publish(true).catch(() => {});
+      return true;
+    } else if (payload.type === "session.events") {
+      void publishSessionEvents(client, payload.sessionId).catch(() => false);
+      return true;
+    } else if (payload.type === "sessions.refresh") {
+      // Pull-to-refresh must include a newly scanned history snapshot; otherwise
+      // a phone that cleared local state can receive an apparently empty tick.
+      void publish(true).catch(() => {});
       return true;
     } else if (payload.type === "session.access.set") {
       handleAccessSet(payload);
@@ -175,6 +263,14 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       return true;
     } else if (payload.type === "session.mcp.set") {
       handleMcpSet(payload);
+      void publish().catch(() => {});
+      return true;
+    } else if (payload.type === "session.skill.set") {
+      handleSkillSet(payload);
+      void publish().catch(() => {});
+      return true;
+    } else if (payload.type === "session.shell.set") {
+      handleShellSet(payload);
       void publish().catch(() => {});
       return true;
     } else if (payload.type === "session.compact") {
@@ -204,7 +300,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
   timer.unref?.();
 
   return {
-    publish,
+    publish: () => publish(false),
     close: () => {
       clearInterval(timer);
       off();
@@ -214,18 +310,42 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
   };
 }
 
-async function sendDeliveryReceipt(
+export async function sendDeliveryReceipt(
   client: RelayClient,
   messageId: string,
   status: "accepted" | "rejected",
   error?: string,
   sessionId?: string,
 ): Promise<void> {
-  const payload = { type: "delivery.receipt" as const, messageId, status, error, receivedAt: Date.now() };
+  const payload = {
+    type: "delivery.receipt" as const,
+    messageId,
+    sessionId: sessionId?.trim() || undefined,
+    status,
+    error,
+    receivedAt: Date.now(),
+  };
   const options = { ttlMs: 24 * 60 * 60_000 };
   await (sessionId
     ? sendSessionPayload(client, payload, sessionId, "phone", options)
     : client.send(payload, "phone", options)).catch(() => {});
+}
+
+export function agentEventForUserMessage(
+  message: UserMessage,
+  text: string,
+  sessionId?: string,
+  kind: "status" | "response" = "response",
+): AgentEvent {
+  return {
+    type: "agent.event",
+    text,
+    requestId: message.requestId,
+    kind,
+    sessionId,
+    originMessageId: message.messageId,
+    createdAt: Date.now(),
+  };
 }
 
 function handleScheduleSet(message: ScheduleSet): void {
@@ -252,12 +372,15 @@ function handleAccessSet(message: SessionAccessSet): void {
 }
 
 function handleMcpSet(message: SessionMcpSet): void {
-  const runtime = loadRuntimeConfig();
-  const disabled = new Set(runtime.sessionMcpDisabled[message.sessionId] ?? []);
-  if (message.allowed) disabled.delete(message.serverName);
-  else disabled.add(message.serverName);
-  runtime.sessionMcpDisabled[message.sessionId] = [...disabled].sort();
-  saveRuntimeConfig(runtime);
+  setSessionMcpAllowed(message.sessionId, message.serverName, message.allowed);
+}
+
+function handleSkillSet(message: SessionSkillSet): void {
+  setSessionSkillAllowed(message.sessionId, message.skillName, message.allowed);
+}
+
+function handleShellSet(message: SessionShellSet): void {
+  setSessionShellAllowed(message.sessionId, message.allowed);
 }
 
 async function handleCompact(client: RelayClient, message: SessionCompact): Promise<void> {
@@ -379,16 +502,9 @@ function handleConfigSet(message: ConfigSet): void {
   saveRuntimeConfig(runtime);
 }
 
-async function handleUserMessage(client: RelayClient, message: UserMessage): Promise<void> {
+export async function handleUserMessage(client: RelayClient, message: UserMessage): Promise<void> {
   const say = (text: string, sessionId?: string, wake = false) => {
-    const payload = {
-          type: "agent.event",
-          text,
-          requestId: message.requestId,
-          kind: "response",
-          sessionId,
-          createdAt: Date.now(),
-        } as const;
+    const payload = agentEventForUserMessage(message, text, sessionId);
     const options = { ttlMs: 15 * 60_000, wake: wake || undefined };
     return (sessionId
       ? sendSessionPayload(client, payload, sessionId, "phone", options)
@@ -438,6 +554,13 @@ async function handleUserMessage(client: RelayClient, message: UserMessage): Pro
   const skills = workspaceSkills(target.cwd);
   if (message.skill && !skills.some((skill) => skill.name === message.skill)) {
     await say("The selected project skill is no longer available in this task's folder.", target.sessionId);
+    return;
+  }
+  if (
+    message.skill &&
+    (runtime.sessionSkillsDisabled[target.sessionId] ?? []).includes(message.skill)
+  ) {
+    await say("The selected project skill is disabled for this task.", target.sessionId);
     return;
   }
 

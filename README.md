@@ -75,16 +75,23 @@ not separate MCP billing.
 Add GrantTap to each agent you use:
 
 ```bash
-codex mcp add granttap -- npx -y granttap-mcp@latest
-claude mcp add granttap -- npx -y granttap-mcp@latest
+npm install
+npm install -g .
+codex mcp add granttap -- granttap
+claude mcp add granttap -- granttap
 ```
+
+Those commands use this checkout. Publish/release it before replacing the local
+install with an npm registry version.
 
 Start a fresh agent task and say **“Connect GrantTap.”** The `connect` tool:
 
 1. creates a new end-to-end encrypted pairing;
-2. returns a scannable one-time QR directly in the agent chat;
-3. installs the Codex and Claude Code approval hooks; and
-4. installs the per-user background helper for task sync and schedules.
+2. returns a scannable one-time QR directly in the agent chat.
+
+Then run the separate MCP `setup` tool. It installs Cursor shell/MCP policy
+hooks, the complete Claude Code matcher, both Codex hooks, and the per-user
+background helper for task sync and schedules.
 
 Scan the QR with GrantTap on iPhone. No terminal QR, copied pairing JSON, or
 open background terminal is required.
@@ -93,14 +100,81 @@ If an MCP client cannot render image content, use the CLI fallback:
 
 ```bash
 npm install -g granttap-mcp
-granttap-mcp connect
-granttap-mcp setup
+granttap connect
+granttap setup
+granttap status
 ```
 
 CLI `connect` prints a one-time QR and short manual code. `setup` is idempotent:
 it preserves unrelated agent settings and backs up a configuration file before
 changing it. The pairing is stored locally in `~/.granttap/machine.json`.
 Existing beta state under `~/.nodvox/` is migrated automatically.
+
+After setup, open `/hooks` in Codex, review and trust both exact GrantTap hooks,
+then restart Codex. Installation alone is not reported as trusted or connected.
+
+## Cursor Settings → Authorize
+
+Cursor only shows **Authorize / Sign in** for **HTTP/SSE** MCP servers that
+speak OAuth (same pattern as Lovable / Figma). The default stdio entry
+(`command` + `args`) cannot show that button — Cursor documents stdio auth as
+**Manual**.
+
+To enable Authorize for GrantTap, use the one-step local setup:
+
+```bash
+npm install -g granttap-mcp
+granttap authorize
+```
+
+It preserves unrelated entries in `~/.cursor/mcp.json`, replaces only the
+`granttap` entry with the loopback HTTP endpoint, keeps a one-time
+`.bak-granttap`, and starts the OAuth MCP server. Then open
+**Cursor Settings → MCP → GrantTap → Authorize**. The local consent page shows
+the pairing QR plus a manual-token fallback when the Mac is not paired yet.
+`granttap authorize` installs a loopback-only per-user LaunchAgent, verifies its
+exact `/healthz` identity, writes Cursor config only after that check succeeds,
+and exits. The service uses RunAtLoad + KeepAlive, so closing the terminal or
+restarting the Mac does not leave Cursor pointing at a dead URL.
+
+The foreground troubleshooting flow is:
+
+1. Run the local HTTP OAuth server (loopback only):
+
+```bash
+granttap serve
+# listens on http://127.0.0.1:17342/mcp
+```
+
+2. Point Cursor at the HTTP URL in `~/.cursor/mcp.json` (replace the stdio
+   `command` entry):
+
+```json
+{
+  "mcpServers": {
+    "granttap": {
+      "url": "http://127.0.0.1:17342/mcp"
+    }
+  }
+}
+```
+
+3. Open **Cursor Settings → MCP → GrantTap** and click **Authorize**.
+   A local browser page confirms linking Cursor to this Mac’s pairing
+   (`~/.granttap`). If unpaired, it shows a one-time QR first.
+
+OAuth tokens are stored in `~/.granttap/mcp-oauth.json` (mode `0600`). They do
+**not** replace E2EE pairing keys. Claude Code / Codex can keep using the
+stdio transport; Authorize is a Cursor Settings affordance.
+
+Details: [docs/cursor-authorize.md](docs/cursor-authorize.md).
+
+`granttap setup` is the policy-hook entry point: it installs Cursor
+`beforeShellExecution`, `afterShellExecution`, and `beforeMCPExecution` hooks,
+plus Claude/Codex hooks and background task sync. It does not opt a new user
+into OAuth; when an exact Cursor HTTP entry already exists, it also repairs the
+persistent OAuth service. Per-chat blocks are checked before phone routing,
+and ambiguous/unscoped Cursor calls fall back to Cursor's native permission UI.
 
 ## Codex and Claude Code: honest capability matrix
 
@@ -133,7 +207,7 @@ Repository skills are discovered only in the selected task workspace under
 | `ask` | Sends an open question and waits for a spoken or typed reply |
 | `ask_yes_no` | Sends a yes/no question and waits for a tap |
 | `notify` | Sends a non-blocking status update |
-| `setup` | Registers both approval hooks and the terminal-free helper |
+| `setup` | Registers Cursor/Claude/Codex policy hooks and the terminal-free helper |
 
 The default answer timeout is three minutes. Override it with
 `GRANTTAP_ASK_TIMEOUT_MS`.
@@ -189,8 +263,19 @@ time, agent, status, result, and created task ID.
 | Command | Purpose |
 | --- | --- |
 | *(no command)* | Starts the GrantTap MCP stdio server |
+| `serve` | HTTP MCP + loopback OAuth for Cursor Settings → Authorize |
+| `authorize` | Installs the persistent loopback OAuth service, verifies health, and configures Cursor |
 | `connect [relayUrl]` | Creates an E2EE pairing; optionally targets a self-hosted `wss://` relay |
-| `setup` | Registers the Codex/Claude hooks and background helper |
+| `setup` | Registers Cursor/Claude/Codex hooks, background sync, and repairs configured OAuth |
+| `status [--json]` | Reads local readiness; JSON uses `granttap.provider-status.v1` and contains no keys |
+
+The installed public command is `granttap`; `granttap-mcp` remains an alias for
+existing scripts. `status` only reads configuration and runtime state—it does
+not install hooks, pair a device, start OAuth, or reload the background helper.
+If Cursor has an HTTP GrantTap entry, status requires both an owned persistent
+service and a live identity-checked health response; a dead URL is never shown
+as connected. Without an HTTP entry, OAuth remains optional and Cursor policy
+readiness is based on the full hook set, pairing, and background sync.
 
 ## Development
 

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -33,6 +34,10 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   const address = relayServer.address();
   assert(address && typeof address === "object");
   const relayUrl = `ws://127.0.0.1:${address.port}`;
+  const cursorDir = join(configDir, "cursor");
+  const claudeDir = join(configDir, "claude");
+  const codexDir = join(configDir, "codex");
+  const agentsDir = join(configDir, "LaunchAgents");
 
   const inheritedEnv = Object.fromEntries(
     Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] != null),
@@ -45,7 +50,14 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
       ...inheritedEnv,
       GRANTTAP_CONFIG_DIR: configDir,
       GRANTTAP_RELAY_URL: relayUrl,
-      GRANTTAP_SKIP_HOOKS: "1",
+      GRANTTAP_CURSOR_DIR: cursorDir,
+      GRANTTAP_CLAUDE_DIR: claudeDir,
+      GRANTTAP_CODEX_DIR: codexDir,
+      GRANTTAP_LAUNCH_AGENTS_DIR: agentsDir,
+      GRANTTAP_PINNED_MONITOR_BIN: join(configDir, "missing-nodvox-monitor"),
+      GRANTTAP_PINNED_MONITOR_ROOT: join(configDir, "missing-nodvox-root"),
+      GRANTTAP_SKIP_LAUNCHCTL: "1",
+      GRANTTAP_NODE: process.execPath,
     },
     stderr: "pipe",
   });
@@ -77,7 +89,7 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   const pairingText = pairingContent.find((item) => item.type === "text")?.text ?? "";
   const pairingImage = pairingContent.find((item) => item.type === "image");
   assert.doesNotMatch(pairingText, /manual secure token:/i);
-  assert.match(pairingText, /single-use/i);
+  assert.match(pairingText, /one-time/i);
   assert.equal(pairingImage?.mimeType, "image/png");
   assert.deepEqual(pairingImage?.annotations?.audience, ["user"]);
   assert.deepEqual(
@@ -93,6 +105,28 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   assert.equal(pairingText.includes(phoneSecret), false);
   assert.equal(Buffer.from(pairingImage?.data ?? "", "base64").includes(Buffer.from(phoneSecret)), false);
   const mailboxId = parkedPath.split("/").at(-1)!;
-  assert.equal(pairingText.includes(mailboxId), false);
+  // Pair-v2 intentionally carries the public one-time mailbox id in its URI;
+  // the independent transfer key, never the mailbox id, protects the payload.
+  assert.equal(pairingText.includes(mailboxId), true);
   assert.equal(parkedBody.includes(mailboxId), false);
+
+  const cursorHooks = JSON.parse(await readFile(join(cursorDir, "hooks.json"), "utf8")) as {
+    hooks: Record<string, Array<{ command: string; failClosed?: boolean }>>;
+  };
+  assert.match(cursorHooks.hooks.beforeShellExecution?.[0]?.command ?? "", /hook cursor$/);
+  assert.match(cursorHooks.hooks.afterShellExecution?.[0]?.command ?? "", /hook cursor-after$/);
+  assert.match(cursorHooks.hooks.beforeMCPExecution?.[0]?.command ?? "", /hook cursor-mcp$/);
+  assert.equal(cursorHooks.hooks.beforeMCPExecution?.[0]?.failClosed, false);
+  assert.match(await readFile(join(claudeDir, "settings.json"), "utf8"), /Skill\|mcp__\.\*\|skill__\.\*/);
+  assert.match(await readFile(join(codexDir, "config.toml"), "utf8"), /hook codex-policy/);
+
+  const setupResult = await client.callTool({ name: "setup", arguments: {} });
+  const setupText = (setupResult.content as Array<{ type: string; text?: string }>)
+    .find((item) => item.type === "text")?.text ?? "";
+  assert.match(setupText, /^Cursor: already/m);
+  assert.match(setupText, /Codex: action required/);
+  assert.match(setupText, /trust both GrantTap hooks/);
+  assert.match(setupText, /Authorize \(OAuth\) is separate/);
+  assert.equal(existsSync(join(configDir, "mcp-oauth.json")), false);
+  assert.equal(existsSync(join(cursorDir, "mcp.json")), false);
 });

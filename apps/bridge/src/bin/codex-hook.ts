@@ -14,7 +14,12 @@
  */
 import { codexToRequest, decisionToCodexOutput, type HookInput } from "../adapters";
 import { requestApproval } from "../approval";
-import { isGatingSkipped, loadConfig, machineConfigPath } from "../config";
+import {
+  blockedSessionCapability,
+  isGatingSkipped,
+  loadConfig,
+  machineConfigPath,
+} from "../config";
 
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
@@ -38,6 +43,16 @@ async function main(): Promise<void> {
     input = JSON.parse(raw) as HookInput;
   } catch {
     process.stdout.write(denyOutput("GrantTap received invalid hook JSON"));
+    return;
+  }
+
+  const blocked = blockedSessionCapability(
+    input.session_id,
+    input.tool_name,
+    input.tool_input,
+  );
+  if (blocked) {
+    process.stdout.write(denyOutput(blocked.reason));
     return;
   }
 

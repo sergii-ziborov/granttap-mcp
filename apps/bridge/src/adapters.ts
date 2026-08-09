@@ -113,6 +113,56 @@ export function decisionToCodexOutput(d: ApprovalDecision): unknown {
   };
 }
 
+// --------------------------------------------------------------------- Cursor
+
+export type CursorHookInput = {
+  conversation_id?: string;
+  generation_id?: string;
+  command?: string;
+  cwd?: string;
+  hook_event_name?: string;
+  workspace_roots?: string[];
+  session_id?: string;
+  tool_name?: string;
+  tool_input?: Record<string, unknown>;
+};
+
+export function cursorToRequest(input: CursorHookInput): ApprovalRequest {
+  const command = typeof input.command === "string" && input.command.trim()
+    ? input.command
+    : extractCommand("Shell", input.tool_input ?? {});
+  const sessionId = input.conversation_id ?? input.session_id;
+  const cwd = (typeof input.cwd === "string" && input.cwd.trim() ? input.cwd : undefined)
+    ?? (Array.isArray(input.workspace_roots) ? input.workspace_roots[0] : undefined);
+  return {
+    type: "approval.request",
+    requestId: randomId(6),
+    agent: "cursor",
+    kind: "permission",
+    tool: input.tool_name ?? "Shell",
+    title: shortTitle("Shell", command),
+    command,
+    cwd,
+    sessionId,
+    risk: guessRisk("Shell", command),
+    createdAt: Date.now(),
+  };
+}
+
+export function decisionToCursorOutput(d: ApprovalDecision): unknown {
+  const permission = d.decision === "allow" ? "allow" : "deny";
+  const message = d.note
+    ?? (d.decision === "allow" ? "Approved from GrantTap" : "Denied from GrantTap");
+  return {
+    permission,
+    continue: d.decision === "allow",
+    user_message: message,
+    agent_message: message,
+    userMessage: message,
+    agentMessage: message,
+  };
+}
+
 // ------------------------------------------------------------------ helpers
 
 function shortTitle(tool: string, command: string): string {

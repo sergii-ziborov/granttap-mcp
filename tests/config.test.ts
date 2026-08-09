@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import {
+  blockedSessionCapability,
   createPairing,
   isGatingSkipped,
   loadRuntimeConfig,
@@ -12,6 +13,9 @@ import {
   parsePairingUri,
   saveConfig,
   saveRuntimeConfig,
+  setSessionMcpAllowed,
+  setSessionShellAllowed,
+  setSessionSkillAllowed,
 } from "../apps/bridge/src/config";
 import { oneTimePairingUri, relayHttpBase } from "../apps/bridge/src/pairing";
 
@@ -25,7 +29,12 @@ test("gating can exclude exactly one chat without disabling every chat", async (
   });
 
   assert.deepEqual(loadRuntimeConfig(), {
-    enabled: true, excludedSessions: [], sessionAccess: {}, sessionMcpDisabled: {},
+    enabled: true,
+    excludedSessions: [],
+    sessionAccess: {},
+    sessionMcpDisabled: {},
+    sessionSkillsDisabled: {},
+    sessionShellDisabled: [],
   });
   assert.equal(isGatingSkipped("chat-a"), false);
 
@@ -34,9 +43,13 @@ test("gating can exclude exactly one chat without disabling every chat", async (
     excludedSessions: ["chat-a"],
     sessionAccess: { "chat-a": "read-only" },
     sessionMcpDisabled: { "chat-a": ["github"] },
+    sessionSkillsDisabled: { "chat-a": ["review"] },
+    sessionShellDisabled: ["chat-a"],
   });
   assert.equal(loadRuntimeConfig().sessionAccess["chat-a"], "read-only");
   assert.deepEqual(loadRuntimeConfig().sessionMcpDisabled["chat-a"], ["github"]);
+  assert.deepEqual(loadRuntimeConfig().sessionSkillsDisabled["chat-a"], ["review"]);
+  assert.deepEqual(loadRuntimeConfig().sessionShellDisabled, ["chat-a"]);
   assert.equal(isGatingSkipped("chat-a"), true);
   assert.equal(isGatingSkipped("chat-b"), false);
   assert.equal((await stat(join(configDir, "config.json"))).mode & 0o777, 0o600);
@@ -48,7 +61,14 @@ test("gating can exclude exactly one chat without disabling every chat", async (
   assert.equal((await stat(machineConfigPath())).mode & 0o777, 0o600);
   assert.match(machineCfg.room, /^[a-f0-9]{32}$/);
 
-  saveRuntimeConfig({ enabled: false, excludedSessions: [], sessionAccess: {}, sessionMcpDisabled: {} });
+  saveRuntimeConfig({
+    enabled: false,
+    excludedSessions: [],
+    sessionAccess: {},
+    sessionMcpDisabled: {},
+    sessionSkillsDisabled: {},
+    sessionShellDisabled: [],
+  });
   assert.equal(isGatingSkipped("chat-a"), true);
   assert.equal(isGatingSkipped(undefined), true);
 });
@@ -67,7 +87,12 @@ test("legacy Nodvox environment and pairing links remain readable during migrati
   });
 
   saveRuntimeConfig({
-    enabled: true, excludedSessions: ["legacy-chat"], sessionAccess: {}, sessionMcpDisabled: {},
+    enabled: true,
+    excludedSessions: ["legacy-chat"],
+    sessionAccess: {},
+    sessionMcpDisabled: {},
+    sessionSkillsDisabled: {},
+    sessionShellDisabled: [],
   });
   assert.equal(isGatingSkipped("legacy-chat"), true);
 
@@ -76,6 +101,47 @@ test("legacy Nodvox environment and pairing links remain readable during migrati
   assert.match(currentUri, /^granttap:\/\/pair\?/);
   const migrated = parsePairingUri(currentUri.replace(/^granttap:/, "nodvox:"));
   assert.deepEqual(migrated, phoneCfg);
+});
+
+test("capability config is bounded and exact-session setters do not leak", async (t) => {
+  const configDir = await mkdtemp(join(tmpdir(), "granttap-capability-config-"));
+  const previous = process.env.GRANTTAP_CONFIG_DIR;
+  process.env.GRANTTAP_CONFIG_DIR = configDir;
+  t.after(() => {
+    if (previous == null) delete process.env.GRANTTAP_CONFIG_DIR;
+    else process.env.GRANTTAP_CONFIG_DIR = previous;
+  });
+
+  await writeFile(join(configDir, "config.json"), JSON.stringify({
+    enabled: true,
+    sessionMcpDisabled: {
+      "chat-a": ["filesystem", "filesystem", " ", "x".repeat(161)],
+      ["s".repeat(257)]: ["filesystem"],
+    },
+    sessionSkillsDisabled: { "chat-a": ["release-check"] },
+    sessionShellDisabled: ["chat-a", "chat-a", "s".repeat(257), 42],
+  }));
+  const parsed = loadRuntimeConfig();
+  assert.deepEqual(parsed.sessionMcpDisabled, { "chat-a": ["filesystem"] });
+  assert.deepEqual(parsed.sessionSkillsDisabled, { "chat-a": ["release-check"] });
+  assert.deepEqual(parsed.sessionShellDisabled, ["chat-a"]);
+
+  const longMcpTool = `mcp__filesystem__${"x".repeat(240)}`.slice(0, 240);
+  assert.equal(blockedSessionCapability("chat-a", longMcpTool)?.kind, "mcp");
+  assert.equal(blockedSessionCapability("chat-b", longMcpTool), null);
+  assert.equal(
+    blockedSessionCapability("chat-a", "Skill", { skill: "release-check" })?.kind,
+    "skill",
+  );
+  assert.equal(blockedSessionCapability("chat-a", "shell_command")?.kind, "cli");
+
+  setSessionMcpAllowed("chat-a", "filesystem", true);
+  setSessionSkillAllowed("chat-a", "release-check", true);
+  setSessionShellAllowed("chat-a", true);
+  assert.equal(blockedSessionCapability("chat-a", longMcpTool), null);
+  assert.equal(blockedSessionCapability("chat-a", "Skill", { skill: "release-check" }), null);
+  assert.equal(blockedSessionCapability("chat-a", "shell_command"), null);
+  assert.throws(() => setSessionMcpAllowed("s".repeat(257), "filesystem", false), /invalid/);
 });
 
 test("chat pairing QR separates the relay mailbox from its 256-bit transfer key", () => {

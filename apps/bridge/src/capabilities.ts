@@ -420,6 +420,7 @@ function skillsIn(root: string): SkillInfo[] {
   }
   const out: SkillInfo[] = [];
   for (const name of entries) {
+    if (name.startsWith(".")) continue;
     const dir = join(root, name);
     try {
       if (!statSync(dir).isDirectory()) continue;
@@ -432,13 +433,26 @@ function skillsIn(root: string): SkillInfo[] {
   return out;
 }
 
-/** Repository-scoped skills only: these are the ones connected to the task's folder. */
+/** Skills available to the agent globally and along the task's repository path. */
 export function workspaceSkills(cwd: string | undefined): SkillInfo[] {
-  if (!cwd) return [];
   const found = new Map<string, SkillInfo>();
-  for (const dir of ancestors(cwd)) {
-    for (const root of [join(dir, ".agents", "skills"), join(dir, ".claude", "skills")]) {
-      for (const skill of skillsIn(root)) if (!found.has(skill.name)) found.set(skill.name, skill);
+  const roots = [
+    join(homedir(), ".cursor", "skills-cursor"),
+    join(homedir(), ".agents", "skills"),
+    join(homedir(), ".claude", "skills"),
+  ];
+  if (cwd) {
+    for (const dir of ancestors(cwd)) {
+      roots.push(
+        join(dir, ".agents", "skills"),
+        join(dir, ".claude", "skills"),
+        join(dir, ".cursor", "skills"),
+      );
+    }
+  }
+  for (const root of roots) {
+    for (const skill of skillsIn(root)) {
+      if (!found.has(skill.name)) found.set(skill.name, skill);
     }
   }
   return [...found.values()].sort((a, b) => a.name.localeCompare(b.name));

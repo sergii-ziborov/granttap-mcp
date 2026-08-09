@@ -1,5 +1,5 @@
 import QRCode from "qrcode";
-import type { InstallResult } from "../install";
+import { CODEX_TRUST_INSTRUCTION, type InstallResult } from "../install";
 import { machineConfigPath, phonePairingPath } from "../config";
 import { createOneTimePairing, DEFAULT_RELAY, PAIRING_CODE_TTL_MINUTES } from "../pairing";
 
@@ -12,6 +12,10 @@ function hookLine(name: string, result: InstallResult): string {
     case "manual":
       return `  ! ${name}: ${result.detail}`;
   }
+}
+
+function codexHookLine(result: InstallResult): string {
+  return `  ! Codex: action required — hooks ${result.status} (${result.detail}). ${CODEX_TRUST_INSTRUCTION}`;
 }
 
 async function connect(relayUrl: string): Promise<void> {
@@ -39,7 +43,7 @@ async function connect(relayUrl: string): Promise<void> {
     ].join("\n"),
   );
 
-  const skipHooks = pairing.claude == null || pairing.codex == null;
+  const skipHooks = pairing.cursor == null || pairing.claude == null || pairing.codex == null;
   process.stdout.write(
     [
       "",
@@ -53,8 +57,9 @@ async function connect(relayUrl: string): Promise<void> {
       ...(skipHooks
         ? ["  Hooks: skipped (GRANTTAP_SKIP_HOOKS=1)"]
         : [
+            hookLine("Cursor", pairing.cursor!),
             hookLine("Claude Code", pairing.claude!),
-            hookLine("Codex", pairing.codex!),
+            codexHookLine(pairing.codex!),
             hookLine("Background task sync", pairing.monitor!),
           ]),
       "",
