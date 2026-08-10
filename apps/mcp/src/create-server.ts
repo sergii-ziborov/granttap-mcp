@@ -7,6 +7,7 @@ import QRCode from "qrcode";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { RelayClient } from "../../../packages/core/relay-client";
 import { loadConfig, machineConfigPath, normalizeRelayUrl } from "../../bridge/src/config";
+import { isUnanswered } from "../../bridge/src/approval";
 import {
   CODEX_TRUST_INSTRUCTION,
   installClaudeHook,
@@ -84,7 +85,9 @@ export async function askYesNo(
     client,
     timeoutMs,
   });
-  if (decision.decidedBy === "system" && decision.note?.includes("timeout")) {
+  // Nobody tapped (phone asleep / relay down) is not a "no" — keep it distinct
+  // so the agent can tell a real decline from an unanswered prompt.
+  if (isUnanswered(decision)) {
     return "no-answer (timeout)";
   }
   return decision.decision === "allow" ? "yes" : "no";

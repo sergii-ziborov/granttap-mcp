@@ -25,6 +25,15 @@ export const AgentId = z.string().min(1);
 export const Risk = z.enum(["low", "medium", "high"]);
 export type Risk = z.infer<typeof Risk>;
 
+/** GrantTap auto-accept levels; configured from iOS, applied on the Mac hook. */
+const AutoAcceptLevel = z.enum([
+  "ask",
+  "safe",
+  "except_push",
+  "except_destructive",
+  "full",
+]);
+
 /** machine -> phone: "the agent wants to do X, may it?" */
 export const ApprovalRequest = z.object({
   type: z.literal("approval.request"),
@@ -408,6 +417,10 @@ export const SessionsStatus = z.object({
   /** Current gating switch + exclusions, so the phone can show/toggle them. */
   gatingEnabled: z.boolean().optional(),
   excludedSessions: z.array(z.string()).optional(),
+  /** GrantTap auto-accept default + per-session map + pause flag. */
+  autoAcceptDefault: AutoAcceptLevel.optional(),
+  autoAcceptBySession: z.record(AutoAcceptLevel).optional(),
+  autoAcceptPaused: z.boolean().optional(),
   agents: z.array(AgentIntegrationStatus).optional(),
   /** Optional bounded transcript previews; full detail uses session.activity. */
   activities: z.array(SessionActivity).optional(),
@@ -421,6 +434,16 @@ export const ConfigSet = z.object({
   enabled: z.boolean().optional(),
   excludeSession: z.string().optional(),
   includeSession: z.string().optional(),
+  /** iOS is the only config surface for auto-accept; the Mac just applies it. */
+  autoAcceptDefault: AutoAcceptLevel.nullish(),
+  /** Set/clear one session's auto-accept level (null clears override). */
+  autoAcceptSession: z
+    .object({
+      sessionId: z.string(),
+      level: AutoAcceptLevel.nullable(),
+    })
+    .nullish(),
+  autoAcceptPaused: z.boolean().nullish(),
   createdAt: z.number(),
 });
 export type ConfigSet = z.infer<typeof ConfigSet>;
