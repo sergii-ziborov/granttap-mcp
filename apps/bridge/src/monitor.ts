@@ -170,6 +170,11 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       tokensAllTime: tokensRecent,
       gatingEnabled: runtime.enabled,
       excludedSessions: runtime.excludedSessions,
+      // Echo the whole auto-accept state back so the iOS Settings screen shows
+      // what the Mac is actually enforcing, not what it last sent.
+      autoAcceptDefault: runtime.autoAcceptDefault,
+      autoAcceptBySession: runtime.autoAcceptBySession,
+      autoAcceptPaused: runtime.autoAcceptPaused,
       agents: inspectAgentIntegrations(),
       generatedAt: Date.now(),
     };
@@ -490,7 +495,7 @@ function handleSubscription(subscriptions: Set<string>, message: SessionSubscrip
   else subscriptions.delete(message.sessionId);
 }
 
-function handleConfigSet(message: ConfigSet): void {
+export function handleConfigSet(message: ConfigSet): void {
   const runtime = loadRuntimeConfig();
   if (typeof message.enabled === "boolean") runtime.enabled = message.enabled;
   if (message.excludeSession && !runtime.excludedSessions.includes(message.excludeSession)) {
@@ -499,7 +504,23 @@ function handleConfigSet(message: ConfigSet): void {
   if (message.includeSession) {
     runtime.excludedSessions = runtime.excludedSessions.filter((id) => id !== message.includeSession);
   }
+  // Auto-accept is configured from iOS only; this is the write path the phone
+  // uses. The hooks never change these — they just read the persisted level.
+  if (message.autoAcceptDefault) runtime.autoAcceptDefault = message.autoAcceptDefault;
+  if (typeof message.autoAcceptPaused === "boolean") {
+    runtime.autoAcceptPaused = message.autoAcceptPaused;
+  }
+  if (message.autoAcceptSession) {
+    const { sessionId, level } = message.autoAcceptSession;
+    if (level == null) delete runtime.autoAcceptBySession[sessionId];
+    else runtime.autoAcceptBySession[sessionId] = level;
+  }
   saveRuntimeConfig(runtime);
+  process.stderr.write(
+    `[monitor] config: gating=${runtime.enabled ? "on" : "OFF"}, ` +
+      `auto=${runtime.autoAcceptPaused ? "paused" : runtime.autoAcceptDefault}, ` +
+      `excluded=${runtime.excludedSessions.length}\n`,
+  );
 }
 
 export async function handleUserMessage(client: RelayClient, message: UserMessage): Promise<void> {
