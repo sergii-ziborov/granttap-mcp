@@ -25,6 +25,18 @@ import {
 } from "./cloud-approvals";
 import { primeSessionKeys, sendSessionPayload } from "./session-keys";
 
+/**
+ * Nobody answered — relay unreachable, or the phone never responded before the
+ * timeout. Neither is a human saying no, so every hook hands the question back
+ * to the agent's own permission prompt instead of denying the tool call.
+ */
+export function isUnanswered(decision: ApprovalDecision): boolean {
+  return (
+    decision.decision === "deny" &&
+    (decision.decidedBy === "unreachable" || decision.decidedBy === "expired")
+  );
+}
+
 export type RequestApprovalOpts = {
   timeoutMs?: number;
   /** Inject a client in tests instead of opening a socket. */
@@ -188,27 +200,41 @@ export async function requestApproval(
     const decision = await decisionP;
 
     if (decision) return decision;
+    // `expired`, not `system`: nobody denied anything — the phone was asleep,
+    // offline, or the app was killed. Hooks hand `expired` back to the agent's
+    // own permission prompt. Reporting it as a plain deny bricks the agent:
+    // every tool call stalls for the full timeout and then fails.
     const expired = markApprovalTerminal(req.requestId, "expired", {
       decision: "deny",
-      decidedBy: "system",
+      decidedBy: "expired",
       note: "No response from phone before timeout",
       sessionId: req.sessionId,
     }, Date.now(), registrationHandle);
-    if (!expired.outcome) return failClosed(req, "No response from phone before timeout");
+    if (!expired.outcome) {
+      return {
+        ...failClosed(req, "No response from phone before timeout"),
+        decidedBy: "expired",
+      };
+    }
     await sendApprovalResolved(
       client,
       resolvedFromOutcome(expired.outcome, expired.request),
     ).catch(() => {});
     return decisionFromOutcome(expired.outcome, req);
   } catch (err) {
+    // Transport blew up mid-flight (socket dropped, peer never attached). Like a
+    // failed connect this is `unreachable`: no human ever saw the request.
     const expired = markApprovalTerminal(req.requestId, "expired", {
       decision: "deny",
-      decidedBy: "system",
+      decidedBy: "unreachable",
       note: "Approval channel error",
       sessionId: req.sessionId,
     }, Date.now(), registrationHandle);
     if (!expired.outcome) {
-      return failClosed(req, `Approval channel error: ${(err as Error).message}`);
+      return {
+        ...failClosed(req, `Approval channel error: ${(err as Error).message}`),
+        decidedBy: "unreachable",
+      };
     }
     await sendApprovalResolved(
       client,

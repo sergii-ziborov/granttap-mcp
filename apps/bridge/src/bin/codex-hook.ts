@@ -13,13 +13,16 @@
  * Fails closed on error/timeout.
  */
 import { codexToRequest, decisionToCodexOutput, type HookInput } from "../adapters";
-import { requestApproval } from "../approval";
+import { isUnanswered, requestApproval } from "../approval";
 import {
+  autoAcceptLevelFor,
   blockedSessionCapability,
   isGatingSkipped,
   loadConfig,
   machineConfigPath,
+  shouldAutoAcceptTool,
 } from "../config";
+import { classifyAction } from "../policy";
 
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
@@ -67,7 +70,26 @@ async function main(): Promise<void> {
     return;
   }
 
+  // Local policy, evaluated after pairing is confirmed — see claude-hook.
   const req = codexToRequest(input);
+  if (shouldAutoAcceptTool(input.session_id, req.tool, req.command)) {
+    const level = autoAcceptLevelFor(input.session_id);
+    const cls = classifyAction(req.tool, req.command);
+    process.stdout.write(
+      JSON.stringify(
+        decisionToCodexOutput({
+          type: "approval.decision",
+          requestId: req.requestId,
+          decision: "allow",
+          decidedBy: "auto",
+          note: `GrantTap auto-accept (${level} / ${cls})`,
+          decidedAt: Date.now(),
+        }),
+      ),
+    );
+    return;
+  }
+
   const timeoutMs = Number(
     process.env.GRANTTAP_APPROVAL_TIMEOUT_MS ??
       process.env.NODVOX_APPROVAL_TIMEOUT_MS ??
@@ -75,9 +97,9 @@ async function main(): Promise<void> {
   );
   const decision = await requestApproval(cfg, req, { timeoutMs });
 
-  // Relay down: stay silent — an empty hook result sends Codex back to its own
-  // approval flow, so desk work keeps going.
-  if (decision.decision === "deny" && decision.decidedBy === "unreachable") return;
+  // Relay down or phone never answered: stay silent — an empty hook result
+  // sends Codex back to its own approval flow, so desk work keeps going.
+  if (isUnanswered(decision)) return;
 
   process.stdout.write(JSON.stringify(decisionToCodexOutput(decision)));
 }

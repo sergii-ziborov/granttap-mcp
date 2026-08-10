@@ -10,16 +10,19 @@
  *   Writes: { hookSpecificOutput: { permissionDecision, ... } } on stdout
  *
  * Fails closed: any error or timeout denies the tool call rather than letting it
- * through unattended.
+ * through unattended — unless GrantTap auto-accept allows it locally.
  */
 import { claudeToRequest, decisionToClaudeOutput, type HookInput } from "../adapters";
-import { requestApproval } from "../approval";
+import { isUnanswered, requestApproval } from "../approval";
 import {
+  autoAcceptLevelFor,
   blockedSessionCapability,
   isGatingSkipped,
   loadConfig,
   machineConfigPath,
+  shouldAutoAcceptTool,
 } from "../config";
+import { classifyAction } from "../policy";
 
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
@@ -51,13 +54,15 @@ async function main(): Promise<void> {
     input.tool_input,
   );
   if (blocked) {
-    process.stdout.write(JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: "PreToolUse",
-        permissionDecision: "deny",
-        permissionDecisionReason: blocked.reason,
-      },
-    }));
+    process.stdout.write(
+      JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          permissionDecision: "deny",
+          permissionDecisionReason: blocked.reason,
+        },
+      }),
+    );
     return;
   }
 
@@ -83,7 +88,29 @@ async function main(): Promise<void> {
     return;
   }
 
+  // Local policy, evaluated after pairing is confirmed: an unpaired machine must
+  // keep Claude's own prompts rather than be silently auto-allowed by a product
+  // the user never finished setting up. Once paired, this is what keeps routine
+  // work independent of whether the phone is awake, reachable, or even running.
   const req = claudeToRequest(input);
+  if (shouldAutoAcceptTool(input.session_id, req.tool, req.command)) {
+    const level = autoAcceptLevelFor(input.session_id);
+    const cls = classifyAction(req.tool, req.command);
+    process.stdout.write(
+      JSON.stringify(
+        decisionToClaudeOutput({
+          type: "approval.decision",
+          requestId: req.requestId,
+          decision: "allow",
+          decidedBy: "auto",
+          note: `GrantTap auto-accept (${level} / ${cls})`,
+          decidedAt: Date.now(),
+        }),
+      ),
+    );
+    return;
+  }
+
   const timeoutMs = Number(
     process.env.GRANTTAP_APPROVAL_TIMEOUT_MS ??
       process.env.NODVOX_APPROVAL_TIMEOUT_MS ??
@@ -91,17 +118,9 @@ async function main(): Promise<void> {
   );
   const decision = await requestApproval(cfg, req, { timeoutMs });
 
-  // Relay down ≠ phone said no: hand the question back to the local prompt.
-  if (decision.decision === "deny" && decision.decidedBy === "unreachable") {
-    process.stdout.write(
-      JSON.stringify({
-        hookSpecificOutput: {
-          hookEventName: "PreToolUse",
-          permissionDecision: "ask",
-          permissionDecisionReason: "GrantTap relay недоступен — решай локально",
-        },
-      }),
-    );
+  // Relay down or phone asleep ≠ phone said no: abstain so Claude's local flow
+  // handles it (avoid flooding "решай локально" on every tool).
+  if (isUnanswered(decision)) {
     return;
   }
 

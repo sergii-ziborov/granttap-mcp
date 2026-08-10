@@ -3,12 +3,13 @@
 import { randomId } from "../../../../packages/core/crypto";
 import type { ApprovalRequest } from "../../../../packages/protocol/schema";
 import { decisionToCursorOutput } from "../adapters";
-import { requestApproval } from "../approval";
+import { isUnanswered, requestApproval } from "../approval";
 import {
   blockedSessionMcpServer,
   isGatingSkipped,
   loadConfig,
   machineConfigPath,
+  shouldAutoAcceptTool,
 } from "../config";
 import {
   cursorConversationId,
@@ -81,10 +82,16 @@ async function main(): Promise<void> {
     risk: "medium",
     createdAt: Date.now(),
   };
+  // Eligible levels approve locally — an MCP call must not hang on a sleeping phone.
+  if (shouldAutoAcceptTool(sessionId, request.tool, request.command)) {
+    process.stdout.write(JSON.stringify({ permission: "allow", continue: true }));
+    return;
+  }
+
   const timeoutMs = Number(process.env.GRANTTAP_APPROVAL_TIMEOUT_MS ?? 60_000);
   const decision = await requestApproval(config, request, { timeoutMs });
-  if (decision.decision === "deny" && decision.decidedBy === "unreachable") {
-    nativeAsk("GrantTap is unreachable; use Cursor approval.");
+  if (isUnanswered(decision)) {
+    nativeAsk("GrantTap got no answer; use Cursor approval.");
     return;
   }
   process.stdout.write(JSON.stringify(decisionToCursorOutput(decision)));

@@ -5,12 +5,14 @@ import {
   decisionToCursorOutput,
   type CursorHookInput,
 } from "../adapters";
-import { requestApproval } from "../approval";
+import { isUnanswered, requestApproval } from "../approval";
 import {
+  autoAcceptLevelFor,
   blockedSessionCapability,
   isGatingSkipped,
   loadConfig,
   machineConfigPath,
+  shouldAutoAcceptCursorShell,
 } from "../config";
 import { cursorRootSessionId } from "../sessions/cursor";
 
@@ -70,10 +72,19 @@ async function main(): Promise<void> {
     conversation_id: sessionId,
     session_id: sessionId,
   });
+
+  // Eligible levels approve locally — never wait on phone WS/APNs for an action
+  // the configured level already allows.
+  const level = autoAcceptLevelFor(sessionId);
+  if (shouldAutoAcceptCursorShell(level, request.tool, request.command)) {
+    process.stdout.write(JSON.stringify({ permission: "allow", continue: true }));
+    return;
+  }
+
   const timeoutMs = Number(process.env.GRANTTAP_APPROVAL_TIMEOUT_MS ?? 60_000);
   const decision = await requestApproval(config, request, { timeoutMs });
-  if (decision.decision === "deny" && decision.decidedBy === "unreachable") {
-    nativeAsk("GrantTap is unreachable; use Cursor approval.");
+  if (isUnanswered(decision)) {
+    nativeAsk("GrantTap got no answer; use Cursor approval.");
     return;
   }
   process.stdout.write(JSON.stringify(decisionToCursorOutput(decision)));
