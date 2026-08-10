@@ -32,6 +32,11 @@ test("gating can exclude exactly one chat without disabling every chat", async (
     enabled: true,
     excludedSessions: [],
     sessionAccess: {},
+    // Routine work is allowed locally by default; only push/destructive classes
+    // need the phone, so a sleeping device cannot stall the agent.
+    autoAcceptDefault: "except_push",
+    autoAcceptBySession: {},
+    autoAcceptPaused: false,
     sessionMcpDisabled: {},
     sessionSkillsDisabled: {},
     sessionShellDisabled: [],

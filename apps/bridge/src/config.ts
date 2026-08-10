@@ -43,10 +43,26 @@ export function machineConfigPath(): string {
 // Editable from the phone (a config.set payload the monitor persists here), so
 // you can pause gating or exempt a specific chat without touching any files.
 
+import {
+  isAutoAcceptLevel,
+  type AutoAcceptLevel,
+  resolveAutoAcceptLevel,
+  shouldAutoAllow,
+  shouldAutoAcceptCursorShell,
+  isSafeReadonlyShell,
+  classifyAction,
+} from "./policy";
+
 export type RuntimeConfig = {
   enabled: boolean;
   excludedSessions: string[];
   sessionAccess: Record<string, AgentAccess>;
+  /** Default auto-accept level for sessions without an override. */
+  autoAcceptDefault: AutoAcceptLevel;
+  /** Per-session overrides set from the phone. */
+  autoAcceptBySession: Record<string, AutoAcceptLevel>;
+  /** When true, treat every session as ask (gating still on). */
+  autoAcceptPaused: boolean;
   /** MCP servers denied only for turns delivered by GrantTap into a task. */
   sessionMcpDisabled: Record<string, string[]>;
   /** Skills denied only in the exact originating chat. */
@@ -59,6 +75,9 @@ const DEFAULT_RUNTIME: RuntimeConfig = {
   enabled: true,
   excludedSessions: [],
   sessionAccess: {},
+  autoAcceptDefault: "except_push",
+  autoAcceptBySession: {},
+  autoAcceptPaused: false,
   sessionMcpDisabled: {},
   sessionSkillsDisabled: {},
   sessionShellDisabled: [],
@@ -80,6 +99,15 @@ function capabilitySessionId(raw: unknown): string | null {
 
 function capabilityName(raw: unknown): string | null {
   return boundedIdentifier(raw, 160);
+}
+
+function parseBySession(raw: unknown): Record<string, AutoAcceptLevel> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, AutoAcceptLevel> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (isAutoAcceptLevel(value)) out[key] = value;
+  }
+  return out;
 }
 
 function parseDisabledCapabilities(raw: unknown): Record<string, string[]> {
@@ -108,6 +136,11 @@ export function loadRuntimeConfig(): RuntimeConfig {
       enabled: raw.enabled !== false,
       excludedSessions: Array.isArray(raw.excludedSessions) ? raw.excludedSessions.map(String) : [],
       sessionAccess,
+      autoAcceptDefault: isAutoAcceptLevel(raw.autoAcceptDefault)
+        ? raw.autoAcceptDefault
+        : DEFAULT_RUNTIME.autoAcceptDefault,
+      autoAcceptBySession: parseBySession(raw.autoAcceptBySession),
+      autoAcceptPaused: raw.autoAcceptPaused === true,
       sessionMcpDisabled: parseDisabledCapabilities(raw.sessionMcpDisabled),
       sessionSkillsDisabled: parseDisabledCapabilities(raw.sessionSkillsDisabled),
       sessionShellDisabled: Array.isArray(raw.sessionShellDisabled)
@@ -122,12 +155,48 @@ export function loadRuntimeConfig(): RuntimeConfig {
     return {
       ...DEFAULT_RUNTIME,
       sessionAccess: {},
+      autoAcceptBySession: {},
       sessionMcpDisabled: {},
       sessionSkillsDisabled: {},
       sessionShellDisabled: [],
     };
   }
 }
+
+/** Level for a session after pause / per-session / default resolution. */
+export function autoAcceptLevelFor(sessionId: string | null | undefined): AutoAcceptLevel {
+  const cfg = loadRuntimeConfig();
+  return resolveAutoAcceptLevel({
+    paused: cfg.autoAcceptPaused,
+    defaultLevel: cfg.autoAcceptDefault,
+    bySession: cfg.autoAcceptBySession,
+    sessionId: sessionId ?? undefined,
+  });
+}
+
+/**
+ * Whether this tool call should be auto-allowed without phoning home.
+ *
+ * This is the difference between "GrantTap is a policy layer" and "GrantTap is
+ * a single point of failure": at any level above `ask`, routine work never
+ * depends on the phone being awake, reachable, or even installed.
+ */
+export function shouldAutoAcceptTool(
+  sessionId: string | null | undefined,
+  tool: string,
+  command: string | null | undefined,
+): boolean {
+  const level = autoAcceptLevelFor(sessionId);
+  return shouldAutoAllow(level, classifyAction(tool, command ?? undefined));
+}
+
+export {
+  classifyAction,
+  shouldAutoAllow,
+  shouldAutoAcceptCursorShell,
+  isSafeReadonlyShell,
+  type AutoAcceptLevel,
+};
 
 /** Phone toggled one MCP server for one exact session. */
 export function setSessionMcpAllowed(
@@ -286,9 +355,18 @@ export function blockedSessionCapability(
   return null;
 }
 
-export function saveRuntimeConfig(cfg: RuntimeConfig): void {
+/**
+ * Merge over whatever is already on disk.
+ *
+ * A writer that only knows its own slice — an older build, a narrow setter, a
+ * test — must not erase settings it never heard of. Writing the object whole is
+ * how one phone-side MCP toggle could silently wipe the entire auto-accept
+ * policy and drop every session back to asking.
+ */
+export function saveRuntimeConfig(cfg: Partial<RuntimeConfig>): void {
   mkdirSync(configDir(), { recursive: true });
-  writeFileSync(runtimeConfigPath(), JSON.stringify(cfg, null, 2) + "\n", { mode: 0o600 });
+  const merged: RuntimeConfig = { ...loadRuntimeConfig(), ...cfg };
+  writeFileSync(runtimeConfigPath(), JSON.stringify(merged, null, 2) + "\n", { mode: 0o600 });
   chmodSync(runtimeConfigPath(), 0o600);
 }
 
