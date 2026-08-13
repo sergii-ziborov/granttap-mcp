@@ -8,6 +8,7 @@
  */
 import type { ApprovalDecision, ApprovalRequest } from "../../../packages/protocol/schema";
 import type { PeerConfig } from "../../../packages/core/relay-client";
+import { fetchCloudJson } from "./cloud-approvals/http";
 
 export type CloudDangerLevel = "safe" | "caution" | "dangerous" | "destructive";
 
@@ -61,7 +62,6 @@ type CloudApprovalListBody = {
 
 const CLOUD_FETCH_TIMEOUT_MS = 5_000;
 const CLOUD_CANCEL_TIMEOUT_MS = 750;
-const MAX_CLOUD_RESPONSE_BYTES = 64 * 1024;
 
 export function httpRelayBase(relayUrl: string): string {
   const url = new URL(relayUrl);
@@ -138,7 +138,7 @@ export async function publishCloudApproval(
   if (!cfg.pushAuth) return { ok: false, error: "missing pushAuth" };
   const url = `${httpRelayBase(cfg.relayUrl)}/approvals?room=${encodeURIComponent(cfg.room)}`;
   try {
-    const { response, value } = await cloudFetch<CloudApprovalPublishBody>(
+    const { response, value } = await fetchCloudJson<CloudApprovalPublishBody>(
       fetchImpl,
       url,
       {
@@ -170,7 +170,7 @@ export async function cancelCloudApproval(
   const url = `${httpRelayBase(cfg.relayUrl)}/approvals?room=${encodeURIComponent(cfg.room)}`
     + `&requestId=${encodeURIComponent(requestId)}`;
   try {
-    const { response } = await cloudFetch<Record<string, unknown>>(
+    const { response } = await fetchCloudJson<Record<string, unknown>>(
       fetchImpl,
       url,
       {
@@ -194,7 +194,7 @@ export async function listCloudApprovals(
   if (!cfg.pushAuth) return { ok: false, approvals: [], error: "missing pushAuth" };
   const url = `${httpRelayBase(cfg.relayUrl)}/approvals?room=${encodeURIComponent(cfg.room)}`;
   try {
-    const { response, value } = await cloudFetch<CloudApprovalListBody>(
+    const { response, value } = await fetchCloudJson<CloudApprovalListBody>(
       fetchImpl,
       url,
       { headers: { authorization: `Bearer ${cfg.pushAuth}`, accept: "application/json" } },
@@ -254,71 +254,4 @@ function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
     }
     signal?.addEventListener("abort", done, { once: true });
   });
-}
-
-/** Bound connect and body-consumption time while composing parent cancellation. */
-async function cloudFetch<T>(
-  fetchImpl: typeof fetch,
-  input: Parameters<typeof fetch>[0],
-  init: RequestInit,
-  parentSignal: AbortSignal | undefined,
-  timeoutMs: number,
-): Promise<{ response: Response; value: T }> {
-  const controller = new AbortController();
-  const abort = () => controller.abort();
-  if (parentSignal?.aborted) abort();
-  else parentSignal?.addEventListener("abort", abort, { once: true });
-  const timer = setTimeout(abort, timeoutMs);
-  try {
-    const response = await fetchImpl(input, { ...init, signal: controller.signal });
-    const value = await readCloudJson<T>(response, controller.signal);
-    return { response, value };
-  } finally {
-    clearTimeout(timer);
-    parentSignal?.removeEventListener("abort", abort);
-  }
-}
-
-async function readCloudJson<T>(response: Response, signal: AbortSignal): Promise<T> {
-  const declared = Number(response.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > MAX_CLOUD_RESPONSE_BYTES) {
-    await response.body?.cancel("response too large").catch(() => {});
-    throw new Error("cloud response body too large");
-  }
-  if (!response.body) return {} as T;
-
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  const abort = () => { void reader.cancel("aborted").catch(() => {}); };
-  signal.addEventListener("abort", abort, { once: true });
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (signal.aborted) throw new DOMException("aborted", "AbortError");
-      if (done) break;
-      total += value.byteLength;
-      if (total > MAX_CLOUD_RESPONSE_BYTES) {
-        await reader.cancel("response too large").catch(() => {});
-        throw new Error("cloud response body too large");
-      }
-      chunks.push(value);
-    }
-  } finally {
-    signal.removeEventListener("abort", abort);
-    reader.releaseLock();
-  }
-
-  if (total === 0) return {} as T;
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  try {
-    return JSON.parse(new TextDecoder().decode(bytes)) as T;
-  } catch {
-    return {} as T;
-  }
 }
