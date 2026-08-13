@@ -24,6 +24,7 @@
     "setup": "node bin/granttap-mcp.mjs setup",
     "status": "node bin/granttap-mcp.mjs status",
     "test": "node --import tsx --test tests/*.test.ts",
+    "inventory": "node scripts/quality/source-inventory.mjs",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm test && npm run typecheck"
   },
