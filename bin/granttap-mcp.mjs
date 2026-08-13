@@ -14,7 +14,7 @@ const usage = [
   "  granttap serve              HTTP MCP + OAuth (Cursor Settings → Authorize)",
   "  granttap authorize          Configure Cursor + start local OAuth in one step",
   "  granttap connect [url]      Pair this machine with iPhone/Apple Watch",
-  "  granttap setup              Install Cursor, Claude, and Codex policy hooks",
+  "  granttap setup              Install available provider hooks + background sync",
   "  granttap status [--json]    Read-only provider and pairing readiness",
   "  granttap web                Print the private Web capability on request",
   "  granttap monitor            Internal background task sync",

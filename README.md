@@ -5,7 +5,8 @@
 [![Node.js 20+](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](package.json)
 [![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**Keep Codex and Claude Code moving from your iPhone or Apple Watch.**
+**Keep Cursor, Claude Code, Codex, GitHub Copilot CLI, and Grok Build moving
+from your iPhone or Apple Watch.**
 
 Approve commands, follow active tasks, reply, attach files, start new work, and
 run local schedules without exposing agent traffic to the relay. GrantTap MCP is
@@ -30,9 +31,10 @@ status is published at [granttap.com](https://granttap.com).
 
 ## What you get
 
-- **Real approvals away from the Mac.** Claude Code or Codex pauses at its
-  permission hook; Allow or Deny returns to that same agent flow.
-- **One task view for both agents.** See recent Codex and Claude Code tasks,
+- **Real approvals away from the Mac.** Supported provider hooks and gates pause
+  the exact agent task; Allow or Deny returns to that same flow.
+- **One task view for your local agents.** See recent Cursor, Claude Code,
+  Codex, Copilot CLI, and Grok Build tasks,
   human-readable activity, delivery state, usage, and context data the agent
   actually exposes.
 - **Continue work from the phone.** Reply to an existing task or create a new
@@ -70,19 +72,59 @@ not separate MCP billing.
 | --- | --- | --- |
 | <img src="https://raw.githubusercontent.com/sergii-ziborov/granttap-mcp/main/docs/images/apple-watch-inbox.png" alt="GrantTap task and approval inbox on Apple Watch" width="230"> | <img src="https://raw.githubusercontent.com/sergii-ziborov/granttap-mcp/main/docs/images/apple-watch-task.png" alt="GrantTap task activity with voice and text reply on Apple Watch" width="230"> | <img src="https://raw.githubusercontent.com/sergii-ziborov/granttap-mcp/main/docs/images/apple-watch-approval.png" alt="Codex command approval on Apple Watch" width="230"> |
 
-## Connect in under a minute
+## Install from npm
 
-Add GrantTap to each agent you use:
+Install the public command once, pair this computer once, then add the same MCP
+server to whichever agents you use:
 
 ```bash
-npm install
-npm install -g .
-codex mcp add granttap -- granttap
-claude mcp add granttap -- granttap
+npm install -g granttap-mcp@latest
+granttap connect
+granttap setup
 ```
 
-Those commands use this checkout. Publish/release it before replacing the local
-install with an npm registry version.
+`granttap connect` reuses an existing valid machine pairing. Installing GrantTap
+for a second agent does not rotate keys or require another QR. Use
+`granttap connect --replace` only when you intentionally want a new pairing.
+
+### Add the MCP to each agent
+
+```bash
+# Codex
+codex mcp add granttap -- npx -y granttap-mcp@latest
+
+# Claude Code (available in every project for this user)
+claude mcp add --scope user granttap -- npx -y granttap-mcp@latest
+
+# Grok Build
+grok mcp add granttap -- npx -y granttap-mcp@latest
+```
+
+Cursor's native **Authorize** button needs the loopback HTTP/OAuth transport:
+
+```bash
+granttap authorize
+```
+
+For GitHub Copilot CLI, merge this server into `~/.copilot/mcp-config.json`
+without removing any existing servers:
+
+```json
+{
+  "mcpServers": {
+    "granttap": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "granttap-mcp@latest"]
+    }
+  }
+}
+```
+
+The MCP tools (`connect`, `ask`, `ask_yes_no`, `notify`, and `setup`) work in
+every client above. Provider-native approvals and mobile chat resume require the
+matching local hook/adapter; `granttap status` reports what is actually ready
+instead of treating an MCP entry as proof that the provider is online.
 
 Start a fresh agent task and say **“Connect GrantTap.”** The `connect` tool:
 
@@ -96,10 +138,9 @@ background helper for task sync and schedules.
 Scan the QR with GrantTap on iPhone. No terminal QR, copied pairing JSON, or
 open background terminal is required.
 
-If an MCP client cannot render image content, use the CLI fallback:
+If an MCP client cannot render image content, use the same installed CLI:
 
 ```bash
-npm install -g granttap-mcp
 granttap connect
 granttap setup
 granttap status
@@ -176,19 +217,15 @@ into OAuth; when an exact Cursor HTTP entry already exists, it also repairs the
 persistent OAuth service. Per-chat blocks are checked before phone routing,
 and ambiguous/unscoped Cursor calls fall back to Cursor's native permission UI.
 
-## Codex and Claude Code: honest capability matrix
+## Provider capability matrix
 
-| Capability | Codex | Claude Code |
-| --- | --- | --- |
-| Approval hook | `PermissionRequest` when Codex hooks are enabled | `PreToolUse` |
-| Resume an existing task | Yes, through the local Codex CLI | Yes, through the local Claude CLI |
-| Start a new persistent task | Yes | Yes |
-| Up to five attachments within one encrypted-frame budget | Images through Codex image inputs; documents as local paths | Local image/document paths in the turn |
-| Change filesystem access from iPhone | Read-only, workspace, or full for the next GrantTap turn | Not exposed; the existing Claude policy remains authoritative |
-| Disable MCP per task | Enforced for later GrantTap-delivered turns | Enforced for later GrantTap-delivered turns |
-| Usage and context | Reported when present in local task logs | Reported when present in local task logs |
-| Trigger real context compaction | Yes, for an idle task through Codex app-server | No supported remote API; GrantTap reports this honestly |
-| Conversational schedule planner | Ephemeral read-only run | Ephemeral plan-mode run |
+| Provider | MCP | Native mobile continuation | Approval/policy path |
+| --- | --- | --- | --- |
+| Codex | stdio | Existing and new tasks | `PermissionRequest` + deny-only `PreToolUse`; trust both in `/hooks` |
+| Claude Code | stdio | Existing and new tasks | `PreToolUse` |
+| Cursor | loopback HTTP/OAuth or stdio | Not claimed without a supported headless resume adapter | Exact-chat shell and MCP hooks |
+| GitHub Copilot CLI | stdio config | Catalog visibility; phone resume is not claimed by this npm release | Native Copilot permission flow |
+| Grok Build | stdio | MCP tools are available; ACP mobile turns require the current GrantTap app bridge | Grok ACP plus deny-only safety hook when that bridge is installed |
 
 GrantTap controls local Codex and Claude Code tasks. It does **not** claim to
 create ordinary ChatGPT chats, private ChatGPT Scheduled Tasks, Codex
@@ -207,7 +244,7 @@ Repository skills are discovered only in the selected task workspace under
 | `ask` | Sends an open question and waits for a spoken or typed reply |
 | `ask_yes_no` | Sends a yes/no question and waits for a tap |
 | `notify` | Sends a non-blocking status update |
-| `setup` | Registers Cursor/Claude/Codex policy hooks and the terminal-free helper |
+| `setup` | Registers the provider adapters available in this npm release and the terminal-free helper; preserves an existing machine pairing |
 
 The default answer timeout is three minutes. Override it with
 `GRANTTAP_ASK_TIMEOUT_MS`.
@@ -244,8 +281,8 @@ it. The exact boundary and threat-model limits are documented in
 
 ## Task sync and scheduling
 
-The background helper publishes a bounded window of recent local Codex and
-Claude Code task metadata. Older chat metadata is available separately for up
+The background helper publishes a bounded window of supported local provider
+task metadata. Older chat metadata is available separately for up
 to 90 days and 160 chats; full activity for a task is sent only after the phone
 subscribes to it. Hidden reasoning is never converted into visible activity.
 
@@ -266,7 +303,7 @@ time, agent, status, result, and created task ID.
 | `serve` | HTTP MCP + loopback OAuth for Cursor Settings → Authorize |
 | `authorize` | Installs the persistent loopback OAuth service, verifies health, and configures Cursor |
 | `connect [relayUrl]` | Creates an E2EE pairing; optionally targets a self-hosted `wss://` relay |
-| `setup` | Registers Cursor/Claude/Codex hooks, background sync, and repairs configured OAuth |
+| `setup` | Registers supported local hooks, background sync, and repairs configured OAuth |
 | `status [--json]` | Reads local readiness; JSON uses `granttap.provider-status.v1` and contains no keys |
 
 The installed public command is `granttap`; `granttap-mcp` remains an alias for

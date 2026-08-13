@@ -1,7 +1,7 @@
 {
   "name": "granttap-mcp",
-  "version": "0.6.8",
-  "description": "Control Codex and Claude Code from iPhone and Apple Watch with zero-knowledge E2EE approvals, replies, and task sync.",
+  "version": "0.6.9",
+  "description": "Connect Cursor, Claude Code, Codex, GitHub Copilot CLI, and Grok Build to iPhone and Apple Watch with E2EE MCP tools.",
   "type": "module",
   "bin": {
     "granttap": "bin/granttap-mcp.mjs",
@@ -63,6 +63,9 @@
     "model-context-protocol",
     "claude-code",
     "codex",
+    "cursor",
+    "github-copilot",
+    "grok-build",
     "iphone",
     "apple-watch",
     "e2ee",
