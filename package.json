@@ -26,8 +26,9 @@
     "test": "node --import tsx --test tests/*.test.ts",
     "test:coverage": "c8 --all --extension .ts --exclude 'tests/**' --exclude 'scripts/**' node --import tsx --test tests/*.test.ts",
     "inventory": "node scripts/quality/source-inventory.mjs",
+    "package:allowlist": "node scripts/quality/package-allowlist.mjs",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm test && npm run typecheck"
+    "prepublishOnly": "npm run package:allowlist && npm test && npm run typecheck"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
