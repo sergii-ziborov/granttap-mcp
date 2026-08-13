@@ -7,6 +7,7 @@ import type { SessionInfo, UserAttachment } from "../../../packages/protocol/sch
 import { configDir, loadRuntimeConfig } from "./config";
 import { withAttachments } from "./reply/attachments";
 import { runProcess } from "./reply/process";
+import { parseClaudeSchedulePlan, parseCodexSchedulePlan } from "./reply/parsers";
 import { routingPrompt } from "./reply/routing";
 import type { DeliveryOptions, ReplyResult } from "./reply/types";
 export type { DeliveryOptions, ReplyResult } from "./reply/types";
@@ -128,44 +129,6 @@ export async function createSchedulePlan(
       await rm(dir, { recursive: true, force: true });
     }
   });
-}
-
-function parseCodexSchedulePlan(stdout: string): ReplyResult {
-  let lastMessage = "";
-  for (const line of stdout.split("\n")) {
-    if (!line.trim()) continue;
-    try {
-      const event = JSON.parse(line) as { item?: { type?: string; text?: string } };
-      if (event.item?.type === "agent_message" && typeof event.item.text === "string") {
-        lastMessage = event.item.text;
-      }
-    } catch {
-      // Codex may emit diagnostics around the JSONL events.
-    }
-  }
-  return lastMessage
-    ? { ok: true, text: lastMessage }
-    : { ok: false, error: "Codex returned no scheduler draft." };
-}
-
-function parseClaudeSchedulePlan(stdout: string): ReplyResult {
-  try {
-    const parsed = JSON.parse(stdout) as {
-      is_error?: boolean;
-      result?: string;
-      structured_output?: unknown;
-    };
-    if (parsed.is_error) return { ok: false, error: parsed.result ?? "Claude planner error" };
-    if (parsed.structured_output && typeof parsed.structured_output === "object") {
-      return { ok: true, text: JSON.stringify(parsed.structured_output) };
-    }
-    if (typeof parsed.result === "string" && parsed.result.trim()) {
-      return { ok: true, text: parsed.result };
-    }
-  } catch {
-    // Fall through to an actionable error; planner output must be structured.
-  }
-  return { ok: false, error: "Claude returned no structured scheduler draft." };
 }
 
 function queued(key: string, run: () => Promise<ReplyResult>): Promise<ReplyResult> {
