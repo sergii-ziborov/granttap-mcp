@@ -66,6 +66,11 @@ async function main(): Promise<void> {
     return;
   }
 
+  // Claude already granted this chat unconditional tool access. GrantTap's
+  // explicit MCP/skill/CLI blocks above still win, but phone approval must not
+  // re-prompt a call Claude is intentionally running in bypass mode.
+  if (input.permission_mode === "bypassPermissions") return;
+
   // Gating paused, or this session is exempt → abstain (empty output = Claude
   // uses its normal permission flow, exactly as if GrantTap weren't installed).
   if (isGatingSkipped(input.session_id)) return;
