@@ -12,6 +12,7 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   const configDir = await mkdtemp(join(tmpdir(), "granttap-mcp-"));
   let parkedPath = "";
   let parkedBody = "";
+  let pairingWrites = 0;
   const relayServer = createServer((request, response) => {
     if (request.method !== "PUT" || !request.url?.startsWith("/pair/")) {
       response.statusCode = 404;
@@ -22,6 +23,7 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
     const chunks: Buffer[] = [];
     request.on("data", (chunk: Buffer) => chunks.push(chunk));
     request.on("end", () => {
+      pairingWrites += 1;
       parkedBody = Buffer.concat(chunks).toString("utf8");
       response.statusCode = 201;
       response.end();
@@ -100,6 +102,7 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   assert.doesNotThrow(() => JSON.parse(parkedBody));
 
   const phoneConfig = await readFile(join(configDir, "phone.pairing.json"), "utf8");
+  const machineConfig = await readFile(join(configDir, "machine.json"), "utf8");
   const phoneSecret = JSON.parse(phoneConfig).mySecretKey as string;
   assert.ok(phoneSecret);
   assert.equal(pairingText.includes(phoneSecret), false);
@@ -109,6 +112,25 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   // the independent transfer key, never the mailbox id, protects the payload.
   assert.equal(pairingText.includes(mailboxId), true);
   assert.equal(parkedBody.includes(mailboxId), false);
+
+  const reusedResult = await client.callTool({ name: "connect", arguments: {} });
+  const reusedContent = reusedResult.content as Array<{ type: string; text?: string }>;
+  const reusedText = reusedContent.find((item) => item.type === "text")?.text ?? "";
+  assert.match(reusedText, /existing secure pairing reused/i);
+  assert.doesNotMatch(reusedText, /granttap:\/\/pair-v2|one-time/i);
+  assert.equal(reusedContent.some((item) => item.type === "image"), false);
+  assert.equal(pairingWrites, 1);
+  assert.equal(await readFile(join(configDir, "machine.json"), "utf8"), machineConfig);
+  assert.equal(await readFile(join(configDir, "phone.pairing.json"), "utf8"), phoneConfig);
+
+  const replacedResult = await client.callTool({
+    name: "connect",
+    arguments: { replace: true },
+  });
+  const replacedContent = replacedResult.content as Array<{ type: string; text?: string }>;
+  assert.equal(replacedContent.some((item) => item.type === "image"), true);
+  assert.equal(pairingWrites, 2);
+  assert.notEqual(await readFile(join(configDir, "machine.json"), "utf8"), machineConfig);
 
   const cursorHooks = JSON.parse(await readFile(join(cursorDir, "hooks.json"), "utf8")) as {
     hooks: Record<string, Array<{ command: string; failClosed?: boolean }>>;

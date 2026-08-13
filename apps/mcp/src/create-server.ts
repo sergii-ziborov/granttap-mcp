@@ -21,6 +21,7 @@ import {
   createOneTimePairing,
   DEFAULT_RELAY,
   PAIRING_CODE_TTL_MINUTES,
+  reusablePairing,
 } from "../../bridge/src/pairing";
 import { formatConnectPasteText, writePairUriDesktopFile } from "../../bridge/src/pair-uri-file";
 import { startSessionMonitor, type SessionMonitor } from "../../bridge/src/monitor";
@@ -178,7 +179,7 @@ export function createGrantTapServer(): McpServer {
   const server = new McpServer({
     name: "granttap",
     title: "GrantTap",
-    version: "0.6.5",
+    version: "0.6.8",
     websiteUrl: "https://granttap.com",
     icons: [
       {
@@ -191,7 +192,7 @@ export function createGrantTapServer(): McpServer {
 
   server.tool(
     "connect",
-    "Pair this computer with the GrantTap iPhone app. Use when the user asks to connect, pair, onboard, or show a pairing QR. Returns a one-time QR image directly in chat; no terminal command is needed.",
+    "Reuse this computer's GrantTap pairing, or create a one-time QR when none exists. Set replace only when the user explicitly asks to replace the pairing.",
     {
       relayUrl: z
         .string()
@@ -209,9 +210,25 @@ export function createGrantTapServer(): McpServer {
         })
         .optional()
         .describe("Optional wss:// relay URL. Omit to use the GrantTap production relay."),
+      replace: z.boolean().optional().describe("Explicitly replace the existing pairing and rotate keys."),
     },
-    async ({ relayUrl }): Promise<CallToolResult> => {
+    async ({ relayUrl, replace }): Promise<CallToolResult> => {
       try {
+        const existing = reusablePairing(replace ?? false);
+        if (existing) {
+          return {
+            content: [{
+              type: "text",
+              text: [
+                "GrantTap existing secure pairing reused.",
+                `Room: ${existing.room}`,
+                `Relay: ${existing.relayUrl}`,
+                "No QR or key rotation was needed.",
+              ].join("\n"),
+              annotations: { audience: ["user"] },
+            }],
+          };
+        }
         const pairing = await createOneTimePairing(
           relayUrl ?? process.env.GRANTTAP_RELAY_URL ?? process.env.NODVOX_RELAY_URL ?? DEFAULT_RELAY,
         );

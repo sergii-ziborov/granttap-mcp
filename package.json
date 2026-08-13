@@ -1,6 +1,6 @@
 {
   "name": "granttap-mcp",
-  "version": "0.6.7",
+  "version": "0.6.8",
   "description": "Control Codex and Claude Code from iPhone and Apple Watch with zero-knowledge E2EE approvals, replies, and task sync.",
   "type": "module",
   "bin": {

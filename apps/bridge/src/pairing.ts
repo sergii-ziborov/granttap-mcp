@@ -8,6 +8,7 @@ import {
 } from "./install";
 import {
   createPairing,
+  loadConfig,
   machineConfigPath,
   normalizeRelayUrl,
   phonePairingPath,
@@ -17,6 +18,31 @@ import type { PeerConfig } from "../../../packages/core/relay-client";
 
 export const DEFAULT_RELAY = "wss://granttap-relay.sergii-ziborov.workers.dev";
 export const PAIRING_CODE_TTL_MINUTES = 15;
+
+function validConfig(config: PeerConfig, role: PeerConfig["role"]): boolean {
+  return config.role === role
+    && [config.relayUrl, config.room, config.senderId, config.myPublicKey,
+      config.mySecretKey, config.peerPublicKey].every((value) => value.length > 0);
+}
+
+/** Return the shared machine identity only when both local halves are reciprocal. */
+export function reusablePairing(replace = false): PeerConfig | null {
+  if (replace) return null;
+  try {
+    const machine = loadConfig(machineConfigPath());
+    const phone = loadConfig(phonePairingPath());
+    return validConfig(machine, "machine")
+      && validConfig(phone, "phone")
+      && machine.room === phone.room
+      && machine.relayUrl === phone.relayUrl
+      && machine.myPublicKey === phone.peerPublicKey
+      && machine.peerPublicKey === phone.myPublicKey
+      ? machine
+      : null;
+  } catch {
+    return null;
+  }
+}
 
 export type OneTimePairing = {
   machineCfg: PeerConfig;
