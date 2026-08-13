@@ -13,37 +13,12 @@ import WebSocket from "ws";
 import { createHash, randomUUID } from "node:crypto";
 import { Envelope, PROTOCOL_VERSION, Payload, type Role } from "../protocol/schema";
 import { open, openWithTransferKey, seal, sealWithTransferKey } from "./crypto";
-
-export type PeerConfig = {
-  relayUrl: string;
-  room: string;
-  role: Role;
-  deviceName: string;
-  senderId: string;
-  myPublicKey: string;
-  mySecretKey: string;
-  peerPublicKey: string;
-  /** Relay-only random credential for push-token registration; never an E2EE key. */
-  pushAuth?: string;
-};
+import type { PeerConfig, RelayClientOptions, SendOptions } from "./relay-client-types";
+export type { PeerConfig, RelayClientOptions, SendOptions } from "./relay-client-types";
 
 /** Return true only after this consumer has durably accepted the payload. */
 type Listener = (p: Payload) => boolean | void | Promise<boolean | void>;
 
-export type RelayClientOptions = {
-  /** Persistent processes reconnect in the background; one-shot hooks leave this off. */
-  autoReconnect?: boolean;
-  minReconnectMs?: number;
-  maxReconnectMs?: number;
-};
-
-export type SendOptions = {
-  /** Delivery lifetime for relay hold queues. Omit only for non-expiring hello packets. */
-  ttlMs?: number;
-  deliveryId?: string;
-  /** Ask the relay for a content-neutral APNs wake. Never carries a message kind. */
-  wake?: boolean;
-};
 
 export class RelayClient {
   private ws?: WebSocket;
