@@ -286,6 +286,21 @@ task metadata. Older chat metadata is available separately for up
 to 90 days and 160 chats; full activity for a task is sent only after the phone
 subscribes to it. Hidden reasoning is never converted into visible activity.
 
+Connection health is reported from its own evidence, not from catalog age. The
+helper sends a small fixed-cadence heartbeat that no scanning can delay, and the
+phone shows **Live** only while that heartbeat is recent. Reading every
+provider's transcripts to rebuild the chat catalog can legitimately take far
+longer than one heartbeat; treating that as a dead computer used to flip the
+phone to "Mac offline" and drop chats that were still valid. A computer that has
+genuinely gone away still fails closed, because heartbeat and catalog must both
+be stale before the link is called offline.
+
+Scanning is scheduled from completion rather than on a fixed timer, runs one at
+a time, and reuses a chat's transcript until that chat itself moves. Periodic
+snapshots are sent transiently: they are replaced by the next tick, so holding
+them in the relay's durable queue only delayed the current one behind copies
+that no longer mattered.
+
 New phone-created tasks default to an isolated per-agent GrantTap workspace.
 The phone can instead select a same-agent folder already advertised by a recent
 local task. The helper rejects arbitrary unadvertised paths.
