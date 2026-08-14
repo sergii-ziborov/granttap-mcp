@@ -35,9 +35,12 @@ import { abandonDelivery, beginDelivery, completeDelivery } from "./delivery";
 import { inspectAgentIntegrations } from "./install";
 import { approvalsStatus } from "./approval-state";
 import { primeSessionKeys, sendSessionPayload } from "./session-keys";
+import { cachedSessionActivity } from "./monitor-session-activity";
+import { HEARTBEAT_INTERVAL_MS, publishHeartbeat } from "./monitor-heartbeat";
+import { startPublishLoop } from "./monitor-publish-loop";
+import { singleFlightPublisher } from "./monitor-single-flight";
 import {
   scanCapabilityUsage,
-  scanSessionActivity,
   scanSessionHistory,
   scanSessions,
   scopeCapabilityUsageToRoom,
@@ -53,8 +56,13 @@ import {
   tickSchedules,
 } from "./scheduler";
 
+/**
+ * A tick rescans every provider's logs. At 5s those scans overlapped, pinned a
+ * core, and starved the relay socket; liveness now rides the heartbeat instead,
+ * so the catalog is free to run at a cadence the machine can actually sustain.
+ */
 const INTERVAL_MS = Number(
-  process.env.GRANTTAP_MONITOR_INTERVAL_MS ?? process.env.NODVOX_MONITOR_INTERVAL_MS ?? 5_000,
+  process.env.GRANTTAP_MONITOR_INTERVAL_MS ?? process.env.NODVOX_MONITOR_INTERVAL_MS ?? 30_000,
 );
 const HISTORY_INTERVAL_MS = 10_000;
 export const HISTORY_PUBLISH_LIMIT = Number(
@@ -98,8 +106,9 @@ export async function publishSessionEvents(
 ): Promise<boolean> {
   const session = resolveSession(sessionId, status);
   if (!session) return false;
-  await sendSessionPayload(client, scanSessionActivity(session), sessionId, "phone", {
+  await sendSessionPayload(client, cachedSessionActivity(session), sessionId, "phone", {
     ttlMs: INTERVAL_MS * 24,
+    reliable: false,
   });
   return true;
 }
@@ -180,13 +189,19 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
     };
   };
 
-  const publish = async (forceHistory = false): Promise<void> => {
+  const publish = singleFlightPublisher(async (forceHistory: boolean): Promise<void> => {
     if (!leadership.acquire()) return;
     tickSchedules();
     if (!client.isConnected) return;
+    // Discovery is synchronous, multi-second filesystem work: once it starts,
+    // the event loop cannot service the socket and the heartbeat loop cannot
+    // fire. Spend the last free moment proving the machine is alive.
+    await publishHeartbeat(client).catch(() => {});
     const includeHistory = forceHistory || Date.now() - lastHistoryPublishedAt >= HISTORY_INTERVAL_MS;
     const status = snapshot(includeHistory, forceHistory);
-    await client.send(status, "phone", { ttlMs: INTERVAL_MS * 24 });
+    // The next tick replaces this snapshot outright, so queuing it durably only
+    // delays the current one behind superseded copies.
+    await client.send(status, "phone", { ttlMs: INTERVAL_MS * 24, reliable: false });
     if (includeHistory) lastHistoryPublishedAt = Date.now();
 
     // Detail follows the lean catalog, before unrelated snapshots can delay it.
@@ -194,13 +209,13 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       await publishSessionEvents(client, sessionId, status).catch(() => false);
     }
 
-    await client.send(approvalsStatus(), "phone", { ttlMs: INTERVAL_MS * 3 });
+    await client.send(approvalsStatus(), "phone", { ttlMs: INTERVAL_MS * 3, reliable: false });
     if (Date.now() - lastCapabilityPublishedAt >= 30_000) {
       const usage = scanCapabilityUsage([
         ...status.sessions,
         ...history(false),
       ]);
-      await client.send(scopeCapabilityUsageToRoom(usage, client.room), "phone", { ttlMs: 90_000 });
+      await client.send(scopeCapabilityUsageToRoom(usage, client.room), "phone", { ttlMs: 90_000, reliable: false });
       lastCapabilityPublishedAt = Date.now();
     }
     await client.send(
@@ -211,9 +226,9 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
         generatedAt: Date.now(),
       },
       "phone",
-      { ttlMs: INTERVAL_MS * 3 },
+      { ttlMs: INTERVAL_MS * 3, reliable: false },
     );
-  };
+  });
 
   const off = client.onMessage(async (payload) => {
     // Codex may start one MCP server per open task. Exactly one instance owns
@@ -249,10 +264,14 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       void publish().catch(() => {});
       return true;
     } else if (payload.type === "session.subscribe") {
-      handleSubscription(subscriptions, payload);
-      // Re-publish now: the subscribed row gains its complete Skills catalog,
-      // and publish sends the bounded transcript immediately after that row.
-      void publish(true).catch(() => {});
+      // Newly opening a chat earns one catalog republish: that row gains its
+      // complete Skills catalog. A repeated heartbeat for a chat already being
+      // watched changes nothing and must not rescan every provider.
+      if (handleSubscription(subscriptions, payload)) {
+        void publish(true).catch(() => {});
+      } else {
+        void publishSessionEvents(client, payload.sessionId).catch(() => false);
+      }
       return true;
     } else if (payload.type === "session.events") {
       void publishSessionEvents(client, payload.sessionId).catch(() => false);
@@ -301,13 +320,25 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
     return false;
   });
 
-  const timer = setInterval(() => void publish().catch(() => {}), INTERVAL_MS);
-  timer.unref?.();
+  const stopCatalog = startPublishLoop({
+    connected: () => client.isConnected,
+    intervalMs: INTERVAL_MS,
+    publish: () => publish().catch(() => {}),
+  });
+  // Liveness rides its own loop. Queueing it behind the single-flight catalog
+  // would reintroduce exactly the failure it exists to prevent: a busy computer
+  // going quiet long enough for the phone to call it offline and drop chats.
+  const stopHeartbeat = startPublishLoop({
+    connected: () => client.isConnected,
+    intervalMs: HEARTBEAT_INTERVAL_MS,
+    publish: () => publishHeartbeat(client).catch(() => {}),
+  });
 
   return {
     publish: () => publish(false),
     close: () => {
-      clearInterval(timer);
+      stopCatalog();
+      stopHeartbeat();
       off();
       subscriptions.clear();
       leadership.release();
@@ -490,9 +521,20 @@ function monitorLeadership(): { acquire: () => boolean; release: () => void } {
   return { acquire, release };
 }
 
-function handleSubscription(subscriptions: Set<string>, message: SessionSubscription): void {
+/**
+ * Report whether this actually changed what the monitor is watching.
+ *
+ * The phone re-sends `session.subscribe` every few seconds while a chat is
+ * open. Treating each repeat as news turned one heartbeat into a full provider
+ * rescan, so only a real change is worth republishing the catalog for.
+ */
+export { handleSubscription as handleSubscriptionForTest };
+
+function handleSubscription(subscriptions: Set<string>, message: SessionSubscription): boolean {
+  const before = subscriptions.size;
   if (message.active) subscriptions.add(message.sessionId);
   else subscriptions.delete(message.sessionId);
+  return subscriptions.size !== before;
 }
 
 export function handleConfigSet(message: ConfigSet): void {

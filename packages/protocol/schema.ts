@@ -57,6 +57,21 @@ export const Hello = z.object({
 });
 export type Hello = z.infer<typeof Hello>;
 
+/**
+ * Cheap proof that the machine publisher is alive.
+ *
+ * Catalog freshness cannot carry this: a full provider scan is unbounded work,
+ * so a healthy but busy computer would read as dead and the phone would purge
+ * its chat list. Liveness travels on its own fixed cadence and stays transient —
+ * it must never occupy the durable relay mailbox.
+ */
+export const MachineHeartbeat = z.object({
+  type: z.literal("machine.heartbeat"),
+  machine: z.string().catch("machine"),
+  createdAt: z.number().catch(() => Date.now()),
+});
+export type MachineHeartbeat = z.infer<typeof MachineHeartbeat>;
+
 export const Payload = z.discriminatedUnion("type", [
   ApprovalRequest,
   ApprovalDecision,
@@ -87,6 +102,7 @@ export const Payload = z.discriminatedUnion("type", [
   SchedulePlanRequest,
   SchedulePlanResult,
   Hello,
+  MachineHeartbeat,
 ]).superRefine((payload, ctx) => {
   if (payload.type !== "user.message") return;
   const encodedCharacters = payload.attachments?.reduce(
