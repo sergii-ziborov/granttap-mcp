@@ -10,15 +10,16 @@
  * the Cloudflare Durable Object deployment.
  */
 import WebSocket from "ws";
-import { createHash, randomUUID } from "node:crypto";
-import { Envelope, PROTOCOL_VERSION, Payload, type Role } from "../protocol/schema";
+import { createHash } from "node:crypto";
+import { Envelope, Payload, type Role } from "../protocol/schema";
 import { open, openWithTransferKey, seal, sealWithTransferKey } from "./crypto";
 import type { PeerConfig, RelayClientOptions, SendOptions } from "./relay-client-types";
 export type { PeerConfig, RelayClientOptions, SendOptions } from "./relay-client-types";
+import { sealEnvelope } from "./relay-envelope";
+export { sealEnvelope } from "./relay-envelope";
 
 /** Return true only after this consumer has durably accepted the payload. */
 type Listener = (p: Payload) => boolean | void | Promise<boolean | void>;
-
 
 export class RelayClient {
   private ws?: WebSocket;
@@ -191,20 +192,7 @@ export class RelayClient {
   ): Promise<void> {
     const ws = this.ws;
     if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error("relay not connected");
-    const { nonce, box } = seal(payload, this.cfg.peerPublicKey, this.cfg.mySecretKey);
-    const env: Envelope = {
-      v: PROTOCOL_VERSION,
-      room: this.cfg.room,
-      from: this.cfg.role,
-      to,
-      senderId: this.cfg.senderId,
-      deliveryId: options.deliveryId ?? randomUUID(),
-      wake: options.wake,
-      expiresAt: options.ttlMs == null ? undefined : Date.now() + options.ttlMs,
-      nonce,
-      box,
-    };
-    ws.send(JSON.stringify(env));
+    ws.send(sealEnvelope(this.cfg, payload, to, options));
   }
 
   setSessionKey(sessionId: string, key: string): void {

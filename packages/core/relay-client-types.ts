@@ -25,6 +25,14 @@ export type SendOptions = {
   /** Delivery lifetime for relay hold queues. Omit only for non-expiring hello packets. */
   ttlMs?: number;
   deliveryId?: string;
+  /**
+   * Periodic snapshots are replaceable and must not enter the durable mailbox.
+   *
+   * Without this, every catalog tick was queued until the phone acknowledged
+   * it, so a backlog of superseded snapshots delayed the current one and the
+   * computer looked offline while it was busily publishing.
+   */
+  reliable?: boolean;
   /** Ask the relay for a content-neutral APNs wake. Never carries a message kind. */
   wake?: boolean;
 };
