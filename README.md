@@ -286,6 +286,18 @@ task metadata. Older chat metadata is available separately for up
 to 90 days and 160 chats; full activity for a task is sent only after the phone
 subscribes to it. Hidden reasoning is never converted into visible activity.
 
+A phone reply reaches an agent one of two ways, and they differ. Answering an
+approval or an `ask` returns into the session that is already running and
+waiting for it — nothing is launched. Writing a new message into a chat instead
+resumes that chat by running the provider's own CLI headlessly, so it is a fresh
+process over the same conversation rather than typing into an open window.
+
+The second path therefore needs that CLI to be signed in on the computer, which
+is separate from being signed in inside a desktop agent app — the CLI keeps its
+own credentials. A "not logged in" reply is the provider's own answer passed
+through unchanged; `claude /login` (or `codex login`, `grok login`) once on that
+computer resolves it.
+
 Connection health is reported from its own evidence, not from catalog age. The
 helper sends a small fixed-cadence heartbeat that no scanning can delay, and the
 phone shows **Live** only while that heartbeat is recent. Reading every
