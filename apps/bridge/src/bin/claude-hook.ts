@@ -69,6 +69,19 @@ async function main(): Promise<void> {
   // Claude already granted this chat unconditional tool access. GrantTap's
   // explicit MCP/skill/CLI blocks above still win, but phone approval must not
   // re-prompt a call Claude is intentionally running in bypass mode.
+  // TEMPORARY DIAGNOSTIC: record only permission-related metadata, never the
+  // tool input or any prompt text. Remove once the bypass field name is known.
+  try {
+    const { appendFileSync } = await import("node:fs");
+    appendFileSync("/tmp/granttap-hook-probe.log", JSON.stringify({
+      keys: Object.keys(input),
+      permission_mode: (input as Record<string, unknown>).permission_mode,
+      permissionMode: (input as Record<string, unknown>).permissionMode,
+      tool_name: (input as Record<string, unknown>).tool_name,
+      session_id: String((input as Record<string, unknown>).session_id ?? "").slice(0, 8),
+    }) + "\n");
+  } catch { /* diagnostics must never block a tool call */ }
+
   if (input.permission_mode === "bypassPermissions") return;
 
   // Gating paused, or this session is exempt → abstain (empty output = Claude
