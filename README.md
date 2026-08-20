@@ -66,6 +66,10 @@ and planner while keeping its different permission and compaction limits clear.
 MCP usage counts only observed calls; context figures are labelled estimates,
 not separate MCP billing.
 
+| Full chat | Local photo preview |
+| --- | --- |
+| <img src="https://raw.githubusercontent.com/sergii-ziborov/granttap-mcp/main/docs/images/iphone-chat.png" alt="One delivered phone photo and one reconciled short agent reply in GrantTap chat" width="250"> | <img src="https://raw.githubusercontent.com/sergii-ziborov/granttap-mcp/main/docs/images/iphone-photo-preview.png" alt="Local full-screen preview of a photo retained by its outgoing delivery" width="250"> |
+
 ### Apple Watch
 
 | Task inbox | Recent activity and reply | Command approval |
@@ -86,6 +90,20 @@ granttap setup
 `granttap connect` reuses an existing valid machine pairing. Installing GrantTap
 for a second agent does not rotate keys or require another QR. Use
 `granttap connect --replace` only when you intentionally want a new pairing.
+
+### Install the GrantTap plugin in Codex
+
+The plugin wraps the same shared helper and pairing; it does not create another
+GrantTap account. Its prompts expose Connect/Reconnect, Add this agent, and
+Repair all agent connections.
+
+```bash
+codex plugin marketplace add sergii-ziborov/granttap
+codex plugin add granttap@personal
+```
+
+Run `granttap setup` after installing a new supported agent. Provider account
+authentication remains separate from GrantTap pairing.
 
 ### Add the MCP to each agent
 
@@ -128,15 +146,15 @@ instead of treating an MCP entry as proof that the provider is online.
 
 Start a fresh agent task and say **“Connect GrantTap.”** The `connect` tool:
 
-1. creates a new end-to-end encrypted pairing;
-2. returns a scannable one-time QR directly in the agent chat.
+1. reuses the valid end-to-end encrypted pairing already on this computer; or
+2. if no valid pairing exists, returns a scannable one-time QR in agent chat.
 
 Then run the separate MCP `setup` tool. It installs Cursor shell/MCP policy
 hooks, the complete Claude Code matcher, both Codex hooks, and the per-user
 background helper for task sync and schedules.
 
-Scan the QR with GrantTap on iPhone. No terminal QR, copied pairing JSON, or
-open background terminal is required.
+Scan the QR with GrantTap on iPhone only when one is shown. No terminal QR,
+copied pairing JSON, or open background terminal is required.
 
 If an MCP client cannot render image content, use the same installed CLI:
 
