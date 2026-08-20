@@ -13,7 +13,7 @@ Phone/approval channel only:
 | `ask` | Open question, wait for reply |
 | `ask_yes_no` | Yes/No approval, wait for tap |
 | `setup` | Install hooks + LaunchAgent plist pointing at **this binary** |
-| `status` | Self-heal: pairing present? LaunchAgent loaded? monitor.log / sessions |
+| `status` | Self-heal: pairing, organization policy, LaunchAgent, monitor.log / sessions |
 
 Not in scope: Weavatrix, git intelligence, repo search.
 
@@ -48,6 +48,7 @@ cargo build -p granttap-mcp --release
 | `mcport` | MCP stdio runtime (controlled/concurrent for long `ask`) |
 | `blazingly-json` | JSON (via mcport + direct) |
 | `blindplane-crypto` | X25519, Poly1305, OS RNG; NaCl box/salsa layered in this crate for tweetnacl wire compat |
+| `blindplane-access` | Pinned issuer, signed tenant policy, revision/epoch, and default-deny decisions |
 | `std` | TCP, threads, files, `launchctl` |
 
 ## Honest gaps vs Node MCP
@@ -55,4 +56,5 @@ cargo build -p granttap-mcp --release
 - PNG QR for `connect` (returns text URI / manual token)
 - Shell-gate dedupe + Cursor Accessibility Allow-click (Node-only for now)
 - Monitor process itself stays Node until ported; Rust `setup` can point LaunchAgent at this binary's `monitor` subcommand once implemented
+- Policy verification is live in Rust `status`; Rust hook enforcement waits for the hook subcommand port, while the product bridge already enforces the same binary format
 - `wss://` uses macOS Secure Transport (`tls_macos`); non-macOS needs a TLS seam later

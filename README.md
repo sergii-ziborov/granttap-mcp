@@ -359,6 +359,21 @@ service and a live identity-checked health response; a dead URL is never shown
 as connected. Without an HTTP entry, OAuth remains optional and Cursor policy
 readiness is based on the full hook set, pairing, and background sync.
 
+## Enterprise verifier foundation
+
+The public Rust endpoint crate now consumes canonical Blindplane Access
+`TenantPolicy` v1 objects from the separate `~/.granttap/managed/` enrollment
+boundary. It pins issuer, tenant, subject, and subject key; validates signature,
+validity, minimum revision, authorization epoch, and the accepted policy hash
+chain; and exposes `organizationPolicy: verified|unmanaged|blocked` in Rust
+`status`. Exact MCP/tool/skill/CLI policy is default-deny.
+
+This is the auditable verifier foundation, not a claim that the current npm
+Node distribution already provides SSO, SCIM, MDM, admin UI, or encrypted
+enterprise audit. Personal mode remains unchanged when no managed enrollment
+directory exists. The private product bridge composes the same policy format
+with local and exact-task restrictions, where every denial wins.
+
 ## Development
 
 Requires Node.js 20 or newer.

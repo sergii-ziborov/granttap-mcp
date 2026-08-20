@@ -4,6 +4,7 @@ pub mod config;
 pub mod crypto;
 pub mod http;
 pub mod nacl_salsa;
+pub mod organization_policy;
 pub mod pairing;
 pub mod relay;
 pub mod setup;

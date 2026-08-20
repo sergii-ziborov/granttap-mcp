@@ -27,6 +27,18 @@ pub fn render_status() -> String {
         lines.push("pairing: missing (run connect)".into());
     }
 
+    let organization = crate::organization_policy::unix_now()
+        .and_then(|now| crate::organization_policy::inspect(&config_dir(), now));
+    match organization {
+        Ok(Some(policy)) => lines.push(format!(
+            "organizationPolicy: verified revision={} epoch={}",
+            policy.revision(),
+            policy.authorization_epoch()
+        )),
+        Ok(None) => lines.push("organizationPolicy: unmanaged".into()),
+        Err(error) => lines.push(format!("organizationPolicy: blocked ({error})")),
+    }
+
     let plist = launch_agents_dir().join(format!("{LAUNCH_AGENT_LABEL}.plist"));
     if plist.is_file() {
         lines.push(format!("launchAgentPlist: {}", plist.display()));
