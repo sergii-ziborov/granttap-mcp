@@ -56,9 +56,9 @@ status is published at [granttap.com](https://granttap.com).
 
 ### iPhone
 
-| Command center | Codex task controls | Observed MCP usage | Claude Code and scheduler |
+| Unified tasks + Codex composer | Codex task controls | Observed MCP usage | Unified tasks + Claude composer |
 | --- | --- | --- | --- |
-| <img src="https://raw.githubusercontent.com/sergii-ziborov/granttap-mcp/main/docs/images/iphone-command-center.png" alt="GrantTap iPhone command center" width="210"> | <img src="https://raw.githubusercontent.com/sergii-ziborov/granttap-mcp/main/docs/images/iphone-task-detail.png" alt="Codex task context, MCP permissions, and sandbox access in GrantTap" width="210"> | <img src="https://raw.githubusercontent.com/sergii-ziborov/granttap-mcp/main/docs/images/iphone-mcp-usage.png" alt="Observed MCP and skill usage on iPhone" width="210"> | <img src="https://raw.githubusercontent.com/sergii-ziborov/granttap-mcp/main/docs/images/iphone-claude-tasks.png" alt="Claude Code task list and conversational scheduler on iPhone" width="210"> |
+| <img src="https://raw.githubusercontent.com/sergii-ziborov/granttap-mcp/main/docs/images/iphone-command-center.png" alt="Unified task list with the Codex composer selected" width="210"> | <img src="https://raw.githubusercontent.com/sergii-ziborov/granttap-mcp/main/docs/images/iphone-task-detail.png" alt="Codex task context, MCP permissions, and sandbox access in GrantTap" width="210"> | <img src="https://raw.githubusercontent.com/sergii-ziborov/granttap-mcp/main/docs/images/iphone-mcp-usage.png" alt="Observed MCP and skill usage on iPhone" width="210"> | <img src="https://raw.githubusercontent.com/sergii-ziborov/granttap-mcp/main/docs/images/iphone-claude-tasks.png" alt="Unified task list with the Claude composer selected" width="210"> |
 
 The Codex task screen exposes the context window, supported compaction, MCP
 allow/deny state, and sandbox access. Claude Code gets its own visual treatment
