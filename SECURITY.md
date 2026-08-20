@@ -19,7 +19,9 @@ keys. Existing configuration files are backed up before hook installation.
 
 Current pairings contain three independent secret classes: NaCl endpoint keys,
 random per-task keys, and a random `pushAuth` room credential that authorizes
-the room WebSocket and APNs device-token registration at the relay. None may be logged.
+the room WebSocket and APNs device-token registration at the relay. Account
+linking adds a separate Ed25519 machine seed, device-code/PKCE state, and account
+tokens stored in macOS Keychain. None may be logged.
 The relay receives only a hash of `pushAuth` and never receives an endpoint's
 secret encryption key.
 
@@ -36,6 +38,13 @@ secret encryption key.
   marks it user-only, but MCP audience annotations are not a cryptographic
   boundary: depending on the host, the chat/model provider may receive tool
   images. Use terminal pairing when the model provider is in your threat model.
+- GrantTap account authorization is not phone pairing. Its QR contains only an
+  HTTPS verification URL and short user code. The machine-only device code,
+  PKCE verifier, account tokens, account signing seed, phone-pairing keys, and
+  provider credentials are excluded from the QR and normal status output.
+- An Enterprise login receipt is signed by a dedicated pinned issuer, bound to
+  the enrolled machine account key, short-lived, and checked for revocation
+  epoch before managed policy can authorize a capability.
 - Every attached Codex or Claude Code task receives a separate random 256-bit
   task key. Task messages, attachments, visible activity, access/MCP changes,
   compaction results, and task-bound approvals use this additional authenticated

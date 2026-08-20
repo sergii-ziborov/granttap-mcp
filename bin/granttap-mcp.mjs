@@ -13,6 +13,10 @@ const usage = [
   "  granttap                    Start the MCP stdio server",
   "  granttap serve              HTTP MCP + OAuth (Cursor Settings → Authorize)",
   "  granttap authorize          Configure Cursor + start local OAuth in one step",
+  "  granttap login              Protected optional account login by one-time QR",
+  "  granttap relogin            Reauthenticate without changing phone pairing",
+  "  granttap logout             Remove account session, not pairing",
+  "  granttap account-status     Read account state without tokens",
   "  granttap connect [url]      Pair this machine with iPhone/Apple Watch",
   "  granttap setup              Install available provider hooks + background sync",
   "  granttap status [--json]    Read-only provider and pairing readiness",
@@ -36,6 +40,8 @@ if (command === "mcp") {
   entry = join(root, "apps", "mcp", "src", "bin", "serve.ts");
 } else if (command === "authorize") {
   entry = join(root, "apps", "mcp", "src", "bin", "authorize.ts");
+} else if (["login", "relogin", "logout", "account-status"].includes(command)) {
+  entry = join(root, "apps", "bridge", "src", "bin", "account.ts");
 } else if (command === "setup") {
   entry = join(root, "apps", "bridge", "src", "bin", "setup.ts");
 } else if (command === "connect") {
@@ -90,7 +96,10 @@ if (!preflight || !loader) {
   process.exit(1);
 }
 
-const forwardedArgs = command === "connect" || command === "status" ? process.argv.slice(3) : [];
+const accountCommand = ["login", "relogin", "logout", "account-status"].includes(command);
+const forwardedArgs = accountCommand
+  ? [command === "account-status" ? "status" : command, ...process.argv.slice(3)]
+  : command === "connect" || command === "status" ? process.argv.slice(3) : [];
 const child = spawn(
   process.execPath,
   ["--require", preflight, "--import", pathToFileURL(loader).href, entry, ...forwardedArgs],

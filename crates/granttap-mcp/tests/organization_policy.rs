@@ -3,6 +3,8 @@ use blindplane_access::{
     AccessIssuer, CapabilityKind, CapabilityRule, Decision, Effect, PolicySpec, PrincipalKeypair,
     PrincipalKind, TenantPolicy,
 };
+use blindplane_crypto::SigningKey;
+use granttap_mcp::login_receipt;
 use granttap_mcp::organization_policy;
 use serde::Serialize;
 use std::fs;
@@ -21,6 +23,31 @@ struct Manifest {
     issuer_public_key: String,
     minimum_revision: &'static str,
     minimum_authorization_epoch: &'static str,
+    login_issuer_id: &'static str,
+    login_issuer_key_id: String,
+    login_issuer_public_key: String,
+}
+
+#[derive(Serialize)]
+struct LoginHeader {
+    alg: &'static str,
+    kid: String,
+    typ: &'static str,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LoginPayload {
+    version: u16,
+    tenant_id: &'static str,
+    subject_id: &'static str,
+    subject_key_id: String,
+    user_id: &'static str,
+    session_id: &'static str,
+    authenticated_at: u64,
+    expires_at: u64,
+    authorization_epoch: &'static str,
+    issuer_id: &'static str,
 }
 
 struct TestRoot(PathBuf);
@@ -76,8 +103,11 @@ fn write_policy(root: &Path, tamper: bool) {
     )
     .unwrap();
     let trusted = issuer.trusted();
+    let login_signer = SigningKey::from_seed(&[12; 32]);
+    let login_public_key = login_signer.verifying_key();
+    let login_key_id = login_receipt::issuer_key_id(&login_public_key);
     let manifest = Manifest {
-        version: 1,
+        version: 2,
         tenant_id: "acme",
         subject_id: "device-1",
         subject_key_id: URL_SAFE_NO_PAD.encode(subject.principal().key_id()),
@@ -86,6 +116,9 @@ fn write_policy(root: &Path, tamper: bool) {
         issuer_public_key: URL_SAFE_NO_PAD.encode(trusted.public_key()),
         minimum_revision: "1",
         minimum_authorization_epoch: "1",
+        login_issuer_id: "granttap-control",
+        login_issuer_key_id: URL_SAFE_NO_PAD.encode(login_key_id),
+        login_issuer_public_key: URL_SAFE_NO_PAD.encode(login_public_key),
     };
     fs::write(
         root.join("managed/issuer.json"),
@@ -98,6 +131,35 @@ fn write_policy(root: &Path, tamper: bool) {
         *last ^= 1;
     }
     fs::write(root.join("managed/organization-policy.bin"), encoded).unwrap();
+    let header = URL_SAFE_NO_PAD.encode(
+        blazingly_json::to_vec(&LoginHeader {
+            alg: "EdDSA",
+            kid: URL_SAFE_NO_PAD.encode(login_key_id),
+            typ: "GTLOGIN",
+        })
+        .unwrap(),
+    );
+    let payload = URL_SAFE_NO_PAD.encode(
+        blazingly_json::to_vec(&LoginPayload {
+            version: 1,
+            tenant_id: "acme",
+            subject_id: "device-1",
+            subject_key_id: URL_SAFE_NO_PAD.encode(subject.principal().key_id()),
+            user_id: "user-1",
+            session_id: "login-1",
+            authenticated_at: 100,
+            expires_at: 200,
+            authorization_epoch: "1",
+            issuer_id: "granttap-control",
+        })
+        .unwrap(),
+    );
+    let signature = login_signer.sign(format!("{header}.{payload}").as_bytes());
+    fs::write(
+        root.join("managed/login.receipt"),
+        format!("{header}.{payload}.{}", URL_SAFE_NO_PAD.encode(signature)),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -125,6 +187,14 @@ fn public_endpoint_verifier_uses_blindplane_default_deny() {
 fn public_endpoint_verifier_rejects_tampering() {
     let root = TestRoot::new("org-tamper");
     write_policy(root.path(), true);
+    assert!(organization_policy::load(root.path(), 150).is_err());
+}
+
+#[test]
+fn public_endpoint_verifier_requires_fresh_enterprise_login() {
+    let root = TestRoot::new("org-login");
+    write_policy(root.path(), false);
+    fs::remove_file(root.path().join("managed/login.receipt")).unwrap();
     assert!(organization_policy::load(root.path(), 150).is_err());
 }
 

@@ -1,5 +1,6 @@
 //! Local verification of enrolled Blindplane organization policy.
 
+use crate::login_receipt;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use blindplane_access::{
     AccessValidationPolicy, CapabilityKind, Decision, TenantPolicy, TrustedIssuer,
@@ -22,6 +23,9 @@ struct IssuerManifest {
     issuer_public_key: String,
     minimum_revision: String,
     minimum_authorization_epoch: String,
+    login_issuer_id: String,
+    login_issuer_key_id: String,
+    login_issuer_public_key: String,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -179,7 +183,7 @@ fn load_policy(
     }
     let manifest: IssuerManifest = blazingly_json::from_slice(&read_regular(&issuer_path, 16_384)?)
         .map_err(|error| format!("parse issuer manifest: {error}"))?;
-    if manifest.version != 1 {
+    if manifest.version != 2 {
         return Err("unsupported issuer manifest version".into());
     }
     let issuer_public_key = decode_32(&manifest.issuer_public_key, "issuer public key")?;
@@ -200,6 +204,23 @@ fn load_policy(
     let minimum_authorization_epoch = parse_u64(
         &manifest.minimum_authorization_epoch,
         "minimum authorization epoch",
+    )?;
+    let login_issuer_key_id = decode_32(&manifest.login_issuer_key_id, "login issuer key id")?;
+    let login_issuer_public_key =
+        decode_32(&manifest.login_issuer_public_key, "login issuer public key")?;
+    if login_receipt::issuer_key_id(&login_issuer_public_key) != login_issuer_key_id {
+        return Err("login issuer key id does not match its public key".into());
+    }
+    login_receipt::verify(
+        &managed.join("login.receipt"),
+        &manifest.tenant_id,
+        &manifest.subject_id,
+        &decode_32(&manifest.subject_key_id, "subject key id")?,
+        &manifest.login_issuer_id,
+        &login_issuer_key_id,
+        &login_issuer_public_key,
+        minimum_authorization_epoch,
+        now,
     )?;
     policy
         .verify(

@@ -1,6 +1,6 @@
 {
   "name": "granttap-mcp",
-  "version": "0.6.9",
+  "version": "0.6.10",
   "description": "Connect Cursor, Claude Code, Codex, GitHub Copilot CLI, and Grok Build to iPhone and Apple Watch with E2EE MCP tools.",
   "type": "module",
   "bin": {

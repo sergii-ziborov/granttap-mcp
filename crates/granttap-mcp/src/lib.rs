@@ -3,6 +3,7 @@
 pub mod config;
 pub mod crypto;
 pub mod http;
+pub mod login_receipt;
 pub mod nacl_salsa;
 pub mod organization_policy;
 pub mod pairing;
