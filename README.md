@@ -19,7 +19,7 @@ only routes authenticated ciphertext it cannot decrypt.
 [Self-hostable relay](https://github.com/sergii-ziborov/granttap-relay)
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/sergii-ziborov/granttap-mcp/main/docs/images/iphone-command-center.png" alt="GrantTap command center on iPhone showing a Codex approval, an agent question, task search, agent switcher, chat history, and MCP usage" width="330">
+  <img src="https://raw.githubusercontent.com/sergii-ziborov/granttap-mcp/main/docs/images/iphone-command-center.png" alt="Current GrantTap unified task list and composer on iPhone in demo mode" width="330">
   &nbsp;&nbsp;&nbsp;
   <img src="https://raw.githubusercontent.com/sergii-ziborov/granttap-mcp/main/docs/images/apple-watch-approval.png" alt="GrantTap Codex approval on Apple Watch" width="230">
 </p>
@@ -93,10 +93,9 @@ for a second agent does not rotate keys or require another QR. Use
 
 ### Install the GrantTap plugin in Codex
 
-The plugin wraps the same shared helper, account session, and pairing; it does
-not create another GrantTap account for each agent. Its prompts expose account
-login/relogin/logout separately from Connect/Reconnect, Add this agent, and
-Repair all agent connections.
+The plugin wraps the same shared helper and pairing; it does not create another
+GrantTap installation for each agent. Its prompts expose Connect/Reconnect,
+Add this agent, and Repair all agent connections.
 
 ```bash
 codex plugin marketplace add sergii-ziborov/granttap
@@ -106,11 +105,13 @@ codex plugin add granttap@personal
 Run `granttap setup` after installing a new supported agent. Provider account
 authentication remains separate from GrantTap pairing.
 
-### GrantTap account login
+### Account and Enterprise login status
 
-Personal/Team account login is optional. Enterprise login is required before an
-enrolled endpoint can use managed policy. Both use a short device-authorization
-flow and leave the E2EE phone pairing unchanged:
+Account login is endpoint-side development groundwork, not a functioning hosted
+GrantTap feature. The source contains device-authorization commands and receipt
+verification, but no deployed GrantTap Control issuer currently authorizes the
+QR flow or issues a usable account session. Do not present these commands as
+working Personal, Team, or Enterprise onboarding:
 
 ```bash
 granttap login
@@ -121,9 +122,10 @@ granttap relogin
 granttap logout
 ```
 
-The machine signs the request with a separate Ed25519 device key and uses PKCE.
-The displayed QR contains only an HTTPS verification URL and user code—never
-the device code, verifier, token, pairing key, or an agent-provider credential.
+When a compatible issuer is added, the machine-side protocol uses a separate
+Ed25519 device key and PKCE. Its QR contract permits only an HTTPS verification
+URL and user code—never the device code, verifier, token, pairing key, or an
+agent-provider credential.
 
 ### Add the MCP to each agent
 
@@ -279,9 +281,9 @@ Repository skills are discovered only in the selected task workspace under
 | Tool | Result |
 | --- | --- |
 | `connect` | Creates a pairing and returns a secure one-time QR in chat |
-| `login` | Starts or completes optional Personal/Team or required Enterprise account login |
-| `account_status` | Reads account state without returning tokens or pairing keys |
-| `logout` | Removes the account session and Enterprise receipt without changing phone pairing |
+| `login` | Development preview; requires a compatible Control issuer that is not currently deployed |
+| `account_status` | Reads local preview account state without returning tokens or pairing keys |
+| `logout` | Removes preview account state without changing phone pairing |
 | `ask` | Sends an open question and waits for a spoken or typed reply |
 | `ask_yes_no` | Sends a yes/no question and waits for a tap |
 | `notify` | Sends a non-blocking status update |
@@ -370,10 +372,10 @@ time, agent, status, result, and created task ID.
 | *(no command)* | Starts the GrantTap MCP stdio server |
 | `serve` | HTTP MCP + loopback OAuth for Cursor Settings → Authorize |
 | `authorize` | Installs the persistent loopback OAuth service, verifies health, and configures Cursor |
-| `login [--enterprise --organization ID] [--complete]` | Starts or completes protected GrantTap account login |
-| `relogin [--enterprise --organization ID]` | Starts fresh account authorization without replacing phone pairing |
-| `logout` | Removes only the GrantTap account session and Enterprise receipt |
-| `account-status` | Reads account state without printing account secrets |
+| `login [--enterprise --organization ID] [--complete]` | Development preview; no hosted GrantTap issuer is deployed |
+| `relogin [--enterprise --organization ID]` | Restarts the preview flow without replacing phone pairing |
+| `logout` | Removes only local preview account state |
+| `account-status` | Reads preview account state without printing account secrets |
 | `connect [relayUrl]` | Creates an E2EE pairing; optionally targets a self-hosted `wss://` relay |
 | `setup` | Registers supported local hooks, background sync, and repairs configured OAuth |
 | `status [--json]` | Reads local readiness; JSON uses `granttap.provider-status.v1` and contains no keys |
@@ -386,10 +388,10 @@ service and a live identity-checked health response; a dead URL is never shown
 as connected. Without an HTTP entry, OAuth remains optional and Cursor policy
 readiness is based on the full hook set, pairing, and background sync.
 
-## Enterprise verifier foundation
+## Enterprise verifier groundwork (not released)
 
-The public Node client now starts and completes protected GrantTap account
-device authorization, storing its machine seed and tokens in macOS Keychain.
+The public Node client implements the client half of protected GrantTap account
+device authorization and stores its machine seed and tokens in macOS Keychain.
 The public Rust endpoint crate consumes canonical Blindplane Access
 `TenantPolicy` v1 objects from the separate `~/.granttap/managed/` enrollment
 boundary. Before policy evaluation it also requires a short-lived signed login
@@ -399,8 +401,9 @@ validity, minimum revision, authorization epoch, and the accepted policy hash
 chain; and exposes `organizationPolicy: verified|unmanaged|blocked` in Rust
 `status`. Exact MCP/tool/skill/CLI policy is default-deny.
 
-This is the endpoint login and auditable verifier foundation, not a claim that
-this public package deploys the private GrantTap Control issuer, SAML/OIDC
+There is no deployed GrantTap Control issuer, so the account flow cannot
+currently complete as a production login. This is endpoint and verifier
+groundwork, not a claim that this public package deploys SAML/OIDC
 identity-provider integration, SCIM, MDM, admin UI, or encrypted enterprise
 audit. Personal mode remains unchanged when no managed enrollment directory
 exists. The private product bridge composes the same policy format with local
