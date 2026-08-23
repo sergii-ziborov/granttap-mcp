@@ -6,10 +6,6 @@ import { RelayClient } from "../../../packages/core/relay-client";
 import type {
   AgentEvent,
   ConfigSet,
-  ScheduleDelete,
-  SchedulePlanRequest,
-  ScheduleRun,
-  ScheduleSet,
   SessionAccessSet,
   SessionCompact,
   SessionInfo,
@@ -46,15 +42,6 @@ import {
   scopeCapabilityUsageToRoom,
   TOKEN_WINDOW_HOURS,
 } from "./sessions";
-import {
-  deleteSchedule,
-  planSchedule,
-  runScheduleNow,
-  scheduledSnapshot,
-  scheduleHistorySnapshot,
-  setSchedule,
-  tickSchedules,
-} from "./scheduler";
 
 /**
  * A tick rescans every provider's logs. At 5s those scans overlapped, pinned a
@@ -191,7 +178,6 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
 
   const publish = singleFlightPublisher(async (forceHistory: boolean): Promise<void> => {
     if (!leadership.acquire()) return;
-    tickSchedules();
     if (!client.isConnected) return;
     // Discovery is synchronous, multi-second filesystem work: once it starts,
     // the event loop cannot service the socket and the heartbeat loop cannot
@@ -218,16 +204,6 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       await client.send(scopeCapabilityUsageToRoom(usage, client.room), "phone", { ttlMs: 90_000, reliable: false });
       lastCapabilityPublishedAt = Date.now();
     }
-    await client.send(
-      {
-        type: "schedules.status",
-        tasks: scheduledSnapshot(),
-        history: scheduleHistorySnapshot(),
-        generatedAt: Date.now(),
-      },
-      "phone",
-      { ttlMs: INTERVAL_MS * 3, reliable: false },
-    );
   });
 
   const off = client.onMessage(async (payload) => {
@@ -301,21 +277,6 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       await handleCompact(client, payload);
       void publish().catch(() => {});
       return true;
-    } else if (payload.type === "schedule.set") {
-      handleScheduleSet(payload);
-      void publish().catch(() => {});
-      return true;
-    } else if (payload.type === "schedule.delete") {
-      handleScheduleDelete(payload);
-      void publish().catch(() => {});
-      return true;
-    } else if (payload.type === "schedule.run") {
-      handleScheduleRun(payload);
-      void publish().catch(() => {});
-      return true;
-    } else if (payload.type === "schedule.plan.request") {
-      await handleSchedulePlan(client, payload);
-      return true;
     }
     return false;
   });
@@ -382,23 +343,6 @@ export function agentEventForUserMessage(
     originMessageId: message.messageId,
     createdAt: Date.now(),
   };
-}
-
-function handleScheduleSet(message: ScheduleSet): void {
-  setSchedule(message);
-}
-
-function handleScheduleDelete(message: ScheduleDelete): void {
-  deleteSchedule(message.id);
-}
-
-function handleScheduleRun(message: ScheduleRun): void {
-  runScheduleNow(message.id);
-}
-
-async function handleSchedulePlan(client: RelayClient, message: SchedulePlanRequest): Promise<void> {
-  const result = await planSchedule(message);
-  await client.send(result, "phone", { ttlMs: 5 * 60_000 }).catch(() => {});
 }
 
 function handleAccessSet(message: SessionAccessSet): void {

@@ -6,23 +6,17 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const [command = "mcp", argument] = process.argv.slice(2);
+const [command = "mcp", ...commandArgs] = process.argv.slice(2);
+const argument = commandArgs[0];
 
 const usage = [
+  "GrantTap — personal control center for local coding agents",
+  "",
   "Usage:",
-  "  granttap                    Start the MCP stdio server",
-  "  granttap serve              HTTP MCP + OAuth (Cursor Settings → Authorize)",
-  "  granttap authorize          Configure Cursor + start local OAuth in one step",
-  "  granttap login              Protected optional account login by one-time QR",
-  "  granttap relogin            Reauthenticate without changing phone pairing",
-  "  granttap logout             Remove account session, not pairing",
-  "  granttap account-status     Read account state without tokens",
-  "  granttap connect [url]      Pair this machine with iPhone/Apple Watch",
-  "  granttap setup              Install available provider hooks + background sync",
-  "  granttap status [--json]    Read-only provider and pairing readiness",
-  "  granttap web                Print the private Web capability on request",
-  "  granttap monitor            Internal background task sync",
-  "  granttap hook <agent>       Internal hook entry point",
+  "  granttap setup                    Detect agents and install or repair GrantTap",
+  "  granttap status [--json]          Show pairing, helper, and provider readiness",
+  "  granttap connect [--relay <url>]  Pair this computer with iPhone/Apple Watch",
+  "  granttap reset [--yes]            Reset this computer's phone pairing",
   "",
   "The legacy granttap-mcp command is an alias for granttap.",
   "",
@@ -36,32 +30,33 @@ if (command === "help" || command === "--help" || command === "-h") {
 let entry;
 if (command === "mcp") {
   entry = join(root, "apps", "mcp", "src", "server.ts");
-} else if (command === "serve" || command === "http") {
-  entry = join(root, "apps", "mcp", "src", "bin", "serve.ts");
-} else if (command === "authorize") {
-  entry = join(root, "apps", "mcp", "src", "bin", "authorize.ts");
-} else if (["login", "relogin", "logout", "account-status"].includes(command)) {
-  entry = join(root, "apps", "bridge", "src", "bin", "account.ts");
 } else if (command === "setup") {
   entry = join(root, "apps", "bridge", "src", "bin", "setup.ts");
 } else if (command === "connect") {
   entry = join(root, "apps", "bridge", "src", "bin", "connect.ts");
 } else if (command === "status") {
   entry = join(root, "apps", "mcp", "src", "bin", "status.ts");
-} else if (command === "web") {
-  entry = join(root, "apps", "bridge", "src", "bin", "web.ts");
-} else if (command === "monitor") {
+} else if (command === "reset") {
+  entry = join(root, "apps", "bridge", "src", "bin", "reset.ts");
+} else if (command === "cursor" && argument === "repair") {
+  entry = join(root, "apps", "mcp", "src", "bin", "authorize.ts");
+} else if (command === "internal" && argument === "serve") {
+  entry = join(root, "apps", "mcp", "src", "bin", "serve.ts");
+} else if (command === "internal" && argument === "authorize") {
+  entry = join(root, "apps", "mcp", "src", "bin", "authorize.ts");
+} else if (command === "internal" && argument === "monitor") {
   entry = join(root, "apps", "bridge", "src", "bin", "monitor.ts");
-} else if (command === "hook" && [
+} else if (command === "internal" && argument === "hook" && [
   "claude", "codex", "codex-policy", "cursor", "cursor-after", "cursor-mcp",
-].includes(argument)) {
-  const hookEntry = argument === "codex-policy"
+].includes(commandArgs[1])) {
+  const route = commandArgs[1];
+  const hookEntry = route === "codex-policy"
     ? "codex-policy-hook.ts"
-    : argument === "cursor-after"
+    : route === "cursor-after"
       ? "cursor-after-shell.ts"
-      : argument === "cursor-mcp"
+      : route === "cursor-mcp"
         ? "cursor-mcp-hook.ts"
-        : `${argument}-hook.ts`;
+        : `${route}-hook.ts`;
   entry = join(root, "apps", "bridge", "src", "bin", hookEntry);
 } else {
   process.stderr.write(usage);
@@ -96,10 +91,7 @@ if (!preflight || !loader) {
   process.exit(1);
 }
 
-const accountCommand = ["login", "relogin", "logout", "account-status"].includes(command);
-const forwardedArgs = accountCommand
-  ? [command === "account-status" ? "status" : command, ...process.argv.slice(3)]
-  : command === "connect" || command === "status" ? process.argv.slice(3) : [];
+const forwardedArgs = ["connect", "status", "reset"].includes(command) ? commandArgs : [];
 const child = spawn(
   process.execPath,
   ["--require", preflight, "--import", pathToFileURL(loader).href, entry, ...forwardedArgs],

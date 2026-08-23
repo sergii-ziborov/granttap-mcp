@@ -7,6 +7,8 @@ import {
 
 export const CapabilityUsageKind = z.enum(["mcp", "skill", "cli"]);
 export type CapabilityUsageKind = z.infer<typeof CapabilityUsageKind>;
+export const CapabilityOutcome = z.enum(["success", "error", "cancelled", "unknown"]);
+export type CapabilityOutcome = z.infer<typeof CapabilityOutcome>;
 
 export const CapabilityChatTarget = z.object({
   kind: z.literal("chat"),
@@ -23,6 +25,8 @@ export const ObservedCapability = z.object({
   estimatedContextTokens: z.number().int().nonnegative().optional(),
   estimatedBaselineTokens: z.number().int().nonnegative().optional(),
   durationMs: z.number().int().nonnegative().optional(),
+  outcome: CapabilityOutcome.default("unknown"),
+  errorClass: z.string().trim().min(1).max(80).optional(),
 });
 export type ObservedCapability = z.infer<typeof ObservedCapability>;
 
@@ -56,6 +60,8 @@ export const CapabilityUsageEvent = z.object({
   estimatedContextTokens: z.number().int().nonnegative().optional(),
   estimatedBaselineTokens: z.number().int().nonnegative().optional(),
   durationMs: z.number().int().nonnegative().optional(),
+  outcome: CapabilityOutcome.default("unknown"),
+  errorClass: z.string().trim().min(1).max(80).optional(),
 });
 export type CapabilityUsageEvent = z.infer<typeof CapabilityUsageEvent>;
 export const RemoteCapabilityUsageEvent = CapabilityUsageEvent;

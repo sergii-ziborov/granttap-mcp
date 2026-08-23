@@ -1,8 +1,9 @@
 import {
   inspectCursorOAuthReadiness,
   inspectProviderStatusSnapshot,
-  inspectWebReadiness,
 } from "../provider-status";
+import { inspectMonitorHelper } from "../../../bridge/src/install";
+import { isMachineConfigured } from "../pairing-status";
 
 const args = process.argv.slice(2);
 async function main(): Promise<void> {
@@ -12,24 +13,25 @@ async function main(): Promise<void> {
     process.stderr.write("Usage: granttap status [--json]\n");
     process.exitCode = 1;
   } else {
-    const [web, cursorOAuth] = await Promise.all([
-      inspectWebReadiness(),
-      inspectCursorOAuthReadiness(),
-    ]);
-    const snapshot = inspectProviderStatusSnapshot(new Date(), web, cursorOAuth);
+    const cursorOAuth = await inspectCursorOAuthReadiness();
+    const snapshot = inspectProviderStatusSnapshot(new Date(), cursorOAuth);
     if (args[0] === "--json") {
       process.stdout.write(`${JSON.stringify(snapshot)}\n`);
     } else {
-      const labels = { cursor: "Cursor", claude: "Claude Code", codex: "Codex", web: "Web" };
+      const labels = { cursor: "Cursor", claude: "Claude Code", codex: "Codex" };
       const states = {
         connected: "Connected",
         action_required: "Action required",
         not_configured: "Not configured",
       };
       process.stdout.write([
-        "GrantTap status (read-only)",
+        "GrantTap",
+        "",
+        `Phone pairing       ${isMachineConfigured() ? "Ready" : "Not paired"}`,
+        `Background helper   ${inspectMonitorHelper().running ? "Running" : "Needs setup"}`,
+        "",
         ...snapshot.providers.map((provider) =>
-          `${labels[provider.id]}: ${states[provider.status]} — ${provider.detail}`),
+          `${labels[provider.id].padEnd(20)} ${states[provider.status]} — ${provider.detail}`),
         "",
       ].join("\n"));
     }

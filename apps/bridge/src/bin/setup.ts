@@ -1,27 +1,97 @@
+import QRCode from "qrcode";
 import {
   CODEX_TRUST_INSTRUCTION,
+  inspectAgentIntegrations,
+  inspectCursorIntegration,
   installClaudeHook,
   installCodexHook,
   installCursorHook,
   installMonitorHelper,
+  type InstallResult,
 } from "../install";
-import { isCursorHttpMcpConfigured } from "../../../mcp/src/cursor-config";
+import { createOneTimePairing, DEFAULT_RELAY, PAIRING_CODE_TTL_MINUTES } from "../pairing";
+import { isMachineConfigured } from "../../../mcp/src/pairing-status";
+import { installCursorHttpConfig } from "../../../mcp/src/cursor-config";
 import { installHttpMcpService } from "../../../mcp/src/http-service";
 
-const cursor = installCursorHook();
-const claude = installClaudeHook();
-const codex = installCodexHook();
-const monitor = installMonitorHelper();
-const oauth = isCursorHttpMcpConfigured() ? installHttpMcpService() : null;
+function state(result: InstallResult): string {
+  return result.status === "manual" ? "Needs attention" : "Ready";
+}
 
-process.stdout.write(
-  [
-    `Cursor: ${cursor.status} (${cursor.detail})`,
-    `Claude Code: ${claude.status} (${claude.detail})`,
-    `Codex: action required — hook ${codex.status} (${codex.detail}). ${CODEX_TRUST_INSTRUCTION}`,
-    `Background task sync: ${monitor.status} (${monitor.detail})`,
-    oauth
-      ? `Persistent Cursor OAuth: ${oauth.status} (${oauth.detail})`
-      : "Persistent Cursor OAuth: not configured (run granttap authorize if wanted)",
-  ].join("\n") + "\n",
-);
+async function pairIfNeeded(): Promise<string | null> {
+  if (isMachineConfigured()) return null;
+  const interactive = process.stdout.isTTY || process.env.GRANTTAP_SETUP_PAIRING === "1";
+  if (!interactive || process.env.GRANTTAP_SKIP_PAIRING === "1") return null;
+  try {
+    const pairing = await createOneTimePairing(
+      process.env.GRANTTAP_TEST_RELAY_URL ?? DEFAULT_RELAY,
+      { installHooks: false },
+    );
+    const qr = await QRCode.toString(pairing.qrPayload, {
+      type: "terminal",
+      small: true,
+      errorCorrectionLevel: "L",
+    });
+    process.stdout.write([
+      "",
+      "Scan this one-time QR in GrantTap on iPhone:",
+      "",
+      qr,
+      `Expires in ${PAIRING_CODE_TTL_MINUTES} minutes. The transfer key is not sent to the relay.`,
+      "",
+    ].join("\n"));
+    return "paired";
+  } catch {
+    return "failed";
+  }
+}
+
+async function main(): Promise<void> {
+  const before = {
+    cursor: inspectCursorIntegration(),
+    agents: inspectAgentIntegrations(),
+  };
+  const cursorHook = installCursorHook();
+  const claudeHook = installClaudeHook();
+  const codexHook = installCodexHook();
+  const helper = installMonitorHelper();
+  let cursorService: InstallResult | null = null;
+  let cursorConfig: InstallResult | null = null;
+  if (before.cursor.installed) {
+    cursorService = installHttpMcpService();
+    if (cursorService.status !== "manual") cursorConfig = installCursorHttpConfig();
+  }
+  const pairingResult = await pairIfNeeded();
+  const paired = isMachineConfigured();
+  const installed = new Set(before.agents.filter((item) => item.installed).map((item) => item.agent));
+  const cursorReady = cursorHook.status !== "manual"
+    && (!before.cursor.installed
+      || (cursorService?.status !== "manual" && cursorConfig?.status !== "manual"));
+
+  process.stdout.write([
+    "GrantTap",
+    "",
+    `Phone pairing       ${paired ? "Ready" : pairingResult === "failed" ? "Relay unavailable" : "Needs connection"}`,
+    `Background helper   ${state(helper)}`,
+    "",
+    `Claude Code         ${installed.has("claude") ? state(claudeHook) : "Not installed"}`,
+    `Codex               ${installed.has("codex")
+      ? codexHook.status === "manual" ? "Needs attention" : "Needs hook trust"
+      : "Not installed"}`,
+    `Cursor              ${before.cursor.installed ? `Beta · ${cursorReady ? "Authorize in Cursor" : "Needs repair"}` : "Not installed"}`,
+    "",
+    paired && installed.has("codex")
+      ? `Next: ${CODEX_TRUST_INSTRUCTION}`
+      : paired && before.cursor.installed
+        ? "Next: open Cursor Settings → MCP → GrantTap → Authorize."
+        : "Next: run granttap connect.",
+    "",
+  ].join("\n"));
+}
+
+void main().catch((error: unknown) => {
+  process.stderr.write(
+    `[granttap-mcp] setup failed: ${error instanceof Error ? error.message : String(error)}\n`,
+  );
+  process.exitCode = 1;
+});

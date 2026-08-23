@@ -39,7 +39,8 @@ function ownedPlist(launcher = executable): string {
   return [
     '<?xml version="1.0" encoding="UTF-8"?>', "<plist><dict>", "<key>Label</key>",
     "<string>com.granttap.mcp-http</string>", "<key>ProgramArguments</key>", "<array>",
-    `<string>${launcher}</string>`, "<string>serve</string>", "</array>", "</dict></plist>", "",
+    `<string>${launcher}</string>`, "<string>internal</string>", "<string>serve</string>",
+    "</array>", "</dict></plist>", "",
   ].join("\n");
 }
 
@@ -67,7 +68,7 @@ test("authorize restores a pre-existing owned plist when repaired service health
   const before = ownedPlist("/previous/granttap-mcp.mjs");
   mkdirSync(env.GRANTTAP_LAUNCH_AGENTS_DIR!, { recursive: true });
   writeFileSync(path, before);
-  const result = await run(["authorize"], env);
+  const result = await run(["internal", "authorize"], env);
   assert.equal(result.code, 1);
   assert.match(result.stderr, /did not become healthy/);
   assert.equal(existsSync(path), true);
@@ -99,7 +100,7 @@ test("authorize restores exact owned plist and loaded state after bootstrap fail
   const before = ownedPlist();
   mkdirSync(env.GRANTTAP_LAUNCH_AGENTS_DIR!, { recursive: true });
   writeFileSync(path, before);
-  const result = await run(["authorize"], env);
+  const result = await run(["internal", "authorize"], env);
   assert.equal(result.code, 1);
   assert.match(result.stderr, /injected bootstrap failure/);
   assert.equal(readFileSync(path, "utf8"), before);
@@ -118,7 +119,7 @@ test("authorize leaves a foreign OAuth plist untouched", async (t) => {
   const before = "foreign plist contents\n";
   mkdirSync(env.GRANTTAP_LAUNCH_AGENTS_DIR!, { recursive: true });
   writeFileSync(path, before);
-  const result = await run(["authorize"], env);
+  const result = await run(["internal", "authorize"], env);
   assert.equal(result.code, 1);
   assert.match(result.stderr, /not an owned GrantTap HTTP service/);
   assert.equal(readFileSync(path, "utf8"), before);

@@ -20,11 +20,12 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import type { RelayClient } from "../../../packages/core/relay-client";
-import type {
-  ApprovalDecision,
-  ApprovalRequest,
-  ApprovalResolved,
-  ApprovalsStatus,
+import {
+  approvalAction,
+  type ApprovalDecision,
+  type ApprovalRequest,
+  type ApprovalResolved,
+  type ApprovalsStatus,
 } from "../../../packages/protocol/schema";
 import { configDir } from "./config";
 
@@ -654,6 +655,7 @@ export function approvalsStatus(now = Date.now()): ApprovalsStatus {
     pending,
     complete: false,
     covered: coveredApprovalScopes(pending, now),
+    actions: pending.map(approvalAction),
     generatedAt,
   };
 }

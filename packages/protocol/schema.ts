@@ -18,14 +18,6 @@ import {
 } from "./messages/interaction";
 import { AgentId, Role } from "./messages/primitives";
 import {
-  ScheduleDelete,
-  SchedulePlanRequest,
-  SchedulePlanResult,
-  ScheduleRun,
-  SchedulesStatus,
-  ScheduleSet,
-} from "./messages/schedules";
-import {
   ConfigSet,
   SessionAccessSet,
   SessionActivity,
@@ -43,7 +35,6 @@ export * from "./messages/approvals";
 export * from "./messages/capabilities";
 export * from "./messages/interaction";
 export * from "./messages/primitives";
-export * from "./messages/schedules";
 export * from "./messages/sessions";
 
 export const PROTOCOL_VERSION = 1 as const;
@@ -95,12 +86,6 @@ export const Payload = z.discriminatedUnion("type", [
   SessionShellSet,
   SessionCompact,
   SessionCompactResult,
-  SchedulesStatus,
-  ScheduleSet,
-  ScheduleDelete,
-  ScheduleRun,
-  SchedulePlanRequest,
-  SchedulePlanResult,
   Hello,
   MachineHeartbeat,
 ]).superRefine((payload, ctx) => {

@@ -95,7 +95,7 @@ test("published launcher resolves hoisted dependencies and runs setup/serve in i
   };
   assert.equal(snapshot.schema, "granttap.provider-status.v1");
   assert.deepEqual(snapshot.providers.map((provider) => provider.id), [
-    "cursor", "claude", "codex", "web",
+    "cursor", "claude", "codex",
   ]);
   assert.doesNotMatch(status.stdout, new RegExp(root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.deepEqual(readdirSync(isolated, { recursive: true }).map(String).sort(), before);
@@ -103,12 +103,13 @@ test("published launcher resolves hoisted dependencies and runs setup/serve in i
 
   const setup = run(["setup"]);
   assert.equal(setup.status, 0, setup.stderr);
-  assert.match(setup.stdout, /^Cursor: installed/m);
-  assert.match(setup.stdout, /Claude Code: installed/);
-  assert.match(setup.stdout, /Codex: action required/);
+  assert.match(setup.stdout, /Background helper\s+Ready/);
+  assert.match(setup.stdout, /Claude Code\s+Ready/);
+  assert.match(setup.stdout, /Codex\s+Needs hook trust/);
+  assert.match(setup.stdout, /Cursor\s+Beta · Authorize in Cursor/);
   const cursorHooks = readFileSync(join(isolated, "cursor", "hooks.json"), "utf8");
   for (const route of ["cursor", "cursor-after", "cursor-mcp"]) {
-    assert.match(cursorHooks, new RegExp(`hook ${route}`));
+    assert.match(cursorHooks, new RegExp(`internal hook ${route}`));
   }
 
   const port = await freePort();
@@ -117,7 +118,7 @@ test("published launcher resolves hoisted dependencies and runs setup/serve in i
     GRANTTAP_MCP_HTTP_HOST: "127.0.0.1",
     GRANTTAP_MCP_HTTP_PORT: String(port),
   };
-  const serve = spawn(join(binDir, "granttap"), ["serve"], {
+  const serve = spawn(join(binDir, "granttap"), ["internal", "serve"], {
     cwd: project,
     env: serveEnv,
     stdio: ["ignore", "pipe", "pipe"],

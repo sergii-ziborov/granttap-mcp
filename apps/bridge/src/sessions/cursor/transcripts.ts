@@ -161,7 +161,10 @@ function observeBlocks(
       const key = `${sourceThreadId}\u0000${block.tool_use_id}`;
       const pending = acc.pending.get(key);
       if (!pending) continue;
-      const observation = observeCapability(pending, block.content, rowAt)
+      const observation = observeCapability(pending, block.content, rowAt, {
+        outcome: block.is_error === true ? "error" : "success",
+        errorClass: block.is_error === true ? "tool_result" : undefined,
+      })
         ?? pendingCapabilityObservation(pending);
       if (observation) rememberCapabilityObservation(acc.observations, observation);
       acc.pending.delete(key);

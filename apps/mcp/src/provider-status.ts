@@ -7,16 +7,11 @@ import {
   type CursorIntegrationStatus,
   type MonitorIntegrationStatus,
 } from "../../bridge/src/install";
-import {
-  listCloudApprovals,
-  validatedCloudPageUrl,
-} from "../../bridge/src/cloud-approvals";
-import { loadConfig } from "../../bridge/src/config";
-import { isMachineConfigured, readOnlyMachineConfigPath } from "./pairing-status";
+import { isMachineConfigured } from "./pairing-status";
 import { isCursorHttpMcpConfigured } from "./cursor-config";
 import { inspectHttpMcpService, probeHttpMcpHealth } from "./http-service";
 
-export type ProviderId = "cursor" | "claude" | "codex" | "web";
+export type ProviderId = "cursor" | "claude" | "codex";
 export type ProviderConnectionState = "connected" | "action_required" | "not_configured";
 
 export type ProviderConnectionStatus = {
@@ -36,7 +31,6 @@ export type ProviderReadiness = {
   integrations: AgentIntegrationStatus[];
   paired: boolean;
   monitor: MonitorIntegrationStatus;
-  web?: WebReadiness;
   cursorOAuth?: CursorOAuthReadiness;
 };
 
@@ -44,13 +38,6 @@ export type CursorOAuthReadiness = {
   configured: boolean;
   persistent: boolean;
   healthy: boolean;
-};
-
-export type WebReadiness = {
-  /** A well-formed relay capability exists in machine.json. */
-  configured: boolean;
-  /** The authenticated relay endpoint answered with a private page capability. */
-  reachable: boolean;
 };
 
 function runtimeRequirement(
@@ -96,7 +83,7 @@ function cursorStatus(readiness: ProviderReadiness): ProviderConnectionStatus {
     return {
       id: "cursor",
       status: "action_required",
-      detail: "Cursor OAuth is configured but its persistent loopback service is not healthy. Run granttap authorize.",
+      detail: "Cursor's local authorization service needs repair. Run granttap cursor repair.",
     };
   }
   return {
@@ -104,7 +91,7 @@ function cursorStatus(readiness: ProviderReadiness): ProviderConnectionStatus {
     status: "connected",
     detail: readiness.cursorOAuth?.configured
       ? "Shell/MCP policy hooks, pairing, background sync, and the persistent OAuth endpoint are ready."
-      : "Shell/MCP policy hooks, pairing, and background sync are ready. OAuth remains optional via granttap authorize.",
+      : "Shell/MCP policy hooks, pairing, and background sync are ready. Run granttap setup for Cursor authorization.",
   };
 }
 
@@ -152,34 +139,15 @@ function agentStatus(
 }
 
 export function providerStatuses(readiness: ProviderReadiness): ProviderConnectionStatus[] {
-  const web = readiness.web ?? { configured: false, reachable: false };
   return [
     cursorStatus(readiness),
     agentStatus("claude", readiness),
     agentStatus("codex", readiness),
-    web.reachable
-      ? {
-          id: "web",
-          status: "connected",
-          detail: "The private approval capability is available. Run granttap web to reveal it.",
-        }
-      : web.configured
-        ? {
-            id: "web",
-            status: "action_required",
-            detail: "The private Web capability is configured, but the relay did not answer. Check the relay and retry granttap web.",
-          }
-        : {
-            id: "web",
-            status: "not_configured",
-            detail: "Run granttap connect before adding GrantTap Web.",
-          },
   ];
 }
 
 export function inspectProviderStatusSnapshot(
   now: Date = new Date(),
-  web: WebReadiness = { configured: false, reachable: false },
   cursorOAuth: CursorOAuthReadiness = { configured: false, persistent: false, healthy: false },
 ): ProviderStatusSnapshot {
   return {
@@ -190,7 +158,6 @@ export function inspectProviderStatusSnapshot(
       integrations: inspectAgentIntegrations(),
       paired: isMachineConfigured(),
       monitor: inspectMonitorHelper(),
-      web,
       cursorOAuth,
     }),
   };
@@ -207,33 +174,4 @@ export async function inspectCursorOAuthReadiness(): Promise<CursorOAuthReadines
     persistent: service.configured && service.running,
     healthy: await probeHttpMcpHealth(),
   };
-}
-
-/**
- * Make a bounded authenticated GET probe without returning its bearer URL or
- * any relay error body to status callers.
- */
-export async function inspectWebReadiness(
-  fetchImpl: typeof fetch = fetch,
-): Promise<WebReadiness> {
-  let config;
-  try {
-    config = loadConfig(readOnlyMachineConfigPath());
-  } catch {
-    return { configured: false, reachable: false };
-  }
-  const configured = isMachineConfigured()
-    && typeof config.pushAuth === "string"
-    && /^[a-f0-9]{64}$/.test(config.pushAuth);
-  if (!configured) return { configured: false, reachable: false };
-  try {
-    const result = await listCloudApprovals(config, fetchImpl);
-    return {
-      configured: true,
-      reachable: result.ok
-        && validatedCloudPageUrl(config.relayUrl, result.pageUrl) != null,
-    };
-  } catch {
-    return { configured: true, reachable: false };
-  }
 }

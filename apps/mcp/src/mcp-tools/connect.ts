@@ -1,39 +1,26 @@
 import QRCode from "qrcode";
-import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { normalizeRelayUrl } from "../../../bridge/src/config";
 import { createOneTimePairing, DEFAULT_RELAY, PAIRING_CODE_TTL_MINUTES, reusablePairing } from "../../../bridge/src/pairing";
 import { resetRelay, relay } from "./relay";
 
 export function registerConnectTool(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     "connect",
-    "Reuse this computer's GrantTap pairing, or create a one-time QR when none exists. Set replace only when the user explicitly asks to replace the pairing.",
     {
-      relayUrl: z.string().max(2_048).url().refine(isSafeRelayUrl, {
-        message: "Relay URL must use wss:// (or loopback ws:// for local development)",
-      }).optional().describe("Optional wss:// relay URL. Omit to use the GrantTap production relay."),
-      replace: z.boolean().optional().describe("Explicitly replace the existing pairing and rotate keys."),
+      description: "Reuse this computer's GrantTap pairing, or create a one-time QR when none exists.",
+      inputSchema: {},
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
-    async ({ relayUrl, replace }): Promise<CallToolResult> => connect(relayUrl, replace),
+    async (): Promise<CallToolResult> => connect(),
   );
 }
 
-function isSafeRelayUrl(value: string): boolean {
+async function connect(): Promise<CallToolResult> {
   try {
-    normalizeRelayUrl(value);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function connect(relayUrl?: string, replace?: boolean): Promise<CallToolResult> {
-  try {
-    const existing = reusablePairing(replace ?? false);
+    const existing = reusablePairing();
     if (existing) return reusedPairingResult(existing);
-    return await oneTimePairingResult(relayUrl);
+    return await oneTimePairingResult();
   } catch (error) {
     return {
       isError: true,
@@ -57,9 +44,9 @@ function reusedPairingResult(pairing: { room: string; relayUrl: string }): CallT
   };
 }
 
-async function oneTimePairingResult(relayUrl?: string): Promise<CallToolResult> {
+async function oneTimePairingResult(): Promise<CallToolResult> {
   const pairing = await createOneTimePairing(
-    relayUrl ?? process.env.GRANTTAP_RELAY_URL ?? process.env.NODVOX_RELAY_URL ?? DEFAULT_RELAY,
+    process.env.GRANTTAP_TEST_RELAY_URL ?? DEFAULT_RELAY,
   );
   resetRelay();
   void relay();

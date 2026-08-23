@@ -62,6 +62,7 @@ function ownedPlist(launcher = executable): string {
     "<key>ProgramArguments</key>",
     "<array>",
     `<string>${launcher}</string>`,
+    "<string>internal</string>",
     "<string>serve</string>",
     "</array>",
     "</dict></plist>",
@@ -121,7 +122,7 @@ test("authorize installs a persistent loopback service, verifies health, then ex
     "    exit 0",
     "    ;;",
     "  bootstrap)",
-    '    "$GRANTTAP_FAKE_NODE" "$GRANTTAP_FAKE_LAUNCHER" serve >>"$GRANTTAP_FAKE_LOG" 2>&1 &',
+    '    "$GRANTTAP_FAKE_NODE" "$GRANTTAP_FAKE_LAUNCHER" internal serve >>"$GRANTTAP_FAKE_LOG" 2>&1 &',
     '    echo $! >"$GRANTTAP_FAKE_PID_FILE"',
     "    exit 0",
     "    ;;",
@@ -185,7 +186,7 @@ test("authorize installs a persistent loopback service, verifies health, then ex
     }
   });
 
-  const result = await run(["authorize"], { ...process.env });
+  const result = await run(["internal", "authorize"], { ...process.env });
   assert.equal(result.code, 0, result.stderr);
   assert.equal(result.stdout, "");
   assert.match(result.stderr, /Persistent local OAuth is healthy/);
@@ -194,7 +195,7 @@ test("authorize installs a persistent loopback service, verifies health, then ex
   const plistPath = httpMcpLaunchAgentPath();
   const plist = readFileSync(plistPath, "utf8");
   assert.match(plist, /<string>com\.granttap\.mcp-http<\/string>/);
-  assert.match(plist, /granttap-mcp\.mjs<\/string>\s*<string>serve<\/string>/);
+  assert.match(plist, /granttap-mcp\.mjs<\/string>\s*<string>internal<\/string>\s*<string>serve<\/string>/);
   assert.match(plist, /<key>RunAtLoad<\/key>\s*<true\/>/);
   assert.match(plist, /<key>KeepAlive<\/key>\s*<true\/>/);
   assert.doesNotMatch(plist, /Cursor\.app|\/helpers\/node/);
@@ -217,8 +218,8 @@ test("authorize installs a persistent loopback service, verifies health, then ex
   writeFileSync(plistPath, plist.replace(executable, "/deleted/granttap-mcp/bin/granttap-mcp.mjs"));
   const setup = await run(["setup"], { ...process.env });
   assert.equal(setup.code, 0, setup.stderr);
-  assert.match(setup.stdout, /Persistent Cursor OAuth: installed/);
-  assert.match(readFileSync(plistPath, "utf8"), /<string>serve<\/string>/);
+  assert.match(setup.stdout, /Cursor\s+Beta · Authorize in Cursor/);
+  assert.match(readFileSync(plistPath, "utf8"), /<string>internal<\/string>\s*<string>serve<\/string>/);
 
   stopFakeService();
   for (let attempt = 0; attempt < 20 && await probeHttpMcpHealth(mcpUrl, 100); attempt += 1) {
@@ -252,7 +253,7 @@ test("authorize installs a persistent loopback service, verifies health, then ex
   });
   t.after(() => new Promise<void>((resolve) => foreign.close(() => resolve())));
   assert.equal(await isHttpMcpPortOccupied(mcpUrl), true);
-  const collision = await run(["authorize"], {
+  const collision = await run(["internal", "authorize"], {
     ...process.env,
     GRANTTAP_HTTP_HEALTH_TIMEOUT_MS: "200",
   });

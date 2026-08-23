@@ -10,7 +10,7 @@ Install the supported CLI, then run the onboarding commands in this order:
 
 ```bash
 npm install -g granttap-mcp
-granttap authorize
+granttap setup
 granttap connect
 granttap setup
 granttap status
@@ -18,7 +18,7 @@ granttap status
 
 The commands have separate jobs:
 
-1. `granttap authorize` installs and verifies the persistent loopback OAuth/MCP
+1. `granttap setup` detects Cursor, installs and verifies the persistent loopback OAuth/MCP
    service, then writes only GrantTap's entry in `~/.cursor/mcp.json`.
 2. `granttap connect` displays a one-time QR and a short manual code for pairing
    the iPhone or iPad app. If Cursor's consent page already completed pairing,
@@ -27,7 +27,7 @@ The commands have separate jobs:
    the background task-sync helper. OAuth remains a separate authorization.
 4. `granttap status` performs a read-only readiness check.
 
-After `granttap authorize`, open **Cursor Settings → MCP → GrantTap** and choose
+After `granttap setup`, open **Cursor Settings → MCP → GrantTap** and choose
 **Authorize**. The local consent page confirms access to this Mac's GrantTap
 pairing. If the Mac is not paired, it offers the same one-time QR and manual-code
 fallback as the CLI.
@@ -47,7 +47,7 @@ ln -sfn "$PWD/cursor-plugin" "$HOME/.cursor/plugins/local/granttap"
 ```
 
 Run those commands from the repository root. The plugin adds the `/connect`
-command, a connect skill, and the exact-correlation rule; `granttap authorize`
+command, a connect skill, and the exact-correlation rule; `granttap setup`
 still configures the MCP endpoint itself.
 
 ## Exact dual-channel behavior

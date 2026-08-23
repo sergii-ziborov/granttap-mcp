@@ -1,7 +1,7 @@
 {
   "name": "granttap-mcp",
   "version": "0.6.10",
-  "description": "Connect Cursor, Claude Code, Codex, GitHub Copilot CLI, and Grok Build to iPhone and Apple Watch with E2EE MCP tools.",
+  "description": "Personal live control center runtime for local coding agents on iPhone and Apple Watch.",
   "type": "module",
   "bin": {
     "granttap": "bin/granttap-mcp.mjs",
@@ -19,8 +19,8 @@
   ],
   "scripts": {
     "start": "node bin/granttap-mcp.mjs",
-    "serve": "node bin/granttap-mcp.mjs serve",
-    "authorize": "node bin/granttap-mcp.mjs authorize",
+    "internal:serve": "node bin/granttap-mcp.mjs internal serve",
+    "cursor:repair": "node bin/granttap-mcp.mjs cursor repair",
     "setup": "node bin/granttap-mcp.mjs setup",
     "status": "node bin/granttap-mcp.mjs status",
     "test": "node --import tsx --test tests/*.test.ts",

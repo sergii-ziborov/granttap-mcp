@@ -603,6 +603,8 @@ export function codexCapabilityUsage(
           toolName: tool.toolName,
           mcpServer: tool.server,
           createdAt: item.createdAt,
+          outcome: observation?.outcome ?? "unknown",
+          errorClass: observation?.errorClass,
           estimatedContextTokens: perCapability,
           durationMs: resultAt >= item.createdAt
             ? Math.min(60 * 60_000, resultAt - item.createdAt)
@@ -626,6 +628,7 @@ export function codexCapabilityUsage(
         toolName: tool.toolName,
         mcpServer: tool.server,
         createdAt: item.createdAt,
+        outcome: "unknown",
         estimatedContextTokens: perCapability,
       });
     }

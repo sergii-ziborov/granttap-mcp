@@ -14,7 +14,7 @@ Connect Cursor to the GrantTap phone app without weakening chat isolation.
 Run:
 
 ```bash
-granttap authorize
+granttap setup
 ```
 
 This installs and verifies the persistent loopback OAuth/MCP service before it
@@ -81,9 +81,9 @@ correlation.
 
 ## Troubleshooting
 
-- `granttap serve` runs the OAuth/MCP service in the foreground for diagnosis;
-  normal onboarding should use the persistent `granttap authorize` path.
-- Re-run `granttap authorize` if `granttap status` reports an unhealthy OAuth
+- `granttap cursor repair` repairs the OAuth/MCP service when setup cannot;
+  normal onboarding should use the persistent `granttap setup` path.
+- Run `granttap cursor repair` if `granttap status` reports an unhealthy OAuth
   service.
 - Re-run `granttap setup` if the policy hooks or background helper are missing.
 - Re-run `granttap connect` only when pairing is absent or must be replaced.

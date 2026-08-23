@@ -17,12 +17,6 @@ import {
   sendApprovalResolved,
   type ApprovalOutcome,
 } from "./approval-state";
-import {
-  cancelCloudApproval,
-  cardFromApprovalRequest,
-  publishCloudApproval,
-  waitCloudApprovalDecision,
-} from "./cloud-approvals";
 import { primeSessionKeys, sendSessionPayload } from "./session-keys";
 
 /**
@@ -41,10 +35,6 @@ export type RequestApprovalOpts = {
   timeoutMs?: number;
   /** Inject a client in tests instead of opening a socket. */
   client?: RelayClient;
-  /** Test-only HTTP transport injection; production uses the platform fetch. */
-  fetchImpl?: typeof fetch;
-  /** Keep Web-decision tests fast without changing the production cadence. */
-  cloudPollMs?: number;
 };
 
 export async function requestApproval(
@@ -55,8 +45,6 @@ export async function requestApproval(
   const timeoutMs = opts.timeoutMs ?? 60_000;
   const client = opts.client ?? new RelayClient(cfg);
   const ownsClient = !opts.client;
-  const fetchImpl = opts.fetchImpl ?? fetch;
-  const cloudAbort = new AbortController();
   let cancelDecisionWait = () => {};
   const registration = registerPendingApproval(req);
   if (!registration.matched) {
@@ -98,7 +86,6 @@ export async function requestApproval(
         settled = true;
         clearTimeout(timer);
         if (durablePoll) clearInterval(durablePoll);
-        cloudAbort.abort();
         off();
         resolve(decision);
       };
@@ -139,33 +126,6 @@ export async function requestApproval(
         }
         return terminalSent;
       });
-      if (cfg.pushAuth) {
-        void waitCloudApprovalDecision(
-          cfg,
-          req.requestId,
-          timeoutMs,
-          fetchImpl,
-          opts.cloudPollMs ?? 400,
-          cloudAbort.signal,
-        ).then(async (webDecision) => {
-          if (!webDecision) return;
-          const scopedDecision: ApprovalDecision = {
-            ...webDecision,
-            sessionId: req.sessionId,
-          };
-          const accepted = acceptApprovalDecision(
-            scopedDecision,
-            Date.now(),
-            registrationHandle,
-          );
-          if (!accepted.matched || !accepted.outcome) return;
-          await sendApprovalResolved(
-            client,
-            resolvedFromOutcome(accepted.outcome, accepted.request),
-          ).catch(() => {});
-          finish(decisionFromOutcome(accepted.outcome, req));
-        }).catch(() => {});
-      }
     });
     // The request id is random and carries no task content. Reusing it as the
     // opaque delivery id lets a generic APNs action answer the request even if
@@ -175,28 +135,11 @@ export async function requestApproval(
       wake: true,
       deliveryId: req.requestId,
     };
-    const cloudPublish = cfg.pushAuth
-      ? publishCloudApproval(
-          cfg,
-          cardFromApprovalRequest(req, { ttlMs: timeoutMs }),
-          fetchImpl,
-          cloudAbort.signal,
-        )
-      : Promise.resolve(null);
-    let phoneSendError: unknown;
-    try {
-      if (req.sessionId) {
-        await sendSessionPayload(client, req, req.sessionId, "phone", sendOptions);
-      } else {
-        await client.send(req, "phone", sendOptions);
-      }
-    } catch (error) {
-      phoneSendError = error;
+    if (req.sessionId) {
+      await sendSessionPayload(client, req, req.sessionId, "phone", sendOptions);
+    } else {
+      await client.send(req, "phone", sendOptions);
     }
-    const cloudResult = await cloudPublish;
-    // Either delivery path may carry the decision. Fail only when both could
-    // not publish; never make Web availability depend on the phone send RTT.
-    if (phoneSendError && !cloudResult?.ok) throw phoneSendError;
     const decision = await decisionP;
 
     if (decision) return decision;
@@ -242,13 +185,7 @@ export async function requestApproval(
     ).catch(() => {});
     return decisionFromOutcome(expired.outcome, req);
   } finally {
-    cloudAbort.abort();
     cancelDecisionWait();
-    if (cfg.pushAuth) {
-      // Remove decided/expired cards with an independent short timeout. The
-      // parent signal is already aborted, so reusing it would skip cleanup.
-      await cancelCloudApproval(cfg, req.requestId, fetchImpl).catch(() => false);
-    }
     if (ownsClient) client.close();
   }
 }

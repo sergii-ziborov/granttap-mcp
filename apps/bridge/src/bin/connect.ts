@@ -1,7 +1,7 @@
 import QRCode from "qrcode";
 import { CODEX_TRUST_INSTRUCTION, type InstallResult } from "../install";
 import { machineConfigPath, phonePairingPath } from "../config";
-import { createOneTimePairing, DEFAULT_RELAY, PAIRING_CODE_TTL_MINUTES } from "../pairing";
+import { createOneTimePairing, DEFAULT_RELAY, PAIRING_CODE_TTL_MINUTES, reusablePairing } from "../pairing";
 
 function hookLine(name: string, result: InstallResult): string {
   switch (result.status) {
@@ -19,6 +19,20 @@ function codexHookLine(result: InstallResult): string {
 }
 
 async function connect(relayUrl: string): Promise<void> {
+  const existing = reusablePairing();
+  if (existing) {
+    process.stdout.write([
+      "GrantTap",
+      "",
+      "Phone pairing       Ready",
+      "Background helper   Run granttap setup to verify",
+      "",
+      "Existing pairing reused. No QR or key rotation was needed.",
+      "Use granttap reset before pairing this computer again.",
+      "",
+    ].join("\n"));
+    return;
+  }
   const pairing = await createOneTimePairing(relayUrl);
   const qr = await QRCode.toString(pairing.qrPayload, {
     type: "terminal",
@@ -71,11 +85,18 @@ async function connect(relayUrl: string): Promise<void> {
   );
 }
 
-const relayUrl =
-  process.argv[2] ??
-  process.env.GRANTTAP_RELAY_URL ??
-  process.env.NODVOX_RELAY_URL ??
-  DEFAULT_RELAY;
+function relayArgument(args: string[]): string {
+  if (args.length === 0) return DEFAULT_RELAY;
+  if (args.length === 1 && ["--help", "-h"].includes(args[0]!)) {
+    process.stdout.write("Usage: granttap connect [--relay <wss-url>]\n");
+    process.exit(0);
+  }
+  if (args.length === 2 && args[0] === "--relay" && args[1]) return args[1];
+  process.stderr.write("Usage: granttap connect [--relay <wss-url>]\n");
+  process.exit(1);
+}
+
+const relayUrl = relayArgument(process.argv.slice(2));
 
 void connect(relayUrl).catch((error: unknown) => {
   process.stderr.write(

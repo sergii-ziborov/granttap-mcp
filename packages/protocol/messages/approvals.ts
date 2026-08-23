@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AgentId, Risk } from "./primitives";
+import { AgentId, DangerLevel, Risk } from "./primitives";
 
 export const ApprovalRequest = z.object({
   type: z.literal("approval.request"),
@@ -12,9 +12,40 @@ export const ApprovalRequest = z.object({
   cwd: z.string().optional(),
   sessionId: z.string().optional(),
   risk: Risk.default("medium"),
+  danger: DangerLevel.nullish(),
   createdAt: z.number(),
 });
 export type ApprovalRequest = z.infer<typeof ApprovalRequest>;
+
+export const ActionRequest = z.object({
+  id: z.string().min(1).max(256),
+  sessionId: z.string().min(1).max(256).nullish(),
+  agent: AgentId.nullish(),
+  kind: z.enum(["permission", "yes_no", "question", "delivery_retry"]),
+  title: z.string().min(1).max(2_000),
+  detail: z.string().max(2_000).nullish(),
+  command: z.string().max(2_000).nullish(),
+  risk: DangerLevel,
+  state: z.enum(["pending", "submitting", "resolved", "failed"]),
+  createdAt: z.number(),
+  expiresAt: z.number().nullish(),
+});
+export type ActionRequest = z.infer<typeof ActionRequest>;
+
+export function approvalAction(request: ApprovalRequest): ActionRequest {
+  return {
+    id: request.requestId,
+    sessionId: request.sessionId,
+    agent: request.agent,
+    kind: "permission",
+    title: request.title,
+    command: request.command,
+    risk: request.danger ?? (request.risk === "high" ? "dangerous"
+      : request.risk === "medium" ? "caution" : "safe"),
+    state: "pending",
+    createdAt: request.createdAt,
+  };
+}
 
 export const ApprovalDecision = z.object({
   type: z.literal("approval.decision"),
@@ -50,6 +81,7 @@ export const ApprovalsStatus = z.object({
   pending: z.array(ApprovalRequest).max(100),
   complete: z.boolean(),
   covered: z.array(ApprovalStatusScope).max(300).nullish(),
+  actions: z.array(ActionRequest).max(100).nullish(),
   generatedAt: z.number(),
 });
 export type ApprovalsStatus = z.infer<typeof ApprovalsStatus>;

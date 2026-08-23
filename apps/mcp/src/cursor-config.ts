@@ -93,7 +93,7 @@ export function inspectCursorHttpConfig(
   expectedUrl = configuredCursorHttpMcpUrl(),
 ): CursorConfigStatus {
   if (!existsSync(path)) {
-    return { status: "not_configured", detail: "Run granttap authorize to add Cursor." };
+    return { status: "not_configured", detail: "Run granttap setup to add Cursor." };
   }
   const config = parseConfig(path);
   if (!config) {
@@ -101,7 +101,7 @@ export function inspectCursorHttpConfig(
   }
   const servers = config.mcpServers;
   if (servers == null) {
-    return { status: "not_configured", detail: "Run granttap authorize to add Cursor." };
+    return { status: "not_configured", detail: "Run granttap setup to add Cursor." };
   }
   if (typeof servers !== "object" || Array.isArray(servers)) {
     return { status: "action_required", detail: "Cursor mcpServers must be a JSON object." };
@@ -111,7 +111,7 @@ export function inspectCursorHttpConfig(
     return { status: "action_required", detail: "Endpoint configured; keep local OAuth running and Authorize in Cursor." };
   }
   return entry == null
-    ? { status: "not_configured", detail: "Run granttap authorize to add Cursor." }
+    ? { status: "not_configured", detail: "Run granttap setup to add Cursor." }
     : { status: "action_required", detail: "Replace the existing GrantTap entry with the HTTP OAuth endpoint." };
 }
 

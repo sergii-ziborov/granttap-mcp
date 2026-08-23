@@ -2,7 +2,7 @@
  * GrantTap MCP server — stdio transport (default for Claude Code / Codex).
  *
  * Cursor Settings → Authorize requires HTTP + OAuth instead:
- *   granttap serve
+ *   granttap internal serve
  * See apps/mcp/src/http-server.ts and docs/cursor-authorize.md.
  */
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";

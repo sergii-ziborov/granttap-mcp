@@ -51,7 +51,7 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
     env: {
       ...inheritedEnv,
       GRANTTAP_CONFIG_DIR: configDir,
-      GRANTTAP_RELAY_URL: relayUrl,
+      GRANTTAP_TEST_RELAY_URL: relayUrl,
       GRANTTAP_CURSOR_DIR: cursorDir,
       GRANTTAP_CLAUDE_DIR: claudeDir,
       GRANTTAP_CODEX_DIR: codexDir,
@@ -68,9 +68,20 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   t.after(() => client.close());
 
   const tools = await client.listTools();
-  assert.deepEqual(
-    tools.tools.map((tool) => tool.name).sort(),
-    ["account_status", "ask", "ask_yes_no", "connect", "login", "logout", "notify", "setup"],
+  assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
+    "ask", "ask_yes_no", "connect", "notify",
+  ]);
+  for (const tool of tools.tools) {
+    assert.equal(tool.annotations?.readOnlyHint, false);
+    assert.equal(tool.annotations?.destructiveHint, false);
+    if (tool.name !== "connect") assert.equal(tool.annotations?.idempotentHint, false);
+  }
+  const connectTool = tools.tools.find((tool) => tool.name === "connect");
+  assert.deepEqual(Object.keys(connectTool?.inputSchema.properties ?? {}), []);
+  const notifyTool = tools.tools.find((tool) => tool.name === "notify");
+  assert.equal(
+    (notifyTool?.inputSchema.properties?.message as { maxLength?: number })?.maxLength,
+    2_000,
   );
 
   const result = await client.callTool({ name: "notify", arguments: { message: "hello" } });
@@ -123,32 +134,15 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   assert.equal(await readFile(join(configDir, "machine.json"), "utf8"), machineConfig);
   assert.equal(await readFile(join(configDir, "phone.pairing.json"), "utf8"), phoneConfig);
 
-  const replacedResult = await client.callTool({
-    name: "connect",
-    arguments: { replace: true },
-  });
-  const replacedContent = replacedResult.content as Array<{ type: string; text?: string }>;
-  assert.equal(replacedContent.some((item) => item.type === "image"), true);
-  assert.equal(pairingWrites, 2);
-  assert.notEqual(await readFile(join(configDir, "machine.json"), "utf8"), machineConfig);
-
   const cursorHooks = JSON.parse(await readFile(join(cursorDir, "hooks.json"), "utf8")) as {
     hooks: Record<string, Array<{ command: string; failClosed?: boolean }>>;
   };
-  assert.match(cursorHooks.hooks.beforeShellExecution?.[0]?.command ?? "", /hook cursor$/);
-  assert.match(cursorHooks.hooks.afterShellExecution?.[0]?.command ?? "", /hook cursor-after$/);
-  assert.match(cursorHooks.hooks.beforeMCPExecution?.[0]?.command ?? "", /hook cursor-mcp$/);
+  assert.match(cursorHooks.hooks.beforeShellExecution?.[0]?.command ?? "", /internal hook cursor$/);
+  assert.match(cursorHooks.hooks.afterShellExecution?.[0]?.command ?? "", /internal hook cursor-after$/);
+  assert.match(cursorHooks.hooks.beforeMCPExecution?.[0]?.command ?? "", /internal hook cursor-mcp$/);
   assert.equal(cursorHooks.hooks.beforeMCPExecution?.[0]?.failClosed, false);
   assert.match(await readFile(join(claudeDir, "settings.json"), "utf8"), /Skill\|mcp__\.\*\|skill__\.\*/);
   assert.match(await readFile(join(codexDir, "config.toml"), "utf8"), /hook codex-policy/);
-
-  const setupResult = await client.callTool({ name: "setup", arguments: {} });
-  const setupText = (setupResult.content as Array<{ type: string; text?: string }>)
-    .find((item) => item.type === "text")?.text ?? "";
-  assert.match(setupText, /^Cursor: already/m);
-  assert.match(setupText, /Codex: action required/);
-  assert.match(setupText, /trust both GrantTap hooks/);
-  assert.match(setupText, /Authorize \(OAuth\) is separate/);
   assert.equal(existsSync(join(configDir, "mcp-oauth.json")), false);
   assert.equal(existsSync(join(cursorDir, "mcp.json")), false);
 });

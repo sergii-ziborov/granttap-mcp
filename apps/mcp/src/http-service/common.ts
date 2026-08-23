@@ -15,14 +15,14 @@ export function httpMcpLaunchAgentPath(): string {
 export function isOwnedHttpService(contents: string): boolean {
   return contents.includes(`<string>${HTTP_SERVICE_LABEL}</string>`)
     && /granttap(?:-mcp)?(?:\.mjs)?<\/string>/.test(contents)
-    && /<string>serve<\/string>/.test(contents);
+    && /<string>internal<\/string>\s*<string>serve<\/string>/.test(contents);
 }
 
 export function isConfiguredHttpService(contents: string): boolean {
   const launcher = join(packageRoot, "bin", "granttap-mcp.mjs");
   return contents.includes(`<string>${HTTP_SERVICE_LABEL}</string>`)
     && contents.includes(`<string>${xml(launcher)}</string>`)
-    && /<string>serve<\/string>/.test(contents)
+    && /<string>internal<\/string>\s*<string>serve<\/string>/.test(contents)
     && !contents.includes("Cursor.app")
     && !contents.includes("/helpers/node");
 }

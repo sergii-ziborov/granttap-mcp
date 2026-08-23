@@ -8,6 +8,8 @@ export const AgentId = z.string().min(1);
 
 export const Risk = z.enum(["low", "medium", "high"]);
 export type Risk = z.infer<typeof Risk>;
+export const DangerLevel = z.enum(["safe", "caution", "dangerous", "destructive"]);
+export type DangerLevel = z.infer<typeof DangerLevel>;
 
 export const AutoAcceptLevel = z.enum([
   "ask",

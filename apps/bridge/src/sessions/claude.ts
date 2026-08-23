@@ -418,7 +418,10 @@ export function claudeCapabilityUsage(
       const item = pending.get(block.tool_use_id);
       if (!item) continue;
       const observation =
-        observeCapability(item, block.content, rowAt || item.createdAt) ??
+        observeCapability(item, block.content, rowAt || item.createdAt, {
+          outcome: block.is_error === true ? "error" : "success",
+          errorClass: block.is_error === true ? "tool_result" : undefined,
+        }) ??
         pendingCapabilityObservation(item);
       if (observation) rememberCapabilityObservation(out, observation);
       pending.delete(block.tool_use_id);

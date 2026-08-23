@@ -5,7 +5,7 @@ description: Authorize Cursor and connect or reconnect the GrantTap phone app
 Use the `granttap-connect` skill in `skills/connect/SKILL.md` and follow it
 end-to-end.
 
-1. Run `granttap authorize` to configure and verify the persistent loopback HTTP
+1. Run `granttap setup` to detect Cursor and configure the persistent loopback HTTP
    MCP/OAuth service.
 2. Open **Cursor Settings → MCP → GrantTap → Authorize**.
 3. Run `granttap connect` if pairing is still required; surface its one-time QR

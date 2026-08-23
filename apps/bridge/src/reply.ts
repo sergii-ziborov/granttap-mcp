@@ -1,13 +1,10 @@
 /** Deliver phone messages into existing sessions or start a new Codex task. */
 import { mkdirSync } from "node:fs";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SessionInfo, UserAttachment } from "../../../packages/protocol/schema";
 import { configDir, loadRuntimeConfig } from "./config";
 import { withAttachments } from "./reply/attachments";
 import { runProcess } from "./reply/process";
-import { parseClaudeSchedulePlan, parseCodexSchedulePlan } from "./reply/parsers";
 import { routingPrompt } from "./reply/routing";
 import type { DeliveryOptions, ReplyResult } from "./reply/types";
 export type { DeliveryOptions, ReplyResult } from "./reply/types";
@@ -67,68 +64,6 @@ export function createClaudeSession(
   return queued("__new_claude_task__", () => withAttachments(attachments, text, (prepared) =>
     runClaudeNew(prepared.claudePrompt, workspace, timeoutMs),
   ));
-}
-
-const SCHEDULE_PLAN_OUTPUT_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    reply: { type: "string" },
-    title: { type: "string" },
-    prompt: { type: "string" },
-    cron: { type: "string" },
-  },
-  required: ["reply", "title", "prompt", "cron"],
-} as const;
-
-/**
- * Ask the selected local agent to create/refine a scheduler draft without
- * creating a persisted Codex task or Claude conversation. The caller still
- * validates the structured response and cron before returning it to iPhone.
- */
-export async function createSchedulePlan(
-  agent: "codex" | "claude",
-  text: string,
-  cwd?: string,
-  timeoutMs = 240_000,
-): Promise<ReplyResult> {
-  const workspace = resolveAgentWorkspace(cwd, agent);
-  return queued(`__schedule_planner_${agent}__`, async () => {
-    if (agent === "claude") {
-      const args = [
-        "-p",
-        "--no-session-persistence",
-        "--permission-mode",
-        "plan",
-        "--output-format",
-        "json",
-        "--json-schema",
-        JSON.stringify(SCHEDULE_PLAN_OUTPUT_SCHEMA),
-        text,
-      ];
-      return runProcess(CLAUDE_BIN, args, workspace, timeoutMs, parseClaudeSchedulePlan);
-    }
-
-    const dir = await mkdtemp(join(tmpdir(), "granttap-schedule-plan-"));
-    try {
-      const schemaPath = join(dir, "output-schema.json");
-      await writeFile(schemaPath, `${JSON.stringify(SCHEDULE_PLAN_OUTPUT_SCHEMA)}\n`, { mode: 0o600 });
-      const args = [
-        "exec",
-        "--ephemeral",
-        "--sandbox",
-        "read-only",
-        "--skip-git-repo-check",
-        "--output-schema",
-        schemaPath,
-        "--json",
-        "-",
-      ];
-      return await runProcess(CODEX_BIN, args, workspace, timeoutMs, parseCodexSchedulePlan, text);
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
-  });
 }
 
 function queued(key: string, run: () => Promise<ReplyResult>): Promise<ReplyResult> {

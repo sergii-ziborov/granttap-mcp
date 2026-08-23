@@ -36,7 +36,7 @@ export type HookRoute =
 
 /** The stable command agents will call. */
 export function hookCommand(agent: HookRoute): string {
-  return `node "${join(repoRoot, "bin", "granttap-mcp.mjs")}" hook ${agent}`;
+  return `node "${join(repoRoot, "bin", "granttap-mcp.mjs")}" internal hook ${agent}`;
 }
 
 function commandHasRoute(command: unknown, route: HookRoute): boolean {
@@ -271,7 +271,10 @@ export function inspectMonitorHelper(): MonitorIntegrationStatus {
     return { configured: false, running: false };
   }
   const hasLabel = contents.includes(`<string>${launchAgentLabel}</string>`);
-  const hasMonitorArgument = /<string>monitor<\/string>/.test(contents);
+  const pinned = isNodvoxPinnedPlist(contents);
+  const hasMonitorArgument = pinned
+    ? /<string>monitor<\/string>/.test(contents)
+    : /<string>internal<\/string>\s*<string>monitor<\/string>/.test(contents);
   const hasSafeExecutable = isNodvoxPinnedPlist(contents)
     || (contents.includes("granttap-mcp.mjs")
       && !contents.includes("Cursor.app")
@@ -418,6 +421,7 @@ export function installMonitorHelper(): InstallResult {
     "  <array>",
     `    <string>${xml(nodeBin)}</string>`,
     `    <string>${xml(executable)}</string>`,
+    ...(usePin ? [] : ["    <string>internal</string>"]),
     "    <string>monitor</string>",
     "  </array>",
     "  <key>EnvironmentVariables</key>",

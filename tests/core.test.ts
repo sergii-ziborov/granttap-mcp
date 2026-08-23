@@ -151,6 +151,7 @@ test("chat capability controls and CLI deep links stay scoped inside E2EE", () =
       name: "shell",
       toolName: "exec_command",
       commandPreview: commandPreview!,
+      outcome: "success",
       createdAt: 2,
     }],
     generatedAt: 3,

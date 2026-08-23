@@ -92,7 +92,12 @@ function completeCall(
   const pendingTool = pending.get(callId);
   if (!pendingTool) return;
   const result = Object.hasOwn(data, "result") ? data.result : data.error;
-  const observation = observeCapability(pendingTool, result, createdAt) ?? pendingCapabilityObservation(pendingTool);
+  const observation = observeCapability(pendingTool, result, createdAt, {
+    outcome: data.cancelled === true
+      ? "cancelled"
+      : data.success === false || data.error != null ? "error" : "success",
+    errorClass: data.error != null ? "tool_execution" : undefined,
+  }) ?? pendingCapabilityObservation(pendingTool);
   if (observation) rememberCapabilityObservation(observations, observation);
   pending.delete(callId);
   completed.add(callId);

@@ -1,6 +1,7 @@
 /** Public capability telemetry entry point and bounded observation caches. */
 import type {
   ActivityEntry,
+  CapabilityOutcome,
   ObservedCapability,
   RemoteCapabilityUsageEvent,
 } from "../../../../packages/protocol/schema";
@@ -46,6 +47,8 @@ export type CapabilityObservation = {
   estimatedContextTokens?: number;
   estimatedBaselineTokens?: number;
   durationMs?: number;
+  outcome: CapabilityOutcome;
+  errorClass?: string;
 };
 
 const remoteCapabilityEventCache = new WeakMap<
@@ -98,6 +101,7 @@ export function pendingCapabilityObservation(
     sessionId: pending.sessionId,
     toolName: pending.toolName,
     createdAt: pending.createdAt,
+    outcome: "unknown",
     ...identity,
     estimatedContextTokens: clampTokens(estimateTokens(pending.input)) || undefined,
   };
@@ -107,6 +111,7 @@ export function observeCapability(
   pending: PendingCapabilityTool,
   resultContent: unknown,
   resultAt: number,
+  completion?: { outcome?: CapabilityOutcome; errorClass?: string },
 ): CapabilityObservation | null {
   const observation = pendingCapabilityObservation(pending);
   if (!observation) return null;
@@ -116,12 +121,30 @@ export function observeCapability(
   const elapsed = resultAt >= pending.createdAt ? resultAt - pending.createdAt : -1;
   return {
     ...observation,
+    outcome: completion?.outcome ?? inferredOutcome(resultContent),
+    errorClass: boundedErrorClass(completion?.errorClass),
     estimatedContextTokens: contextTokens || undefined,
     estimatedBaselineTokens: supportsFileReadBaseline(pending.toolName)
       ? estimateBaselineTokens(pending.input, contextTokens, pending.cwd)
       : undefined,
     durationMs: elapsed >= 0 ? Math.min(MAX_DURATION_MS, Math.round(elapsed)) : undefined,
   };
+}
+
+function inferredOutcome(value: unknown): CapabilityOutcome {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const row = value as Record<string, unknown>;
+    const status = String(row.status ?? "").toLowerCase();
+    if (row.cancelled === true || status === "cancelled" || status === "canceled") return "cancelled";
+    if (row.success === false || row.is_error === true || row.isError === true || row.error != null
+      || ["error", "failed", "failure"].includes(status)) return "error";
+  }
+  return "success";
+}
+
+function boundedErrorClass(value: string | undefined): string | undefined {
+  const clean = value?.trim().replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0, 80);
+  return clean || undefined;
 }
 
 export function toObservedCapability(
@@ -138,6 +161,8 @@ export function toObservedCapability(
     estimatedContextTokens: observation.estimatedContextTokens,
     estimatedBaselineTokens: observation.estimatedBaselineTokens,
     durationMs: observation.durationMs,
+    outcome: observation.outcome,
+    errorClass: observation.errorClass,
   };
 }
 
@@ -182,13 +207,15 @@ export function toRemoteCapabilityUsageEvent(
     estimatedContextTokens: observation.estimatedContextTokens,
     estimatedBaselineTokens: observation.estimatedBaselineTokens,
     durationMs: observation.durationMs,
+    outcome: observation.outcome,
+    errorClass: observation.errorClass,
   };
   remoteCapabilityEventCache.set(observation, event);
   return event;
 }
 
 function richness(event: RemoteCapabilityUsageEvent): number {
-  return (event.durationMs != null ? 4 : 0) +
+  return (event.durationMs != null ? 4 : 0) + (event.outcome !== "unknown" ? 4 : 0) +
     (event.estimatedBaselineTokens != null ? 2 : 0) +
     (event.commandPreview != null ? 1 : 0) +
     (event.estimatedContextTokens ?? 0) / MAX_TOKEN_ESTIMATE;

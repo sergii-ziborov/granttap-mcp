@@ -7,10 +7,13 @@ const NOT_PAIRED =
 const question = z.string().min(1).max(8_000).describe("The question to ask");
 
 export function registerInteractionTools(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     "notify",
-    "Push a short status/message to the user's phone. Fire-and-forget — use it to keep them informed without blocking.",
-    { message: z.string().min(1).max(8_000).describe("Text to show on the phone") },
+    {
+      description: "Send a non-blocking status update to the user's GrantTap devices.",
+      inputSchema: { message: z.string().min(1).max(2_000).describe("Text to show on the user's devices") },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    },
     async ({ message }) => {
       const client = await relay();
       if (!client) return notPaired();
@@ -22,16 +25,22 @@ export function registerInteractionTools(server: McpServer): void {
       return { content: [{ type: "text", text: "sent to phone" }] };
     },
   );
-  server.tool(
+  server.registerTool(
     "ask_yes_no",
-    "Ask the user a yes/no question on their phone/watch and wait for the tap. Returns 'yes' or 'no'.",
-    { question: question.describe("A question answerable with yes/no") },
+    {
+      description: "Ask the user a yes/no question on their phone/watch and wait for the tap. Returns 'yes' or 'no'.",
+      inputSchema: { question: question.describe("A question answerable with yes/no") },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    },
     async ({ question: text }) => answerYesNo(text),
   );
-  server.tool(
+  server.registerTool(
     "ask",
-    "Ask the user an open question on their phone/watch and wait for their spoken or typed reply. Returns their answer text.",
-    { question },
+    {
+      description: "Ask the user an open question on their phone/watch and wait for their spoken or typed reply. Returns their answer text.",
+      inputSchema: { question },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    },
     async ({ question: text }) => answerOpenQuestion(text),
   );
 }

@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
-import { spawn, spawnSync } from "node:child_process";
-import { createServer } from "node:http";
-import type { AddressInfo } from "node:net";
+import { spawnSync } from "node:child_process";
 import {
   accessSync,
   constants,
@@ -17,7 +15,6 @@ import { join } from "node:path";
 import test from "node:test";
 import {
   inspectProviderStatusSnapshot,
-  inspectWebReadiness,
   providerStatuses,
 } from "../apps/mcp/src/provider-status";
 
@@ -34,32 +31,12 @@ test("provider status requires the full hook set, live pairing, and monitor", ()
     paired: true,
     monitor: { configured: true, running: true },
   });
-  assert.deepEqual(providers.map((provider) => provider.id), ["cursor", "claude", "codex", "web"]);
+  assert.deepEqual(providers.map((provider) => provider.id), ["cursor", "claude", "codex"]);
   assert.equal(providers[0]?.status, "connected");
-  assert.match(providers[0]?.detail ?? "", /OAuth remains optional/);
+  assert.match(providers[0]?.detail ?? "", /Run granttap setup for Cursor authorization/);
   assert.equal(providers[1]?.status, "connected");
   assert.equal(providers[2]?.status, "action_required");
   assert.match(providers[2]?.detail ?? "", /\/hooks/);
-  assert.equal(providers[3]?.status, "not_configured");
-
-  const webReady = providerStatuses({
-    cursor: { installed: true, hookConfigured: true },
-    integrations: [],
-    paired: true,
-    monitor: { configured: true, running: true },
-    web: { configured: true, reachable: true },
-  });
-  assert.equal(webReady[3]?.status, "connected");
-  assert.match(webReady[3]?.detail ?? "", /granttap web/);
-  const webOffline = providerStatuses({
-    cursor: { installed: true, hookConfigured: true },
-    integrations: [],
-    paired: true,
-    monitor: { configured: true, running: true },
-    web: { configured: true, reachable: false },
-  });
-  assert.equal(webOffline[3]?.status, "action_required");
-  assert.match(webOffline[3]?.detail ?? "", /relay did not answer/);
 
   const stopped = providerStatuses({
     cursor: { installed: true, hookConfigured: false },
@@ -83,7 +60,7 @@ test("provider status requires the full hook set, live pairing, and monitor", ()
     cursorOAuth: { configured: true, persistent: true, healthy: false },
   });
   assert.equal(deadOAuth[0]?.status, "action_required");
-  assert.match(deadOAuth[0]?.detail ?? "", /not healthy/);
+  assert.match(deadOAuth[0]?.detail ?? "", /needs repair/);
   const liveOAuth = providerStatuses({
     ...oauthBase,
     cursorOAuth: { configured: true, persistent: true, healthy: true },
@@ -92,7 +69,7 @@ test("provider status requires the full hook set, live pairing, and monitor", ()
   assert.match(liveOAuth[0]?.detail ?? "", /persistent OAuth endpoint/);
 });
 
-test("status live probe is truthful while snapshots contain no private capability", async (t) => {
+test("status snapshots contain no pairing secrets or private capability", (t) => {
   const root = mkdtempSync(join(tmpdir(), "granttap-status-safe-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const configDir = join(root, "config");
@@ -142,27 +119,7 @@ test("status live probe is truthful while snapshots contain no private capabilit
     }
   });
 
-  const unreachable = await inspectWebReadiness((async () => {
-    throw new Error("offline");
-  }) as typeof fetch);
-  assert.deepEqual(unreachable, { configured: true, reachable: false });
-  const foreignPage = await inspectWebReadiness((async () => Response.json({
-    ok: true,
-    pageUrl: "https://evil.example/a/stolen",
-    approvals: [],
-  })) as typeof fetch);
-  assert.deepEqual(foreignPage, { configured: true, reachable: false });
-  const reachable = await inspectWebReadiness((async (_input, init) => {
-    assert.equal(new Headers(init?.headers).get("authorization"), `Bearer ${pushAuth}`);
-    return Response.json({
-      ok: true,
-      pageUrl: "https://relay.example/a/room/live-private-token",
-      approvals: [],
-    });
-  }) as typeof fetch);
-  assert.deepEqual(reachable, { configured: true, reachable: true });
-
-  const serialized = JSON.stringify(inspectProviderStatusSnapshot(new Date(0), reachable));
+  const serialized = JSON.stringify(inspectProviderStatusSnapshot(new Date(0)));
   assert.doesNotMatch(serialized, new RegExp(room));
   assert.doesNotMatch(serialized, new RegExp(secret));
   assert.doesNotMatch(serialized, new RegExp(pushAuth));
@@ -183,8 +140,11 @@ test("public granttap bin exposes management routes and emits compatible JSON re
     encoding: "utf8",
   });
   assert.equal(help.status, 0, help.stderr);
-  for (const command of ["authorize", "setup", "connect", "status", "web"]) {
+  for (const command of ["setup", "connect", "status", "reset"]) {
     assert.match(help.stdout, new RegExp(`granttap ${command}\\b`));
+  }
+  for (const command of ["login", "relogin", "logout", "account-status", "web", "serve", "monitor", "hook", "authorize"]) {
+    assert.doesNotMatch(help.stdout, new RegExp(`granttap ${command}\\b`));
   }
 
   const root = mkdtempSync(join(tmpdir(), "granttap-status-cli-"));
@@ -213,88 +173,7 @@ test("public granttap bin exposes management routes and emits compatible JSON re
   assert.equal(snapshot.schema, "granttap.provider-status.v1");
   assert.deepEqual(
     (snapshot.providers as Array<{ id: string }>).map((provider) => provider.id),
-    ["cursor", "claude", "codex", "web"],
+    ["cursor", "claude", "codex"],
   );
   assert.deepEqual(readdirSync(root, { recursive: true }).map(String).sort(), before);
-});
-
-test("web reveals its capability only explicitly while status performs a secret-safe live probe", async (t) => {
-  const room = "12".repeat(16);
-  const pushAuth = "34".repeat(32);
-  const privateToken = "private-view-token-must-not-enter-status";
-  const server = createServer((request, response) => {
-    assert.equal(request.method, "GET");
-    assert.equal(request.headers.authorization, `Bearer ${pushAuth}`);
-    assert.match(request.url ?? "", new RegExp(`^/approvals\\?room=${room}$`));
-    response.setHeader("content-type", "application/json");
-    response.end(JSON.stringify({
-      ok: true,
-      pageUrl: `http://127.0.0.1:${(server.address() as AddressInfo).port}/a/${room}/${privateToken}`,
-      approvals: [],
-    }));
-  });
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", resolve);
-  });
-  t.after(() => server.close());
-  const port = (server.address() as AddressInfo).port;
-
-  const root = mkdtempSync(join(tmpdir(), "granttap-web-cli-"));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  for (const dir of ["config", "cursor", "claude", "codex", "agents"]) {
-    mkdirSync(join(root, dir), { recursive: true });
-  }
-  writeFileSync(join(root, "config", "machine.json"), JSON.stringify({
-    relayUrl: `ws://127.0.0.1:${port}`,
-    room,
-    role: "machine",
-    deviceName: "local-test",
-    senderId: "local-test",
-    myPublicKey: "machine-public-key",
-    mySecretKey: "machine-secret-key",
-    peerPublicKey: "phone-public-key",
-    pushAuth,
-  }));
-  const env = {
-    ...process.env,
-    PATH: "",
-    GRANTTAP_CONFIG_DIR: join(root, "config"),
-    GRANTTAP_CURSOR_DIR: join(root, "cursor"),
-    GRANTTAP_CLAUDE_DIR: join(root, "claude"),
-    GRANTTAP_CODEX_DIR: join(root, "codex"),
-    GRANTTAP_LAUNCH_AGENTS_DIR: join(root, "agents"),
-  };
-  const run = (args: string[]): Promise<{ code: number | null; stdout: string; stderr: string }> =>
-    new Promise((resolve, reject) => {
-      const child = spawn(process.execPath, [executable, ...args], {
-        cwd: packageRoot,
-        env,
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-      let stdout = "";
-      let stderr = "";
-      child.stdout.setEncoding("utf8").on("data", (chunk) => { stdout += chunk; });
-      child.stderr.setEncoding("utf8").on("data", (chunk) => { stderr += chunk; });
-      child.once("error", reject);
-      child.once("close", (code) => resolve({ code, stdout, stderr }));
-    });
-
-  const web = await run(["web"]);
-  assert.equal(web.code, 0, web.stderr);
-  assert.equal(web.stderr, "");
-  assert.match(web.stdout, /private capability/i);
-  assert.match(web.stdout, new RegExp(privateToken));
-  assert.match(web.stdout, new RegExp(`http://127\\.0\\.0\\.1:${port}/a/`));
-
-  const status = await run(["status", "--json"]);
-  assert.equal(status.code, 0, status.stderr);
-  assert.equal(status.stderr, "");
-  const snapshot = JSON.parse(status.stdout) as {
-    providers: Array<{ id: string; status: string; detail: string }>;
-  };
-  assert.equal(snapshot.providers.find((provider) => provider.id === "web")?.status, "connected");
-  for (const privateValue of [privateToken, pushAuth, room, String(port), root]) {
-    assert.equal(status.stdout.includes(privateValue), false, `status leaked ${privateValue}`);
-  }
 });
