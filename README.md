@@ -184,11 +184,14 @@ npm run package:allowlist
 npm run test:coverage   # macOS only — see below
 ```
 
-`npm test` runs everywhere. The coverage contract is measured on macOS: the
-background helper, the Cursor OAuth service, and the installer only execute
-there, so a Linux percentage understates real runtime coverage. CI runs the
-cross-platform suite on Linux and the coverage gate on macOS, and `npm publish`
-enforces the same gate through `prepublishOnly`.
+`npm test` runs everywhere. Both suites run with an isolated `HOME`, so a
+developer's own Claude/Codex/Cursor data can never inflate a local result: the
+numbers on this machine and in CI are the same. The coverage contract is
+measured on macOS because the background helper, the Cursor OAuth service, and
+the installer only execute there, so a Linux percentage understates real
+runtime coverage. CI runs the cross-platform suite on Linux and the coverage
+gate on macOS, and `npm publish` enforces the same gate through
+`prepublishOnly`.
 
 Do not publish from a dirty checkout or before the package allowlist, tests,
 typecheck, and release checks pass.
