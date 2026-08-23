@@ -94,6 +94,7 @@ granttap setup
 granttap status [--json]
 granttap connect [--relay <wss-url>]
 granttap reset [--yes]
+granttap mesh connect <one-time-invite>
 ```
 
 `connect` reuses a valid pairing. If none exists, it creates a one-time QR.
