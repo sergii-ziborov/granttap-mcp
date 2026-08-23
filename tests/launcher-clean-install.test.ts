@@ -103,7 +103,8 @@ test("published launcher resolves hoisted dependencies and runs setup/serve in i
 
   const setup = run(["setup"]);
   assert.equal(setup.status, 0, setup.stderr);
-  assert.match(setup.stdout, /Background helper\s+Ready/);
+  const helperState = process.platform === "darwin" ? "Ready" : "Needs attention";
+  assert.match(setup.stdout, new RegExp(`Background helper\\s+${helperState}`));
   assert.match(setup.stdout, /Claude Code\s+Ready/);
   assert.match(setup.stdout, /Codex\s+Needs hook trust/);
   assert.match(setup.stdout, /Cursor\s+Beta · Authorize in Cursor/);
