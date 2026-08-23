@@ -21,7 +21,6 @@ import {
   cursorRootSessionId,
   scanCursor,
 } from "../apps/bridge/src/sessions/cursor";
-import { copilotActivity, scanCopilot } from "../apps/bridge/src/sessions/copilot";
 
 function setEnv(t: test.TestContext, name: string, value: string): void {
   const previous = process.env[name];

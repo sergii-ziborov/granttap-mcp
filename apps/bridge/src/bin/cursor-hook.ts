@@ -10,6 +10,7 @@ import {
   autoAcceptLevelFor,
   blockedSessionCapability,
   isGatingSkipped,
+  isProviderEnabled,
   loadConfig,
   machineConfigPath,
   shouldAutoAcceptCursorShell,
@@ -36,6 +37,10 @@ async function main(): Promise<void> {
     input = JSON.parse(await readStdin()) as CursorHookInput;
   } catch {
     nativeAsk("GrantTap could not read this shell call; use Cursor approval.");
+    return;
+  }
+  if (!isProviderEnabled("cursor")) {
+    nativeAsk("GrantTap monitoring for Cursor is disabled; use Cursor approval.");
     return;
   }
   const rawSessionId = input.conversation_id ?? input.session_id;

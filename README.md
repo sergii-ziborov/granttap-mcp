@@ -34,10 +34,46 @@ end-to-end encrypted.
 
 - Primary: Claude Code and Codex.
 - Beta: Cursor.
-- Experimental where available: GitHub Copilot CLI and Grok Build.
+- Experimental where available: Grok Build.
 
 GrantTap reports the depth each provider actually exposes. Visibility does not
 imply deterministic remote blocking or full mobile continuation.
+
+## Project Mesh and task handoff
+
+Project Mesh adds stable Project and Task identity above provider-native
+sessions. A Task can retain its `taskId` across multiple executions, agents,
+and computers while each native session remains intact.
+
+Agents can read the compact `granttap://mesh/current` MCP resource and publish
+bounded progress, dependency, question, answer, claim, conflict, and completion
+events through the existing `notify` tool. Full transcripts and hidden
+reasoning are never mesh payloads. Claims have TTLs; a colliding claim is
+rejected before it is recorded so agents can choose different work or contact
+the owner before escalating to Needs You.
+
+The first executable handoff path is Claude Code ↔ Codex across linked
+computers. GrantTap builds a bounded Task Capsule from explicit task/git facts,
+requires local phone authorization, creates a separate target branch/worktree,
+starts the target execution, and returns a receipt bound to the exact capsule.
+Cursor and Grok Build use the same provider-neutral schema and discovery model;
+unsupported remote-start paths fail closed instead of claiming parity.
+
+### Grok Bot as a scoped Mesh participant
+
+Grok Bot is a persistent agent, not a coding-agent integration. The iPhone
+issues a one-time encrypted Mesh Invite scoped to the Projects you select, and
+the invite is redeemed on the trusted CLI:
+
+```bash
+granttap mesh connect <one-time-invite>
+```
+
+Grok Bot then runs `granttap internal mesh-mcp`, a separate scoped MCP server
+that exposes only the twelve task-scoped Mesh operations. It cannot create
+invites, change the relay, expand Project scope, or reach `setup`; revoking the
+endpoint from the iPhone stops new Mesh operations immediately while local Task
+history stays on the device.
 
 ## Install
 
@@ -88,6 +124,9 @@ trust.
 MCP `connect` accepts no custom routing, replacement, or key-rotation input.
 Setup is CLI-only because it changes provider configuration and must not be
 available to a model through prompt injection.
+
+`notify` may alternatively carry one bounded task-scoped Mesh event. This does
+not add a fifth MCP tool or grant any global setup capability.
 
 Provider-native approvals and mobile continuation require the matching local
 adapter. MCP registration alone is never reported as proof that an integration

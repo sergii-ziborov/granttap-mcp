@@ -18,6 +18,12 @@ import {
 } from "./messages/interaction";
 import { AgentId, Role } from "./messages/primitives";
 import {
+  MeshEndpointPolicy,
+  MeshEvent,
+  MeshHandoffPrepare,
+  MeshSnapshot,
+} from "./messages/mesh";
+import {
   ConfigSet,
   SessionAccessSet,
   SessionActivity,
@@ -34,6 +40,7 @@ import {
 export * from "./messages/approvals";
 export * from "./messages/capabilities";
 export * from "./messages/interaction";
+export * from "./messages/mesh";
 export * from "./messages/primitives";
 export * from "./messages/sessions";
 
@@ -63,7 +70,10 @@ export const MachineHeartbeat = z.object({
 });
 export type MachineHeartbeat = z.infer<typeof MachineHeartbeat>;
 
-export const Payload = z.discriminatedUnion("type", [
+// Mesh payloads carry cross-field task/project scope checks, so they are
+// ZodEffects rather than plain objects. A regular union preserves those checks
+// while keeping the same strict `type` discriminator on every member.
+export const Payload = z.union([
   ApprovalRequest,
   ApprovalDecision,
   ApprovalResolved,
@@ -86,6 +96,10 @@ export const Payload = z.discriminatedUnion("type", [
   SessionShellSet,
   SessionCompact,
   SessionCompactResult,
+  MeshEvent,
+  MeshHandoffPrepare,
+  MeshSnapshot,
+  MeshEndpointPolicy,
   Hello,
   MachineHeartbeat,
 ]).superRefine((payload, ctx) => {

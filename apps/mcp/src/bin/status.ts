@@ -18,7 +18,9 @@ async function main(): Promise<void> {
     if (args[0] === "--json") {
       process.stdout.write(`${JSON.stringify(snapshot)}\n`);
     } else {
-      const labels = { cursor: "Cursor", claude: "Claude Code", codex: "Codex" };
+      const labels = {
+        cursor: "Cursor", claude: "Claude Code", codex: "Codex", grok: "Grok Build",
+      };
       const states = {
         connected: "Connected",
         action_required: "Action required",

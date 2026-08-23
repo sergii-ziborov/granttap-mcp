@@ -115,9 +115,7 @@ export function cursorTranscriptsRoot(): string {
   );
 }
 
-export function copilotSessionsRoot(): string {
-  return (
-    process.env.GRANTTAP_COPILOT_SESSIONS_DIR ??
-    join(homedir(), ".copilot", "session-state")
-  );
+export function grokSessionsRoot(): string {
+  return process.env.GRANTTAP_GROK_SESSIONS_DIR
+    ?? join(process.env.GROK_HOME ?? join(homedir(), ".grok"), "sessions");
 }

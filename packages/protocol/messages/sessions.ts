@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CodingAgent } from "./primitives";
 import { ActivityEntry, McpServerInfo, SkillInfo } from "./capabilities";
 import {
   AgentId,
@@ -41,6 +42,7 @@ export const SessionKeyGrant = z.object({
   type: z.literal("session.key.grant"),
   sessionId: z.string(),
   key: z.string().min(43).max(44),
+  purpose: z.enum(["session", "task", "project"]).optional(),
   createdAt: z.number(),
 });
 export type SessionKeyGrant = z.infer<typeof SessionKeyGrant>;
@@ -57,9 +59,13 @@ export type SessionSealed = z.infer<typeof SessionSealed>;
 export const SessionInfo = z.object({
   sessionId: z.string(),
   agent: AgentId,
+  projectId: z.string().max(128).optional(),
+  taskId: z.string().max(128).optional(),
+  computerId: z.string().max(128).optional(),
   title: z.string().optional(),
   cwd: z.string().optional(),
   branch: z.string().optional(),
+  worktree: z.string().max(1_024).optional(),
   model: z.string().optional(),
   summary: z.string().optional(),
   accessLevel: AgentAccess.optional(),
@@ -78,11 +84,19 @@ export const SessionInfo = z.object({
 export type SessionInfo = z.infer<typeof SessionInfo>;
 
 export const AgentIntegrationStatus = z.object({
-  agent: z.enum(["codex", "claude"]),
+  agent: CodingAgent,
   installed: z.boolean(),
   hookConfigured: z.boolean(),
 });
 export type AgentIntegrationStatus = z.infer<typeof AgentIntegrationStatus>;
+
+export const ProviderRuntimeSettings = z.object({
+  claude: z.boolean(),
+  codex: z.boolean(),
+  cursor: z.boolean(),
+  grok: z.boolean(),
+}).strict();
+export type ProviderRuntimeSettings = z.infer<typeof ProviderRuntimeSettings>;
 
 export const SessionsStatus = z.object({
   type: z.literal("sessions.status"),
@@ -97,6 +111,8 @@ export const SessionsStatus = z.object({
   autoAcceptDefault: AutoAcceptLevel.optional(),
   autoAcceptBySession: z.record(AutoAcceptLevel).optional(),
   autoAcceptPaused: z.boolean().optional(),
+  providerSettings: ProviderRuntimeSettings.optional(),
+  meshEnabled: z.boolean().optional(),
   agents: z.array(AgentIntegrationStatus).optional(),
   activities: z.array(SessionActivity).optional(),
   generatedAt: z.number(),
@@ -114,7 +130,18 @@ export const ConfigSet = z.object({
     level: AutoAcceptLevel.nullable(),
   }).nullish(),
   autoAcceptPaused: z.boolean().nullish(),
+  provider: CodingAgent.optional(),
+  providerEnabled: z.boolean().optional(),
+  meshEnabled: z.boolean().optional(),
   createdAt: z.number(),
+}).strict().superRefine((value, ctx) => {
+  if ((value.provider == null) !== (value.providerEnabled == null)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: [value.provider == null ? "provider" : "providerEnabled"],
+      message: "provider and providerEnabled must be sent together",
+    });
+  }
 });
 export type ConfigSet = z.infer<typeof ConfigSet>;
 

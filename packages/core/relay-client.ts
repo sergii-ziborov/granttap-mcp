@@ -124,8 +124,9 @@ export class RelayClient {
     if (!parsedPayload.success) return;
     let payload: Payload = parsedPayload.data;
     if (payload.type === "session.key.grant") {
-      // Only the machine may attach a task and grant its independent key.
-      if (this.cfg.role !== "phone") return;
+      // A machine owns native-session keys. The paired phone may forward only
+      // explicit task/project keys when the user authorizes cross-computer Mesh.
+      if (this.cfg.role === "machine" && !["task", "project"].includes(payload.purpose ?? "")) return;
     } else if (payload.type === "session.sealed") {
       const key = this.sessionKeys.get(payload.sessionId);
       if (!key) return;

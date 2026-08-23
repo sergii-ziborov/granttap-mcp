@@ -17,7 +17,10 @@ type IntegrationRow = {
 };
 
 function integrationRows(): IntegrationRow[] {
-  return inspectAgentIntegrations().map((integration) => ({
+  return inspectAgentIntegrations()
+    .filter((integration): integration is typeof integration & { agent: "claude" | "codex" } =>
+      integration.agent === "claude" || integration.agent === "codex")
+    .map((integration) => ({
     id: integration.agent,
     label: integration.agent === "claude" ? "Claude Code" : "Codex",
     status: integration.agent === "codex" && integration.hookConfigured
@@ -28,7 +31,7 @@ function integrationRows(): IntegrationRow[] {
       : integration.hookConfigured ? "Approval hook installed."
       : integration.installed ? "Run granttap setup to install the approval hook."
       : "Agent was not found on this Mac.",
-  }));
+    }));
 }
 
 function escapeHtml(value: string): string {

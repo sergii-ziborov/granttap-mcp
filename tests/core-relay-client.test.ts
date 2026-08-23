@@ -253,4 +253,19 @@ test("per-task sealed traffic is bound to its outer task and only machine grants
     "forged-grant",
   ));
   assert.equal(machineClient.hasSessionKey("task-a"), false);
+
+  const authorizedTaskGrant: Payload = {
+    ...grant,
+    purpose: "task",
+  };
+  await receiveRaw(machineClient, encryptedEnvelope(
+    authorizedTaskGrant,
+    machineCfg.room,
+    "phone",
+    "machine",
+    phone.secretKey,
+    machine.publicKey,
+    "authorized-task-grant",
+  ));
+  assert.equal(machineClient.hasSessionKey("task-a"), true);
 });

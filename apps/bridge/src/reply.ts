@@ -2,18 +2,25 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { SessionInfo, UserAttachment } from "../../../packages/protocol/schema";
+import type { CodingAgent } from "../../../packages/protocol/schema";
 import { configDir, loadRuntimeConfig } from "./config";
 import { withAttachments } from "./reply/attachments";
 import { runProcess } from "./reply/process";
 import { routingPrompt } from "./reply/routing";
 import type { DeliveryOptions, ReplyResult } from "./reply/types";
+import {
+  runCursorNew,
+  runCursorResume,
+  runGrokNew,
+  runGrokResume,
+} from "./reply/provider-headless";
 export type { DeliveryOptions, ReplyResult } from "./reply/types";
 
 const CLAUDE_BIN = process.env.GRANTTAP_CLAUDE_BIN ?? process.env.NODVOX_CLAUDE_BIN ?? "claude";
 const CODEX_BIN = process.env.GRANTTAP_CODEX_BIN ?? process.env.NODVOX_CODEX_BIN ?? "codex";
 export const GENERAL_WORKSPACE = "granttap:general";
 
-export function resolveAgentWorkspace(cwd: string | undefined, agent: "codex" | "claude"): string {
+export function resolveAgentWorkspace(cwd: string | undefined, agent: CodingAgent): string {
   if (cwd && cwd !== GENERAL_WORKSPACE) return cwd;
   const path = join(configDir(), "workspaces", `general-${agent}`);
   mkdirSync(path, { recursive: true, mode: 0o700 });
@@ -32,7 +39,7 @@ export function deliverToSession(
   return queued(session.sessionId, () => withAttachments(attachments, text, (prepared) =>
     runDelivery(
       session,
-      session.agent === "claude" ? prepared.claudePrompt : prepared.prompt,
+      session.agent === "codex" ? prepared.prompt : prepared.claudePrompt,
       timeoutMs,
       prepared.images,
       options,
@@ -66,6 +73,30 @@ export function createClaudeSession(
   ));
 }
 
+export function createCursorSession(
+  text: string,
+  cwd?: string,
+  timeoutMs = 240_000,
+  attachments: UserAttachment[] = [],
+): Promise<ReplyResult> {
+  const workspace = resolveAgentWorkspace(cwd, "cursor");
+  return queued("__new_cursor_task__", () => withAttachments(attachments, text, (prepared) =>
+    runCursorNew(prepared.claudePrompt, workspace, timeoutMs),
+  ));
+}
+
+export function createGrokSession(
+  text: string,
+  cwd?: string,
+  timeoutMs = 240_000,
+  attachments: UserAttachment[] = [],
+): Promise<ReplyResult> {
+  const workspace = resolveAgentWorkspace(cwd, "grok");
+  return queued("__new_grok_task__", () => withAttachments(attachments, text, (prepared) =>
+    runGrokNew(prepared.claudePrompt, workspace, timeoutMs),
+  ));
+}
+
 function queued(key: string, run: () => Promise<ReplyResult>): Promise<ReplyResult> {
   const previous = inFlight.get(key) ?? Promise.resolve(null);
   const next = previous.then(run);
@@ -86,6 +117,8 @@ function runDelivery(
   const routed = routingPrompt(session, text, options);
   if (session.agent === "claude") return runClaude(session, routed, timeoutMs);
   if (session.agent === "codex") return runCodex(session, routed, timeoutMs, images);
+  if (session.agent === "cursor") return runCursorResume(session, routed, timeoutMs);
+  if (session.agent === "grok") return runGrokResume(session, routed, timeoutMs);
   return Promise.resolve({ ok: false, error: `unknown agent: ${session.agent}` });
 }
 

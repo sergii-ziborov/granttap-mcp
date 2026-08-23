@@ -22,6 +22,7 @@ import { homedir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import type { CodingAgent } from "../../../packages/protocol/schema";
 import { configDir } from "./config";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
@@ -54,7 +55,7 @@ export const CODEX_TRUST_INSTRUCTION =
   "Open /hooks in Codex, review and trust both GrantTap hooks, then restart Codex.";
 
 export type AgentIntegrationStatus = {
-  agent: "codex" | "claude";
+  agent: CodingAgent;
   installed: boolean;
   hookConfigured: boolean;
 };
@@ -242,9 +243,16 @@ export function inspectCursorIntegration(): CursorIntegrationStatus {
 export function inspectAgentIntegrations(): AgentIntegrationStatus[] {
   const codex = process.env.GRANTTAP_CODEX_BIN ?? process.env.NODVOX_CODEX_BIN ?? "codex";
   const claude = process.env.GRANTTAP_CLAUDE_BIN ?? process.env.NODVOX_CLAUDE_BIN ?? "claude";
+  const cursor = process.env.GRANTTAP_CURSOR_AGENT_BIN ?? "cursor-agent";
+  const grok = process.env.GRANTTAP_GROK_BIN ?? "grok";
+  const cursorStatus = inspectCursorIntegration();
   return [
     { agent: "codex", installed: executableAvailable(codex), hookConfigured: codexHookConfigured() },
     { agent: "claude", installed: executableAvailable(claude), hookConfigured: claudeHookConfigured() },
+    { agent: "cursor", installed: executableAvailable(cursor), hookConfigured: cursorStatus.hookConfigured },
+    // Grok Build's headless session contract is direct; GrantTap does not
+    // claim an approval hook exists when none has been installed.
+    { agent: "grok", installed: executableAvailable(grok), hookConfigured: false },
   ];
 }
 

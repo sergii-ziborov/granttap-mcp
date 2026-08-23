@@ -37,16 +37,13 @@ import {
   cursorCapabilityUsage,
   scanCursor,
 } from "./sessions/cursor";
-import {
-  copilotActivity,
-  copilotCapabilityUsage,
-  scanCopilot,
-} from "./sessions/copilot";
+import { grokActivity, grokCapabilityUsage, scanGrok } from "./sessions/grok";
 import {
   limitCapabilityUsageEvents,
   rememberCapabilityUsageCandidate,
   toRemoteCapabilityUsageEvent,
 } from "./sessions/telemetry";
+import { loadRuntimeConfig } from "./config";
 
 export { MAX_ACTIVITY_ENTRIES, MAX_ACTIVITY_TEXT, TOKEN_WINDOW_HOURS };
 
@@ -61,18 +58,19 @@ function emptyScan(): ProviderScan {
  * In normal operation (no overrides) every installed provider is scanned.
  */
 function providerScans(): ProviderScan[] {
+  const enabled = loadRuntimeConfig().providerSettings;
   const explicit = {
     claude: Boolean(process.env.GRANTTAP_CLAUDE_PROJECTS_DIR || process.env.NODVOX_CLAUDE_PROJECTS_DIR),
     codex: Boolean(process.env.GRANTTAP_CODEX_SESSIONS_DIR || process.env.NODVOX_CODEX_SESSIONS_DIR),
     cursor: Boolean(process.env.GRANTTAP_CURSOR_TRANSCRIPTS_DIR || process.env.GRANTTAP_CURSOR_STATE_DB),
-    copilot: Boolean(process.env.GRANTTAP_COPILOT_SESSIONS_DIR),
+    grok: Boolean(process.env.GRANTTAP_GROK_SESSIONS_DIR || process.env.GROK_HOME),
   };
   const isolated = Object.values(explicit).some(Boolean);
   return [
-    !isolated || explicit.claude ? scanClaude() : emptyScan(),
-    !isolated || explicit.codex ? scanCodex() : emptyScan(),
-    !isolated || explicit.cursor ? scanCursor() : emptyScan(),
-    !isolated || explicit.copilot ? scanCopilot() : emptyScan(),
+    enabled.claude && (!isolated || explicit.claude) ? scanClaude() : emptyScan(),
+    enabled.codex && (!isolated || explicit.codex) ? scanCodex() : emptyScan(),
+    enabled.cursor && (!isolated || explicit.cursor) ? scanCursor() : emptyScan(),
+    enabled.grok && (!isolated || explicit.grok) ? scanGrok() : emptyScan(),
   ];
 }
 
@@ -143,7 +141,7 @@ function activityForSession(session: SessionInfo): ActivityEntry[] {
   if (session.agent === "claude") return claudeActivity(session);
   if (session.agent === "codex") return codexActivity(session);
   if (session.agent === "cursor") return cursorActivity(session);
-  if (session.agent === "copilot") return copilotActivity(session);
+  if (session.agent === "grok") return grokActivity(session);
   return [];
 }
 
@@ -202,8 +200,8 @@ export function scanCapabilityUsage(
       session.agent === "claude" ? claudeCapabilityUsage(session)
         : session.agent === "codex" ? codexCapabilityUsage(session)
           : session.agent === "cursor" ? cursorCapabilityUsage(session)
-            : session.agent === "copilot" ? copilotCapabilityUsage(session)
-              : [];
+            : session.agent === "grok" ? grokCapabilityUsage(session)
+            : [];
     for (const observation of observations) {
       const event = toRemoteCapabilityUsageEvent(observation);
       if (event) rememberCapabilityUsageCandidate(candidates, event);

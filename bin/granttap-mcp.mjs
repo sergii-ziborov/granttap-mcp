@@ -17,6 +17,7 @@ const usage = [
   "  granttap status [--json]          Show pairing, helper, and provider readiness",
   "  granttap connect [--relay <url>]  Pair this computer with iPhone/Apple Watch",
   "  granttap reset [--yes]            Reset this computer's phone pairing",
+  "  granttap mesh connect <invite>    Redeem a one-time Grok Bot Mesh invite",
   "",
   "The legacy granttap-mcp command is an alias for granttap.",
   "",
@@ -40,6 +41,10 @@ if (command === "mcp") {
   entry = join(root, "apps", "bridge", "src", "bin", "reset.ts");
 } else if (command === "cursor" && argument === "repair") {
   entry = join(root, "apps", "mcp", "src", "bin", "authorize.ts");
+} else if (command === "mesh" && argument === "connect") {
+  entry = join(root, "apps", "bridge", "src", "bin", "mesh-connect.ts");
+} else if (command === "internal" && argument === "mesh-mcp") {
+  entry = join(root, "apps", "mcp", "src", "mesh-stdio.ts");
 } else if (command === "internal" && argument === "serve") {
   entry = join(root, "apps", "mcp", "src", "bin", "serve.ts");
 } else if (command === "internal" && argument === "authorize") {
@@ -91,7 +96,9 @@ if (!preflight || !loader) {
   process.exit(1);
 }
 
-const forwardedArgs = ["connect", "status", "reset"].includes(command) ? commandArgs : [];
+const forwardedArgs = ["connect", "status", "reset", "mesh"].includes(command)
+  ? (command === "mesh" ? commandArgs.slice(1) : commandArgs)
+  : [];
 const child = spawn(
   process.execPath,
   ["--require", preflight, "--import", pathToFileURL(loader).href, entry, ...forwardedArgs],

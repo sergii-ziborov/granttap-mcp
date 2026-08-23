@@ -11,7 +11,7 @@ import { isMachineConfigured } from "./pairing-status";
 import { isCursorHttpMcpConfigured } from "./cursor-config";
 import { inspectHttpMcpService, probeHttpMcpHealth } from "./http-service";
 
-export type ProviderId = "cursor" | "claude" | "codex";
+export type ProviderId = "cursor" | "claude" | "codex" | "grok";
 export type ProviderConnectionState = "connected" | "action_required" | "not_configured";
 
 export type ProviderConnectionStatus = {
@@ -41,21 +41,21 @@ export type CursorOAuthReadiness = {
 };
 
 function runtimeRequirement(
-  id: "cursor" | "claude" | "codex",
+  id: ProviderId,
   readiness: ProviderReadiness,
 ): ProviderConnectionStatus | null {
   if (!readiness.paired) {
     return {
       id,
       status: "action_required",
-      detail: "Hooks installed, but this Mac is not paired. Run granttap connect.",
+      detail: "Local provider integration found, but this computer is not paired. Run granttap connect.",
     };
   }
   if (!readiness.monitor.configured) {
     return {
       id,
       status: "action_required",
-      detail: "Hooks and pairing found, but background sync is not configured. Run granttap setup.",
+      detail: "Provider integration and pairing found, but background sync is not configured. Run granttap setup.",
     };
   }
   if (!readiness.monitor.running) {
@@ -138,11 +138,26 @@ function agentStatus(
   };
 }
 
+function grokStatus(readiness: ProviderReadiness): ProviderConnectionStatus {
+  const integration = readiness.integrations.find((row) => row.agent === "grok");
+  if (!integration?.installed) return {
+    id: "grok", status: "not_configured",
+    detail: "Install Grok Build, then run granttap setup.",
+  };
+  const runtime = runtimeRequirement("grok", readiness);
+  if (runtime) return runtime;
+  return {
+    id: "grok", status: "connected",
+    detail: "CLI session discovery, continuation, pairing, and background sync are ready.",
+  };
+}
+
 export function providerStatuses(readiness: ProviderReadiness): ProviderConnectionStatus[] {
   return [
     cursorStatus(readiness),
     agentStatus("claude", readiness),
     agentStatus("codex", readiness),
+    grokStatus(readiness),
   ];
 }
 

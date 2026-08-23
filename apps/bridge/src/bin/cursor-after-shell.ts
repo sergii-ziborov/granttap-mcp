@@ -7,7 +7,7 @@ import {
   resolvedFromOutcome,
   sendApprovalResolved,
 } from "../approval-state";
-import { loadConfig, machineConfigPath } from "../config";
+import { isProviderEnabled, loadConfig, machineConfigPath } from "../config";
 import { cursorRootSessionId } from "../sessions/cursor";
 
 const SHELL_TOOLS = new Set([
@@ -32,6 +32,10 @@ async function readStdin(): Promise<string> {
 }
 
 async function main(): Promise<void> {
+  if (!isProviderEnabled("cursor")) {
+    process.stdout.write("{}\n");
+    return;
+  }
   const raw = await readStdin().catch(() => "");
   let input: {
     conversation_id?: string;

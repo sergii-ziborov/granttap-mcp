@@ -27,16 +27,18 @@ test("provider status requires the full hook set, live pairing, and monitor", ()
     integrations: [
       { agent: "claude", installed: true, hookConfigured: true },
       { agent: "codex", installed: true, hookConfigured: true },
+      { agent: "grok", installed: true, hookConfigured: false },
     ],
     paired: true,
     monitor: { configured: true, running: true },
   });
-  assert.deepEqual(providers.map((provider) => provider.id), ["cursor", "claude", "codex"]);
+  assert.deepEqual(providers.map((provider) => provider.id), ["cursor", "claude", "codex", "grok"]);
   assert.equal(providers[0]?.status, "connected");
   assert.match(providers[0]?.detail ?? "", /Run granttap setup for Cursor authorization/);
   assert.equal(providers[1]?.status, "connected");
   assert.equal(providers[2]?.status, "action_required");
   assert.match(providers[2]?.detail ?? "", /\/hooks/);
+  assert.equal(providers[3]?.status, "connected");
 
   const stopped = providerStatuses({
     cursor: { installed: true, hookConfigured: false },
@@ -173,7 +175,7 @@ test("public granttap bin exposes management routes and emits compatible JSON re
   assert.equal(snapshot.schema, "granttap.provider-status.v1");
   assert.deepEqual(
     (snapshot.providers as Array<{ id: string }>).map((provider) => provider.id),
-    ["cursor", "claude", "codex"],
+    ["cursor", "claude", "codex", "grok"],
   );
   assert.deepEqual(readdirSync(root, { recursive: true }).map(String).sort(), before);
 });

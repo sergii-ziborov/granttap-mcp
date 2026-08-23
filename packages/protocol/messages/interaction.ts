@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CodingAgent } from "./primitives";
 
 export const UserAttachment = z.object({
   name: z.string().min(1).max(180),
@@ -14,7 +15,7 @@ export const UserMessage = z.object({
   type: z.literal("user.message"),
   messageId: z.string().min(1).max(180).optional(),
   text: z.string(),
-  agent: z.enum(["codex", "claude"]).optional(),
+  agent: CodingAgent.optional(),
   cwd: z.string().max(4_096).optional(),
   requestId: z.string().optional(),
   sessionId: z.string().optional(),

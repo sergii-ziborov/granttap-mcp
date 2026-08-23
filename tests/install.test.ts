@@ -174,10 +174,12 @@ test("agent integration inspection is read-only and reports binaries and hooks s
   const binDir = join(root, "bin");
   const claudeDir = join(root, "claude");
   const codexDir = join(root, "codex");
+  const cursorDir = join(root, "cursor");
   await Promise.all([
     mkdir(binDir, { recursive: true }),
     mkdir(claudeDir, { recursive: true }),
     mkdir(codexDir, { recursive: true }),
+    mkdir(cursorDir, { recursive: true }),
   ]);
   const fakeClaude = join(binDir, "claude");
   const fakeCodex = join(binDir, "codex");
@@ -208,10 +210,12 @@ test("agent integration inspection is read-only and reports binaries and hooks s
     path: process.env.PATH,
     claudeDir: process.env.GRANTTAP_CLAUDE_DIR,
     codexDir: process.env.GRANTTAP_CODEX_DIR,
+    cursorDir: process.env.GRANTTAP_CURSOR_DIR,
   };
   process.env.PATH = binDir;
   process.env.GRANTTAP_CLAUDE_DIR = claudeDir;
   process.env.GRANTTAP_CODEX_DIR = codexDir;
+  process.env.GRANTTAP_CURSOR_DIR = cursorDir;
   t.after(() => {
     const restore = (key: string, value: string | undefined) => {
       if (value == null) delete process.env[key];
@@ -220,11 +224,14 @@ test("agent integration inspection is read-only and reports binaries and hooks s
     restore("PATH", previous.path);
     restore("GRANTTAP_CLAUDE_DIR", previous.claudeDir);
     restore("GRANTTAP_CODEX_DIR", previous.codexDir);
+    restore("GRANTTAP_CURSOR_DIR", previous.cursorDir);
   });
 
   assert.deepEqual(inspectAgentIntegrations(), [
     { agent: "codex", installed: true, hookConfigured: true },
     { agent: "claude", installed: true, hookConfigured: true },
+    { agent: "cursor", installed: false, hookConfigured: false },
+    { agent: "grok", installed: false, hookConfigured: false },
   ]);
 
   await Promise.all([
@@ -245,5 +252,7 @@ test("agent integration inspection is read-only and reports binaries and hooks s
   assert.deepEqual(inspectAgentIntegrations(), [
     { agent: "codex", installed: true, hookConfigured: false },
     { agent: "claude", installed: true, hookConfigured: false },
+    { agent: "cursor", installed: false, hookConfigured: false },
+    { agent: "grok", installed: false, hookConfigured: false },
   ], "partial matchers and flat TOML commands are not complete hook installations");
 });

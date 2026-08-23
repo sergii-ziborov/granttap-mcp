@@ -1,7 +1,7 @@
 #!/usr/bin/env -S npx tsx
 /** Deny-only Codex PreToolUse policy for exact per-chat capability switches. */
 import type { HookInput } from "../adapters";
-import { blockedSessionCapability } from "../config";
+import { blockedSessionCapability, isProviderEnabled } from "../config";
 
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
@@ -10,6 +10,7 @@ async function readStdin(): Promise<string> {
 }
 
 async function main(): Promise<void> {
+  if (!isProviderEnabled("codex")) return;
   let input: HookInput;
   try {
     input = JSON.parse(await readStdin()) as HookInput;

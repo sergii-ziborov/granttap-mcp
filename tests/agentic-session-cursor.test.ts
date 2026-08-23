@@ -21,7 +21,6 @@ import {
   cursorRootSessionId,
   scanCursor,
 } from "../apps/bridge/src/sessions/cursor";
-import { copilotActivity, scanCopilot } from "../apps/bridge/src/sessions/copilot";
 
 function setEnv(t: test.TestContext, name: string, value: string): void {
   const previous = process.env[name];
@@ -51,9 +50,15 @@ test("Cursor subagent transcript is grouped under its composer parent", async (t
       role: "assistant",
       message: {
         usage: { input_tokens: 12, output_tokens: 4 },
-        content: [{ type: "text", text: "Delegating." }],
+        content: [
+          { type: "text", text: "Delegating." },
+          { type: "tool_use", name: "Bash", input: { command: "git status" } },
+        ],
       },
     },
+    { role: "assistant", message: { content: "Plain Cursor answer" } },
+    { role: "system", message: { content: "hidden" } },
+    { role: "user", message: { content: [{ type: "image" }] } },
   ]));
   await writeFile(join(parentDir, "subagents", `${childId}.jsonl`), jsonl([
     {
@@ -107,72 +112,7 @@ test("Cursor subagent transcript is grouped under its composer parent", async (t
   assert.ok((parent.childThreads?.[0]?.tokensSession ?? 0) > 11);
   const activity = cursorActivity(parent);
   assert.equal(activity.some((entry) => entry.childThreadId === childId), true);
+  assert.equal(activity.some((entry) => entry.text === "Plain Cursor answer"), true);
+  assert.equal(activity.some((entry) => entry.kind === "tool"), true);
   assert.doesNotMatch(JSON.stringify(activity), /cursor private chain/);
-});
-
-test("Copilot parentToolCallId groups nested output without exposing reasoningText", async (t) => {
-  const root = await mkdtemp(join(tmpdir(), "granttap-agentic-copilot-"));
-  const sessionId = "copilot-root";
-  const sessionDir = join(root, sessionId);
-  await mkdir(sessionDir, { recursive: true });
-  const childId = "copilot-child-call";
-  const started = Date.now() - 4_000;
-  await writeFile(join(sessionDir, "events.jsonl"), jsonl([
-    {
-      timestamp: new Date(started).toISOString(),
-      type: "session.start",
-      data: { sessionId, startTime: new Date(started).toISOString(), context: { cwd: "/repo" } },
-    },
-    {
-      timestamp: new Date(started + 100).toISOString(),
-      type: "user.message",
-      data: { content: "Root Copilot request" },
-    },
-    {
-      timestamp: new Date(started + 500).toISOString(),
-      type: "subagent.started",
-      data: {
-        toolCallId: childId,
-        agentName: "explore",
-        agentDisplayName: "Auth explorer",
-        agentDescription: "Inspect Copilot auth",
-      },
-    },
-    {
-      timestamp: new Date(started + 1_000).toISOString(),
-      type: "assistant.message",
-      data: {
-        parentToolCallId: childId,
-        content: "Copilot child result",
-        outputTokens: 7,
-        reasoningText: "copilot private chain",
-        reasoningOpaque: "opaque-private",
-        toolRequests: [],
-      },
-    },
-    {
-      timestamp: new Date(started + 1_100).toISOString(),
-      type: "subagent.completed",
-      data: { toolCallId: childId, agentName: "explore", agentDisplayName: "Auth explorer" },
-    },
-    {
-      timestamp: new Date(started + 1_500).toISOString(),
-      type: "assistant.message",
-      data: { content: "Root complete", outputTokens: 3, toolRequests: [] },
-    },
-  ]));
-  setEnv(t, "GRANTTAP_COPILOT_SESSIONS_DIR", root);
-
-  const scan = scanCopilot();
-  assert.deepEqual(scan.sessions.map((session) => session.sessionId), [sessionId]);
-  const parent = scan.sessions[0]!;
-  assert.equal(parent.tokensSession, 10);
-  assert.equal(parent.childThreads?.[0]?.threadId, childId);
-  assert.equal(parent.childThreads?.[0]?.tokensSession, 7);
-  const activity = copilotActivity(parent);
-  assert.equal(
-    activity.find((entry) => entry.text === "Copilot child result")?.childThreadId,
-    childId,
-  );
-  assert.doesNotMatch(JSON.stringify(activity), /copilot private chain|opaque-private/);
 });

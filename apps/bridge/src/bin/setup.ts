@@ -79,6 +79,7 @@ async function main(): Promise<void> {
       ? codexHook.status === "manual" ? "Needs attention" : "Needs hook trust"
       : "Not installed"}`,
     `Cursor              ${before.cursor.installed ? `Beta · ${cursorReady ? "Authorize in Cursor" : "Needs repair"}` : "Not installed"}`,
+    `Grok Build          ${installed.has("grok") ? "Ready" : "Not installed"}`,
     "",
     paired && installed.has("codex")
       ? `Next: ${CODEX_TRUST_INSTRUCTION}`

@@ -83,6 +83,17 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
     (notifyTool?.inputSchema.properties?.message as { maxLength?: number })?.maxLength,
     2_000,
   );
+  assert.ok(notifyTool?.inputSchema.properties?.meshEvent);
+  const resources = await client.listResources();
+  assert.deepEqual(resources.resources.map((resource) => resource.uri), [
+    "granttap://mesh/current",
+  ]);
+  const mesh = await client.readResource({ uri: "granttap://mesh/current" });
+  const meshText = (mesh.contents[0] as { text?: string }).text ?? "";
+  assert.deepEqual(JSON.parse(meshText).projects, []);
+
+  const emptyNotify = await client.callTool({ name: "notify", arguments: {} });
+  assert.equal(emptyNotify.isError, true);
 
   const result = await client.callTool({ name: "notify", arguments: { message: "hello" } });
   const content = result.content as Array<{ type: string; text?: string }>;

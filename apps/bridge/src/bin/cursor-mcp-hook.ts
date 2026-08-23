@@ -7,6 +7,7 @@ import { isUnanswered, requestApproval } from "../approval";
 import {
   blockedSessionMcpServer,
   isGatingSkipped,
+  isProviderEnabled,
   loadConfig,
   machineConfigPath,
   shouldAutoAcceptTool,
@@ -38,6 +39,10 @@ async function main(): Promise<void> {
     input = JSON.parse(await readStdin()) as CursorMcpHookInput;
   } catch {
     nativeAsk("GrantTap could not correlate this MCP call; use Cursor approval.");
+    return;
+  }
+  if (!isProviderEnabled("cursor")) {
+    nativeAsk("GrantTap monitoring for Cursor is disabled; use Cursor approval.");
     return;
   }
   const rawSessionId = cursorConversationId(input);

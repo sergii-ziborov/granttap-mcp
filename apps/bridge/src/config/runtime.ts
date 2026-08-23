@@ -1,5 +1,9 @@
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import type { AgentAccess } from "../../../../packages/protocol/schema";
+import type {
+  AgentAccess,
+  CodingAgent,
+  ProviderRuntimeSettings,
+} from "../../../../packages/protocol/schema";
 import {
   classifyAction,
   isAutoAcceptLevel,
@@ -19,6 +23,8 @@ export type RuntimeConfig = {
   sessionMcpDisabled: Record<string, string[]>;
   sessionSkillsDisabled: Record<string, string[]>;
   sessionShellDisabled: string[];
+  providerSettings: ProviderRuntimeSettings;
+  meshEnabled: boolean;
 };
 
 const DEFAULT_RUNTIME: RuntimeConfig = {
@@ -31,7 +37,22 @@ const DEFAULT_RUNTIME: RuntimeConfig = {
   sessionMcpDisabled: {},
   sessionSkillsDisabled: {},
   sessionShellDisabled: [],
+  providerSettings: { claude: true, codex: true, cursor: true, grok: true },
+  meshEnabled: true,
 };
+
+function parseProviderSettings(raw: unknown): ProviderRuntimeSettings {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { ...DEFAULT_RUNTIME.providerSettings };
+  }
+  const value = raw as Record<string, unknown>;
+  return {
+    claude: value.claude !== false,
+    codex: value.codex !== false,
+    cursor: value.cursor !== false,
+    grok: value.grok !== false,
+  };
+}
 
 export function boundedIdentifier(raw: unknown, maxLength: number): string | null {
   if (typeof raw !== "string") return null;
@@ -96,6 +117,8 @@ export function loadRuntimeConfig(): RuntimeConfig {
               .filter((sessionId): sessionId is string => sessionId != null),
           )]
         : [],
+      providerSettings: parseProviderSettings(raw.providerSettings),
+      meshEnabled: raw.meshEnabled !== false,
     };
   } catch {
     return {
@@ -105,8 +128,18 @@ export function loadRuntimeConfig(): RuntimeConfig {
       sessionMcpDisabled: {},
       sessionSkillsDisabled: {},
       sessionShellDisabled: [],
+      providerSettings: { ...DEFAULT_RUNTIME.providerSettings },
+      meshEnabled: true,
     };
   }
+}
+
+export function isProviderEnabled(provider: CodingAgent): boolean {
+  return loadRuntimeConfig().providerSettings[provider];
+}
+
+export function isMeshEnabled(): boolean {
+  return loadRuntimeConfig().meshEnabled;
 }
 
 export function saveRuntimeConfig(cfg: Partial<RuntimeConfig>): void {

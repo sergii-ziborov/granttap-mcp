@@ -26,11 +26,19 @@ import {
 } from "./config";
 import { mcpServersForSession, workspaceSkills } from "./capabilities";
 import { compactCodexSession } from "./codex-control";
-import { createClaudeSession, createCodexSession, deliverToSession } from "./reply";
+import {
+  createClaudeSession,
+  createCodexSession,
+  createCursorSession,
+  createGrokSession,
+  deliverToSession,
+} from "./reply";
 import { abandonDelivery, beginDelivery, completeDelivery } from "./delivery";
 import { inspectAgentIntegrations } from "./install";
 import { approvalsStatus } from "./approval-state";
 import { primeSessionKeys, sendSessionPayload } from "./session-keys";
+import { sendMeshPayload } from "./session-keys";
+import { handleMeshPayload, meshCatalog, meshSnapshots, prepareMeshHandoff } from "./mesh/runtime";
 import { cachedSessionActivity } from "./monitor-session-activity";
 import { HEARTBEAT_INTERVAL_MS, publishHeartbeat } from "./monitor-heartbeat";
 import { startPublishLoop } from "./monitor-publish-loop";
@@ -120,7 +128,11 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
 
   const decorate = (sessions: SessionsStatus["sessions"]): SessionsStatus["sessions"] => {
     const runtime = loadRuntimeConfig();
-    return sessions.map((session) => {
+    const visible = sessions.filter((session) =>
+      runtime.providerSettings[session.agent as keyof typeof runtime.providerSettings] !== false
+    );
+    const coordinated = runtime.meshEnabled ? meshCatalog(visible) : visible;
+    return coordinated.map((session) => {
       const base: SessionInfo = {
         ...session,
         accessLevel: runtime.sessionAccess[session.sessionId] ?? session.accessLevel,
@@ -171,6 +183,8 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       autoAcceptDefault: runtime.autoAcceptDefault,
       autoAcceptBySession: runtime.autoAcceptBySession,
       autoAcceptPaused: runtime.autoAcceptPaused,
+      providerSettings: runtime.providerSettings,
+      meshEnabled: runtime.meshEnabled,
       agents: inspectAgentIntegrations(),
       generatedAt: Date.now(),
     };
@@ -189,6 +203,17 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
     // delays the current one behind superseded copies.
     await client.send(status, "phone", { ttlMs: INTERVAL_MS * 24, reliable: false });
     if (includeHistory) lastHistoryPublishedAt = Date.now();
+
+    // Project Mesh is separately encrypted under each project key. The relay
+    // sees only the legacy routing envelope and ciphertext.
+    if (loadRuntimeConfig().meshEnabled) {
+      for (const mesh of meshSnapshots()) {
+        await sendMeshPayload(client, mesh, "phone", {
+          ttlMs: INTERVAL_MS * 24,
+          reliable: false,
+        }).catch(() => {});
+      }
+    }
 
     // Detail follows the lean catalog, before unrelated snapshots can delay it.
     for (const sessionId of subscriptions) {
@@ -277,6 +302,15 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       await handleCompact(client, payload);
       void publish().catch(() => {});
       return true;
+    } else if ((payload.type === "mesh.event" || payload.type === "mesh.snapshot")
+      && loadRuntimeConfig().meshEnabled) {
+      await handleMeshPayload(client, payload);
+      void publish().catch(() => {});
+      return true;
+    } else if (payload.type === "mesh.handoff.prepare" && loadRuntimeConfig().meshEnabled) {
+      const prepared = await prepareMeshHandoff(client, payload);
+      if (prepared) void publish().catch(() => {});
+      return prepared;
     }
     return false;
   });
@@ -501,11 +535,18 @@ export function handleConfigSet(message: ConfigSet): void {
     if (level == null) delete runtime.autoAcceptBySession[sessionId];
     else runtime.autoAcceptBySession[sessionId] = level;
   }
+  if (message.provider && typeof message.providerEnabled === "boolean") {
+    runtime.providerSettings = {
+      ...runtime.providerSettings,
+      [message.provider]: message.providerEnabled,
+    };
+  }
+  if (typeof message.meshEnabled === "boolean") runtime.meshEnabled = message.meshEnabled;
   saveRuntimeConfig(runtime);
   process.stderr.write(
     `[monitor] config: gating=${runtime.enabled ? "on" : "OFF"}, ` +
       `auto=${runtime.autoAcceptPaused ? "paused" : runtime.autoAcceptDefault}, ` +
-      `excluded=${runtime.excludedSessions.length}\n`,
+      `excluded=${runtime.excludedSessions.length}, mesh=${runtime.meshEnabled ? "on" : "OFF"}\n`,
   );
 }
 
@@ -519,7 +560,14 @@ export async function handleUserMessage(client: RelayClient, message: UserMessag
   };
 
   if (!message.sessionId) {
-    const agent = message.agent === "claude" ? "claude" : "codex";
+    const agent = message.agent ?? "codex";
+    const displayName = {
+      claude: "Claude Code", codex: "Codex", cursor: "Cursor", grok: "Grok Build",
+    }[agent];
+    if (!loadRuntimeConfig().providerSettings[agent]) {
+      await say(`${displayName} is disabled in GrantTap Settings.`, undefined, true);
+      return;
+    }
     const requestedCwd = message.cwd?.trim();
     if (requestedCwd) {
       const known = [...scanSessions().sessions, ...scanSessionHistory()].some((session) =>
@@ -530,14 +578,18 @@ export async function handleUserMessage(client: RelayClient, message: UserMessag
         return;
       }
     }
-    await say(`Creating a new ${agent === "claude" ? "Claude Code" : "Codex"} task…`);
-    const result = agent === "claude"
-      ? await createClaudeSession(message.text, requestedCwd, 240_000, message.attachments)
-      : await createCodexSession(message.text, requestedCwd, 240_000, message.attachments);
+    await say(`Creating a new ${displayName} task…`);
+    const create = {
+      claude: createClaudeSession,
+      codex: createCodexSession,
+      cursor: createCursorSession,
+      grok: createGrokSession,
+    }[agent];
+    const result = await create(message.text, requestedCwd, 240_000, message.attachments);
     if (result.ok) {
       await say(result.text, result.sessionId, true);
     } else {
-      await say(`Could not create a ${agent === "claude" ? "Claude Code" : "Codex"} task: ${result.error}`, undefined, true);
+      await say(`Could not create a ${displayName} task: ${result.error}`, undefined, true);
     }
     return;
   }
@@ -545,6 +597,13 @@ export async function handleUserMessage(client: RelayClient, message: UserMessag
   const target = scanSessions().sessions.find((session) => session.sessionId === message.sessionId);
   if (!target) {
     await say("This task is no longer available on the computer.", message.sessionId);
+    return;
+  }
+
+  const settings = loadRuntimeConfig().providerSettings;
+  if (target.agent in settings
+    && settings[target.agent as keyof typeof settings] === false) {
+    await say("This agent is disabled in GrantTap Settings.", message.sessionId, true);
     return;
   }
 

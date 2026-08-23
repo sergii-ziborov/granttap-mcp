@@ -24,11 +24,11 @@
     "setup": "node bin/granttap-mcp.mjs setup",
     "status": "node bin/granttap-mcp.mjs status",
     "test": "node --import tsx --test tests/*.test.ts",
-    "test:coverage": "c8 --all --extension .ts --exclude 'tests/**' --exclude 'scripts/**' node --import tsx --test tests/*.test.ts",
+    "test:coverage": "c8 --all --extension .ts --exclude 'tests/**' --exclude 'scripts/**' --exclude 'packages/core/relay-client-types.ts' --exclude 'apps/bridge/src/capabilities/types.ts' --exclude 'apps/bridge/src/reply/types.ts' --check-coverage --lines 95 --statements 95 --functions 95 --branches 85 node --import tsx --test tests/*.test.ts",
     "inventory": "node scripts/quality/source-inventory.mjs",
     "package:allowlist": "node scripts/quality/package-allowlist.mjs",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run package:allowlist && npm test && npm run typecheck"
+    "prepublishOnly": "npm run package:allowlist && npm run test:coverage && npm run typecheck"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
@@ -64,7 +64,6 @@
     "claude-code",
     "codex",
     "cursor",
-    "github-copilot",
     "grok-build",
     "iphone",
     "apple-watch",

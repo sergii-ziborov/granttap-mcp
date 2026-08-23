@@ -40,6 +40,8 @@ test("gating can exclude exactly one chat without disabling every chat", async (
     sessionMcpDisabled: {},
     sessionSkillsDisabled: {},
     sessionShellDisabled: [],
+    providerSettings: { claude: true, codex: true, cursor: true, grok: true },
+    meshEnabled: true,
   });
   assert.equal(isGatingSkipped("chat-a"), false);
 

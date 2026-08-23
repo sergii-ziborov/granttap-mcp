@@ -21,7 +21,6 @@ import {
   cursorRootSessionId,
   scanCursor,
 } from "../apps/bridge/src/sessions/cursor";
-import { copilotActivity, scanCopilot } from "../apps/bridge/src/sessions/copilot";
 
 function setEnv(t: test.TestContext, name: string, value: string): void {
   const previous = process.env[name];
@@ -89,4 +88,3 @@ test("Cursor policy scope resolves nested parents and fails closed on ambiguity 
   assert.equal(cursorRootSessionId("unknown", db), "unknown");
   assert.equal(cursorRootSessionId(" ", db), null);
 });
-

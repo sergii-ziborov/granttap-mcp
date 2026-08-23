@@ -18,6 +18,7 @@ import {
   autoAcceptLevelFor,
   blockedSessionCapability,
   isGatingSkipped,
+  isProviderEnabled,
   loadConfig,
   machineConfigPath,
   shouldAutoAcceptTool,
@@ -48,6 +49,8 @@ async function main(): Promise<void> {
     process.stdout.write(denyOutput("GrantTap received invalid hook JSON"));
     return;
   }
+
+  if (!isProviderEnabled("codex")) return;
 
   const blocked = blockedSessionCapability(
     input.session_id,

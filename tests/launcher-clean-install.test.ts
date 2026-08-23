@@ -95,7 +95,7 @@ test("published launcher resolves hoisted dependencies and runs setup/serve in i
   };
   assert.equal(snapshot.schema, "granttap.provider-status.v1");
   assert.deepEqual(snapshot.providers.map((provider) => provider.id), [
-    "cursor", "claude", "codex",
+    "cursor", "claude", "codex", "grok",
   ]);
   assert.doesNotMatch(status.stdout, new RegExp(root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.deepEqual(readdirSync(isolated, { recursive: true }).map(String).sort(), before);
@@ -111,6 +111,7 @@ test("published launcher resolves hoisted dependencies and runs setup/serve in i
     setup.stdout,
     /Cursor\s+(?:Beta · (?:Authorize in Cursor|Needs repair)|Not installed)/,
   );
+  assert.match(setup.stdout, /Grok Build\s+(?:Ready|Not installed)/);
   const cursorHooks = readFileSync(join(isolated, "cursor", "hooks.json"), "utf8");
   for (const route of ["cursor", "cursor-after", "cursor-mcp"]) {
     assert.match(cursorHooks, new RegExp(`internal hook ${route}`));
@@ -131,14 +132,17 @@ test("published launcher resolves hoisted dependencies and runs setup/serve in i
   serve.stderr.on("data", (chunk: Buffer) => { serveStderr += chunk.toString("utf8"); });
   t.after(() => serve.kill("SIGTERM"));
   let health: Response | null = null;
-  for (let attempt = 0; attempt < 40; attempt += 1) {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
     try {
       health = await fetch(`http://127.0.0.1:${port}/healthz`);
       if (health.ok) break;
     } catch {
       // The portable launcher may still be resolving its TypeScript loader.
+      // Coverage instrumentation makes that resolution measurably slower, so
+      // wait on the health endpoint itself instead of a fixed attempt budget.
     }
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await new Promise<void>((resolve) => setTimeout(resolve, 100));
   }
   assert.ok(health?.ok, serveStderr);
   const healthJson = await health!.json() as { schema: string; service: string };

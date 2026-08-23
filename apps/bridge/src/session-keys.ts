@@ -2,7 +2,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "n
 import { join } from "node:path";
 import { generateTransferKey } from "../../../packages/core/crypto";
 import { RelayClient, type SendOptions } from "../../../packages/core/relay-client";
-import type { Payload, Role } from "../../../packages/protocol/schema";
+import type { MeshEvent, MeshSnapshot, Payload, Role } from "../../../packages/protocol/schema";
 import { configDir } from "./config";
 
 type SessionKeys = Record<string, string>;
@@ -53,12 +53,34 @@ export async function sendSessionPayload(
   to: Role | "all" = "phone",
   options: SendOptions = {},
 ): Promise<void> {
+  await sendScopedPayload(client, payload, sessionId, undefined, to, options);
+}
+
+export async function sendMeshPayload(
+  client: RelayClient,
+  payload: MeshEvent | MeshSnapshot,
+  to: Role | "all" = "phone",
+  options: SendOptions = {},
+): Promise<void> {
+  const purpose = payload.type === "mesh.snapshot" ? "project" : "task";
+  await sendScopedPayload(client, payload, payload.sessionId, purpose, to, options);
+}
+
+async function sendScopedPayload(
+  client: RelayClient,
+  payload: Payload,
+  sessionId: string,
+  purpose: "task" | "project" | undefined,
+  to: Role | "all",
+  options: SendOptions,
+): Promise<void> {
   const key = sessionKey(sessionId);
   client.setSessionKey(sessionId, key);
   await client.send({
     type: "session.key.grant",
     sessionId,
     key,
+    purpose,
     createdAt: Date.now(),
   }, to, { ttlMs: options.ttlMs });
   await client.sendSession(payload, sessionId, to, options);
