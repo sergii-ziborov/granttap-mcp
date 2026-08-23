@@ -18,8 +18,23 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run test:coverage
+      - run: npm test
       - run: npm run typecheck
-      - run: npm run package:allowlist
       - run: npm audit --omit=dev --audit-level=high
       - run: npm pack --dry-run
+
+  # The coverage contract is measured on macOS because the LaunchAgent helper,
+  # the Cursor OAuth service, and the installer only execute there. Linux skips
+  # those paths, so a Linux percentage would understate real runtime coverage.
+  coverage:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:coverage
+      - run: npm run package:allowlist

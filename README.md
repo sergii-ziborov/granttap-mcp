@@ -181,10 +181,16 @@ npm install
 npm run typecheck
 npm test
 npm run package:allowlist
+npm run test:coverage   # macOS only — see below
 ```
+
+`npm test` runs everywhere. The coverage contract is measured on macOS: the
+background helper, the Cursor OAuth service, and the installer only execute
+there, so a Linux percentage understates real runtime coverage. CI runs the
+cross-platform suite on Linux and the coverage gate on macOS, and `npm publish`
+enforces the same gate through `prepublishOnly`.
 
 Do not publish from a dirty checkout or before the package allowlist, tests,
 typecheck, and release checks pass.
 
-GrantTap is not affiliated with Anthropic, OpenAI, Apple, Microsoft, Anysphere,
-GitHub, or xAI.
+GrantTap is not affiliated with Anthropic, OpenAI, Apple, Anysphere, or xAI.
