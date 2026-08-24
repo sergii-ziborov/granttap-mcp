@@ -100,5 +100,16 @@ expiry, actor, Project scope, and operation, and a revoked or disabled endpoint
 fails closed. Invite creation, actor enablement, Project scope, and revocation
 stay in the iPhone UI and the trusted CLI, never in a model-callable tool.
 
+## Local helper installation
+
+The background helper is a user LaunchAgent, and `launchctl bootstrap` replaces
+whatever job already holds that label. GrantTap therefore refuses to load a
+LaunchAgent whose plist lives under the operating system's temporary directory:
+a test, probe, or agent run with a temporary `HOME` must never evict the
+installed helper and leave launchd restarting a program whose files were already
+cleaned up. Only `GRANTTAP_TEST_FAKE_LAUNCHCTL=1`, which states that `launchctl`
+on `PATH` is a stub, lifts that refusal.
+
+
 Relay vulnerabilities should be reported through the
 [GrantTap relay advisory form](https://github.com/sergii-ziborov/granttap-relay/security/advisories/new).

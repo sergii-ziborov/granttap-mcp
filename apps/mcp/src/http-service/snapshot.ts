@@ -1,3 +1,4 @@
+import { insideTemporaryDirectory } from "../../../bridge/src/launchd-safety";
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
@@ -95,7 +96,7 @@ function currentOwnedPlist(path: string): Buffer | null | undefined {
 }
 
 function bootout(path: string): void {
-  if (process.env.GRANTTAP_SKIP_LAUNCHCTL === "1") return;
+  if (process.env.GRANTTAP_SKIP_LAUNCHCTL === "1" || insideTemporaryDirectory(path)) return;
   const uid = process.getuid?.();
   if (uid != null) spawnSync("launchctl", ["bootout", `gui/${uid}`, path], { stdio: "ignore" });
 }
@@ -118,7 +119,7 @@ function restorePlist(before: HttpMcpServiceSnapshot, plist: Buffer): void {
 }
 
 function bootstrap(path: string): boolean {
-  if (process.env.GRANTTAP_SKIP_LAUNCHCTL === "1") return true;
+  if (process.env.GRANTTAP_SKIP_LAUNCHCTL === "1" || insideTemporaryDirectory(path)) return true;
   const uid = process.getuid?.();
   if (uid == null) return false;
   return spawnSync("launchctl", ["bootstrap", `gui/${uid}`, path], { stdio: "ignore" }).status === 0;

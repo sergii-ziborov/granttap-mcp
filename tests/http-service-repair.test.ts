@@ -95,7 +95,12 @@ test("authorize restores exact owned plist and loaded state after bootstrap fail
   const env: NodeJS.ProcessEnv = {
     ...authorizeEnv(root, port), PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
     GRANTTAP_FAKE_SERVICE_STATE: serviceState, GRANTTAP_FAKE_FAILED_ONCE: failedOnce,
+    // launchctl on PATH is the stub above, so the live domain is never reached.
+    GRANTTAP_TEST_FAKE_LAUNCHCTL: "1",
   };
+  // This test drives the real install path through its stub, so the suite-wide
+  // launchctl escape hatch must not short-circuit it.
+  delete env.GRANTTAP_SKIP_LAUNCHCTL;
   const path = join(env.GRANTTAP_LAUNCH_AGENTS_DIR!, "com.granttap.mcp-http.plist");
   const before = ownedPlist();
   mkdirSync(env.GRANTTAP_LAUNCH_AGENTS_DIR!, { recursive: true });

@@ -147,6 +147,7 @@ test("authorize installs a persistent loopback service, verifies health, then ex
     port: process.env.GRANTTAP_MCP_HTTP_PORT,
     node: process.env.GRANTTAP_NODE,
     skip: process.env.GRANTTAP_SKIP_LAUNCHCTL,
+    fakeLaunchctl: process.env.GRANTTAP_TEST_FAKE_LAUNCHCTL,
     path: process.env.PATH,
     fakePid: process.env.GRANTTAP_FAKE_PID_FILE,
     fakeNode: process.env.GRANTTAP_FAKE_NODE,
@@ -160,6 +161,9 @@ test("authorize installs a persistent loopback service, verifies health, then ex
     GRANTTAP_MCP_HTTP_HOST: "127.0.0.1",
     GRANTTAP_MCP_HTTP_PORT: String(port),
     GRANTTAP_NODE: process.execPath,
+    // launchctl on PATH is the stub written above, so the installer may run its
+    // whole path against a temporary LaunchAgents directory.
+    GRANTTAP_TEST_FAKE_LAUNCHCTL: "1",
     PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
     GRANTTAP_FAKE_PID_FILE: pidFile,
     GRANTTAP_FAKE_NODE: process.execPath,
@@ -185,6 +189,7 @@ test("authorize installs a persistent loopback service, verifies health, then ex
       GRANTTAP_MCP_HTTP_PORT: previous.port,
       GRANTTAP_NODE: previous.node,
       GRANTTAP_SKIP_LAUNCHCTL: previous.skip,
+      GRANTTAP_TEST_FAKE_LAUNCHCTL: previous.fakeLaunchctl,
       PATH: previous.path,
       GRANTTAP_FAKE_PID_FILE: previous.fakePid,
       GRANTTAP_FAKE_NODE: previous.fakeNode,

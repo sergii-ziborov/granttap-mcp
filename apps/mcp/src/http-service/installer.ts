@@ -1,3 +1,4 @@
+import { refusesLiveLaunchd } from "../../../bridge/src/launchd-safety";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -105,6 +106,8 @@ function installPlist(path: string, logsDir: string, plist: string, options: { f
   if (already && !options.forceReload && inspectHttpMcpService().running) return { status: "already", detail: path };
   writePlist(path, plist);
   if (process.env.GRANTTAP_SKIP_LAUNCHCTL === "1") return { status: already ? "already" : "installed", detail: path };
+  const sandboxed = refusesLiveLaunchd(path);
+  if (sandboxed) return rollback(before, sandboxed);
   const uid = process.getuid?.();
   if (uid == null) return rollback(before, `${path}: could not determine user id`);
   const domain = `gui/${uid}`;

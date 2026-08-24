@@ -23,6 +23,7 @@ import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import type { CodingAgent } from "../../../packages/protocol/schema";
+import { refusesLiveLaunchd } from "./launchd-safety";
 import { configDir } from "./config";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
@@ -468,6 +469,8 @@ export function installMonitorHelper(): InstallResult {
     return { status: already ? "already" : "installed", detail };
   }
 
+  const sandboxed = refusesLiveLaunchd(path);
+  if (sandboxed) return { status: "manual", detail: sandboxed };
   const uid = process.getuid?.();
   if (uid == null) return { status: "manual", detail: `${path}: could not determine user id` };
   const domain = `gui/${uid}`;
