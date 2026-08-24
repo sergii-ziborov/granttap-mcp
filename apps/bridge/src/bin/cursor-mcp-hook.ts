@@ -19,6 +19,7 @@ import {
 } from "../cursor-mcp-policy";
 import { recordAttributedCall } from "../mesh/call-scope";
 import { cursorRootSessionId } from "../sessions/cursor";
+import { protectedGrantTapAccess } from "../self-protection";
 
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
@@ -40,6 +41,17 @@ async function main(): Promise<void> {
     input = JSON.parse(await readStdin()) as CursorMcpHookInput;
   } catch {
     nativeAsk("GrantTap could not correlate this MCP call; use Cursor approval.");
+    return;
+  }
+  const protectedAccess = protectedGrantTapAccess(
+    input.tool_name, input.tool_input, input.command,
+  );
+  if (protectedAccess) {
+    process.stdout.write(JSON.stringify({
+      permission: "deny",
+      user_message: protectedAccess.reason,
+      agent_message: protectedAccess.reason,
+    }));
     return;
   }
   if (!isProviderEnabled("cursor")) {

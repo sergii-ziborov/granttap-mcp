@@ -2,6 +2,7 @@
 /** Deny-only Codex PreToolUse policy for exact per-chat capability switches. */
 import type { HookInput } from "../adapters";
 import { blockedSessionCapability, isProviderEnabled } from "../config";
+import { protectedGrantTapAccess } from "../self-protection";
 
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
@@ -10,13 +11,24 @@ async function readStdin(): Promise<string> {
 }
 
 async function main(): Promise<void> {
-  if (!isProviderEnabled("codex")) return;
   let input: HookInput;
   try {
     input = JSON.parse(await readStdin()) as HookInput;
   } catch {
     return;
   }
+  const protectedAccess = protectedGrantTapAccess(input.tool_name, input.tool_input);
+  if (protectedAccess) {
+    process.stdout.write(JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        permissionDecisionReason: protectedAccess.reason,
+      },
+    }));
+    return;
+  }
+  if (!isProviderEnabled("codex")) return;
   const blocked = blockedSessionCapability(
     input.session_id,
     input.tool_name,

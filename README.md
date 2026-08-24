@@ -51,12 +51,11 @@ Mesh resource. Full transcripts and hidden reasoning are never mesh payloads.
 Claims have TTLs; a colliding claim is rejected before it is recorded so agents
 can choose different work or contact the owner before escalating to Needs You.
 
-Both directions are scoped to the calling execution. The provider hook already
-runs inside the agent's own session and sees the exact call, so GrantTap
-attributes every `notify` to the session that really made it and publishes the
-event only for that execution — a model that learned another session's id
-cannot act in its name. `granttap://mesh/current` therefore carries no Project
-data: an attributed call returns this execution's opaque
+For Claude Code, Codex, and Cursor, the provider hook runs inside the agent's
+own session and sees the exact call. GrantTap attributes every `notify` to the
+session that really made it and publishes the event only for that execution —
+a model that learned another session's id cannot act in its name.
+`granttap://mesh/current` therefore carries no Project data: an attributed call returns this execution's opaque
 `granttap://mesh/<capability>` URI, and only that URI serves its Project, Task,
 owners, claims, dependencies, and relevant events. Ownership transfer stays out
 of the tool surface entirely: `HANDOFF_ACCEPTED` and `HANDOFF_REJECTED` are
@@ -66,8 +65,11 @@ The first executable handoff path is Claude Code ↔ Codex across linked
 computers. GrantTap builds a bounded Task Capsule from explicit task/git facts,
 requires local phone authorization, creates a separate target branch/worktree,
 starts the target execution, and returns a receipt bound to the exact capsule.
-Cursor and Grok Build use the same provider-neutral schema and discovery model;
-unsupported remote-start paths fail closed instead of claiming parity.
+Cursor uses the same provider-neutral schema and trusted caller attribution.
+Grok Build remains Experimental and observable where available, but does not
+yet expose a trusted caller hook, so agent-authored scoped Mesh events are not
+offered for it. Unsupported remote-start paths fail closed instead of claiming
+parity.
 
 A capsule carries facts, not files. A handoff from a checkout with uncommitted
 changes is refused — "This task has uncommitted changes. Commit or checkpoint

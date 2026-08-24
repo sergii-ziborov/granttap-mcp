@@ -20,6 +20,15 @@ credential used for authenticated WebSocket and APNs registration.
 Provider credentials remain in each provider's own local authentication flow.
 GrantTap does not send them to the relay.
 
+Installed Claude Code, Codex, and Cursor hooks deny direct agent tool calls
+that name GrantTap's local pairing or policy directory, including calls that
+would otherwise be auto-accepted or run in provider bypass mode. This is
+best-effort self-protection, not an operating-system security boundary: a
+process running as the same macOS user can use an unobserved tool, shell
+obfuscation, or direct filesystem access outside those hooks. Protect the user
+account and disk; use a trusted terminal for intentional maintenance. Moving
+remaining local secret material into Keychain is the stronger future boundary.
+
 ## Cryptographic boundary
 
 - Every computer pairing is generated locally with unique Curve25519 keys.
@@ -66,6 +75,10 @@ reasoning and transcript replication are outside the contract. Handoff
 acceptance includes a SHA-256 receipt over a canonical capsule and the source,
 target, Task identity, and acceptance time. Stale claims expire, replayed event
 IDs are ignored, and destination routing is explicit.
+
+Repository remotes included in Project snapshots are reduced to lowercase
+host/path form. Userinfo, passwords or tokens, query strings, fragments, and
+local-path remotes are never persisted as `baseRemote`.
 
 ## Runtime controls
 

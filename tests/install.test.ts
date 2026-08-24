@@ -69,11 +69,12 @@ test("installMonitorHelper preserves an existing nodvox-pinned LaunchAgent", asy
   const agentsDir = join(root, "LaunchAgents");
   await mkdir(agentsDir, { recursive: true });
   const path = join(agentsDir, "com.granttap.monitor.plist");
+  const pinnedBin = join(root, "nodvox", "bin", "granttap.mjs");
   const pinned = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     "<plist><dict>",
     "<key>Label</key><string>com.granttap.monitor</string>",
-    "<string>/Users/serhiirihgt/dev/nodvox/bin/granttap.mjs</string>",
+    `<string>${pinnedBin}</string>`,
     "<string>monitor</string>",
     "</dict></plist>",
     "",
@@ -81,13 +82,21 @@ test("installMonitorHelper preserves an existing nodvox-pinned LaunchAgent", asy
   await writeFile(path, pinned);
   const previous = {
     agents: process.env.GRANTTAP_LAUNCH_AGENTS_DIR,
+    pinnedBin: process.env.GRANTTAP_PINNED_MONITOR_BIN,
+    pinnedRoot: process.env.GRANTTAP_PINNED_MONITOR_ROOT,
     skip: process.env.GRANTTAP_SKIP_LAUNCHCTL,
   };
   process.env.GRANTTAP_LAUNCH_AGENTS_DIR = agentsDir;
+  process.env.GRANTTAP_PINNED_MONITOR_BIN = pinnedBin;
+  process.env.GRANTTAP_PINNED_MONITOR_ROOT = join(root, "nodvox");
   process.env.GRANTTAP_SKIP_LAUNCHCTL = "1";
   t.after(() => {
     if (previous.agents == null) delete process.env.GRANTTAP_LAUNCH_AGENTS_DIR;
     else process.env.GRANTTAP_LAUNCH_AGENTS_DIR = previous.agents;
+    if (previous.pinnedBin == null) delete process.env.GRANTTAP_PINNED_MONITOR_BIN;
+    else process.env.GRANTTAP_PINNED_MONITOR_BIN = previous.pinnedBin;
+    if (previous.pinnedRoot == null) delete process.env.GRANTTAP_PINNED_MONITOR_ROOT;
+    else process.env.GRANTTAP_PINNED_MONITOR_ROOT = previous.pinnedRoot;
     if (previous.skip == null) delete process.env.GRANTTAP_SKIP_LAUNCHCTL;
     else process.env.GRANTTAP_SKIP_LAUNCHCTL = previous.skip;
   });

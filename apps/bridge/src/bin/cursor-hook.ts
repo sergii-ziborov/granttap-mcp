@@ -16,6 +16,7 @@ import {
   shouldAutoAcceptCursorShell,
 } from "../config";
 import { cursorRootSessionId } from "../sessions/cursor";
+import { protectedGrantTapAccess } from "../self-protection";
 
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
@@ -31,12 +32,27 @@ function nativeAsk(message: string): void {
   }));
 }
 
+function deny(message: string): void {
+  process.stdout.write(JSON.stringify({
+    permission: "deny", continue: false,
+    user_message: message, agent_message: message,
+    userMessage: message, agentMessage: message,
+  }));
+}
+
 async function main(): Promise<void> {
   let input: CursorHookInput;
   try {
     input = JSON.parse(await readStdin()) as CursorHookInput;
   } catch {
     nativeAsk("GrantTap could not read this shell call; use Cursor approval.");
+    return;
+  }
+  const protectedAccess = protectedGrantTapAccess(
+    input.tool_name, input.tool_input, input.command,
+  );
+  if (protectedAccess) {
+    deny(protectedAccess.reason);
     return;
   }
   if (!isProviderEnabled("cursor")) {
@@ -51,14 +67,7 @@ async function main(): Promise<void> {
     input.tool_input ?? { command: input.command },
   );
   if (blocked) {
-    process.stdout.write(JSON.stringify({
-      permission: "deny",
-      continue: false,
-      user_message: blocked.reason,
-      agent_message: blocked.reason,
-      userMessage: blocked.reason,
-      agentMessage: blocked.reason,
-    }));
+    deny(blocked.reason);
     return;
   }
   if (!sessionId || isGatingSkipped(sessionId)) {

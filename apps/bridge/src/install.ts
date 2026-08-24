@@ -299,18 +299,15 @@ export function inspectMonitorHelper(): MonitorIntegrationStatus {
   return { configured: true, running: active.status === 0 };
 }
 
-/** Absolute pin for this machine — LaunchAgent must never drift to granttap-mcp + Cursor helpers. */
-export const DEFAULT_PINNED_MONITOR_BIN = "/Users/serhiirihgt/dev/nodvox/bin/granttap.mjs";
-export const DEFAULT_PINNED_MONITOR_ROOT = "/Users/serhiirihgt/dev/nodvox";
-
-export function pinnedMonitorBin(): string {
+/** Optional explicit development pin; public installs use this package by default. */
+export function pinnedMonitorBin(): string | undefined {
   const override = process.env.GRANTTAP_PINNED_MONITOR_BIN?.trim();
-  return override && override.length > 0 ? override : DEFAULT_PINNED_MONITOR_BIN;
+  return override && override.length > 0 ? override : undefined;
 }
 
-export function pinnedMonitorRoot(): string {
+export function pinnedMonitorRoot(): string | undefined {
   const override = process.env.GRANTTAP_PINNED_MONITOR_ROOT?.trim();
-  return override && override.length > 0 ? override : DEFAULT_PINNED_MONITOR_ROOT;
+  return override && override.length > 0 ? override : undefined;
 }
 
 function xml(value: string): string {
@@ -326,15 +323,12 @@ export function isCursorHelperNode(nodePath: string): boolean {
   return nodePath.includes("Cursor.app") || nodePath.includes("/helpers/node");
 }
 
-/** True when plist already runs the nodvox monitor without Cursor/mcp clobber. */
+/** True when a plist uses the caller's explicit development monitor pin. */
 export function isNodvoxPinnedPlist(contents: string): boolean {
   const pin = pinnedMonitorBin();
-  const hasNodvoxBin =
-    contents.includes(pin) ||
-    contents.includes("/dev/nodvox/bin/granttap.mjs") ||
-    contents.includes("/nodvox/bin/granttap.mjs");
+  if (!pin) return false;
   return (
-    hasNodvoxBin &&
+    contents.includes(pin) &&
     !contents.includes("granttap-mcp.mjs") &&
     !contents.includes("Cursor.app") &&
     !contents.includes("/helpers/node")
@@ -364,8 +358,8 @@ export function resolveMonitorNodeBin(): string | null {
  * Keep task/session sync alive without a terminal or a newly opened MCP chat.
  *
  * Hard rules:
- * - Never overwrite a healthy nodvox-pinned LaunchAgent with granttap-mcp / Cursor helpers.
- * - When `/Users/serhiirihgt/dev/nodvox/bin/granttap.mjs` exists, pin to it (not this package's bin).
+ * - Never overwrite a healthy explicitly pinned LaunchAgent with package / Cursor helpers.
+ * - Development pins are opt-in through `GRANTTAP_PINNED_MONITOR_BIN`.
  * - Never put Cursor.app helpers/node in ProgramArguments.
  */
 export function installMonitorHelper(): InstallResult {
@@ -383,11 +377,12 @@ export function installMonitorHelper(): InstallResult {
     }
   }
 
-  const pinBin = pinnedMonitorBin();
-  const usePin = existsSync(pinBin);
-  const executable = usePin ? pinBin : join(repoRoot, "bin", "granttap-mcp.mjs");
-  const workingDirectory = usePin
-    ? pinnedMonitorRoot()
+  const explicitPin = pinnedMonitorBin();
+  const pinBin = explicitPin && existsSync(explicitPin) ? explicitPin : undefined;
+  const usePin = pinBin != null;
+  const executable = pinBin ?? join(repoRoot, "bin", "granttap-mcp.mjs");
+  const workingDirectory = pinBin
+    ? (pinnedMonitorRoot() ?? dirname(pinBin))
     : (process.env.GRANTTAP_MONITOR_CWD ?? process.cwd());
   const nodeBin = resolveMonitorNodeBin();
   if (!nodeBin) {

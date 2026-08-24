@@ -9,6 +9,7 @@ import {
   registerPendingApproval,
 } from "../apps/bridge/src/approval-state";
 import { resolveCursorMcpServer } from "../apps/bridge/src/cursor-mcp-policy";
+import { protectedGrantTapAccess } from "../apps/bridge/src/self-protection";
 
 const HOOKS = {
   claude: "apps/bridge/src/bin/claude-hook.ts",
@@ -35,6 +36,38 @@ function runHook(
   assert.ok(child.stdout.trim(), `${agent} hook returned no decision`);
   return JSON.parse(child.stdout) as Record<string, unknown>;
 }
+
+test("provider hooks deny direct access to GrantTap trust state before bypass or auto policy", (t) => {
+  const configDir = mkdtempSync(join(tmpdir(), "granttap-self-protection-"));
+  t.after(() => rmSync(configDir, { recursive: true, force: true }));
+  const protectedPath = join(configDir, "machine.json");
+  const cases: Array<[keyof typeof HOOKS, Record<string, unknown>]> = [
+    ["claude", {
+      session_id: "chat", tool_name: "Read", permission_mode: "bypassPermissions",
+      tool_input: { file_path: protectedPath },
+    }],
+    ["codex", {
+      session_id: "chat", tool_name: "shell_command",
+      tool_input: { command: `cat ${protectedPath}` },
+    }],
+    ["codexPolicy", {
+      session_id: "chat", tool_name: "Read", tool_input: { path: "~/.granttap/config.json" },
+    }],
+    ["cursor", { command: `cat ${protectedPath}` }],
+    ["cursorMcp", {
+      tool_name: "read_file", tool_input: { path: "$HOME/.granttap/session-keys.json" },
+    }],
+  ];
+  for (const [provider, input] of cases) {
+    const output = runHook(provider, configDir, input);
+    assert.match(JSON.stringify(output), /protects its local pairing and policy files/);
+    assert.doesNotMatch(JSON.stringify(output), new RegExp(configDir.replaceAll("/", "\\/")));
+  }
+  assert.ok(protectedGrantTapAccess("Read", { path: "/tmp/.nodvox/key.json" }));
+  assert.equal(protectedGrantTapAccess("Write", {
+    file_path: "/repo/README.md", content: "Document ~/.granttap without reading it",
+  }), null);
+});
 
 test("provider hooks enforce disabled capabilities only in the exact root chat", (t) => {
   const configDir = mkdtempSync(join(tmpdir(), "granttap-hook-capabilities-"));

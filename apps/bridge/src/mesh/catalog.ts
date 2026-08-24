@@ -7,7 +7,12 @@ import type {
   SessionInfo,
   TaskState,
 } from "../../../../packages/protocol/schema";
-import { canonicalRepositoryIdentity, projectIdentity, taskIdentity } from "./identity";
+import {
+  canonicalRepositoryIdentity,
+  projectIdentity,
+  sanitizedRepositoryRemote,
+  taskIdentity,
+} from "./identity";
 import type { MeshStore } from "./store";
 
 export type RepositoryFacts = {
@@ -49,11 +54,12 @@ export function inspectRepository(cwd: string): RepositoryFacts {
   const cached = repositoryCache.get(cwd);
   if (cached) return cached;
   const root = git(cwd, ["rev-parse", "--show-toplevel"]) ?? cwd;
-  const baseRemote = git(root, ["remote", "get-url", "origin"]);
+  const rawRemote = git(root, ["remote", "get-url", "origin"]);
+  const baseRemote = rawRemote ? sanitizedRepositoryRemote(rawRemote) : undefined;
   const facts = {
     root,
     baseRemote,
-    canonicalRepositoryId: canonicalRepositoryIdentity(baseRemote, root),
+    canonicalRepositoryId: canonicalRepositoryIdentity(rawRemote, root),
     worktree: git(root, ["rev-parse", "--show-toplevel"]),
   };
   repositoryCache.set(cwd, facts);
@@ -89,7 +95,9 @@ export function linkSessionsToProjects(
       name: basename(repository.root) || "Project",
       repositoryRoot: repository.root,
       canonicalRepositoryId: repository.canonicalRepositoryId,
-      baseRemote: repository.baseRemote,
+      baseRemote: repository.baseRemote
+        ? sanitizedRepositoryRemote(repository.baseRemote)
+        : undefined,
       createdAt: session.startedAt,
     };
     store.upsertProject(project);

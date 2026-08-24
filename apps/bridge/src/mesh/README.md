@@ -9,12 +9,13 @@ identity without replacing provider-native session discovery. `store.ts`
 deduplicates replayed events and expires stale claims. `capsule.ts` reads only
 explicit git and task facts; transcripts and hidden reasoning are never copied.
 `worktree.ts` creates a separate target branch/worktree before Claude Code or
-Codex is started. The provider abstraction already admits Cursor and Grok Build
-without changing the core contract, while their unsupported phase-one start
-paths fail closed.
+Codex is started. Cursor has trusted caller attribution but no phase-one remote
+start. Grok Build remains observable and Experimental; because it has no
+trusted caller hook, agent-authored scoped Mesh events are not offered for it.
+Unsupported paths fail closed.
 
 `call-scope.ts` and `capability.ts` own caller identity. The MCP server cannot
-see which agent called it, so each provider hook records a single-use
+see which agent called it, so supported provider hooks record a single-use
 attribution for the exact call it observed inside its own session, and the
 runtime derives the publishing execution from that instead of from anything the
 model supplied. `capability.ts` mints the opaque per-execution token that

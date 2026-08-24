@@ -8,6 +8,7 @@ import test from "node:test";
 import {
   canonicalRepositoryIdentity,
   projectIdentity,
+  sanitizedRepositoryRemote,
   taskIdentity,
 } from "../apps/bridge/src/mesh/identity";
 import { MeshStore } from "../apps/bridge/src/mesh/store";
@@ -28,9 +29,16 @@ test("repository and task identity remain stable across computers and handoff", 
   const taskId = taskIdentity(projectId, "claude", "native-a");
   assert.equal(taskId, taskIdentity(projectId, "claude", "native-a"));
   assert.notEqual(taskId, taskIdentity(projectId, "codex", "native-b"));
-  assert.equal(canonicalRepositoryIdentity("Local Alias", "/missing"), "local alias");
+  assert.equal(canonicalRepositoryIdentity("Local Alias", "/missing"), "local:/missing");
   assert.equal(canonicalRepositoryIdentity(undefined, "/definitely/missing/repo"),
     "local:/definitely/missing/repo");
+  assert.equal(
+    sanitizedRepositoryRemote("https://oauth2:TOKEN@gitlab.example.test/team/private.git?ref=main"),
+    "gitlab.example.test/team/private",
+  );
+  assert.equal(sanitizedRepositoryRemote("git@github.com:Example/GrantTap.git"),
+    "github.com/example/granttap");
+  assert.equal(sanitizedRepositoryRemote("/Users/person/private.git"), undefined);
 });
 
 test("claims detect overlap and stale owners expire", async () => {
@@ -159,7 +167,7 @@ test("catalog groups sessions by repository and preserves task identity on hando
   ], "mac", () => ({
     root: "/repo",
     canonicalRepositoryId: "github.com/example/granttap",
-    baseRemote: "git@github.com:example/granttap.git",
+    baseRemote: "https://oauth2:TOKEN@github.com/example/granttap.git?ref=main",
     worktree: "/repo",
   }));
   const source = sessions[0]!;
@@ -176,6 +184,8 @@ test("catalog groups sessions by repository and preserves task identity on hando
     startedAt: now + 1,
   });
   const snapshot = store.snapshot(source.projectId!);
+  assert.equal(snapshot?.project.baseRemote, "github.com/example/granttap");
+  assert.doesNotMatch(JSON.stringify(snapshot), /TOKEN|oauth2|ref=main/);
   assert.equal(snapshot?.tasks.length, 1);
   assert.equal(snapshot?.executions.length, 2);
   assert.deepEqual(new Set(snapshot?.executions.map((item) => item.taskId)), new Set([source.taskId]));

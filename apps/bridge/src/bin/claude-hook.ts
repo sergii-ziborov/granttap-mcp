@@ -25,6 +25,7 @@ import {
 } from "../config";
 import { recordAttributedCall } from "../mesh/call-scope";
 import { classifyAction } from "../policy";
+import { protectedGrantTapAccess } from "../self-protection";
 
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
@@ -47,6 +48,18 @@ async function main(): Promise<void> {
         },
       }),
     );
+    return;
+  }
+
+  const protectedAccess = protectedGrantTapAccess(input.tool_name, input.tool_input);
+  if (protectedAccess) {
+    process.stdout.write(JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        permissionDecisionReason: protectedAccess.reason,
+      },
+    }));
     return;
   }
 
