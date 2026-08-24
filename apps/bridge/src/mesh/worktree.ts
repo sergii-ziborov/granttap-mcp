@@ -8,6 +8,19 @@ function safeSegment(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
 }
 
+/** Whether this checkout can already resolve the commit a capsule names. */
+export function repositoryHasCommit(repository: string, revision: string): boolean {
+  if (!/^[0-9a-f]{7,64}$/i.test(revision)) return false;
+  try {
+    execFileSync("git", ["-C", repository, "cat-file", "-e", `${revision}^{commit}`], {
+      stdio: "ignore", timeout: 3_000,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function createHandoffWorktree(
   repository: string,
   worktreeRoot: string,

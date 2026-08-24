@@ -9,7 +9,7 @@ import type { MeshEvent, TaskCapsule } from "../packages/protocol/schema";
 import { createPairing } from "../apps/bridge/src/config";
 import { localMeshStore, resetLocalMeshStore } from "../apps/bridge/src/mesh/local";
 import { createGrokBotMeshServer } from "../apps/mcp/src/mesh-server";
-import { resetGrokBotRelay } from "../apps/mcp/src/mcp-tools/mesh-relay";
+import { grokBotRelay, resetGrokBotRelay } from "../apps/mcp/src/mcp-tools/mesh-relay";
 import { saveTestGrokBotEndpoint } from "./support/grok-bot-endpoint";
 import { connectInMemory, textResult } from "./support/mcp-client";
 import { forwardingRelay, waitFor } from "./support/forwarding-relay";
@@ -104,7 +104,10 @@ test("Grok Bot MCP executes every scoped Mesh operation over E2EE", async (t) =>
     type: "session.key.grant", sessionId: taskId, key: taskKey,
     purpose: "task", createdAt: Date.now(),
   }, "machine");
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  // Wait for the key itself: a fixed delay makes every publish below timing
+  // dependent, which is exactly the kind of flake a release gate must not have.
+  const bot = await grokBotRelay();
+  await waitFor(() => bot.hasSessionKey(taskId));
 
   assert.equal((await call("mesh_task", scope)).isError, undefined);
   assert.equal((await call("mesh_task", { ...scope, taskId: "missing" })).isError, true);

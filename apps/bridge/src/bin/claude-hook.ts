@@ -23,6 +23,7 @@ import {
   machineConfigPath,
   shouldAutoAcceptTool,
 } from "../config";
+import { recordAttributedCall } from "../mesh/call-scope";
 import { classifyAction } from "../policy";
 
 async function readStdin(): Promise<string> {
@@ -50,6 +51,16 @@ async function main(): Promise<void> {
   }
 
   if (!isProviderEnabled("claude")) return;
+
+  // Attribute this exact GrantTap call to the session that made it. The MCP
+  // server cannot see the caller, so without this a model could publish Mesh
+  // events in another execution's name.
+  recordAttributedCall({
+    provider: "claude",
+    sessionId: input.session_id,
+    toolName: input.tool_name,
+    args: input.tool_input,
+  });
 
   const blocked = blockedSessionCapability(
     input.session_id,

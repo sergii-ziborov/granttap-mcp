@@ -45,12 +45,22 @@ Project Mesh adds stable Project and Task identity above provider-native
 sessions. A Task can retain its `taskId` across multiple executions, agents,
 and computers while each native session remains intact.
 
-Agents can read the compact `granttap://mesh/current` MCP resource and publish
-bounded progress, dependency, question, answer, claim, conflict, and completion
-events through the existing `notify` tool. Full transcripts and hidden
-reasoning are never mesh payloads. Claims have TTLs; a colliding claim is
-rejected before it is recorded so agents can choose different work or contact
-the owner before escalating to Needs You.
+Agents publish bounded progress, dependency, question, answer, claim, conflict,
+and completion events through the existing `notify` tool, and read state from a
+Mesh resource. Full transcripts and hidden reasoning are never mesh payloads.
+Claims have TTLs; a colliding claim is rejected before it is recorded so agents
+can choose different work or contact the owner before escalating to Needs You.
+
+Both directions are scoped to the calling execution. The provider hook already
+runs inside the agent's own session and sees the exact call, so GrantTap
+attributes every `notify` to the session that really made it and publishes the
+event only for that execution — a model that learned another session's id
+cannot act in its name. `granttap://mesh/current` therefore carries no Project
+data: an attributed call returns this execution's opaque
+`granttap://mesh/<capability>` URI, and only that URI serves its Project, Task,
+owners, claims, dependencies, and relevant events. Ownership transfer stays out
+of the tool surface entirely: `HANDOFF_ACCEPTED` and `HANDOFF_REJECTED` are
+decided by the runtime after receipt verification.
 
 The first executable handoff path is Claude Code ↔ Codex across linked
 computers. GrantTap builds a bounded Task Capsule from explicit task/git facts,
@@ -58,6 +68,14 @@ requires local phone authorization, creates a separate target branch/worktree,
 starts the target execution, and returns a receipt bound to the exact capsule.
 Cursor and Grok Build use the same provider-neutral schema and discovery model;
 unsupported remote-start paths fail closed instead of claiming parity.
+
+A capsule carries facts, not files. A handoff from a checkout with uncommitted
+changes is refused — "This task has uncommitted changes. Commit or checkpoint
+them before moving the task." — instead of silently continuing the Task from
+committed state and leaving that work behind. The destination is refused just
+as explicitly when the named commit is not on its computer, or when the
+capsule's own resource claims overlap another execution's; GrantTap never
+pushes or fetches on its own.
 
 ### Grok Bot as a scoped Mesh participant
 
@@ -127,7 +145,8 @@ Setup is CLI-only because it changes provider configuration and must not be
 available to a model through prompt injection.
 
 `notify` may alternatively carry one bounded task-scoped Mesh event. This does
-not add a fifth MCP tool or grant any global setup capability.
+not add a fifth MCP tool or grant any global setup capability, and it publishes
+only for the execution whose provider hook attributed the call.
 
 Provider-native approvals and mobile continuation require the matching local
 adapter. MCP registration alone is never reported as proof that an integration

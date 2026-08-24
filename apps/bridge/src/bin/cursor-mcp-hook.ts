@@ -17,6 +17,7 @@ import {
   resolveCursorMcpServer,
   type CursorMcpHookInput,
 } from "../cursor-mcp-policy";
+import { recordAttributedCall } from "../mesh/call-scope";
 import { cursorRootSessionId } from "../sessions/cursor";
 
 async function readStdin(): Promise<string> {
@@ -47,6 +48,13 @@ async function main(): Promise<void> {
   }
   const rawSessionId = cursorConversationId(input);
   const sessionId = cursorRootSessionId(rawSessionId) ?? rawSessionId;
+  // See claude-hook.ts: Mesh events are published only for the calling session.
+  recordAttributedCall({
+    provider: "cursor",
+    sessionId,
+    toolName: input.tool_name,
+    args: input.tool_input,
+  });
   const server = resolveCursorMcpServer(input);
   const blocked = blockedSessionMcpServer(sessionId, server);
   if (blocked) {

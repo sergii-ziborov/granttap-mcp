@@ -49,6 +49,16 @@ whose independent keys were granted to it. The protection is against relay,
 database/network compromise, other pairings, and disclosure of a different
 task key—not against an endpoint already authorized for that task.
 
+Project Mesh reads and writes are scoped to one execution. The MCP server
+cannot see which agent called it, so the provider hook — which runs inside the
+session and receives the exact arguments — records a single-use attribution for
+that call, and the runtime publishes the event for that session only. A model
+that learned another execution's session id, Project, or Task cannot publish in
+its name, and the unscoped `granttap://mesh/current` URI carries no Project
+data at all. The opaque capability returned to an attributed caller names one
+Project, Task, session and provider, expires, and never authorizes ownership
+transfer.
+
 Task Capsules are strict, bounded schemas containing goal, explicit status,
 repository/commit facts, changed-file names, tests, dependencies, claims,
 remaining work, and explicit decisions. Unknown fields are rejected; hidden

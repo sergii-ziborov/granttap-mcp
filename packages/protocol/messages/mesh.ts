@@ -45,6 +45,9 @@ export const ExecutionSessionLink = z.object({
   workspace: Path,
   branch: z.string().trim().min(1).max(512).optional(),
   worktree: Path.optional(),
+  // Uncommitted work cannot travel inside a Task Capsule, so the owning
+  // computer publishes whether this execution currently has any.
+  uncommitted: z.boolean().optional(),
   startedAt: z.number().nonnegative(),
   endedAt: z.number().nonnegative().optional(),
 }).strict().superRefine((value, ctx) => {

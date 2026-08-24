@@ -29,6 +29,22 @@ function git(cwd: string, args: string[]): string | undefined {
   }
 }
 
+/**
+ * Whether this checkout has changes that a commit-based handoff would leave
+ * behind. `undefined` means the probe could not answer, which callers must not
+ * read as "clean".
+ */
+export function hasUncommittedWork(cwd: string): boolean | undefined {
+  try {
+    execFileSync("git", ["-C", cwd, "diff", "--quiet", "HEAD"], {
+      stdio: "ignore", timeout: 2_000,
+    });
+    return false;
+  } catch (error) {
+    return (error as { status?: number }).status === 1 ? true : undefined;
+  }
+}
+
 export function inspectRepository(cwd: string): RepositoryFacts {
   const cached = repositoryCache.get(cwd);
   if (cached) return cached;
@@ -98,6 +114,7 @@ export function linkSessionsToProjects(
       workspace: cwd,
       branch: session.branch,
       worktree: repository.worktree,
+      uncommitted: hasUncommittedWork(repository.worktree ?? cwd),
       startedAt: session.startedAt,
     });
     return { ...session, projectId, taskId, computerId, worktree: repository.worktree };

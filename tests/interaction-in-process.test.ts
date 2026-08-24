@@ -8,6 +8,7 @@ import type { Payload } from "../packages/protocol/schema";
 import {
   createPairing, machineConfigPath, saveConfig, saveRuntimeConfig,
 } from "../apps/bridge/src/config";
+import { recordAttributedCall } from "../apps/bridge/src/mesh/call-scope";
 import { localMeshStore, resetLocalMeshStore } from "../apps/bridge/src/mesh/local";
 import { createGrantTapServer, resetRelay } from "../apps/mcp/src/create-server";
 import { connectInMemory, textResult } from "./support/mcp-client";
@@ -54,7 +55,8 @@ test("in-process MCP covers unpaired interaction behavior", async (t) => {
   const resource = await client.readResource({ uri: "granttap://mesh/current" });
   const value = JSON.parse((resource.contents[0] as { text: string }).text);
   assert.equal(value.enabled, true);
-  assert.deepEqual(value.projects, []);
+  assert.equal(value.scoped, false);
+  assert.equal("projects" in value, false);
 });
 
 test("paired MCP delivers decisions, replies, and bounded Mesh events", async (t) => {
@@ -106,29 +108,45 @@ test("paired MCP delivers decisions, replies, and bounded Mesh events", async (t
     projectId, taskId, sourceSessionId: "claude-session",
     eventType: "TASK_PROGRESS", payload: { summary: "Crypto complete" },
   };
-  assert.equal(textResult(await call("notify", { meshEvent: meshInput })), "mesh event published");
+  // Stand in for the provider hook, which is the only trusted place that knows
+  // which session made the call.
+  const attribute = (args: Record<string, unknown>) => recordAttributedCall({
+    provider: "claude", sessionId: "claude-session",
+    toolName: "mcp__granttap__notify", args,
+  });
+
+  assert.equal((await call("notify", { meshEvent: meshInput })).isError, true,
+    "an unattributed Mesh event publishes nothing");
+  attribute({ meshEvent: meshInput });
+  const published = textResult(await call("notify", { meshEvent: meshInput }));
+  assert.match(published, /mesh event published/);
+  assert.match(published, /granttap:\/\/mesh\/[A-Za-z0-9_-]{43}/);
   saveRuntimeConfig({ meshEnabled: false });
+  attribute({ meshEvent: meshInput });
   assert.equal((await call("notify", { meshEvent: meshInput })).isError, true);
   const disabledResource = await client.readResource({ uri: "granttap://mesh/current" });
   const disabled = JSON.parse((disabledResource.contents[0] as { text: string }).text);
   assert.equal(disabled.enabled, false);
-  assert.deepEqual(disabled.projects, []);
+  assert.equal("projects" in disabled, false);
 
   saveRuntimeConfig({ meshEnabled: true, providerSettings: {
     claude: false, codex: true, cursor: true, grok: true,
   } });
+  attribute({ meshEvent: meshInput });
   assert.equal((await call("notify", { meshEvent: meshInput })).isError, true);
   saveRuntimeConfig({ providerSettings: { claude: true, codex: true, cursor: true, grok: true } });
   localMeshStore().claim({
     claimId: "foreign", projectId, taskId, ownerSessionId: "codex-session",
     resource: "src/auth/**", mode: "claim", createdAt: Date.now(), expiresAt: Date.now() + 60_000,
   });
-  const conflict = await call("notify", { meshEvent: {
+  const claimEvent = {
     ...meshInput, eventType: "RESOURCE_CLAIM", payload: { claim: {
       claimId: "local", projectId, taskId, ownerSessionId: "claude-session",
       resource: "src/auth/login.ts", mode: "claim", createdAt: Date.now(), expiresAt: Date.now() + 60_000,
     } },
-  } });
+  };
+  attribute({ meshEvent: claimEvent });
+  const conflict = await call("notify", { meshEvent: claimEvent });
   assert.match(textResult(conflict), /claim rejected/);
   await waitFor(() => received.some((item) => item.type === "mesh.event"));
 });

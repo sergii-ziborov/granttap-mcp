@@ -23,6 +23,7 @@ import {
   machineConfigPath,
   shouldAutoAcceptTool,
 } from "../config";
+import { recordAttributedCall } from "../mesh/call-scope";
 import { classifyAction } from "../policy";
 
 async function readStdin(): Promise<string> {
@@ -51,6 +52,14 @@ async function main(): Promise<void> {
   }
 
   if (!isProviderEnabled("codex")) return;
+
+  // See claude-hook.ts: the MCP server trusts this attribution, never the model.
+  recordAttributedCall({
+    provider: "codex",
+    sessionId: input.session_id,
+    toolName: input.tool_name,
+    args: input.tool_input,
+  });
 
   const blocked = blockedSessionCapability(
     input.session_id,

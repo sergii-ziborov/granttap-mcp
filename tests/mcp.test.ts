@@ -88,9 +88,21 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   assert.deepEqual(resources.resources.map((resource) => resource.uri), [
     "granttap://mesh/current",
   ]);
+  const templates = await client.listResourceTemplates();
+  assert.deepEqual(templates.resourceTemplates.map((template) => template.uriTemplate), [
+    "granttap://mesh/{capability}",
+  ]);
+  // The unscoped URI must never carry Project state: it is readable by any
+  // session on this computer, including one running an injected prompt.
   const mesh = await client.readResource({ uri: "granttap://mesh/current" });
-  const meshText = (mesh.contents[0] as { text?: string }).text ?? "";
-  assert.deepEqual(JSON.parse(meshText).projects, []);
+  const meshState = JSON.parse((mesh.contents[0] as { text?: string }).text ?? "{}");
+  assert.equal(meshState.scoped, false);
+  assert.equal("projects" in meshState, false);
+  assert.equal("tasks" in meshState, false);
+  const forged = await client.readResource({ uri: "granttap://mesh/not-a-capability" });
+  const forgedState = JSON.parse((forged.contents[0] as { text?: string }).text ?? "{}");
+  assert.equal(forgedState.scoped, false);
+  assert.equal("project" in forgedState, false);
 
   const emptyNotify = await client.callTool({ name: "notify", arguments: {} });
   assert.equal(emptyNotify.isError, true);

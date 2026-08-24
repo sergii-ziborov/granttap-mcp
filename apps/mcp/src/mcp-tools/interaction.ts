@@ -7,6 +7,12 @@ import {
   MeshEventType,
 } from "../../../../packages/protocol/schema";
 import { classifyHumanAttention } from "../../../bridge/src/mesh/attention";
+import {
+  executionCapabilityFor,
+  resolveExecutionCapability,
+  type ExecutionCapability,
+} from "../../../bridge/src/mesh/capability";
+import { consumeAttributedCall } from "../../../bridge/src/mesh/call-scope";
 import { localMeshStore } from "../../../bridge/src/mesh/local";
 import { handleMeshPayload } from "../../../bridge/src/mesh/runtime";
 import { sendMeshPayload } from "../../../bridge/src/session-keys";
@@ -17,14 +23,20 @@ const NOT_PAIRED =
   "GrantTap is not paired on this machine. Pair the desktop bridge with the GrantTap app first.";
 const question = z.string().min(1).max(8_000).describe("The question to ask");
 const meshEventInput = z.object({
+  capability: z.string().trim().min(1).max(128).optional(),
   projectId: z.string().trim().min(1).max(128),
   taskId: z.string().trim().min(1).max(128),
-  sourceSessionId: z.string().trim().min(1).max(128),
+  sourceSessionId: z.string().trim().min(1).max(128).optional(),
   targetSessionId: z.string().trim().min(1).max(128).optional(),
   eventType: MeshEventType,
   payload: MeshEventPayload,
   expiresInSeconds: z.number().int().min(30).max(86_400).optional(),
 }).strict();
+
+const UNATTRIBUTED =
+  "GrantTap could not attribute this call to a live agent session. Project Mesh events "
+  + "are published only for the execution that made the call, so its provider hook must "
+  + "be installed and trusted (granttap setup).";
 
 export function registerInteractionTools(server: McpServer): void {
   server.registerTool(
@@ -44,6 +56,8 @@ export function registerInteractionTools(server: McpServer): void {
       };
       const client = await relay();
       if (!client) return notPaired();
+      // The provider hook already saw this exact call inside its own session.
+      const attributed = consumeAttributedCall("notify", { message, meshEvent });
       if (message) {
         await client.send(
           { type: "agent.event", text: message, kind: "status", createdAt: Date.now() },
@@ -51,8 +65,20 @@ export function registerInteractionTools(server: McpServer): void {
           { ttlMs: 15 * 60_000, wake: true },
         );
       }
-      const result = meshEvent ? await publishMeshEvent(client, meshEvent) : "sent to phone";
-      return { content: [{ type: "text", text: result }] };
+      const result = meshEvent
+        ? await publishMeshEvent(client, meshEvent, attributed?.sessionId)
+        : "sent to phone";
+      const capability = isMeshEnabled() && attributed
+        ? executionCapabilityFor(attributed.sessionId)
+        : undefined;
+      return {
+        content: [{
+          type: "text",
+          text: capability
+            ? `${result}\nScoped Mesh state: granttap://mesh/${capability.token}`
+            : result,
+        }],
+      };
     },
   );
   server.registerTool(
@@ -75,17 +101,49 @@ export function registerInteractionTools(server: McpServer): void {
   );
 }
 
+/**
+ * Resolve the execution this call really belongs to.
+ *
+ * Nothing the model supplies can widen the scope: an attributed hook call wins,
+ * a capability minted for another session is refused, and an unattributed call
+ * without a capability publishes nothing.
+ */
+function callerScope(
+  input: z.infer<typeof meshEventInput>,
+  attributedSessionId: string | undefined,
+): ExecutionCapability {
+  const capability = attributedSessionId
+    ? executionCapabilityFor(attributedSessionId)
+    : resolveExecutionCapability(input.capability);
+  if (!capability) {
+    throw new Error(attributedSessionId || input.capability
+      ? "Mesh caller is not a live execution of an enabled coding agent"
+      : UNATTRIBUTED);
+  }
+  if (input.capability && input.capability !== capability.token) {
+    throw new Error("Mesh capability belongs to a different execution");
+  }
+  if (input.sourceSessionId && input.sourceSessionId !== capability.sessionId) {
+    throw new Error("Mesh events are published only for the calling execution");
+  }
+  if (input.projectId !== capability.projectId || input.taskId !== capability.taskId) {
+    throw new Error("Mesh Task is outside this execution's scope");
+  }
+  if (!capability.allowedEventTypes.includes(input.eventType)) {
+    throw new Error(`${input.eventType} is decided by GrantTap, not by a tool call`);
+  }
+  return capability;
+}
+
 async function publishMeshEvent(
   client: NonNullable<Awaited<ReturnType<typeof relay>>>,
   input: z.infer<typeof meshEventInput>,
+  attributedSessionId?: string,
 ): Promise<string> {
   if (!isMeshEnabled()) throw new Error("Project Mesh is disabled");
-  const snapshot = localMeshStore().snapshot(input.projectId);
-  const source = snapshot?.executions.find((execution) =>
-    execution.taskId === input.taskId
-    && execution.sessionId === input.sourceSessionId
-    && execution.endedAt == null);
-  if (!source || source.provider === "grok_bot" || !isProviderEnabled(source.provider)) {
+  const scope = callerScope(input, attributedSessionId);
+  const source = { provider: scope.provider, sessionId: scope.sessionId };
+  if (!isProviderEnabled(source.provider)) {
     throw new Error("Mesh source session is not an enabled Task execution");
   }
   const now = Date.now();
@@ -95,7 +153,7 @@ async function publishMeshEvent(
     eventId: randomUUID(),
     projectId: input.projectId,
     taskId: input.taskId,
-    sourceSessionId: input.sourceSessionId,
+    sourceSessionId: source.sessionId,
     targetSessionId: input.targetSessionId,
     eventType: input.eventType,
     createdAt: now,

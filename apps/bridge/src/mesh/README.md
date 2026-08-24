@@ -13,10 +13,21 @@ Codex is started. The provider abstraction already admits Cursor and Grok Build
 without changing the core contract, while their unsupported phase-one start
 paths fail closed.
 
-The read-only MCP resource `granttap://mesh/current` exposes compact local state
-to an agent. Structured events use the existing `notify` tool so the public MCP
-tool allowlist remains exactly `connect`, `notify`, `ask_yes_no`, and `ask`.
-Setup and global provider configuration remain CLI-only.
+`call-scope.ts` and `capability.ts` own caller identity. The MCP server cannot
+see which agent called it, so each provider hook records a single-use
+attribution for the exact call it observed inside its own session, and the
+runtime derives the publishing execution from that instead of from anything the
+model supplied. `capability.ts` mints the opaque per-execution token that
+`scoped-view.ts` answers with, so a read returns one Project rather than
+everything this computer knows. Structured events use the existing `notify`
+tool so the public MCP tool allowlist remains exactly `connect`, `notify`,
+`ask_yes_no`, and `ask`. Setup and global provider configuration remain
+CLI-only.
+
+`readiness.ts` decides whether a handoff may leave at all. A capsule transfers
+committed facts, so uncommitted work blocks the handoff instead of silently
+staying behind, and the destination refuses just as explicitly when it lacks the
+named commit or when the capsule's resource claims overlap another execution.
 
 Every event is schema-bounded and sent under an independent task key; snapshots
 use an independent project key. Resource claims are advisory, expire without a
