@@ -29,6 +29,20 @@ CLI-only.
 committed facts, so uncommitted work blocks the handoff instead of silently
 staying behind, and the destination refuses just as explicitly when it lacks the
 named commit or when the capsule's resource claims overlap another execution.
+"Uncommitted" is read from `git status` including untracked files, because an
+untracked file is work no commit would carry. A probe that cannot answer
+publishes `unknown`, and only an explicit `clean` releases the handoff.
+
+`convergence.ts` and `task-state.ts` keep one Task identity while snapshots and
+events arrive late, twice, and from several computers. Every writer raises the
+Task `revision`, a merge keeps the higher one, and a tie resolves the same way
+on every device. Ownership only moves forward: to an unowned Task, back to the
+session that already owns it, or through a receipt from the current owner —
+and a computer that already watched a session hand the Task on refuses that
+session's later receipt. Completed and failed Tasks absorb events instead of
+reopening, an execution closed by a receipt stays closed even while its native
+session keeps reporting itself, and the local catalog may refresh a Task's
+description but never take it back from the agent that owns it now.
 
 Every event is schema-bounded and sent under an independent task key; snapshots
 use an independent project key. Resource claims are advisory, expire without a

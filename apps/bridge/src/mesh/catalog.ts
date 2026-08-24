@@ -35,19 +35,32 @@ function git(cwd: string, args: string[]): string | undefined {
 }
 
 /**
- * Whether this checkout has changes that a commit-based handoff would leave
- * behind. `undefined` means the probe could not answer, which callers must not
- * read as "clean".
+ * Whether this checkout has anything a commit-based handoff would leave behind.
+ *
+ * `git status` rather than `git diff HEAD`, because an untracked file is work
+ * the Task Capsule cannot carry just as surely as a modified tracked one.
+ * `undefined` means the probe could not answer, which callers must not read as
+ * "clean".
  */
 export function hasUncommittedWork(cwd: string): boolean | undefined {
   try {
-    execFileSync("git", ["-C", cwd, "diff", "--quiet", "HEAD"], {
-      stdio: "ignore", timeout: 2_000,
-    });
-    return false;
-  } catch (error) {
-    return (error as { status?: number }).status === 1 ? true : undefined;
+    const status = execFileSync(
+      "git",
+      ["-C", cwd, "status", "--porcelain=v1", "--untracked-files=normal", "-z"],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 5_000,
+        maxBuffer: 4 * 1_024 * 1_024 },
+    );
+    return status.trim().length > 0;
+  } catch {
+    return undefined;
   }
+}
+
+/** The same reading in the explicit form a Task Capsule publishes. */
+export function workingTreeState(cwd: string): "clean" | "dirty" | "unknown" {
+  const uncommitted = hasUncommittedWork(cwd);
+  if (uncommitted === undefined) return "unknown";
+  return uncommitted ? "dirty" : "clean";
 }
 
 export function inspectRepository(cwd: string): RepositoryFacts {

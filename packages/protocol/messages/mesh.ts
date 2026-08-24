@@ -31,6 +31,10 @@ export const MeshTask = z.object({
   goal: Detail,
   state: TaskState,
   ownerSessionId: Identifier.optional(),
+  // Ordered convergence: every writer raises `revision` when it changes a task,
+  // so a delayed snapshot or replayed event can never restore an older owner or
+  // reopen finished work. Absent means a pre-revision publisher, read as 0.
+  revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
   createdAt: z.number().nonnegative(),
   updatedAt: z.number().nonnegative(),
 }).strict();
@@ -48,6 +52,9 @@ export const ExecutionSessionLink = z.object({
   // Uncommitted work cannot travel inside a Task Capsule, so the owning
   // computer publishes whether this execution currently has any.
   uncommitted: z.boolean().optional(),
+  // When those facts were last observed, so a late snapshot cannot replace a
+  // fresh reading with a stale one.
+  updatedAt: z.number().nonnegative().optional(),
   startedAt: z.number().nonnegative(),
   endedAt: z.number().nonnegative().optional(),
 }).strict().superRefine((value, ctx) => {
@@ -96,6 +103,9 @@ export const TaskCapsule = z.object({
   branch: z.string().trim().min(1).max(512).optional(),
   latestCommit: GitSha.optional(),
   dirtyDiffHash: z.string().regex(/^[0-9a-f]{64}$/i).optional(),
+  // Explicit, because "no diff hash" cannot distinguish a clean checkout from a
+  // probe that failed. Anything but `clean` refuses the handoff.
+  workingTree: z.enum(["clean", "dirty", "unknown"]).optional(),
   filesChanged: z.array(Path).max(64),
   testsStatus: Detail.optional(),
   dependencies: z.array(Identifier).max(32),

@@ -166,8 +166,8 @@ test("readiness names one blocking reason at a time", async () => {
   const repo = await gitRepository(false);
   assert.equal(repositoryHasCommit(repo, "a".repeat(40)), false);
   const ready = handoffReadiness({
-    capsule: { dirtyDiffHash: undefined, latestCommit: "abc1234", baseSha: "abc1234",
-      repository: "github.com/example/granttap" } as TaskCapsule,
+    capsule: { dirtyDiffHash: undefined, workingTree: "clean", latestCommit: "abc1234",
+      baseSha: "abc1234", repository: "github.com/example/granttap" } as TaskCapsule,
     targetProviderEnabled: true,
     conflicts: [],
   });
@@ -179,8 +179,8 @@ test("readiness names one blocking reason at a time", async () => {
   assert.match(missing.blockedReason ?? "", /No git repository/);
 
   const disabled = handoffReadiness({
-    capsule: { dirtyDiffHash: undefined, latestCommit: "abc1234", baseSha: "abc1234",
-      repository: "repo" } as TaskCapsule,
+    capsule: { dirtyDiffHash: undefined, workingTree: "clean", latestCommit: "abc1234",
+      baseSha: "abc1234", repository: "repo" } as TaskCapsule,
     targetProviderEnabled: false,
     conflicts: [],
   });

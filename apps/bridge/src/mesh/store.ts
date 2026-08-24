@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import {
   ExecutionSessionLink,
@@ -8,7 +8,6 @@ import {
   MeshTask,
   Project,
   ResourceClaim,
-  TaskDependency,
   type ExecutionSessionLink as ExecutionValue,
   type HandoffReceipt as ReceiptValue,
   type MeshEvent as MeshEventValue,
@@ -16,57 +15,18 @@ import {
   type MeshTask as TaskValue,
   type Project as ProjectValue,
   type ResourceClaim as ResourceClaimValue,
-  type TaskDependency as DependencyValue,
 } from "../../../../packages/protocol/schema";
+import { loadStoreState, type StoreState } from "./store-state";
+import { preferExecution, preferTask, isTerminalTaskState, mayOwnTask } from "./convergence";
 import { capsuleHash } from "./handoff";
-import { mergeBy, resourceOverlap } from "./store-support";
-
-type StoreState = {
-  version: 1;
-  projects: ProjectValue[];
-  tasks: TaskValue[];
-  executions: ExecutionValue[];
-  claims: ResourceClaimValue[];
-  dependencies: DependencyValue[];
-  events: MeshEventValue[];
-  receipts: ReceiptValue[];
-};
-
-const EMPTY: StoreState = {
-  version: 1, projects: [], tasks: [], executions: [], claims: [], dependencies: [], events: [], receipts: [],
-};
-
-function parsedArray<T>(value: unknown, schema: { safeParse: (input: unknown) => { success: boolean; data?: T } }): T[] {
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((item) => {
-    const parsed = schema.safeParse(item);
-    return parsed.success && parsed.data ? [parsed.data] : [];
-  });
-}
-
-function load(path: string): StoreState {
-  try {
-    const value = JSON.parse(readFileSync(path, "utf8")) as Partial<StoreState>;
-    return {
-      version: 1,
-      projects: parsedArray(value.projects, Project),
-      tasks: parsedArray(value.tasks, MeshTask),
-      executions: parsedArray(value.executions, ExecutionSessionLink),
-      claims: parsedArray(value.claims, ResourceClaim),
-      dependencies: parsedArray(value.dependencies, TaskDependency),
-      events: parsedArray(value.events, MeshEvent),
-      receipts: parsedArray(value.receipts, HandoffReceipt),
-    };
-  } catch {
-    return structuredClone(EMPTY);
-  }
-}
+import { mergeBy, mergeWith, resourceOverlap } from "./store-support";
+import { receiptMovesOwnership, taskAfterEvent, taskAfterLocalReading } from "./task-state";
 
 export class MeshStore {
   private state: StoreState;
 
   constructor(private readonly path: string, private readonly now = Date.now) {
-    this.state = load(path);
+    this.state = loadStoreState(path);
   }
 
   private save(): void {
@@ -88,11 +48,17 @@ export class MeshStore {
   upsertTask(input: TaskValue): void {
     const task = MeshTask.parse(input);
     const previous = this.state.tasks.find((item) => item.taskId === task.taskId);
-    if (previous && previous.updatedAt > task.updatedAt) return;
-    if (previous && JSON.stringify(previous) === JSON.stringify(task)) return;
+    const next = previous
+      ? taskAfterLocalReading(previous, task, this.state.executions)
+      : { ...task, revision: task.revision ?? 0 };
+    if (!next) return;
+    this.replaceTask(next);
+    this.save();
+  }
+
+  private replaceTask(task: TaskValue): void {
     this.state.tasks = this.state.tasks.filter((item) => item.taskId !== task.taskId);
     this.state.tasks.push(task);
-    this.save();
   }
 
   taskForExecution(computerId: string, provider: string, sessionId: string): string | undefined {
@@ -101,11 +67,16 @@ export class MeshStore {
   }
 
   linkExecution(input: ExecutionValue): void {
-    const execution = ExecutionSessionLink.parse(input);
+    const parsed = ExecutionSessionLink.parse({
+      ...input, updatedAt: input.updatedAt ?? this.now(),
+    });
     const previous = this.state.executions.find((item) =>
-      item.computerId === execution.computerId
-      && item.provider === execution.provider
-      && item.sessionId === execution.sessionId);
+      item.computerId === parsed.computerId
+      && item.provider === parsed.provider
+      && item.sessionId === parsed.sessionId);
+    // A closed execution stays closed: the Task moved on, even when the native
+    // session it left behind is still running and still reports itself.
+    const execution = previous ? preferExecution(previous, parsed) : parsed;
     if (previous && JSON.stringify(previous) === JSON.stringify(execution)) return;
     this.state.executions = this.state.executions.filter((item) => !(
       item.computerId === execution.computerId
@@ -113,13 +84,23 @@ export class MeshStore {
       && item.sessionId === execution.sessionId
     ));
     this.state.executions.push(execution);
-    const task = this.state.tasks.find((item) => item.taskId === execution.taskId);
-    if (task) {
-      task.ownerSessionId = execution.sessionId;
-      task.updatedAt = Math.max(task.updatedAt, execution.startedAt);
-      if (task.state === "handoff" || task.state === "planned") task.state = "working";
-    }
+    this.claimTaskFor(execution);
     this.save();
+  }
+
+  private claimTaskFor(execution: ExecutionValue): void {
+    const task = this.state.tasks.find((item) => item.taskId === execution.taskId);
+    if (!task || execution.endedAt != null) return;
+    if (!mayOwnTask(task, execution.sessionId, this.state.executions)) return;
+    const state = !isTerminalTaskState(task.state)
+      && (task.state === "handoff" || task.state === "planned") ? "working" : task.state;
+    this.replaceTask({
+      ...task,
+      ownerSessionId: execution.sessionId,
+      state,
+      updatedAt: Math.max(task.updatedAt, execution.startedAt),
+      revision: (task.revision ?? 0) + 1,
+    });
   }
 
   recordReceipt(input: ReceiptValue): void {
@@ -214,22 +195,19 @@ export class MeshStore {
     }
     const task = this.state.tasks.find((item) => item.taskId === event.taskId);
     if (!task) return;
-    if (event.eventType === "TASK_STARTED" || event.eventType === "TASK_PROGRESS") task.state = "working";
-    if (event.eventType === "HANDOFF_REQUEST") task.state = "handoff";
-    if (event.eventType === "HANDOFF_ACCEPTED" && event.payload.receipt) {
-      task.state = "working";
-      task.ownerSessionId = event.payload.receipt.targetSessionId;
+    const receipt = event.payload.receipt;
+    if (event.eventType === "HANDOFF_ACCEPTED" && receipt) {
+      if (!receiptMovesOwnership(task, receipt, this.state.receipts)) return;
       const source = this.state.executions.find((item) =>
-        item.taskId === event.taskId && item.sessionId === event.payload.receipt?.sourceSessionId);
-      if (source) source.endedAt = event.payload.receipt.acceptedAt;
+        item.taskId === event.taskId && item.sessionId === receipt.sourceSessionId);
+      if (source) source.endedAt = receipt.acceptedAt;
+      this.state.receipts = [
+        ...this.state.receipts.filter((item) => item.capsuleHash !== receipt.capsuleHash),
+        receipt,
+      ].slice(-256);
     }
-    if (event.eventType === "TASK_BLOCKED") {
-      task.state = event.payload.needsUser ? "needs_user" : "blocked";
-    }
-    if (event.eventType === "CONFLICT" && event.payload.resolved !== true) task.state = "needs_user";
-    if (event.eventType === "HANDOFF_REJECTED" && event.payload.failed) task.state = "needs_user";
-    if (event.eventType === "TASK_COMPLETED") task.state = "completed";
-    task.updatedAt = Math.max(task.updatedAt, event.createdAt);
+    const next = taskAfterEvent(task, event);
+    if (next) this.replaceTask(next);
   }
 
   eventsForProject(projectId: string): MeshEventValue[] {
@@ -279,11 +257,14 @@ export class MeshStore {
   mergeSnapshot(input: SnapshotValue): void {
     const snapshot = MeshSnapshot.parse(input);
     this.state.projects = mergeBy(this.state.projects, [snapshot.project], (item) => item.projectId);
-    this.state.tasks = mergeBy(this.state.tasks, snapshot.tasks, (item) => item.taskId);
-    this.state.executions = mergeBy(
+    this.state.tasks = mergeWith(
+      this.state.tasks, snapshot.tasks, (item) => item.taskId, preferTask,
+    );
+    this.state.executions = mergeWith(
       this.state.executions,
       snapshot.executions,
       (item) => `${item.computerId}\0${item.provider}\0${item.sessionId}`,
+      preferExecution,
     );
     this.state.claims = mergeBy(this.state.claims, snapshot.claims, (item) => item.claimId);
     this.state.dependencies = mergeBy(

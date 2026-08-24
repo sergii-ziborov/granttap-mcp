@@ -6,6 +6,7 @@ import {
   type SessionInfo,
   type TaskCapsule as CapsuleValue,
 } from "../../../../packages/protocol/schema";
+import { workingTreeState } from "./catalog";
 import type { MeshStore } from "./store";
 
 function git(cwd: string, args: string[]): string | undefined {
@@ -72,6 +73,7 @@ export function buildTaskCapsule(
     branch: session.branch ?? git(cwd, ["branch", "--show-current"]),
     latestCommit: head,
     dirtyDiffHash: dirtyDiffHash(cwd),
+    workingTree: workingTreeState(cwd),
     filesChanged: changedFiles(cwd),
     dependencies: snapshot.dependencies
       .filter((item) => item.taskId === request.taskId).map((item) => item.dependsOnTaskId).slice(0, 32),

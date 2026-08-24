@@ -11,6 +11,10 @@ import type { ResourceClaim, TaskCapsule } from "../../../../packages/protocol/s
 export const UNCOMMITTED_WORK_REASON =
   "This task has uncommitted changes. Commit or checkpoint them before moving the task.";
 
+/** An unread working tree blocks the move; only a positive "clean" releases it. */
+export const UNREADABLE_WORKING_TREE_REASON =
+  "GrantTap could not read this working tree, so it cannot promise a commit carries every change.";
+
 export type HandoffCheckId = "repository" | "workingTree" | "claims" | "targetAgent";
 
 export type HandoffCheck = {
@@ -35,6 +39,19 @@ function check(id: HandoffCheckId, ready: boolean, detail: string): HandoffCheck
   return { id, ready, detail };
 }
 
+function workingTree(capsule?: TaskCapsule): "clean" | "dirty" | "unknown" {
+  if (capsule?.dirtyDiffHash != null) return "dirty";
+  return capsule?.workingTree ?? "unknown";
+}
+
+function workingTreeDetail(capsule?: TaskCapsule): string {
+  switch (workingTree(capsule)) {
+    case "clean": return "Clean";
+    case "dirty": return UNCOMMITTED_WORK_REASON;
+    default: return UNREADABLE_WORKING_TREE_REASON;
+  }
+}
+
 /** Every blocking condition the source computer can answer before publishing. */
 export function handoffReadiness(input: HandoffReadinessInput): HandoffReadiness {
   const { capsule } = input;
@@ -49,8 +66,8 @@ export function handoffReadiness(input: HandoffReadinessInput): HandoffReadiness
     ),
     check(
       "workingTree",
-      Boolean(capsule) && capsule?.dirtyDiffHash == null,
-      capsule?.dirtyDiffHash == null ? "Clean" : UNCOMMITTED_WORK_REASON,
+      Boolean(capsule) && workingTree(capsule) === "clean",
+      workingTreeDetail(capsule),
     ),
     check(
       "claims",
