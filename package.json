@@ -1,6 +1,6 @@
 {
   "name": "granttap-mcp",
-  "version": "0.7.4",
+  "version": "0.7.5",
   "description": "Personal live control center runtime for local coding agents on iPhone and Apple Watch.",
   "type": "module",
   "bin": {

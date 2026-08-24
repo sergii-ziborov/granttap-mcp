@@ -8,6 +8,23 @@ const PATH_KEYS = new Set([
   "notebookpath", "path", "root", "url", "workspace", "workspaceroot", "workspaceroots",
 ]);
 
+const CONFIG_MARKERS = ["/.granttap", "/.nodvox", ".granttap", ".nodvox"];
+
+/**
+ * Entries inside the config directory an agent may reach.
+ *
+ * Everything else is denied, including the directory itself and any glob over
+ * it, so a file added tomorrow is protected the day it appears rather than the
+ * day someone remembers to list it. Diagnostics stay reachable on purpose:
+ * hiding the helper log only made a crash harder to explain, and the log holds
+ * no key, no pairing, and no policy decision.
+ */
+const READABLE_ENTRIES = new Set([
+  "logs", "monitor.log", "monitor.lock",
+  "project-mesh.json", "mesh-tool-calls.json", "delivery-ledger.json",
+  "workspaces", "worktrees",
+]);
+
 function protectedRoots(): string[] {
   const configured = process.env.GRANTTAP_CONFIG_DIR ?? process.env.NODVOX_CONFIG_DIR;
   return [
@@ -29,11 +46,26 @@ function values(value: unknown, key = "", depth = 0): string[] {
     .flatMap(([childKey, child]) => values(child, childKey.toLowerCase(), depth + 1));
 }
 
-function namesProtectedLocation(raw: string, roots: string[]): boolean {
+/** What this reference names inside a config root, or null when it names none. */
+function configRootRemainder(raw: string, roots: string[]): string | null {
   const text = raw.toLowerCase().replaceAll("\\", "/");
-  if (text.includes(".granttap/") || text.includes("/.granttap")
-      || text.includes(".nodvox/") || text.includes("/.nodvox")) return true;
-  return roots.some((root) => text.includes(root.replaceAll("\\", "/")));
+  for (const marker of [...roots.map((root) => root.replaceAll("\\", "/")), ...CONFIG_MARKERS]) {
+    const index = text.indexOf(marker);
+    if (index >= 0) return text.slice(index + marker.length).replace(/^\/+/, "");
+  }
+  return null;
+}
+
+function readableEntry(remainder: string): boolean {
+  if (!remainder) return false;
+  if (/[*?[\]]/.test(remainder)) return false;
+  if (/(^|\/)\.\.(\/|$)/.test(remainder)) return false;
+  return READABLE_ENTRIES.has(remainder.split("/")[0] ?? "");
+}
+
+function namesProtectedLocation(raw: string, roots: string[]): boolean {
+  const remainder = configRootRemainder(raw, roots);
+  return remainder != null && !readableEntry(remainder);
 }
 
 /** Best-effort hook guard for direct agent access to GrantTap's local trust state. */
@@ -45,6 +77,7 @@ export function protectedGrantTapAccess(
   const candidates = [...values(toolInput), ...values(command)];
   if (!candidates.some((value) => namesProtectedLocation(value, protectedRoots()))) return null;
   return {
-    reason: "GrantTap protects its local pairing and policy files from agent tool access. Use a trusted terminal outside the agent for intentional maintenance.",
+    reason: "GrantTap protects its local pairing, key, and policy files from agent tool access. "
+      + "Helper logs stay readable; use a trusted terminal outside the agent for maintenance.",
   };
 }

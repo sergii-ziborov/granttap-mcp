@@ -60,13 +60,36 @@ test("provider hooks deny direct access to GrantTap trust state before bypass or
   ];
   for (const [provider, input] of cases) {
     const output = runHook(provider, configDir, input);
-    assert.match(JSON.stringify(output), /protects its local pairing and policy files/);
+    assert.match(JSON.stringify(output), /protects its local pairing, key, and policy files/);
     assert.doesNotMatch(JSON.stringify(output), new RegExp(configDir.replaceAll("/", "\\/")));
   }
   assert.ok(protectedGrantTapAccess("Read", { path: "/tmp/.nodvox/key.json" }));
   assert.equal(protectedGrantTapAccess("Write", {
     file_path: "/repo/README.md", content: "Document ~/.granttap without reading it",
   }), null);
+});
+
+test("the guard covers trust state and unknown files while leaving diagnostics readable", () => {
+  const denied = [
+    "~/.granttap", "~/.granttap/", "~/.granttap/machine.json", "~/.granttap/session-keys.json",
+    "~/.granttap/mesh-capabilities.json", "~/.granttap/grok-bot-endpoint.json",
+    "~/.granttap/config.json", "~/.granttap/approval-records/pending.json",
+    "~/.granttap/something-added-next-year.json", "~/.granttap/*", "~/.granttap/logs/../machine.json",
+  ];
+  for (const path of denied) {
+    assert.ok(protectedGrantTapAccess("Read", { path }), `${path} must stay protected`);
+  }
+  const readable = [
+    "~/.granttap/monitor.log", "~/.granttap/logs/http-mcp.log", "~/.granttap/monitor.lock",
+    "~/.granttap/project-mesh.json",
+  ];
+  for (const path of readable) {
+    assert.equal(protectedGrantTapAccess("Read", { path }), null, `${path} must stay readable`);
+  }
+  // A crash is diagnosable without a trusted terminal; the keys beside it are not.
+  assert.equal(protectedGrantTapAccess("Bash", {}, "tail -60 ~/.granttap/monitor.log"), null);
+  assert.ok(protectedGrantTapAccess("Bash", {}, "cat ~/.granttap/machine.json"));
+  assert.equal(protectedGrantTapAccess("Read", { path: "~/Library/Logs/GrantTap/monitor.err.log" }), null);
 });
 
 test("provider hooks enforce disabled capabilities only in the exact root chat", (t) => {

@@ -21,8 +21,13 @@ Provider credentials remain in each provider's own local authentication flow.
 GrantTap does not send them to the relay.
 
 Installed Claude Code, Codex, and Cursor hooks deny direct agent tool calls
-that name GrantTap's local pairing or policy directory, including calls that
-would otherwise be auto-accepted or run in provider bypass mode. This is
+that name GrantTap's local pairing, key, or policy files, including calls that
+would otherwise be auto-accepted or run in provider bypass mode. The denial
+covers the config directory itself, any glob over it, and every file not on a
+short readable list, so a file added later is protected the day it appears.
+The helper log and the Mesh snapshot are on that list: they carry no key,
+pairing, or policy decision, and hiding them only made a crash harder to
+explain. This is
 best-effort self-protection, not an operating-system security boundary: a
 process running as the same macOS user can use an unobserved tool, shell
 obfuscation, or direct filesystem access outside those hooks. Protect the user
