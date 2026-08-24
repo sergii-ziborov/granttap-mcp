@@ -8,7 +8,15 @@ const PATH_KEYS = new Set([
   "notebookpath", "path", "root", "url", "workspace", "workspaceroot", "workspaceroots",
 ]);
 
-const CONFIG_MARKERS = ["/.granttap", "/.nodvox", ".granttap", ".nodvox"];
+/**
+ * The config directory named as a path component.
+ *
+ * The boundary before the dot matters: a bare substring match also fires on the
+ * LaunchAgent label `com.granttap.monitor` and on any other identifier that
+ * happens to contain the product name, which denies calls that never touch the
+ * directory at all.
+ */
+const CONFIG_MARKER = /(?:^|[\s'"`;|&<>()=~:/])\.(?:granttap|nodvox)(?=$|[\s'"`;|&<>()/])/g;
 
 /**
  * Entries inside the config directory an agent may reach.
@@ -46,38 +54,72 @@ function values(value: unknown, key = "", depth = 0): string[] {
     .flatMap(([childKey, child]) => values(child, childKey.toLowerCase(), depth + 1));
 }
 
-/** What this reference names inside a config root, or null when it names none. */
-function configRootRemainder(raw: string, roots: string[]): string | null {
+/**
+ * Every entry this reference names inside a config root.
+ *
+ * A candidate is usually a whole shell command rather than one clean path, so
+ * each hit is cut at the first shell separator — and every hit is collected,
+ * because one readable log in a command line must not carry a second, protected
+ * path past the guard.
+ */
+function configReferences(raw: string, roots: string[]): string[] {
   const text = raw.toLowerCase().replaceAll("\\", "/");
-  for (const marker of [...roots.map((root) => root.replaceAll("\\", "/")), ...CONFIG_MARKERS]) {
-    const index = text.indexOf(marker);
-    if (index >= 0) return text.slice(index + marker.length).replace(/^\/+/, "");
+  const entries: string[] = [];
+  const record = (rest: string) => {
+    entries.push(rest.replace(/^\/+/, "").split(/[\s'"`;|&<>()$]/)[0] ?? "");
+  };
+  for (const root of roots.map((value) => value.replaceAll("\\", "/"))) {
+    for (let index = text.indexOf(root); index >= 0; index = text.indexOf(root, index + 1)) {
+      record(text.slice(index + root.length));
+    }
   }
-  return null;
+  for (const match of text.matchAll(CONFIG_MARKER)) {
+    record(text.slice((match.index ?? 0) + match[0].length));
+  }
+  return entries;
 }
 
-function readableEntry(remainder: string): boolean {
-  if (!remainder) return false;
-  if (/[*?[\]]/.test(remainder)) return false;
-  if (/(^|\/)\.\.(\/|$)/.test(remainder)) return false;
-  return READABLE_ENTRIES.has(remainder.split("/")[0] ?? "");
+function readableEntry(entry: string): boolean {
+  if (!entry) return false;
+  if (/[*?[\]]/.test(entry)) return false;
+  if (/(^|\/)\.\.(\/|$)/.test(entry)) return false;
+  return READABLE_ENTRIES.has(entry.split("/")[0] ?? "");
 }
 
 function namesProtectedLocation(raw: string, roots: string[]): boolean {
-  const remainder = configRootRemainder(raw, roots);
-  return remainder != null && !readableEntry(remainder);
+  const entries = configReferences(raw, roots);
+  return entries.length > 0 && entries.some((entry) => !readableEntry(entry));
 }
 
-/** Best-effort hook guard for direct agent access to GrantTap's local trust state. */
-export function protectedGrantTapAccess(
-  _toolName: unknown,
-  toolInput: unknown,
-  command?: unknown,
-): ProtectedAccess | null {
+function decide(toolInput: unknown, command: unknown): ProtectedAccess | null {
   const candidates = [...values(toolInput), ...values(command)];
   if (!candidates.some((value) => namesProtectedLocation(value, protectedRoots()))) return null;
   return {
     reason: "GrantTap protects its local pairing, key, and policy files from agent tool access. "
       + "Helper logs stay readable; use a trusted terminal outside the agent for maintenance.",
   };
+}
+
+/**
+ * Best-effort hook guard for direct agent access to GrantTap's local trust
+ * state.
+ *
+ * It denies only what it positively recognised. A fault inside the guard itself
+ * is reported and allowed through: this is self-protection, not an operating
+ * system boundary, and a guard that blocks every tool call on every machine the
+ * moment its own code faults is a far larger outage than the file it was
+ * watching. The fault is loud so it gets fixed rather than lived with.
+ */
+export function protectedGrantTapAccess(
+  _toolName: unknown,
+  toolInput: unknown,
+  command?: unknown,
+): ProtectedAccess | null {
+  try {
+    return decide(toolInput, command);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`[granttap] self-protection fault, allowing this call: ${detail}\n`);
+    return null;
+  }
 }

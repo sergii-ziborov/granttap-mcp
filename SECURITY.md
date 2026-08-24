@@ -27,7 +27,10 @@ covers the config directory itself, any glob over it, and every file not on a
 short readable list, so a file added later is protected the day it appears.
 The helper log and the Mesh snapshot are on that list: they carry no key,
 pairing, or policy decision, and hiding them only made a crash harder to
-explain. This is
+explain. The guard denies only what it positively recognised as a path into
+that directory, and a fault inside the guard itself is printed and allowed
+through instead of blocking every tool call on the machine: an outage of every
+agent is a worse failure than the file it was watching. This is
 best-effort self-protection, not an operating-system security boundary: a
 process running as the same macOS user can use an unobserved tool, shell
 obfuscation, or direct filesystem access outside those hooks. Protect the user
