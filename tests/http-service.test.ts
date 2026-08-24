@@ -90,6 +90,16 @@ function run(args: string[], env: NodeJS.ProcessEnv): Promise<{
   });
 }
 
+async function waitFor(
+  condition: () => boolean | Promise<boolean>,
+  timeoutMs = 4_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline && !await condition()) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+  }
+}
+
 test("authorize installs a persistent loopback service, verifies health, then exits", async (t) => {
   if (process.platform !== "darwin") return t.skip("LaunchAgent is macOS-only");
   const root = mkdtempSync(join(tmpdir(), "granttap-http-service-"));
@@ -222,9 +232,8 @@ test("authorize installs a persistent loopback service, verifies health, then ex
   assert.match(readFileSync(plistPath, "utf8"), /<string>internal<\/string>\s*<string>serve<\/string>/);
 
   stopFakeService();
-  for (let attempt = 0; attempt < 20 && await probeHttpMcpHealth(mcpUrl, 100); attempt += 1) {
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
-  }
+  await waitFor(async () => !await probeHttpMcpHealth(mcpUrl, 100));
+  await waitFor(() => !inspectHttpMcpService().running);
   assert.equal(await probeHttpMcpHealth(mcpUrl, 100), false);
   assert.deepEqual(await inspectCursorOAuthReadiness(), {
     configured: true,
