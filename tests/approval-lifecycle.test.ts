@@ -227,7 +227,12 @@ test("timeout replays a concurrently durable decision instead of publishing expi
     client: fake as never,
     timeoutMs: 20,
   });
-  await waitUntil(() => fake.sent.some((item) => item.payload.type === "approval.request"));
+  // Let the async scoped send reach the request without yielding to the timer
+  // phase. A polling wait can itself outlive this deliberately tiny timeout on
+  // a loaded CI runner and turn the intended decision-vs-timeout race into an
+  // already-expired request.
+  await Promise.resolve();
+  assert.equal(fake.sent.some((item) => item.payload.type === "approval.request"), true);
   assert.equal(acceptApprovalDecision({
     type: "approval.decision",
     requestId: request.requestId,
