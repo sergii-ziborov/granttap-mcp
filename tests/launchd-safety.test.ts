@@ -23,7 +23,9 @@ test("a plist under the operating system temp directory never reaches launchd", 
   assert.equal(insideTemporaryDirectory("/tmp/com.granttap.monitor.plist"), true);
 });
 
-test("installing the helper from a sandboxed home reports manual instead of hijacking the label", async (t) => {
+test("installing the helper from a sandboxed home reports manual instead of hijacking the label", {
+  skip: process.platform !== "darwin" ? "LaunchAgent installation is macOS-only" : false,
+}, async (t) => {
   const home = await mkdtemp(join(tmpdir(), "granttap-launchd-home-"));
   const previous = {
     agents: process.env.GRANTTAP_LAUNCH_AGENTS_DIR,

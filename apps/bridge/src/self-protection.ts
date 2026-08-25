@@ -18,20 +18,18 @@ const PATH_KEYS = new Set([
  */
 const CONFIG_MARKER = /(?:^|[\s'"`;|&<>()=~:/])\.(?:granttap|nodvox)(?=$|[\s'"`;|&<>()/])/g;
 
-/**
- * Entries inside the config directory an agent may reach.
- *
- * Everything else is denied, including the directory itself and any glob over
- * it, so a file added tomorrow is protected the day it appears rather than the
- * day someone remembers to list it. Diagnostics stay reachable on purpose:
- * hiding the helper log only made a crash harder to explain, and the log holds
- * no key, no pairing, and no policy decision.
- */
-const READABLE_ENTRIES = new Set([
-  "logs", "monitor.log", "monitor.lock",
-  "project-mesh.json", "mesh-tool-calls.json", "delivery-ledger.json",
-  "workspaces", "worktrees",
+const READ_ONLY_ENTRIES = new Set([
+  "logs", "monitor.log", "monitor.lock", "delivery-ledger.json",
 ]);
+const WORKSPACE_ENTRIES = new Set(["workspaces", "worktrees"]);
+const READ_TOOLS = new Set([
+  "read", "readfile", "read_file", "view", "viewfile", "view_file",
+]);
+const SHELL_TOOLS = new Set([
+  "bash", "command", "execcommand", "exec_command", "runterminalcmd",
+  "shell", "shellcommand", "shell_command", "terminal",
+]);
+const SAFE_SHELL_READERS = new Set(["cat", "grep", "head", "ls", "stat", "tail", "wc"]);
 
 function protectedRoots(): string[] {
   const configured = process.env.GRANTTAP_CONFIG_DIR ?? process.env.NODVOX_CONFIG_DIR;
@@ -79,21 +77,47 @@ function configReferences(raw: string, roots: string[]): string[] {
   return entries;
 }
 
-function readableEntry(entry: string): boolean {
-  if (!entry) return false;
-  if (/[*?[\]]/.test(entry)) return false;
-  if (/(^|\/)\.\.(\/|$)/.test(entry)) return false;
-  return READABLE_ENTRIES.has(entry.split("/")[0] ?? "");
+type EntryAccess = "deny" | "read-only" | "workspace";
+
+function entryAccess(entry: string): EntryAccess {
+  if (!entry || /[*?[\]]/.test(entry) || /(^|\/)\.\.(\/|$)/.test(entry)) return "deny";
+  const root = entry.split("/")[0] ?? "";
+  if (WORKSPACE_ENTRIES.has(root)) return "workspace";
+  return READ_ONLY_ENTRIES.has(root) ? "read-only" : "deny";
 }
 
-function namesProtectedLocation(raw: string, roots: string[]): boolean {
-  const entries = configReferences(raw, roots);
-  return entries.length > 0 && entries.some((entry) => !readableEntry(entry));
+function normalizedToolName(toolName: unknown): string {
+  return String(toolName ?? "").split("__").at(-1)!.toLowerCase();
 }
 
-function decide(toolInput: unknown, command: unknown): ProtectedAccess | null {
+function readOnlyShell(command: unknown): boolean {
+  const text = String(command ?? "").trim();
+  if (!text || /[;`\n]|\$\(|&&|\|\|/.test(text)) return false;
+  const withoutStderrMerge = text.replaceAll(/\d*>&\d+/g, "");
+  if (/[<>]/.test(withoutStderrMerge)) return false;
+  return text.split("|").every((part) => {
+    const words = part.trim().split(/\s+/);
+    const executable = words[0] === "command" ? words[1] : words[0];
+    return Boolean(executable && SAFE_SHELL_READERS.has(executable.split("/").at(-1)!));
+  });
+}
+
+function shellCommand(toolInput: unknown, command: unknown): unknown {
+  if (typeof command === "string") return command;
+  if (!toolInput || typeof toolInput !== "object") return toolInput;
+  const input = toolInput as Record<string, unknown>;
+  return input.command ?? input.cmd;
+}
+
+function decide(toolName: unknown, toolInput: unknown, command: unknown): ProtectedAccess | null {
   const candidates = [...values(toolInput), ...values(command)];
-  if (!candidates.some((value) => namesProtectedLocation(value, protectedRoots()))) return null;
+  const access = candidates.flatMap((value) =>
+    configReferences(value, protectedRoots()).map(entryAccess));
+  if (access.length === 0 || access.every((value) => value === "workspace")) return null;
+  const tool = normalizedToolName(toolName);
+  const readAllowed = access.every((value) => value === "workspace" || value === "read-only")
+    && (READ_TOOLS.has(tool) || (SHELL_TOOLS.has(tool) && readOnlyShell(shellCommand(toolInput, command))));
+  if (readAllowed) return null;
   return {
     reason: "GrantTap protects its local pairing, key, and policy files from agent tool access. "
       + "Helper logs stay readable; use a trusted terminal outside the agent for maintenance.",
@@ -111,12 +135,12 @@ function decide(toolInput: unknown, command: unknown): ProtectedAccess | null {
  * watching. The fault is loud so it gets fixed rather than lived with.
  */
 export function protectedGrantTapAccess(
-  _toolName: unknown,
+  toolName: unknown,
   toolInput: unknown,
   command?: unknown,
 ): ProtectedAccess | null {
   try {
-    return decide(toolInput, command);
+    return decide(toolName, toolInput, command);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     process.stderr.write(`[granttap] self-protection fault, allowing this call: ${detail}\n`);

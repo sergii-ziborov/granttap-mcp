@@ -24,10 +24,11 @@ Installed Claude Code, Codex, and Cursor hooks deny direct agent tool calls
 that name GrantTap's local pairing, key, or policy files, including calls that
 would otherwise be auto-accepted or run in provider bypass mode. The denial
 covers the config directory itself, any glob over it, and every file not on a
-short readable list, so a file added later is protected the day it appears.
-The helper log and the Mesh snapshot are on that list: they carry no key,
-pairing, or policy decision, and hiding them only made a crash harder to
-explain. The guard denies only what it positively recognised as a path into
+short access-mode list, so a file added later is protected the day it appears.
+Only helper logs and bounded runtime diagnostics are agent-readable, and they
+remain read-only. Raw Mesh state and hook-attribution records are never exposed
+to agent tools; `workspaces/` and `worktrees/` remain normal editable agent
+workspace. The guard denies only what it positively recognised as a path into
 that directory, and a fault inside the guard itself is printed and allowed
 through instead of blocking every tool call on the machine: an outage of every
 agent is a worse failure than the file it was watching. This is

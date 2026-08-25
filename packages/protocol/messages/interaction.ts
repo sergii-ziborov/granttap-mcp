@@ -42,6 +42,10 @@ export const AgentEvent = z.object({
   requestId: z.string().optional(),
   kind: z.enum(["question", "status", "response"]).optional(),
   sessionId: z.string().optional(),
+  agent: CodingAgent.optional(),
+  projectId: z.string().min(1).max(128).optional(),
+  taskId: z.string().min(1).max(128).optional(),
+  computerId: z.string().min(1).max(256).optional(),
   originMessageId: z.string().nullish(),
   createdAt: z.number(),
 });

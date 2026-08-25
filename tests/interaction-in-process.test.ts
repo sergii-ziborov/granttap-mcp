@@ -83,13 +83,14 @@ test("paired MCP delivers decisions, replies, and bounded Mesh events", async (t
     if (payload.type === "approval.request") {
       await phone.send({
         type: "approval.decision", requestId: payload.requestId,
-        decision: "allow", decidedAt: Date.now(), decidedBy: "phone",
+        decision: "allow", sessionId: payload.sessionId,
+        decidedAt: Date.now(), decidedBy: "phone",
       }, "machine");
     }
     if (payload.type === "agent.event" && payload.kind === "question" && payload.requestId) {
       await phone.send({
         type: "user.message", messageId: "reply-message", requestId: payload.requestId,
-        text: "connectionId", createdAt: Date.now(),
+        text: "connectionId", sessionId: payload.sessionId, createdAt: Date.now(),
       }, "machine");
     }
     return true;
@@ -101,8 +102,26 @@ test("paired MCP delivers decisions, replies, and bounded Mesh events", async (t
   const call = (name: string, args: Record<string, unknown>) => client.callTool({ name, arguments: args });
 
   assert.equal(textResult(await call("notify", { message: "Build started" })), "sent to phone");
+  recordAttributedCall({
+    provider: "claude", sessionId: "claude-session",
+    toolName: "mcp__granttap__ask_yes_no", args: { question: "Continue?" },
+  });
   assert.equal(textResult(await call("ask_yes_no", { question: "Continue?" })), "yes");
+  recordAttributedCall({
+    provider: "claude", sessionId: "claude-session",
+    toolName: "mcp__granttap__ask", args: { question: "Field name?" },
+  });
   assert.equal(textResult(await call("ask", { question: "Field name?" })), "connectionId");
+  const yesNoRequest = received.find((item) => item.type === "approval.request") as
+    Extract<Payload, { type: "approval.request" }> | undefined;
+  const openQuestion = received.find((item) =>
+    item.type === "agent.event" && item.kind === "question") as
+      Extract<Payload, { type: "agent.event" }> | undefined;
+  assert.equal(yesNoRequest?.sessionId, "claude-session");
+  assert.equal(yesNoRequest?.agent, "claude");
+  assert.equal(openQuestion?.sessionId, "claude-session");
+  assert.equal(openQuestion?.projectId, projectId);
+  assert.equal(openQuestion?.taskId, taskId);
 
   const meshInput = {
     projectId, taskId, sourceSessionId: "claude-session",

@@ -42,6 +42,7 @@ test("the guard covers trust state and unknown files while leaving diagnostics r
   const denied = [
     "~/.granttap", "~/.granttap/", "~/.granttap/machine.json", "~/.granttap/session-keys.json",
     "~/.granttap/mesh-capabilities.json", "~/.granttap/grok-bot-endpoint.json",
+    "~/.granttap/project-mesh.json", "~/.granttap/mesh-tool-calls.json",
     "~/.granttap/config.json", "~/.granttap/approval-records/pending.json",
     "~/.granttap/something-added-next-year.json", "~/.granttap/*", "~/.granttap/logs/../machine.json",
   ];
@@ -50,7 +51,7 @@ test("the guard covers trust state and unknown files while leaving diagnostics r
   }
   const readable = [
     "~/.granttap/monitor.log", "~/.granttap/logs/http-mcp.log", "~/.granttap/monitor.lock",
-    "~/.granttap/project-mesh.json",
+    "~/.granttap/delivery-ledger.json",
   ];
   for (const path of readable) {
     assert.equal(protectedGrantTapAccess("Read", { path }), null, `${path} must stay readable`);
@@ -63,6 +64,18 @@ test("the guard covers trust state and unknown files while leaving diagnostics r
     "a whole command line, not just a bare path, must resolve to the entry it names",
   );
   assert.ok(protectedGrantTapAccess("Bash", {}, "cat ~/.granttap/machine.json"));
+  assert.ok(protectedGrantTapAccess("Bash", {}, "cat ~/.granttap/mesh-tool-calls.json"));
+  assert.ok(protectedGrantTapAccess(
+    "Bash", {}, "echo forged > ~/.granttap/mesh-tool-calls.json",
+  ));
+  assert.ok(protectedGrantTapAccess("Write", { path: "~/.granttap/delivery-ledger.json" }));
+  assert.ok(protectedGrantTapAccess("Write", { path: "~/.granttap/monitor.log" }));
+  assert.ok(protectedGrantTapAccess(
+    "Bash", { command: "rg --pre=cp error ~/.granttap/monitor.log" },
+  ));
+  assert.equal(protectedGrantTapAccess(
+    "Write", { path: "~/.granttap/worktrees/task/src/index.ts" },
+  ), null);
   assert.ok(
     protectedGrantTapAccess("Bash", { command: "cat ~/.granttap/monitor.log; cat ~/.granttap/machine.json" }),
     "a readable log must not carry a protected path past the guard",

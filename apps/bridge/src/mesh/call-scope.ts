@@ -96,7 +96,7 @@ export function recordAttributedCall(input: {
 }): void {
   const tool = grantTapToolName(input.toolName);
   const sessionId = String(input.sessionId ?? "").trim();
-  if (tool !== "notify" || !sessionId || sessionId.length > 256) return;
+  if (!tool || tool === "connect" || !sessionId || sessionId.length > 256) return;
   const now = input.now ?? Date.now();
   try {
     const call = AttributedCall.parse({

@@ -10,7 +10,7 @@ export function createGrantTapServer(): McpServer {
   const server = new McpServer({
     name: "granttap",
     title: "GrantTap",
-    version: "0.7.2",
+    version: "0.7.6",
     websiteUrl: "https://granttap.com",
     icons: [{ src: "https://granttap.com/favicon.png", mimeType: "image/png", sizes: ["64x64"] }],
   });

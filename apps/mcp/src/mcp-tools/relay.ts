@@ -5,12 +5,21 @@ import { isUnanswered, requestApproval } from "../../../bridge/src/approval";
 import { sendApprovalResolved, terminalApproval } from "../../../bridge/src/approval-state";
 import { loadConfig, machineConfigPath } from "../../../bridge/src/config";
 import { startSessionMonitor, type SessionMonitor } from "../../../bridge/src/monitor";
+import { sendSessionPayload } from "../../../bridge/src/session-keys";
 
 const ASK_TIMEOUT_MS = Number(
   process.env.GRANTTAP_ASK_TIMEOUT_MS ?? process.env.NODVOX_ASK_TIMEOUT_MS ?? 180_000,
 );
 let client: RelayClient | null = null;
 let monitor: SessionMonitor | null = null;
+
+export type TaskInteractionScope = {
+  provider: "claude" | "codex" | "cursor" | "grok";
+  sessionId: string;
+  projectId: string;
+  taskId: string;
+  computerId: string;
+};
 
 export async function relay(): Promise<RelayClient | null> {
   try {
@@ -37,6 +46,7 @@ export async function askYesNo(
   client: RelayClient,
   question: string,
   timeoutMs = ASK_TIMEOUT_MS,
+  scope?: TaskInteractionScope,
 ): Promise<string> {
   const requestId = randomId(6);
   const decision = await requestApproval(
@@ -44,10 +54,14 @@ export async function askYesNo(
     {
       type: "approval.request",
       requestId,
-      agent: "granttap",
+      agent: scope?.provider ?? "granttap",
       kind: "permission",
       tool: "ask_yes_no",
       title: question,
+      sessionId: scope?.sessionId,
+      projectId: scope?.projectId,
+      taskId: scope?.taskId,
+      computerId: scope?.computerId,
       risk: "low",
       createdAt: Date.now(),
     },
@@ -61,9 +75,10 @@ export async function askOpenQuestion(
   client: RelayClient,
   question: string,
   timeoutMs = ASK_TIMEOUT_MS,
+  scope?: TaskInteractionScope,
 ): Promise<string> {
   const requestId = randomId(6);
-  const reply = await waitForReply(client, requestId, timeoutMs, question);
+  const reply = await waitForReply(client, requestId, timeoutMs, question, scope);
   if (!reply) {
     await sendApprovalResolved(client, terminalApproval(requestId, "expired", {
       note: "No response before timeout",
@@ -77,23 +92,21 @@ async function waitForReply(
   requestId: string,
   timeoutMs: number,
   question: string,
+  scope?: TaskInteractionScope,
 ): Promise<Reply | null> {
   let cancelReplyWait = () => {};
-  const replyP = listenForReply(client, requestId, timeoutMs, (cancel) => {
+  const replyP = listenForReply(client, requestId, timeoutMs, scope?.sessionId, (cancel) => {
     cancelReplyWait = cancel;
   });
   try {
-    await client.send(
-      {
-        type: "agent.event",
-        text: question,
-        requestId,
-        kind: "question",
-        createdAt: Date.now(),
-      },
-      "phone",
-      { ttlMs: timeoutMs, wake: true },
-    );
+    const payload = {
+      type: "agent.event" as const, text: question, requestId, kind: "question" as const,
+      sessionId: scope?.sessionId, agent: scope?.provider, projectId: scope?.projectId,
+      taskId: scope?.taskId, computerId: scope?.computerId, createdAt: Date.now(),
+    };
+    const options = { ttlMs: timeoutMs, wake: true };
+    if (scope) await sendSessionPayload(client, payload, scope.sessionId, "phone", options);
+    else await client.send(payload, "phone", options);
   } catch (error) {
     cancelReplyWait();
     throw error;
@@ -107,6 +120,7 @@ function listenForReply(
   client: RelayClient,
   requestId: string,
   timeoutMs: number,
+  sessionId: string | undefined,
   setCancel: (cancel: () => void) => void,
 ): Promise<Reply | null> {
   return new Promise((resolve) => {
@@ -127,7 +141,7 @@ function listenForReply(
       if (
         payload.type !== "user.message"
         || payload.requestId !== requestId
-        || payload.sessionId?.trim()
+        || (payload.sessionId?.trim() || undefined) !== sessionId
         || handling
       ) return false;
       handling = true;

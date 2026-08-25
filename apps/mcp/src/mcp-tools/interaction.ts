@@ -13,11 +13,12 @@ import {
   type ExecutionCapability,
 } from "../../../bridge/src/mesh/capability";
 import { consumeAttributedCall } from "../../../bridge/src/mesh/call-scope";
+import { liveExecutionScope } from "../../../bridge/src/mesh/capability";
 import { localMeshStore } from "../../../bridge/src/mesh/local";
 import { handleMeshPayload } from "../../../bridge/src/mesh/runtime";
 import { sendMeshPayload } from "../../../bridge/src/session-keys";
 import { isMeshEnabled, isProviderEnabled } from "../../../bridge/src/config/runtime";
-import { askOpenQuestion, askYesNo, relay } from "./relay";
+import { askOpenQuestion, askYesNo, relay, type TaskInteractionScope } from "./relay";
 
 const NOT_PAIRED =
   "GrantTap is not paired on this machine. Pair the desktop bridge with the GrantTap app first.";
@@ -88,7 +89,7 @@ export function registerInteractionTools(server: McpServer): void {
       inputSchema: { question: question.describe("A question answerable with yes/no") },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     },
-    async ({ question: text }) => answerYesNo(text),
+    async ({ question: text }) => answerYesNo(text, interactionScope("ask_yes_no", text)),
   );
   server.registerTool(
     "ask",
@@ -97,7 +98,7 @@ export function registerInteractionTools(server: McpServer): void {
       inputSchema: { question },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     },
-    async ({ question: text }) => answerOpenQuestion(text),
+    async ({ question: text }) => answerOpenQuestion(text, interactionScope("ask", text)),
   );
 }
 
@@ -200,14 +201,32 @@ function notPaired() {
   return { content: [{ type: "text" as const, text: NOT_PAIRED }] };
 }
 
-async function answerYesNo(questionText: string) {
-  const client = await relay();
-  if (!client) return notPaired();
-  return { content: [{ type: "text" as const, text: await askYesNo(client, questionText) }] };
+function interactionScope(tool: "ask" | "ask_yes_no", text: string): TaskInteractionScope | undefined {
+  const attributed = consumeAttributedCall(tool, { question: text });
+  if (!attributed) return undefined;
+  const live = liveExecutionScope(attributed.sessionId);
+  if (!live || live.execution.provider !== attributed.provider) return undefined;
+  return {
+    provider: attributed.provider,
+    sessionId: attributed.sessionId,
+    projectId: live.snapshot.projectId,
+    taskId: live.execution.taskId,
+    computerId: live.execution.computerId,
+  };
 }
 
-async function answerOpenQuestion(questionText: string) {
+async function answerYesNo(questionText: string, scope?: TaskInteractionScope) {
   const client = await relay();
   if (!client) return notPaired();
-  return { content: [{ type: "text" as const, text: await askOpenQuestion(client, questionText) }] };
+  return { content: [{
+    type: "text" as const, text: await askYesNo(client, questionText, undefined, scope),
+  }] };
+}
+
+async function answerOpenQuestion(questionText: string, scope?: TaskInteractionScope) {
+  const client = await relay();
+  if (!client) return notPaired();
+  return { content: [{
+    type: "text" as const, text: await askOpenQuestion(client, questionText, undefined, scope),
+  }] };
 }
