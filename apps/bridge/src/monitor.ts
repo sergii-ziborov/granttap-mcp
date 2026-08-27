@@ -1,7 +1,4 @@
 import { hostname } from "node:os";
-import { randomUUID } from "node:crypto";
-import { closeSync, mkdirSync, openSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { RelayClient } from "../../../packages/core/relay-client";
 import type {
   AgentEvent,
@@ -24,6 +21,7 @@ import {
   setSessionShellAllowed,
   setSessionSkillAllowed,
 } from "./config";
+import { monitorLeadership } from "./monitor-leadership";
 import { mcpServersForSession, workspaceSkills } from "./capabilities";
 import { compactCodexSession } from "./codex-control";
 import {
@@ -430,74 +428,6 @@ async function handleCompact(client: RelayClient, message: SessionCompact): Prom
  * lock records the owning pid and is reclaimed automatically after a crash;
  * non-leaders retry on each publish tick and on incoming relay traffic.
  */
-function monitorLeadership(): { acquire: () => boolean; release: () => void } {
-  const path = join(configDir(), "monitor.lock");
-  const token = `${process.pid}:${randomUUID()}`;
-  let leader = false;
-
-  const ownsLock = (): boolean => {
-    try {
-      return readFileSync(path, "utf8") === token;
-    } catch {
-      return false;
-    }
-  };
-
-  const ownerIsAlive = (): boolean => {
-    try {
-      const raw = readFileSync(path, "utf8");
-      const pid = Number(raw.split(":", 1)[0]);
-      if (!Number.isSafeInteger(pid) || pid <= 0) return false;
-      process.kill(pid, 0);
-      return true;
-    } catch (error) {
-      return (error as NodeJS.ErrnoException).code === "EPERM";
-    }
-  };
-
-  const acquire = (): boolean => {
-    if (leader) {
-      leader = ownsLock();
-      if (leader) return true;
-    }
-
-    mkdirSync(configDir(), { recursive: true });
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      try {
-        const fd = openSync(path, "wx", 0o600);
-        try {
-          writeFileSync(fd, token);
-        } finally {
-          closeSync(fd);
-        }
-        leader = true;
-        return true;
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "EEXIST") return false;
-        if (ownerIsAlive()) return false;
-        try {
-          unlinkSync(path);
-        } catch {
-          return false;
-        }
-      }
-    }
-    return false;
-  };
-
-  const release = (): void => {
-    if (!leader || !ownsLock()) return;
-    try {
-      unlinkSync(path);
-    } catch {
-      // A successor may already have reclaimed a stale lock.
-    }
-    leader = false;
-  };
-
-  acquire();
-  return { acquire, release };
-}
 
 /**
  * Report whether this actually changed what the monitor is watching.
