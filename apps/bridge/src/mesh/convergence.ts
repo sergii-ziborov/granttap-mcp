@@ -65,10 +65,12 @@ export function preferExecution(
 /**
  * Whether `sessionId` may become the owner of `task`.
  *
- * Ownership moves forward only: to an unowned Task, back to the session that
- * already owns it, or away from an owner whose execution this computer can see
- * has ended. An owner this computer cannot see is treated as still working,
- * because guessing would be exactly the split brain this prevents.
+ * Ownership moves forward only. The one case that must never happen is taking a
+ * Task back from an owner that is still working, so a recorded owner whose
+ * execution this computer can see is open holds it. An owner with no execution
+ * record at all is not evidence of live work: refusing there stranded the Task
+ * forever once the owning session was gone, leaving a dead chat presented as
+ * current, which is the failure this rule exists to prevent in the first place.
  */
 export function mayOwnTask(
   task: TaskValue,
@@ -78,5 +80,5 @@ export function mayOwnTask(
   if (task.ownerSessionId == null || task.ownerSessionId === sessionId) return true;
   const owner = executions.find((item) =>
     item.taskId === task.taskId && item.sessionId === task.ownerSessionId);
-  return owner?.endedAt != null;
+  return owner == null || owner.endedAt != null;
 }
