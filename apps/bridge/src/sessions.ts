@@ -43,6 +43,7 @@ import {
   rememberCapabilityUsageCandidate,
   toRemoteCapabilityUsageEvent,
 } from "./sessions/telemetry";
+import { createCapabilityTotals } from "./sessions/capability-totals";
 import { loadRuntimeConfig } from "./config";
 
 export { MAX_ACTIVITY_ENTRIES, MAX_ACTIVITY_TEXT, TOKEN_WINDOW_HOURS };
@@ -192,6 +193,9 @@ export function scanCapabilityUsage(
   sessions: SessionInfo[] = [...scanSessions().sessions, ...scanSessionHistory()],
 ): CapabilityUsageStatus {
   const candidates: RemoteCapabilityUsageEvent[] = [];
+  // Totals count every observation as it streams past; the candidate list is
+  // trimmed to a byte budget and can never answer for a whole period.
+  const totals = createCapabilityTotals();
   const seenSessions = new Set<string>();
   for (const session of sessions) {
     if (seenSessions.has(session.sessionId)) continue;
@@ -204,12 +208,15 @@ export function scanCapabilityUsage(
             : [];
     for (const observation of observations) {
       const event = toRemoteCapabilityUsageEvent(observation);
-      if (event) rememberCapabilityUsageCandidate(candidates, event);
+      if (!event) continue;
+      totals.add(event);
+      rememberCapabilityUsageCandidate(candidates, event);
     }
   }
   return {
     type: "capability.usage.status",
     events: limitCapabilityUsageEvents(candidates),
+    totals: totals.rows(),
     generatedAt: Date.now(),
   };
 }

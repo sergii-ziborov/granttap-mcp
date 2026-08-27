@@ -67,9 +67,31 @@ export type CapabilityUsageEvent = z.infer<typeof CapabilityUsageEvent>;
 export const RemoteCapabilityUsageEvent = CapabilityUsageEvent;
 export type RemoteCapabilityUsageEvent = CapabilityUsageEvent;
 
+/**
+ * What a period actually contained.
+ *
+ * The event list is bounded by a byte budget, so on a busy computer it holds
+ * only the newest hours: counting it produced a "last 30 days" that silently
+ * meant "the last eighty calls", and a capability used yesterday read as never
+ * used at all. Totals are counted on the computer, where the whole period is
+ * visible, and travel as a handful of rows.
+ */
+export const CapabilityUsageTotal = z.object({
+  windowHours: z.number().int().positive().max(24 * 400),
+  kind: CapabilityUsageKind,
+  /** Absent for the roll-up of a whole kind. */
+  name: CapabilityName.optional(),
+  count: z.number().int().nonnegative(),
+  failures: z.number().int().nonnegative(),
+  cancelled: z.number().int().nonnegative(),
+  lastUsedAt: z.number().nonnegative(),
+}).strict();
+export type CapabilityUsageTotal = z.infer<typeof CapabilityUsageTotal>;
+
 export const CapabilityUsageStatus = z.object({
   type: z.literal("capability.usage.status"),
   events: z.array(CapabilityUsageEvent).max(200),
+  totals: z.array(CapabilityUsageTotal).max(160).optional(),
   generatedAt: z.number(),
 });
 export type CapabilityUsageStatus = z.infer<typeof CapabilityUsageStatus>;
