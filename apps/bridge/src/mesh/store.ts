@@ -20,6 +20,7 @@ import { loadStoreState, type StoreState } from "./store-state";
 import { preferExecution, preferTask, isTerminalTaskState, mayOwnTask } from "./convergence";
 import { capsuleHash } from "./handoff";
 import { mergeBy, mergeWith, resourceOverlap } from "./store-support";
+import { closeVanished } from "./execution-sweep";
 import { receiptMovesOwnership, taskAfterEvent, taskAfterLocalReading } from "./task-state";
 
 export class MeshStore {
@@ -59,6 +60,20 @@ export class MeshStore {
   private replaceTask(task: TaskValue): void {
     this.state.tasks = this.state.tasks.filter((item) => item.taskId !== task.taskId);
     this.state.tasks.push(task);
+  }
+
+  /** Close executions this computer no longer runs. See `execution-sweep`. */
+  closeVanishedExecutions(
+    computerId: string,
+    liveSessionIds: ReadonlySet<string>,
+    scannedProviders: ReadonlySet<string>,
+    endedAt = this.now(),
+  ): number {
+    const closed = closeVanished(this.state.executions, {
+      computerId, liveSessionIds, scannedProviders, endedAt,
+    });
+    if (closed > 0) this.save();
+    return closed;
   }
 
   taskForExecution(computerId: string, provider: string, sessionId: string): string | undefined {

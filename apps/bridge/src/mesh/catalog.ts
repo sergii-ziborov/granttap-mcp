@@ -97,6 +97,13 @@ export function linkSessionsToProjects(
   computerId: string,
   inspect: (cwd: string) => RepositoryFacts = inspectRepository,
 ): SessionInfo[] {
+  // A vanished session never says it ended, so sweep first: an execution left
+  // open holds the Task, keeps its old title, and keeps its last state.
+  store.closeVanishedExecutions(
+    computerId,
+    new Set(sessions.map((session) => session.sessionId)),
+    new Set(sessions.flatMap((session) => provider(session.agent) ?? [])),
+  );
   return sessions.map((session) => {
     const agent = provider(session.agent);
     const cwd = session.cwd?.trim();

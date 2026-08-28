@@ -210,3 +210,62 @@ test("two computers holding the same revision still converge on one task", () =>
     preferExecution({ ...execution, branch: "other" }, execution),
   );
 });
+
+test("a session that vanished stops holding the task, its title, and its state", async () => {
+  const store = await freshStore();
+  store.upsertProject(project());
+  store.upsertTask({
+    taskId: "task", projectId: "project", title: "An old chat title", goal: "Old goal",
+    state: "working", ownerSessionId: "claude-gone", createdAt: now, updatedAt: now,
+  });
+  store.linkExecution({
+    taskId: "task", sessionId: "claude-gone", provider: "claude", computerId: "MacBook",
+    workspace: "/repo", startedAt: now,
+  });
+
+  // The next scan sees a different live claude session in the same checkout.
+  const live: SessionInfo = {
+    sessionId: "claude-live", agent: "claude", title: "What the chat is called now",
+    cwd: "/repo", state: "idle", startedAt: now + 10, lastActivityAt: now + 10,
+    tokensSession: 1, tokensLastTurn: 1,
+  };
+  const inspect = () => ({
+    root: "/repo", canonicalRepositoryId: "github.com/example/granttap", worktree: "/repo",
+  });
+  linkSessionsToProjects(store, [live], "MacBook", inspect);
+
+  // The live session opens its own task; the old one stays as history and, with
+  // its execution closed, no longer passes for current work.
+  const executions = store.projectIds()
+    .flatMap((id) => store.snapshot(id)?.executions ?? []);
+  assert.ok(
+    executions.find((item) => item.sessionId === "claude-gone")?.endedAt,
+    "an execution this computer no longer runs is closed",
+  );
+  assert.equal(
+    executions.filter((item) => item.endedAt == null).map((item) => item.sessionId).join(),
+    "claude-live",
+    "only the live session is open",
+  );
+  assert.equal(store.task("task")?.title, "An old chat title", "history keeps its own name");
+});
+
+test("a provider missing from this scan keeps its executions open", async () => {
+  const store = await freshStore();
+  store.upsertProject(project());
+  store.upsertTask({
+    taskId: "task", projectId: "project", title: "Codex work", goal: "Goal",
+    state: "working", ownerSessionId: "codex-session", createdAt: now, updatedAt: now,
+  });
+  store.linkExecution({
+    taskId: "task", sessionId: "codex-session", provider: "codex", computerId: "MacBook",
+    workspace: "/repo", startedAt: now,
+  });
+  // Only claude was observed: a Codex CLI that is temporarily unavailable must
+  // not have its sessions declared over.
+  store.closeVanishedExecutions("MacBook", new Set(["claude-live"]), new Set(["claude"]));
+  assert.equal(
+    store.snapshot("project")?.executions.find((item) => item.sessionId === "codex-session")?.endedAt,
+    undefined,
+  );
+});
