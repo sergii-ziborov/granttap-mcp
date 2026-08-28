@@ -23,6 +23,7 @@ import {
   MeshHandoffPrepare,
   MeshSnapshot,
 } from "./messages/mesh";
+import { MachineLoad } from "./messages/machine";
 import {
   ConfigSet,
   SessionAccessSet,
@@ -40,6 +41,7 @@ import {
 export * from "./messages/approvals";
 export * from "./messages/capabilities";
 export * from "./messages/interaction";
+export * from "./messages/machine";
 export * from "./messages/mesh";
 export * from "./messages/primitives";
 export * from "./messages/sessions";
@@ -102,6 +104,7 @@ export const Payload = z.union([
   MeshEndpointPolicy,
   Hello,
   MachineHeartbeat,
+  MachineLoad,
 ]).superRefine((payload, ctx) => {
   if (payload.type !== "user.message") return;
   const encodedCharacters = payload.attachments?.reduce(

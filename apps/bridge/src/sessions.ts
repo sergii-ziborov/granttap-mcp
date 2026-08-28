@@ -45,6 +45,7 @@ import {
 } from "./sessions/telemetry";
 import { createCapabilityTotals } from "./sessions/capability-totals";
 import { loadRuntimeConfig } from "./config";
+import { timedProviderScan } from "./machine-load/scan-cost";
 
 export { MAX_ACTIVITY_ENTRIES, MAX_ACTIVITY_TEXT, TOKEN_WINDOW_HOURS };
 
@@ -68,10 +69,14 @@ function providerScans(): ProviderScan[] {
   };
   const isolated = Object.values(explicit).some(Boolean);
   return [
-    enabled.claude && (!isolated || explicit.claude) ? scanClaude() : emptyScan(),
-    enabled.codex && (!isolated || explicit.codex) ? scanCodex() : emptyScan(),
-    enabled.cursor && (!isolated || explicit.cursor) ? scanCursor() : emptyScan(),
-    enabled.grok && (!isolated || explicit.grok) ? scanGrok() : emptyScan(),
+    enabled.claude && (!isolated || explicit.claude)
+      ? timedProviderScan("claude", scanClaude) : emptyScan(),
+    enabled.codex && (!isolated || explicit.codex)
+      ? timedProviderScan("codex", scanCodex) : emptyScan(),
+    enabled.cursor && (!isolated || explicit.cursor)
+      ? timedProviderScan("cursor", scanCursor) : emptyScan(),
+    enabled.grok && (!isolated || explicit.grok)
+      ? timedProviderScan("grok", scanGrok) : emptyScan(),
   ];
 }
 

@@ -41,6 +41,7 @@ import { cachedSessionActivity } from "./monitor-session-activity";
 import { HEARTBEAT_INTERVAL_MS, publishHeartbeat } from "./monitor-heartbeat";
 import { startPublishLoop } from "./monitor-publish-loop";
 import { singleFlightPublisher } from "./monitor-single-flight";
+import { createMachineLoadPublisher } from "./machine-load";
 import {
   scanCapabilityUsage,
   scanSessionHistory,
@@ -123,6 +124,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
   let historyCache: { generatedAt: number; sessions: SessionsStatus["sessions"] } | undefined;
   let lastHistoryPublishedAt = 0;
   let lastCapabilityPublishedAt = 0;
+  const publishMachineLoad = createMachineLoadPublisher();
 
   const decorate = (sessions: SessionsStatus["sessions"]): SessionsStatus["sessions"] => {
     const runtime = loadRuntimeConfig();
@@ -201,6 +203,13 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
     // delays the current one behind superseded copies.
     await client.send(status, "phone", { ttlMs: INTERVAL_MS * 24, reliable: false });
     if (includeHistory) lastHistoryPublishedAt = Date.now();
+    // Process sampling is independent telemetry. Never hold the catalog/detail
+    // single-flight behind `ps`, especially while the phone is opening a chat.
+    void publishMachineLoad(client, status, INTERVAL_MS).catch((error: unknown) => {
+      process.stderr.write(
+        `[monitor] load report failed: ${error instanceof Error ? error.message : String(error)}\n`,
+      );
+    });
 
     // Project Mesh is separately encrypted under each project key. The relay
     // sees only the legacy routing envelope and ciphertext.
