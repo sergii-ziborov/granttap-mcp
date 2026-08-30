@@ -53,6 +53,7 @@ test("macOS background task sync is installed as a terminal-free LaunchAgent", a
   const plist = await readFile(path, "utf8");
   assert.match(plist, /<string>monitor<\/string>/);
   assert.match(plist, /<key>KeepAlive<\/key>\s*<true\/>/);
+  assert.match(plist, /<key>GRANTTAP_MONITOR_PRIMARY<\/key>\s*<string>1<\/string>/);
   assert.match(
     plist,
     /<string>\/tmp\/granttap-default-workspace&amp;&lt;&gt;&apos;&quot;<\/string>/,

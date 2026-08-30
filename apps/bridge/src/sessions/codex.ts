@@ -24,12 +24,14 @@ import {
   estimateTokens,
   pushEntry,
   toolSummary,
+  visibleUserText,
 } from "./activity-helpers";
 import {
   aggregateChildThreads,
   childEntryFields,
   childTitle,
 } from "./child-threads";
+import { codexHeadRequest } from "./codex-head";
 import {
   activityTelemetry,
   observeCapability,
@@ -126,26 +128,6 @@ function codexChildSource(meta: any): CodexChildSource | undefined {
   };
 }
 
-function visibleCodexUserText(value: unknown): string {
-  const text = String(value ?? "").trim();
-  if (!text) return "";
-  const internal = [
-    "recommended_plugins",
-    "environment_context",
-    "app-context",
-    "permissions instructions",
-    "collaboration_mode",
-    "apps_instructions",
-    "plugins_instructions",
-    "skills_instructions",
-  ];
-  if (internal.some((tag) => text.startsWith(`<${tag}`)) || text.startsWith("<image name=")) {
-    return "";
-  }
-  const marker = /^##\s+My request(?: for Codex)?:\s*$/im.exec(text);
-  return marker ? text.slice(marker.index + marker[0].length).trim() : text;
-}
-
 /** Exclude the repeatedly-counted cached prompt from session spend. */
 function effectiveCodexUsage(usage: any): number | undefined {
   if (!usage || typeof usage !== "object") return undefined;
@@ -237,7 +219,7 @@ export function scanCodex(): Scan {
       }
 
       if (!title && d.type === "event_msg" && d.payload?.type === "user_message") {
-        title = childTitle(visibleCodexUserText(d.payload.message ?? d.payload.text));
+        title = childTitle(visibleUserText(d.payload.message ?? d.payload.text));
       }
       if (
         !title &&
@@ -248,7 +230,7 @@ export function scanCodex(): Scan {
       ) {
         const visible = d.payload.content
           .filter((block: any) => block?.type === "input_text" || block?.type === "text")
-          .map((block: any) => visibleCodexUserText(block.text))
+          .map((block: any) => visibleUserText(block.text))
           .filter(Boolean)
           .join("\n");
         if (visible) title = childTitle(visible);
@@ -284,6 +266,7 @@ export function scanCodex(): Scan {
       }
     }
 
+    if (!title) title = childTitle(codexHeadRequest(file)?.text);
     lastActivityAt = Math.max(lastActivityAt, fileStat.mtimeMs);
     startedAt ||= fileStat.birthtimeMs || lastActivityAt;
     if (!sessionId) sessionId = file.split("/").pop()?.replace(".jsonl", "") ?? "codex";
@@ -587,8 +570,11 @@ export function codexCapabilityUsage(
         payload.output ?? payload.content ?? payload.result,
         rowAt || item.createdAt,
       ) ?? pendingCapabilityObservation(item);
-    if (observation) rememberCapabilityObservation(out, observation);
     const nested = nestedByCall.get(callId) ?? [];
+    // `functions.exec` is only an orchestrator when its source names nested
+    // MCP calls. Count those concrete calls, not the wrapper as a second CLI
+    // operation with the same input and output budget.
+    if (observation && nested.length === 0) rememberCapabilityObservation(out, observation);
     if (nested.length > 0) {
       const total = Math.min(
         100_000,
@@ -618,8 +604,8 @@ export function codexCapabilityUsage(
 
   for (const [callId, item] of pending) {
     const observation = pendingCapabilityObservation(item);
-    if (observation) rememberCapabilityObservation(out, observation);
     const nested = nestedByCall.get(callId) ?? [];
+    if (observation && nested.length === 0) rememberCapabilityObservation(out, observation);
     const perCapability = Math.max(1, Math.ceil(estimateTokens(item.input) / Math.max(1, nested.length)));
     for (const [nestedIndex, tool] of nested.entries()) {
       rememberCapabilityObservation(out, {
@@ -747,6 +733,16 @@ export function codexActivity(session: SessionInfo): ActivityEntry[] {
   const out: ActivityEntry[] = [];
   const seen = new Set<string>();
   for (const source of sources) {
+    const head = codexHeadRequest(source.path);
+    if (head) {
+      const createdAt = head.createdAt || session.startedAt;
+      const childFields = source.child ? childEntryFields(source.child) : {};
+      pushEntry(
+        out, seen, session.sessionId, "user", head.text, createdAt, -1,
+        childFields,
+        source.child ? `${source.child.threadId}:${createdAt}:-1` : undefined,
+      );
+    }
     let lines: string[];
     try {
       lines = readCodexLogWindow(

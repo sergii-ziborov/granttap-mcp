@@ -434,10 +434,10 @@ export function installMonitorHelper(): InstallResult {
       ? [
           "    <key>GRANTTAP_LOCAL</key>",
           "    <string>1</string>",
-          "    <key>GRANTTAP_MONITOR_PRIMARY</key>",
-          "    <string>1</string>",
         ]
       : []),
+    "    <key>GRANTTAP_MONITOR_PRIMARY</key>",
+    "    <string>1</string>",
     "    <key>PATH</key>",
     `    <string>${xml(environmentPath)}</string>`,
     "  </dict>",

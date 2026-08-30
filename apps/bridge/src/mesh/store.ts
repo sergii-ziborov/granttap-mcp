@@ -107,8 +107,12 @@ export class MeshStore {
     const task = this.state.tasks.find((item) => item.taskId === execution.taskId);
     if (!task || execution.endedAt != null) return;
     if (!mayOwnTask(task, execution.sessionId, this.state.executions)) return;
-    const state = !isTerminalTaskState(task.state)
-      && (task.state === "handoff" || task.state === "planned") ? "working" : task.state;
+    // A cataloged execution can be idle and still available to continue. Only
+    // a handoff proves newly started work; promoting every planned Task made
+    // quiet native sessions appear as another actively working agent.
+    const state = !isTerminalTaskState(task.state) && task.state === "handoff"
+      ? "working"
+      : task.state;
     this.replaceTask({
       ...task,
       ownerSessionId: execution.sessionId,

@@ -117,12 +117,12 @@ test("a phone-selected access level is passed to the resumed Codex task", async 
     "Use restricted access",
     5_000,
     [],
-    { preferredMcp: "granttap", skill: "release-check" },
+    { preferredMcp: "granttap", skill: "release-check", model: "gpt-5.6-terra" },
   );
 
   assert.equal(result.ok, true);
   if (!result.ok) return;
-  assert.match(result.text, /exec\|resume\|-c\|sandbox_mode="read-only"\|-c\|mcp_servers\."github"\.enabled=false\|thread-access\|--json\|-/);
+  assert.match(result.text, /exec\|resume\|-c\|sandbox_mode="read-only"\|-c\|mcp_servers\."github"\.enabled=false\|-m\|gpt-5.6-terra\|thread-access\|--json\|-/);
   assert.match(result.text, /mcp_servers\."github"\.enabled=false/);
 });
 

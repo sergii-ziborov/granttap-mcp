@@ -25,9 +25,10 @@ function activityText(value: unknown, max = MAX_ACTIVITY_TEXT): string {
 }
 
 /** Remove host-injected transport context that is not a message the person typed. */
-function visibleUserText(value: unknown): string {
+export function visibleUserText(value: unknown): string {
   const text = String(value ?? "").trim();
   if (!text) return "";
+  if (/^#\s+AGENTS\.md instructions for(?:\s|$)/i.test(text)) return "";
   const internal = [
     "recommended_plugins",
     "environment_context",

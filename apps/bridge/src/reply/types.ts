@@ -5,4 +5,5 @@ export type ReplyResult =
 export type DeliveryOptions = {
   preferredMcp?: string;
   skill?: string;
+  model?: string;
 };

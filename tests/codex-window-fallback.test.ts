@@ -64,6 +64,36 @@ test("Codex keeps oversized rollouts bounded and skips unreadable files", async 
   assert.equal(entries.some((entry) => entry.text === filler), false);
 });
 
+test("Codex retains the first request when its row contains an attached image", async (t) => {
+  const day = await sessionsRoot(t);
+  const now = Date.now();
+  const image = "a".repeat(360 * 1024);
+  const later = "x".repeat(900 * 1024);
+  await writeFile(join(day, "rollout-attached.jsonl"), jsonl([
+    { timestamp: new Date(now - 4_000).toISOString(), type: "session_meta", payload: {
+      id: "attached-session", cwd: "/repo", model: "gpt-5",
+    } },
+    { timestamp: new Date(now - 3_000).toISOString(), type: "response_item", payload: {
+      type: "message", role: "user", content: [
+        { type: "input_text", text: "Inspect the attached screen" },
+        { type: "input_image", image_url: `data:image/jpeg;base64,${image}` },
+      ],
+    } },
+    { timestamp: new Date(now - 2_000).toISOString(), type: "response_item", payload: {
+      type: "message", role: "assistant", content: [{ type: "output_text", text: later }],
+    } },
+    { timestamp: new Date(now - 1_000).toISOString(), type: "response_item", payload: {
+      type: "message", role: "assistant", content: [{ type: "output_text", text: "Done." }],
+    } },
+  ]));
+
+  const session = scanCodex().sessions.find((item) => item.sessionId === "attached-session");
+  assert.equal(session?.title, "Inspect the attached screen");
+  const entries = codexActivity(session as SessionInfo);
+  assert.equal(entries.some((entry) => entry.text === "Inspect the attached screen"), true);
+  assert.equal(entries.some((entry) => entry.text === later), false);
+});
+
 test("Codex names an orphan parent row and reloads activity without a warm path", async (t) => {
   const day = await sessionsRoot(t);
   const now = Date.now();

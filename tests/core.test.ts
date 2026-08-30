@@ -57,13 +57,16 @@ test("protocol accepts correlated questions, replies, activity, and expiring env
     agents: [{ agent: "claude", installed: true, hookConfigured: false }],
     generatedAt: 4,
   }).success, true);
-  assert.equal(Payload.safeParse({
+  const turn = Payload.safeParse({
     type: "user.message",
     text: "yes",
     cwd: "/known/project",
     requestId: "q1",
+    model: "gpt-5.6-terra",
     createdAt: 2,
-  }).success, true);
+  });
+  assert.equal(turn.success, true);
+  assert.equal(turn.success && "model" in turn.data ? turn.data.model : undefined, "gpt-5.6-terra");
   assert.equal(Payload.safeParse({
     type: "session.activity",
     sessionId: "s1",

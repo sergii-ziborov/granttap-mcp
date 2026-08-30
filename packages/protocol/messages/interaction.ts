@@ -22,6 +22,8 @@ export const UserMessage = z.object({
   attachments: z.array(UserAttachment).max(5).optional(),
   preferredMcp: z.string().min(1).max(180).optional(),
   skill: z.string().min(1).max(180).optional(),
+  model: z.string().min(1).max(120)
+    .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/).optional(),
   createdAt: z.number(),
 });
 export type UserMessage = z.infer<typeof UserMessage>;

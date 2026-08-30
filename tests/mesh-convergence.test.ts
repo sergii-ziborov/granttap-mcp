@@ -250,6 +250,28 @@ test("a session that vanished stops holding the task, its title, and its state",
   assert.equal(store.task("task")?.title, "An old chat title", "history keeps its own name");
 });
 
+test("an idle native session keeps its execution without claiming active work", async () => {
+  const store = await freshStore();
+  const idle: SessionInfo = {
+    sessionId: "codex-idle", agent: "codex", title: "Finished locally", cwd: "/repo",
+    state: "idle", startedAt: now - 60_000, lastActivityAt: now,
+    tokensSession: 1, tokensLastTurn: 1,
+  };
+
+  const [linked] = linkSessionsToProjects(store, [idle], "MacBook", () => ({
+    root: "/repo", canonicalRepositoryId: "github.com/example/granttap", worktree: "/repo",
+  }));
+  const snapshot = store.snapshot(linked!.projectId!)!;
+  const execution = snapshot.executions.find((item) => item.sessionId === idle.sessionId);
+
+  assert.equal(execution?.endedAt, undefined, "the idle chat remains available to continue");
+  assert.equal(
+    snapshot.tasks.find((item) => item.taskId === linked!.taskId)?.state,
+    "planned",
+    "an idle chat is not presented as active work",
+  );
+});
+
 test("a provider missing from this scan keeps its executions open", async () => {
   const store = await freshStore();
   store.upsertProject(project());

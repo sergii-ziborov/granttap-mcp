@@ -165,6 +165,14 @@ test("Codex tasks and visible activity are discovered from local rollouts", asyn
       type: "event_msg",
       payload: {
         type: "user_message",
+        message: "# AGENTS.md instructions for /repo\n\n<INSTRUCTIONS>\nInternal bootstrap\n</INSTRUCTIONS>",
+      },
+    },
+    {
+      timestamp,
+      type: "event_msg",
+      payload: {
+        type: "user_message",
         message: "# Files mentioned by the user:\n\n## Photo 1.jpg: /tmp/example.jpg\n\n## My request for Codex:\n\nBuild the feature",
       },
     },
@@ -200,6 +208,19 @@ test("Codex tasks and visible activity are discovered from local rollouts", asyn
       timestamp,
       type: "response_item",
       payload: { type: "custom_tool_call_output", call_id: "call-node-repl", output: "2" },
+    },
+    {
+      timestamp,
+      type: "response_item",
+      payload: {
+        type: "custom_tool_call", call_id: "call-exec-wrapper", name: "exec",
+        input: "const result = await tools.exec_command({ cmd: 'pwd' }); text(result.output);",
+      },
+    },
+    {
+      timestamp,
+      type: "response_item",
+      payload: { type: "custom_tool_call_output", call_id: "call-exec-wrapper", output: "/repo" },
     },
     { timestamp, type: "event_msg", payload: { type: "agent_message", phase: "final", message: "Done." } },
     {
@@ -258,6 +279,7 @@ test("Codex tasks and visible activity are discovered from local rollouts", asyn
   assert.equal(nestedMcp?.toolName, "mcp__node_repl__js");
   assert.equal((nestedMcp?.estimatedContextTokens ?? 0) > 0, true);
   assert.deepEqual(cli.map((event) => event.commandPreview).sort(), [
+    "const result = await tools.exec_command({ cmd: 'pwd' }); text(result.output);",
     "echo cleanup",
     "git status --short",
   ]);

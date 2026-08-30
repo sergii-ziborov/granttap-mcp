@@ -8,10 +8,14 @@ import { LEADERSHIP_TTL_MS, monitorLeadership } from "../apps/bridge/src/monitor
 async function configured(t: { after: (fn: () => void) => void }): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "granttap-leadership-"));
   const previous = process.env.GRANTTAP_CONFIG_DIR;
+  const previousPrimary = process.env.GRANTTAP_MONITOR_PRIMARY;
   process.env.GRANTTAP_CONFIG_DIR = root;
+  delete process.env.GRANTTAP_MONITOR_PRIMARY;
   t.after(() => {
     if (previous == null) delete process.env.GRANTTAP_CONFIG_DIR;
     else process.env.GRANTTAP_CONFIG_DIR = previous;
+    if (previousPrimary == null) delete process.env.GRANTTAP_MONITOR_PRIMARY;
+    else process.env.GRANTTAP_MONITOR_PRIMARY = previousPrimary;
   });
   return root;
 }
@@ -60,4 +64,23 @@ test("a renewed lease keeps one publisher and says why the other is silent", asy
   leader.release();
   assert.equal(follower.acquire(), true, "a released lease is free immediately");
   follower.release();
+});
+
+test("the persistent primary replaces a per-chat publisher without killing it", async (t) => {
+  const root = await configured(t);
+  const lock = join(root, "monitor.lock");
+  const peer = monitorLeadership();
+  assert.equal(peer.acquire(), true);
+  assert.match(await readFile(lock, "utf8"), /:peer$/);
+
+  process.env.GRANTTAP_MONITOR_PRIMARY = "1";
+  const primary = monitorLeadership();
+  assert.equal(primary.acquire(), true);
+  assert.match(await readFile(lock, "utf8"), /:primary$/);
+
+  delete process.env.GRANTTAP_MONITOR_PRIMARY;
+  assert.equal(peer.acquire(), false, "the previous owner becomes a follower on its next tick");
+  process.env.GRANTTAP_MONITOR_PRIMARY = "1";
+  assert.equal(primary.acquire(), true);
+  primary.release();
 });

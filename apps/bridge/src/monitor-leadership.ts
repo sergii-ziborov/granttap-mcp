@@ -36,7 +36,8 @@ export function monitorLeadership(
   report: (message: string) => void = (message) => process.stderr.write(message),
 ): MonitorLeadership {
   const path = join(configDir(), "monitor.lock");
-  const token = `${process.pid}:${randomUUID()}`;
+  const primary = process.env.GRANTTAP_MONITOR_PRIMARY === "1";
+  const token = `${process.pid}:${randomUUID()}:${primary ? "primary" : "peer"}`;
   let leader = false;
   let reportedAt = 0;
 
@@ -74,6 +75,8 @@ export function monitorLeadership(
     }
   };
 
+  const ownerIsPrimary = (): boolean => read()?.trim().endsWith(":primary") === true;
+
   const reportRefusal = (): void => {
     if (now() - reportedAt < REPORT_INTERVAL_MS) return;
     reportedAt = now();
@@ -103,6 +106,18 @@ export function monitorLeadership(
         return true;
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "EEXIST") return false;
+        // The persistent LaunchAgent is the only publisher that upgrades when
+        // the local package changes. Let it replace a lease held by an older,
+        // long-lived per-chat MCP process; that process observes the changed
+        // token on its next tick and immediately becomes a follower.
+        if (primary && !ownerIsPrimary()) {
+          try {
+            unlinkSync(path);
+          } catch {
+            return false;
+          }
+          continue;
+        }
         if (ownerIsAlive() && !expired()) {
           reportRefusal();
           return false;

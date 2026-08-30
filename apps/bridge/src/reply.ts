@@ -115,19 +115,28 @@ function runDelivery(
   options: DeliveryOptions,
 ): Promise<ReplyResult> {
   const routed = routingPrompt(session, text, options);
-  if (session.agent === "claude") return runClaude(session, routed, timeoutMs);
-  if (session.agent === "codex") return runCodex(session, routed, timeoutMs, images);
+  if (session.agent === "claude") return runClaude(session, routed, timeoutMs, options);
+  if (session.agent === "codex") return runCodex(session, routed, timeoutMs, images, options);
   if (session.agent === "cursor") return runCursorResume(session, routed, timeoutMs);
   if (session.agent === "grok") return runGrokResume(session, routed, timeoutMs);
   return Promise.resolve({ ok: false, error: `unknown agent: ${session.agent}` });
 }
 
-function runClaude(session: SessionInfo, text: string, timeoutMs: number): Promise<ReplyResult> {
+function runClaude(
+  session: SessionInfo,
+  text: string,
+  timeoutMs: number,
+  options: DeliveryOptions,
+): Promise<ReplyResult> {
   const disabled = loadRuntimeConfig().sessionMcpDisabled[session.sessionId] ?? [];
   const mcpArgs = disabled.length === 0
     ? []
     : ["--disallowedTools", disabled.map((name) => `mcp__${name}`).join(",")];
-  const args = ["-p", "--resume", session.sessionId, ...mcpArgs, "--output-format", "json", text];
+  const modelArgs = options.model ? ["--model", options.model] : [];
+  const args = [
+    "-p", "--resume", session.sessionId, ...mcpArgs, ...modelArgs,
+    "--output-format", "json", text,
+  ];
   return runProcess(CLAUDE_BIN, args, session.cwd, timeoutMs, (stdout) => {
     try {
       const parsed = JSON.parse(stdout) as { result?: string; is_error?: boolean };
@@ -196,6 +205,7 @@ function runCodex(
   text: string,
   timeoutMs: number,
   images: string[] = [],
+  options: DeliveryOptions = {},
 ): Promise<ReplyResult> {
   const configured = loadRuntimeConfig().sessionAccess[session.sessionId];
   const disabledMcp = loadRuntimeConfig().sessionMcpDisabled[session.sessionId] ?? [];
@@ -211,8 +221,12 @@ function runCodex(
     "-c",
     `mcp_servers.${tomlKey(name)}.enabled=false`,
   ]);
+  const modelArgs = options.model ? ["-m", options.model] : [];
   const imageArgs = images.flatMap((path) => ["-i", path]);
-  const args = ["exec", "resume", ...accessArgs, ...mcpArgs, ...imageArgs, session.sessionId, "--json", "-"];
+  const args = [
+    "exec", "resume", ...accessArgs, ...mcpArgs, ...modelArgs, ...imageArgs,
+    session.sessionId, "--json", "-",
+  ];
   return runProcess(
     CODEX_BIN,
     args,

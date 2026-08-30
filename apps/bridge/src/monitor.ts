@@ -573,6 +573,7 @@ export async function handleUserMessage(client: RelayClient, message: UserMessag
   const result = await deliverToSession(target, message.text, 240_000, message.attachments, {
     preferredMcp: message.preferredMcp,
     skill: message.skill,
+    model: message.model,
   });
   if (result.ok) {
     await say(result.text, result.sessionId ?? target.sessionId, true);

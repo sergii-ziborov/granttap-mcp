@@ -20,6 +20,7 @@ const CLI_TOOL_NAMES = new Set([
   "terminal",
   "exec_command",
   "execute_command",
+  "exec",
   "local_shell_call",
   "run_command",
   "run_in_terminal",
