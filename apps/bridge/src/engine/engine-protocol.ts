@@ -1,10 +1,24 @@
+import type {
+  CapabilityFingerprint,
+  EnginePolicyDecision,
+  PolicyEffect,
+  PolicySource,
+} from "./engine-policy-types";
+
 export const ENGINE_PROTOCOL_VERSION = 1 as const;
 export const MAX_ENGINE_FRAME_BYTES = 64 * 1024;
 export const MAX_ENGINE_PENDING_REQUESTS = 128;
 export const DEFAULT_ENGINE_POLICY_TIMEOUT_MS = 50;
 
-export type PolicyEffect = "inherit" | "allow" | "ask" | "deny";
-export type PolicySource = "none" | "provider" | "account" | "project" | "task";
+export type {
+  CapabilityFingerprint,
+  CapabilityKind,
+  EnforcementStatus,
+  EnginePolicyDecision,
+  FingerprintConfidence,
+  PolicyEffect,
+  PolicySource,
+} from "./engine-policy-types";
 export type ProjectBindingRole = "primary" | "dependency" | "supporting";
 
 export type EngineProject = {
@@ -31,7 +45,12 @@ export type EngineOperation =
   | { operation: "engine.version" }
   | {
     operation: "project.resolve";
-    input: { project_id?: string; endpoint_id?: string; repository_id?: string };
+    input: {
+      project_id?: string;
+      endpoint_id?: string;
+      repository_id?: string;
+      local_root?: string;
+    };
   }
   | { operation: "project.get"; input: { project_id: string } }
   | { operation: "project.list_bindings"; input: { project_id: string } }
@@ -46,6 +65,10 @@ export type EngineOperation =
       account?: PolicyEffect;
       project?: PolicyEffect;
       task?: PolicyEffect;
+      project_id?: string;
+      endpoint_id?: string;
+      capability?: CapabilityFingerprint;
+      impact_available?: boolean;
     };
   };
 
@@ -70,7 +93,7 @@ export type EngineResult =
   | { operation: "project.binding_upserted"; binding: EngineProjectBinding }
   | {
     operation: "policy.evaluated";
-    decision: { effect: PolicyEffect; source: PolicySource; reason: string };
+    decision: EnginePolicyDecision;
   };
 
 export type EngineWireObject = Record<string, unknown>;
@@ -187,6 +210,16 @@ function parseResult(value: unknown): EngineResult {
     const decision = requireObject(result.decision, "policy decision");
     if (!isPolicyEffect(decision.effect) || !isPolicySource(decision.source)) invalidResult();
     requireString(decision.reason, "reason");
+    optionalString(decision.rule_id, "rule_id");
+    optionalInteger(decision.policy_revision);
+    if (decision.fingerprint_confidence != null
+      && !["exact", "strong", "name_only", "unknown"].includes(String(decision.fingerprint_confidence))) {
+      invalidResult();
+    }
+    if (decision.coverage != null
+      && !["enforced", "observed", "unsupported", "unknown"].includes(String(decision.coverage))) {
+      invalidResult();
+    }
   } else {
     throw new EngineProtocolError("engine result operation is unsupported");
   }
@@ -204,6 +237,14 @@ function requireString(value: unknown, field: string): asserts value is string {
   if (typeof value !== "string" || value.length === 0) {
     throw new EngineProtocolError(`engine ${field} is invalid`);
   }
+}
+
+function optionalString(value: unknown, field: string): void {
+  if (value != null) requireString(value, field);
+}
+
+function optionalInteger(value: unknown): void {
+  if (value != null && (!Number.isSafeInteger(value) || Number(value) < 0)) invalidResult();
 }
 
 function invalidResult(): never {

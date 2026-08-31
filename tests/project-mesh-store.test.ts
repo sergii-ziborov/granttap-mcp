@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -214,4 +214,18 @@ test("binding restore and remote merge reject cross-Project identity poisoning",
   };
   assert.throws(() => restored.mergeSnapshot(incoming), /binding conflict/i);
   assert.equal(restored.snapshot("project")?.project.name, "GrantTap");
+});
+
+test("store restore rejects symlinked and oversized coordination state", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-mesh-store-bounds-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const target = join(root, "target.json");
+  await writeFile(target, JSON.stringify({ projects: [project()] }));
+  const linked = join(root, "linked.json");
+  await symlink(target, linked);
+  assert.deepEqual(new MeshStore(linked).projectIds(), []);
+
+  const oversized = join(root, "oversized.json");
+  await writeFile(oversized, Buffer.alloc(4 * 1_024 * 1_024 + 1));
+  assert.deepEqual(new MeshStore(oversized).projectIds(), []);
 });

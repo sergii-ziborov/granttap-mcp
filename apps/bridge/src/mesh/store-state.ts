@@ -17,7 +17,9 @@ import {
   type ResourceClaim as ResourceClaimValue,
   type TaskDependency as DependencyValue,
 } from "../../../../packages/protocol/schema";
-import { readFileSync } from "node:fs";
+import { lstatSync, readFileSync } from "node:fs";
+
+const MAX_STORE_BYTES = 4 * 1_024 * 1_024;
 
 export type StoreState = {
   version: 1;
@@ -47,6 +49,10 @@ function parsedArray<T>(value: unknown, schema: { safeParse: (input: unknown) =>
 
 export function loadStoreState(path: string): StoreState {
   try {
+    const metadata = lstatSync(path);
+    if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.size > MAX_STORE_BYTES) {
+      return structuredClone(EMPTY);
+    }
     const value = JSON.parse(readFileSync(path, "utf8")) as Partial<StoreState>;
     const projects = parsedArray(value.projects, Project);
     const bindings = validBindings(

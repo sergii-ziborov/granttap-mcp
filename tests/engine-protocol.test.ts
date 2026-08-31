@@ -47,7 +47,11 @@ test("response parser accepts every Rust v1 result", () => {
     },
     {
       operation: "policy.evaluated",
-      decision: { effect: "ask", source: "project", reason: "project requires approval" },
+      decision: {
+        effect: "ask", source: "project", reason: "project requires approval",
+        rule_id: "ask-deploy", policy_revision: 3,
+        fingerprint_confidence: "strong", coverage: "enforced",
+      },
     },
   ];
   for (const result of results) {
@@ -92,6 +96,14 @@ test("response parser rejects malformed and incompatible wire values", () => {
     response({
       operation: "policy.evaluated",
       decision: { effect: "deny", source: "project", reason: "" },
+    }),
+    response({
+      operation: "policy.evaluated",
+      decision: { effect: "deny", source: "project", reason: "x", policy_revision: -1 },
+    }),
+    response({
+      operation: "policy.evaluated",
+      decision: { effect: "deny", source: "project", reason: "x", coverage: "claimed" },
     }),
   ];
   for (const value of invalid) {

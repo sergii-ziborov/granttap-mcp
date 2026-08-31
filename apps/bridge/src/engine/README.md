@@ -10,6 +10,11 @@ legacy hook behavior when the engine is disabled or unavailable.
 `engine-projects.ts` forwards only bounded local Project/binding records when
 the rollout flag is enabled. Absolute roots stay on the local IPC connection;
 the encrypted Mesh projection omits them by default.
+The Claude hook can evaluate the engine's local Project Governance policy only
+when both `GRANTTAP_ENGINE_ENABLED` and `GRANTTAP_PROJECT_POLICY_ENABLED` are
+enabled. Project `DENY` and `ASK` precede bypass and auto-accept. A disabled or
+unavailable engine preserves the established GrantTap flow, and no hook request
+is retried inside its 50 ms policy budget.
 
 The proprietary engine source and Project database do not live in this package.
 

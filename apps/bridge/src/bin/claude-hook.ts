@@ -25,6 +25,10 @@ import {
 } from "../config";
 import { recordAttributedCall } from "../mesh/call-scope";
 import { classifyAction } from "../policy";
+import {
+  evaluateEffectiveAction,
+  legacyGrantTapFlowAllowed,
+} from "../policy/effective-action";
 import { protectedGrantTapAccess } from "../self-protection";
 
 async function readStdin(): Promise<string> {
@@ -35,31 +39,20 @@ async function readStdin(): Promise<string> {
 
 async function main(): Promise<void> {
   const raw = await readStdin();
-  let input: HookInput = {};
+  let input: HookInput;
   try {
     input = JSON.parse(raw) as HookInput;
   } catch {
-    process.stdout.write(
-      JSON.stringify({
-        hookSpecificOutput: {
-          hookEventName: "PreToolUse",
-          permissionDecision: "deny",
-          permissionDecisionReason: "GrantTap received invalid hook JSON",
-        },
-      }),
-    );
+    writePermission("deny", "GrantTap received invalid hook JSON");
     return;
   }
+  await handlePreToolUse(input);
+}
 
+async function handlePreToolUse(input: HookInput): Promise<void> {
   const protectedAccess = protectedGrantTapAccess(input.tool_name, input.tool_input);
   if (protectedAccess) {
-    process.stdout.write(JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: "PreToolUse",
-        permissionDecision: "deny",
-        permissionDecisionReason: protectedAccess.reason,
-      },
-    }));
+    writePermission("deny", protectedAccess.reason);
     return;
   }
 
@@ -80,43 +73,42 @@ async function main(): Promise<void> {
     input.tool_name,
     input.tool_input,
   );
-  if (blocked) {
-    process.stdout.write(
-      JSON.stringify({
-        hookSpecificOutput: {
-          hookEventName: "PreToolUse",
-          permissionDecision: "deny",
-          permissionDecisionReason: blocked.reason,
-        },
-      }),
-    );
+  const projectDecision = await evaluateEffectiveAction({
+    provider: "claude",
+    sessionId: input.session_id,
+    cwd: input.cwd,
+    toolName: input.tool_name,
+    toolInput: input.tool_input,
+    legacyDenyReason: blocked?.reason,
+  });
+  if (projectDecision.effect === "deny") {
+    writePermission("deny", projectDecision.reason);
     return;
   }
+  const legacyFlow = legacyGrantTapFlowAllowed(projectDecision);
 
   // Claude already granted this chat unconditional tool access. GrantTap's
-  // explicit MCP/skill/CLI blocks above still win, but phone approval must not
-  // re-prompt a call Claude is intentionally running in bypass mode.
-  if (input.permission_mode === "bypassPermissions") return;
+  // Project ASK/DENY is a parent boundary, so bypass mode cannot weaken it.
+  if (legacyFlow && input.permission_mode === "bypassPermissions") return;
 
   // Gating paused, or this session is exempt → abstain (empty output = Claude
   // uses its normal permission flow, exactly as if GrantTap weren't installed).
-  if (isGatingSkipped(input.session_id)) return;
+  if (legacyFlow && isGatingSkipped(input.session_id)) return;
+  await continuePermissionFlow(input, legacyFlow);
+}
 
+async function continuePermissionFlow(input: HookInput, legacyFlow: boolean): Promise<void> {
   let cfg;
   try {
     cfg = loadConfig(machineConfigPath());
   } catch {
+    if (!legacyFlow) {
+      writePermission("deny", "Project policy requires GrantTap approval, but this computer is not paired");
+      return;
+    }
     // No pairing yet: don't block the user's normal workflow — defer to Claude's
     // own prompt by emitting "ask".
-    process.stdout.write(
-      JSON.stringify({
-        hookSpecificOutput: {
-          hookEventName: "PreToolUse",
-          permissionDecision: "ask",
-          permissionDecisionReason: "GrantTap not paired (run `npm run init`)",
-        },
-      }),
-    );
+    writePermission("ask", "GrantTap not paired (run `npm run init`)");
     return;
   }
 
@@ -125,21 +117,8 @@ async function main(): Promise<void> {
   // the user never finished setting up. Once paired, this is what keeps routine
   // work independent of whether the phone is awake, reachable, or even running.
   const req = claudeToRequest(input);
-  if (shouldAutoAcceptTool(input.session_id, req.tool, req.command)) {
-    const level = autoAcceptLevelFor(input.session_id);
-    const cls = classifyAction(req.tool, req.command);
-    process.stdout.write(
-      JSON.stringify(
-        decisionToClaudeOutput({
-          type: "approval.decision",
-          requestId: req.requestId,
-          decision: "allow",
-          decidedBy: "auto",
-          note: `GrantTap auto-accept (${level} / ${cls})`,
-          decidedAt: Date.now(),
-        }),
-      ),
-    );
+  if (legacyFlow && shouldAutoAcceptTool(input.session_id, req.tool, req.command)) {
+    writeAutoApproval(input, req);
     return;
   }
 
@@ -153,10 +132,36 @@ async function main(): Promise<void> {
   // Relay down or phone asleep ≠ phone said no: abstain so Claude's local flow
   // handles it (avoid flooding "решай локально" on every tool).
   if (isUnanswered(decision)) {
+    if (!legacyFlow) {
+      writePermission("deny", "Project approval was required but no decision was received");
+    }
     return;
   }
 
   process.stdout.write(JSON.stringify(decisionToClaudeOutput(decision)));
+}
+
+function writeAutoApproval(input: HookInput, req: ReturnType<typeof claudeToRequest>): void {
+  const level = autoAcceptLevelFor(input.session_id);
+  const cls = classifyAction(req.tool, req.command);
+  process.stdout.write(JSON.stringify(decisionToClaudeOutput({
+    type: "approval.decision",
+    requestId: req.requestId,
+    decision: "allow",
+    decidedBy: "auto",
+    note: `GrantTap auto-accept (${level} / ${cls})`,
+    decidedAt: Date.now(),
+  })));
+}
+
+function writePermission(decision: "deny" | "ask", reason: string): void {
+  process.stdout.write(JSON.stringify({
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: decision,
+      permissionDecisionReason: reason,
+    },
+  }));
 }
 
 main().catch((err) => {
