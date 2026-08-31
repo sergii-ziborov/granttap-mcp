@@ -8,6 +8,7 @@ import test from "node:test";
 import {
   canonicalRepositoryIdentity,
   projectIdentity,
+  projectBindingIdentity,
   sanitizedRepositoryRemote,
   taskIdentity,
 } from "../apps/bridge/src/mesh/identity";
@@ -26,6 +27,14 @@ test("repository and task identity remain stable across computers and handoff", 
   assert.equal(ssh, https);
   const projectId = projectIdentity(ssh);
   assert.equal(projectId, projectIdentity(https));
+  assert.equal(
+    projectBindingIdentity(projectId, "mac", ssh),
+    projectBindingIdentity(projectId, "mac", https),
+  );
+  assert.notEqual(
+    projectBindingIdentity(projectId, "mac", ssh),
+    projectBindingIdentity(projectId, "pc", ssh),
+  );
   const taskId = taskIdentity(projectId, "claude", "native-a");
   assert.equal(taskId, taskIdentity(projectId, "claude", "native-a"));
   assert.notEqual(taskId, taskIdentity(projectId, "codex", "native-b"));
@@ -190,6 +199,41 @@ test("catalog groups sessions by repository and preserves task identity on hando
   assert.equal(snapshot?.executions.length, 2);
   assert.deepEqual(new Set(snapshot?.executions.map((item) => item.taskId)), new Set([source.taskId]));
 });
+
+test("catalog honors existing multi-repository logical Project bindings", async () => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-logical-project-"));
+  const store = new MeshStore(join(root, "mesh.json"), () => now);
+  store.upsertProject({
+    projectId: "applydjinn", name: "ApplyDjinn",
+    canonicalRepositoryId: "github.com/example/frontend", createdAt: now,
+  });
+  for (const [bindingId, repositoryId] of ([
+    ["frontend-binding", "github.com/example/frontend"],
+    ["api-binding", "github.com/example/api"],
+  ] as const)) {
+    store.upsertBinding({
+      bindingId, projectId: "applydjinn", endpointId: "mac", repositoryId,
+      displayName: repositoryId.split("/").at(-1)!, available: true,
+    });
+  }
+  const sessions = linkSessionsToProjects(store, [
+    session("frontend-session", "/frontend"),
+    session("api-session", "/api"),
+  ], "mac", (cwd) => ({
+    root: cwd,
+    canonicalRepositoryId: `github.com/example/${cwd.slice(1)}`,
+    worktree: cwd,
+  }));
+  assert.deepEqual(new Set(sessions.map((item) => item.projectId)), new Set(["applydjinn"]));
+  assert.equal(store.snapshot("applydjinn")?.bindings?.length, 2);
+});
+
+function session(sessionId: string, cwd: string) {
+  return {
+    sessionId, agent: "codex", cwd, state: "working" as const,
+    startedAt: now, lastActivityAt: now, tokensSession: 0, tokensLastTurn: 0,
+  };
+}
 
 test("local handoff capsule contains explicit git facts but no transcript", async () => {
   const root = await mkdtemp(join(tmpdir(), "granttap-mesh-capsule-"));

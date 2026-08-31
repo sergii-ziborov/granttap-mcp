@@ -165,3 +165,53 @@ test("workspace lookup and snapshot merge remain project and computer scoped", a
   assert.equal(merged.task("task")?.title, "Merged");
   assert.deepEqual(merged.projectIds(), ["project"]);
 });
+
+test("repository bindings attach several repos and computers to one logical Project", async () => {
+  const store = await storeAt();
+  store.upsertProject(project());
+  store.upsertBinding({
+    bindingId: "mac-api", projectId: "project", endpointId: "MacBook",
+    repositoryId: "github.com/example/api", displayName: "API", available: true,
+    revision: "a".repeat(40),
+  });
+  store.upsertBinding({
+    bindingId: "pc-frontend", projectId: "project", endpointId: "Workstation",
+    repositoryId: "github.com/example/frontend", displayName: "Frontend", available: false,
+  });
+  assert.equal(store.projectIdForRepository("github.com/example/api", "MacBook"), "project");
+  assert.equal(store.projectIdForRepository("github.com/example/frontend"), "project");
+  assert.deepEqual(
+    store.snapshot("project")?.bindings?.map((item) => item.bindingId),
+    ["mac-api", "pc-frontend"],
+  );
+  assert.throws(() => store.upsertBinding({
+    bindingId: "mac-api", projectId: "other", endpointId: "Other",
+    repositoryId: "other", displayName: "Other", available: true,
+  }), /binding conflict/i);
+});
+
+test("binding restore and remote merge reject cross-Project identity poisoning", async () => {
+  const valid = {
+    bindingId: "binding", projectId: "project", endpointId: "MacBook",
+    repositoryId: "repo", displayName: "Repo", available: true,
+  };
+  const restored = await storeAt({
+    projects: [project()], bindings: [
+      valid,
+      { ...valid, bindingId: "duplicate-location" },
+      { ...valid, bindingId: "orphan", projectId: "other", endpointId: "Other" },
+    ],
+  });
+  assert.deepEqual(restored.snapshot("project")?.bindings, [valid]);
+
+  const incoming: MeshSnapshot = {
+    type: "mesh.snapshot", sessionId: "project", projectId: "project",
+    project: { ...project(), name: "Must not partially merge" },
+    bindings: [{
+      ...valid, bindingId: "foreign-id", projectId: "project",
+    }],
+    tasks: [], executions: [], claims: [], dependencies: [], events: [], generatedAt: now,
+  };
+  assert.throws(() => restored.mergeSnapshot(incoming), /binding conflict/i);
+  assert.equal(restored.snapshot("project")?.project.name, "GrantTap");
+});

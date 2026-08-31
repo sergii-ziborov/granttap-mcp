@@ -112,7 +112,13 @@ test("supervisor verifies, launches, reaches health, and stops its child", async
     return { operation: "engine.pong", engine_version: "0.1.0" };
   }, () => { closed = true; });
   const child = Object.assign(new EventEmitter(), {
-    kill: () => { killed = true; return true; },
+    exitCode: null,
+    signalCode: null,
+    kill: () => {
+      killed = true;
+      queueMicrotask(() => child.emit("exit", 0, null));
+      return true;
+    },
   }) as unknown as ChildProcess;
   let launchedSocket = "";
   const supervisor = new EngineSupervisor({
@@ -129,7 +135,7 @@ test("supervisor verifies, launches, reaches health, and stops its child", async
   try {
     assert.equal((await supervisor.ensureAvailable()).state, "healthy");
     assert.equal(launchedSocket, join(directory, "engine.sock"));
-    supervisor.stop();
+    await supervisor.stop();
     assert.equal(closed, true);
     assert.equal(killed, true);
   } finally {
@@ -151,7 +157,7 @@ test("failed launch enters bounded backoff", async () => {
   assert.equal((await supervisor.ensureAvailable()).state, "unavailable");
   now = 101;
   assert.equal((await supervisor.ensureAvailable()).state, "backoff");
-  supervisor.stop();
+  await supervisor.stop();
 });
 
 function fakeClient(

@@ -193,5 +193,8 @@ function expectedResultOperation(
   if (operation === "engine.ping") return "engine.pong";
   if (operation === "engine.version") return "engine.version";
   if (operation === "project.resolve") return "project.resolved";
+  if (operation === "project.get") return "project.found";
+  if (operation === "project.list_bindings") return "project.bindings";
+  if (operation === "project.upsert_binding") return "project.binding_upserted";
   return "policy.evaluated";
 }

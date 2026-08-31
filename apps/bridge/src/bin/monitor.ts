@@ -7,6 +7,7 @@ import { startSessionMonitor } from "../monitor";
 let client: RelayClient;
 let monitor: ReturnType<typeof startSessionMonitor>;
 const engine = new EngineSupervisor();
+let stopping = false;
 
 try {
   client = new RelayClient(loadConfig(machineConfigPath()), { autoReconnect: true });
@@ -19,10 +20,11 @@ try {
 }
 
 const stop = (): void => {
-  engine.stop();
+  if (stopping) return;
+  stopping = true;
   monitor.close();
   client.close();
-  process.exit(0);
+  void engine.stop().finally(() => process.exit(0));
 };
 
 process.on("SIGINT", stop);

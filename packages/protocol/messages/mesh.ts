@@ -19,6 +19,18 @@ export const Project = z.object({
 }).strict();
 export type Project = z.infer<typeof Project>;
 
+export const ProjectBindingSummary = z.object({
+  bindingId: Identifier,
+  projectId: Identifier,
+  endpointId: Identifier,
+  repositoryId: z.string().trim().min(1).max(512),
+  displayName: Label,
+  localPathHint: Path.optional(),
+  available: z.boolean(),
+  revision: z.string().trim().min(1).max(512).optional(),
+}).strict();
+export type ProjectBindingSummary = z.infer<typeof ProjectBindingSummary>;
+
 export const TaskState = z.enum([
   "planned", "working", "blocked", "needs_user", "handoff", "completed", "failed",
 ]);
@@ -238,6 +250,7 @@ export const MeshSnapshot = z.object({
   sessionId: Identifier,
   projectId: Identifier,
   project: Project,
+  bindings: z.array(ProjectBindingSummary).max(64).optional(),
   tasks: z.array(MeshTask).max(64),
   executions: z.array(ExecutionSessionLink).max(128),
   claims: z.array(ResourceClaim).max(128),
@@ -249,7 +262,14 @@ export const MeshSnapshot = z.object({
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["sessionId"], message: "project scope mismatch" });
   }
   const taskIds = new Set(value.tasks.map((task) => task.taskId));
-  if (value.tasks.some((task) => task.projectId !== value.projectId)
+  const bindingIds = new Set(value.bindings?.map((binding) => binding.bindingId));
+  const bindingKeys = new Set(value.bindings?.map(
+    (binding) => `${binding.endpointId}\0${binding.repositoryId}`,
+  ));
+  if (bindingIds.size !== (value.bindings?.length ?? 0)
+    || bindingKeys.size !== (value.bindings?.length ?? 0)
+    || value.bindings?.some((binding) => binding.projectId !== value.projectId)
+    || value.tasks.some((task) => task.projectId !== value.projectId)
     || value.executions.some((execution) => !taskIds.has(execution.taskId))
     || value.claims.some((claim) => claim.projectId !== value.projectId || !taskIds.has(claim.taskId))
     || value.dependencies.some((dependency) => !taskIds.has(dependency.taskId))

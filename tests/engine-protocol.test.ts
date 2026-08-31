@@ -25,6 +25,27 @@ test("response parser accepts every Rust v1 result", () => {
       resolution: { project_id: "project", compatibility_mode: false },
     },
     {
+      operation: "project.found",
+      project: { project_id: "project", name: "Project", created_at: 1 },
+    },
+    {
+      operation: "project.bindings",
+      bindings: [{
+        binding_id: "binding", project_id: "project", endpoint_id: "mac",
+        repository_id: "repo", local_root: "/repo", local_alias: "Repo",
+        canonical_remote: "github.com/example/repo", role: "primary",
+        observed_revision: "a".repeat(40), last_seen_at: 1,
+      }],
+    },
+    {
+      operation: "project.binding_upserted",
+      binding: {
+        binding_id: "binding", project_id: "project", endpoint_id: "mac",
+        repository_id: "repo", local_root: null, local_alias: null,
+        canonical_remote: null, role: "dependency", observed_revision: null, last_seen_at: 1,
+      },
+    },
+    {
       operation: "policy.evaluated",
       decision: { effect: "ask", source: "project", reason: "project requires approval" },
     },

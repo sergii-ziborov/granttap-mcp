@@ -86,9 +86,11 @@ export class EngineSupervisor {
     }
   }
 
-  stop(): void {
+  async stop(): Promise<void> {
     this.client.close();
-    this.stopChild();
+    const child = this.child;
+    this.child = undefined;
+    if (child) await terminateChild(child);
   }
 
   private async ping(): Promise<EngineHealth | undefined> {
@@ -153,4 +155,21 @@ function delay(milliseconds: number): Promise<void> {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function terminateChild(child: ChildProcess): Promise<void> {
+  if (child.exitCode != null || child.signalCode != null) return Promise.resolve();
+  return new Promise((resolve) => {
+    let finished = false;
+    const finish = (): void => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(finish, 500);
+    child.once("exit", finish);
+    child.once("error", finish);
+    if (!child.kill()) finish();
+  });
 }

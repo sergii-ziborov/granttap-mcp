@@ -5,6 +5,7 @@ import {
   MeshEvent,
   MeshTask,
   Project,
+  ProjectBindingSummary,
   ResourceClaim,
   TaskDependency,
   type ExecutionSessionLink as ExecutionValue,
@@ -12,6 +13,7 @@ import {
   type MeshEvent as MeshEventValue,
   type MeshTask as TaskValue,
   type Project as ProjectValue,
+  type ProjectBindingSummary as BindingValue,
   type ResourceClaim as ResourceClaimValue,
   type TaskDependency as DependencyValue,
 } from "../../../../packages/protocol/schema";
@@ -20,6 +22,7 @@ import { readFileSync } from "node:fs";
 export type StoreState = {
   version: 1;
   projects: ProjectValue[];
+  bindings: BindingValue[];
   tasks: TaskValue[];
   executions: ExecutionValue[];
   claims: ResourceClaimValue[];
@@ -29,7 +32,8 @@ export type StoreState = {
 };
 
 const EMPTY: StoreState = {
-  version: 1, projects: [], tasks: [], executions: [], claims: [], dependencies: [], events: [], receipts: [],
+  version: 1, projects: [], bindings: [], tasks: [], executions: [], claims: [],
+  dependencies: [], events: [], receipts: [],
 };
 
 function parsedArray<T>(value: unknown, schema: { safeParse: (input: unknown) => { success: boolean; data?: T } }): T[] {
@@ -44,9 +48,15 @@ function parsedArray<T>(value: unknown, schema: { safeParse: (input: unknown) =>
 export function loadStoreState(path: string): StoreState {
   try {
     const value = JSON.parse(readFileSync(path, "utf8")) as Partial<StoreState>;
+    const projects = parsedArray(value.projects, Project);
+    const bindings = validBindings(
+      parsedArray(value.bindings, ProjectBindingSummary),
+      new Set(projects.map((project) => project.projectId)),
+    );
     return {
       version: 1,
-      projects: parsedArray(value.projects, Project),
+      projects,
+      bindings,
       tasks: parsedArray(value.tasks, MeshTask),
       executions: parsedArray(value.executions, ExecutionSessionLink),
       claims: parsedArray(value.claims, ResourceClaim),
@@ -57,4 +67,18 @@ export function loadStoreState(path: string): StoreState {
   } catch {
     return structuredClone(EMPTY);
   }
+}
+
+function validBindings(bindings: BindingValue[], projectIds: ReadonlySet<string>): BindingValue[] {
+  const ids = new Set<string>();
+  const locations = new Set<string>();
+  return bindings.filter((binding) => {
+    const location = `${binding.endpointId}\0${binding.repositoryId}`;
+    if (!projectIds.has(binding.projectId)
+      || ids.has(binding.bindingId)
+      || locations.has(location)) return false;
+    ids.add(binding.bindingId);
+    locations.add(location);
+    return true;
+  });
 }

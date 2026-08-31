@@ -40,6 +40,17 @@ export function projectIdentity(canonicalRepositoryId: string): string {
   return digest("project", canonicalRepositoryId.trim().toLowerCase());
 }
 
+export function projectBindingIdentity(
+  projectId: string,
+  endpointId: string,
+  canonicalRepositoryId: string,
+): string {
+  return digest(
+    "binding",
+    `${projectId.trim()}\0${endpointId.trim()}\0${canonicalRepositoryId.trim().toLowerCase()}`,
+  );
+}
+
 export function taskIdentity(projectId: string, provider: string, sessionId: string): string {
   return digest("task", `${projectId}\0${provider.trim().toLowerCase()}\0${sessionId.trim()}`);
 }

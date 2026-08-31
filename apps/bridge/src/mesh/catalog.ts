@@ -9,17 +9,20 @@ import type {
 } from "../../../../packages/protocol/schema";
 import {
   canonicalRepositoryIdentity,
+  projectBindingIdentity,
   projectIdentity,
   sanitizedRepositoryRemote,
   taskIdentity,
 } from "./identity";
 import type { MeshStore } from "./store";
+import { syncProjectBinding } from "../engine/engine-projects";
 
 export type RepositoryFacts = {
   root: string;
   canonicalRepositoryId: string;
   baseRemote?: string;
   worktree?: string;
+  revision?: string;
 };
 
 const repositoryCache = new Map<string, RepositoryFacts>();
@@ -74,6 +77,7 @@ export function inspectRepository(cwd: string): RepositoryFacts {
     baseRemote,
     canonicalRepositoryId: canonicalRepositoryIdentity(rawRemote, root),
     worktree: git(root, ["rev-parse", "--show-toplevel"]),
+    revision: git(root, ["rev-parse", "HEAD"]),
   };
   repositoryCache.set(cwd, facts);
   return facts;
@@ -109,18 +113,45 @@ export function linkSessionsToProjects(
     const cwd = session.cwd?.trim();
     if (!agent || !cwd) return session;
     const repository = inspect(cwd);
-    const projectId = projectIdentity(repository.canonicalRepositoryId);
-    const project: Project = {
+    const projectId = store.projectIdForRepository(
+      repository.canonicalRepositoryId,
+      computerId,
+    ) ?? projectIdentity(repository.canonicalRepositoryId);
+    const knownProject = store.project(projectId);
+    let project = knownProject;
+    if (!project) {
+      project = {
+        projectId,
+        name: basename(repository.root) || "Project",
+        repositoryRoot: repository.root,
+        canonicalRepositoryId: repository.canonicalRepositoryId,
+        baseRemote: repository.baseRemote
+          ? sanitizedRepositoryRemote(repository.baseRemote)
+          : undefined,
+        createdAt: session.startedAt,
+      };
+      store.upsertProject(project);
+    }
+    const knownBinding = store.bindingForRepository(repository.canonicalRepositoryId, computerId);
+    const binding = {
+      bindingId: knownBinding?.bindingId
+        ?? projectBindingIdentity(projectId, computerId, repository.canonicalRepositoryId),
       projectId,
-      name: basename(repository.root) || "Project",
-      repositoryRoot: repository.root,
-      canonicalRepositoryId: repository.canonicalRepositoryId,
-      baseRemote: repository.baseRemote
+      endpointId: computerId,
+      repositoryId: repository.canonicalRepositoryId,
+      displayName: knownBinding?.displayName ?? (basename(repository.root) || "Repository"),
+      available: true,
+      revision: repository.revision,
+    };
+    store.upsertBinding(binding);
+    void syncProjectBinding(project, {
+      summary: binding,
+      localRoot: repository.root,
+      canonicalRemote: repository.baseRemote
         ? sanitizedRepositoryRemote(repository.baseRemote)
         : undefined,
-      createdAt: session.startedAt,
-    };
-    store.upsertProject(project);
+      lastSeenAt: session.lastActivityAt,
+    });
     const knownTask = store.taskForExecution(computerId, agent, session.sessionId);
     const taskId = knownTask ?? taskIdentity(projectId, agent, session.sessionId);
     const task: MeshTask = {

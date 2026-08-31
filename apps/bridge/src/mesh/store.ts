@@ -14,14 +14,21 @@ import {
   type MeshSnapshot as SnapshotValue,
   type MeshTask as TaskValue,
   type Project as ProjectValue,
+  type ProjectBindingSummary as BindingValue,
   type ResourceClaim as ResourceClaimValue,
 } from "../../../../packages/protocol/schema";
 import { loadStoreState, type StoreState } from "./store-state";
-import { preferExecution, preferTask, isTerminalTaskState, mayOwnTask } from "./convergence";
+import { preferExecution, isTerminalTaskState, mayOwnTask } from "./convergence";
 import { capsuleHash } from "./handoff";
-import { mergeBy, mergeWith, resourceOverlap } from "./store-support";
+import { mergeBy, resourceOverlap } from "./store-support";
 import { closeVanished } from "./execution-sweep";
 import { receiptMovesOwnership, taskAfterEvent, taskAfterLocalReading } from "./task-state";
+import {
+  bindingForRepository,
+  upsertBinding as updateBinding,
+  workspaceForRepository as boundWorkspace,
+} from "./binding-state";
+import { mergeSnapshotState } from "./snapshot-merge";
 
 export class MeshStore {
   private state: StoreState;
@@ -44,6 +51,25 @@ export class MeshStore {
     this.state.projects = this.state.projects.filter((item) => item.projectId !== next.projectId);
     this.state.projects.push(next);
     this.save();
+  }
+
+  project(projectId: string): ProjectValue | undefined {
+    return this.state.projects.find((item) => item.projectId === projectId);
+  }
+
+  upsertBinding(input: BindingValue): void {
+    const result = updateBinding(this.state, input);
+    if (!result.changed) return;
+    this.state.bindings = result.bindings;
+    this.save();
+  }
+
+  projectIdForRepository(repositoryId: string, endpointId?: string): string | undefined {
+    return bindingForRepository(this.state.bindings, repositoryId, endpointId)?.projectId;
+  }
+
+  bindingForRepository(repositoryId: string, endpointId?: string): BindingValue | undefined {
+    return bindingForRepository(this.state.bindings, repositoryId, endpointId);
   }
 
   upsertTask(input: TaskValue): void {
@@ -238,16 +264,7 @@ export class MeshStore {
   }
 
   workspaceForRepository(canonicalRepositoryId: string, computerId?: string): string | undefined {
-    const projectIds = new Set(this.state.projects
-      .filter((project) => project.canonicalRepositoryId === canonicalRepositoryId)
-      .map((project) => project.projectId));
-    const taskIds = new Set(this.state.tasks
-      .filter((task) => projectIds.has(task.projectId)).map((task) => task.taskId));
-    const local = this.state.executions.find((item) =>
-      taskIds.has(item.taskId) && (computerId == null || item.computerId === computerId));
-    if (computerId != null) return local?.worktree ?? local?.workspace;
-    return local?.worktree ?? local?.workspace
-      ?? this.state.projects.find((item) => projectIds.has(item.projectId))?.repositoryRoot;
+    return boundWorkspace(this.state, canonicalRepositoryId, computerId);
   }
 
   task(taskId: string): TaskValue | undefined {
@@ -264,6 +281,7 @@ export class MeshStore {
       sessionId: projectId,
       projectId,
       project,
+      bindings: this.state.bindings.filter((item) => item.projectId === projectId).slice(0, 64),
       tasks,
       executions: this.state.executions.filter((item) => taskIds.has(item.taskId)).slice(-128),
       claims: this.activeClaims().filter((item) => item.projectId === projectId).slice(-128),
@@ -274,24 +292,7 @@ export class MeshStore {
   }
 
   mergeSnapshot(input: SnapshotValue): void {
-    const snapshot = MeshSnapshot.parse(input);
-    this.state.projects = mergeBy(this.state.projects, [snapshot.project], (item) => item.projectId);
-    this.state.tasks = mergeWith(
-      this.state.tasks, snapshot.tasks, (item) => item.taskId, preferTask,
-    );
-    this.state.executions = mergeWith(
-      this.state.executions,
-      snapshot.executions,
-      (item) => `${item.computerId}\0${item.provider}\0${item.sessionId}`,
-      preferExecution,
-    );
-    this.state.claims = mergeBy(this.state.claims, snapshot.claims, (item) => item.claimId);
-    this.state.dependencies = mergeBy(
-      this.state.dependencies,
-      snapshot.dependencies,
-      (item) => `${item.taskId}\0${item.dependsOnTaskId}`,
-    );
-    this.state.events = mergeBy(this.state.events, snapshot.events, (item) => item.eventId).slice(-512);
+    mergeSnapshotState(this.state, input);
     this.save();
   }
 }

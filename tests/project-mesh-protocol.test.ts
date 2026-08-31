@@ -11,6 +11,7 @@ import {
   MeshSnapshot,
   Payload,
   Project,
+  ProjectBindingSummary,
   TaskCapsule,
 } from "../packages/protocol/schema";
 
@@ -114,6 +115,25 @@ test("projects have a bounded canonical repository identity", () => {
   }).success, false);
 });
 
+test("Project bindings are bounded projections and old Projects stay valid", () => {
+  const binding = {
+    bindingId: "binding-frontend",
+    projectId: "project-granttap",
+    endpointId: "macbook",
+    repositoryId: "github.com/example/frontend",
+    displayName: "Frontend",
+    available: true,
+    revision: "a".repeat(40),
+  };
+  assert.equal(ProjectBindingSummary.safeParse(binding).success, true);
+  assert.equal(ProjectBindingSummary.safeParse({
+    ...binding, localPathHint: "x".repeat(4_097),
+  }).success, false);
+  assert.equal(Project.safeParse({
+    projectId: "legacy", name: "Legacy", canonicalRepositoryId: "repo", createdAt: now,
+  }).success, true);
+});
+
 test("Task Capsule is bounded and cannot carry hidden reasoning", () => {
   assert.equal(TaskCapsule.safeParse(capsule()).success, true);
   assert.equal(TaskCapsule.safeParse({
@@ -180,6 +200,20 @@ test("project snapshots cannot smuggle task state across project scope", () => {
     generatedAt: now,
   };
   assert.equal(MeshSnapshot.safeParse(snapshot).success, true);
+  assert.equal(MeshSnapshot.safeParse({
+    ...snapshot,
+    bindings: [{
+      bindingId: "binding", projectId: project.projectId, endpointId: "macbook",
+      repositoryId: "github.com/example/granttap", displayName: "GrantTap", available: true,
+    }],
+  }).success, true);
+  assert.equal(MeshSnapshot.safeParse({
+    ...snapshot,
+    bindings: [{
+      bindingId: "binding", projectId: "different-project", endpointId: "macbook",
+      repositoryId: "repo", displayName: "Other", available: true,
+    }],
+  }).success, false);
   assert.equal(MeshSnapshot.safeParse({
     ...snapshot, tasks: [{ ...task, projectId: "different-project" }],
   }).success, false);

@@ -5,13 +5,39 @@ export const DEFAULT_ENGINE_POLICY_TIMEOUT_MS = 50;
 
 export type PolicyEffect = "inherit" | "allow" | "ask" | "deny";
 export type PolicySource = "none" | "provider" | "account" | "project" | "task";
+export type ProjectBindingRole = "primary" | "dependency" | "supporting";
+
+export type EngineProject = {
+  project_id: string;
+  name: string;
+  created_at: number;
+};
+
+export type EngineProjectBinding = {
+  binding_id: string;
+  project_id: string;
+  endpoint_id: string;
+  repository_id: string;
+  local_root?: string | null;
+  local_alias?: string | null;
+  canonical_remote?: string | null;
+  role: ProjectBindingRole;
+  observed_revision?: string | null;
+  last_seen_at: number;
+};
 
 export type EngineOperation =
   | { operation: "engine.ping" }
   | { operation: "engine.version" }
   | {
     operation: "project.resolve";
-    input: { project_id?: string; repository_id?: string };
+    input: { project_id?: string; endpoint_id?: string; repository_id?: string };
+  }
+  | { operation: "project.get"; input: { project_id: string } }
+  | { operation: "project.list_bindings"; input: { project_id: string } }
+  | {
+    operation: "project.upsert_binding";
+    input: { project: EngineProject; binding: EngineProjectBinding };
   }
   | {
     operation: "policy.evaluate_action";
@@ -39,6 +65,9 @@ export type EngineResult =
     operation: "project.resolved";
     resolution: { project_id: string; compatibility_mode: boolean };
   }
+  | { operation: "project.found"; project: EngineProject }
+  | { operation: "project.bindings"; bindings: EngineProjectBinding[] }
+  | { operation: "project.binding_upserted"; binding: EngineProjectBinding }
   | {
     operation: "policy.evaluated";
     decision: { effect: PolicyEffect; source: PolicySource; reason: string };
@@ -147,6 +176,13 @@ function parseResult(value: unknown): EngineResult {
     const resolution = requireObject(result.resolution, "project resolution");
     requireString(resolution.project_id, "project_id");
     if (typeof resolution.compatibility_mode !== "boolean") invalidResult();
+  } else if (operation === "project.found") {
+    parseProject(result.project);
+  } else if (operation === "project.bindings") {
+    if (!Array.isArray(result.bindings) || result.bindings.length > 256) invalidResult();
+    result.bindings.forEach(parseBinding);
+  } else if (operation === "project.binding_upserted") {
+    parseBinding(result.binding);
   } else if (operation === "policy.evaluated") {
     const decision = requireObject(result.decision, "policy decision");
     if (!isPolicyEffect(decision.effect) || !isPolicySource(decision.source)) invalidResult();
@@ -181,4 +217,43 @@ function isPolicyEffect(value: unknown): value is PolicyEffect {
 function isPolicySource(value: unknown): value is PolicySource {
   return value === "none" || value === "provider" || value === "account"
     || value === "project" || value === "task";
+}
+
+function parseProject(value: unknown): void {
+  const project = requireObject(value, "Project");
+  requireBoundedString(project.project_id, "project_id", 128);
+  requireBoundedString(project.name, "project name", 160);
+  requireTimestamp(project.created_at);
+}
+
+function parseBinding(value: unknown): void {
+  const binding = requireObject(value, "Project binding");
+  requireBoundedString(binding.binding_id, "binding_id", 128);
+  requireBoundedString(binding.project_id, "project_id", 128);
+  requireBoundedString(binding.endpoint_id, "endpoint_id", 128);
+  requireBoundedString(binding.repository_id, "repository_id", 512);
+  requireOptionalString(binding.local_root, "local_root", 4_096);
+  requireOptionalString(binding.local_alias, "local_alias", 160);
+  requireOptionalString(binding.canonical_remote, "canonical_remote", 1_024);
+  requireOptionalString(binding.observed_revision, "observed_revision", 512);
+  if (!isBindingRole(binding.role)) invalidResult();
+  requireTimestamp(binding.last_seen_at);
+}
+
+function requireBoundedString(value: unknown, field: string, maximum: number): void {
+  requireString(value, field);
+  if (value.length > maximum) invalidResult();
+}
+
+function requireOptionalString(value: unknown, field: string, maximum: number): void {
+  if (value == null) return;
+  requireBoundedString(value, field, maximum);
+}
+
+function requireTimestamp(value: unknown): void {
+  if (!Number.isSafeInteger(value) || (value as number) < 0) invalidResult();
+}
+
+function isBindingRole(value: unknown): value is ProjectBindingRole {
+  return value === "primary" || value === "dependency" || value === "supporting";
 }
