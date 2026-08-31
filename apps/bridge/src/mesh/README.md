@@ -49,3 +49,6 @@ use an independent project key. Resource claims are advisory, expire without a
 heartbeat, and a colliding claim is rejected before it is recorded. The agent
 may choose other work or ask the current owner; the conflict reaches the human
 only after explicit `needsUser` escalation.
+
+License: this module is distributed under the GrantTap Commercial Source License
+in the repository-root `LICENSE` file.

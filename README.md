@@ -2,7 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/granttap-mcp)](https://www.npmjs.com/package/granttap-mcp)
 [![CI](https://github.com/sergii-ziborov/granttap-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/sergii-ziborov/granttap-mcp/actions/workflows/ci.yml)
-[![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-GrantTap%20Commercial-7c3aed.svg)](LICENSE)
 
 GrantTap is a Personal live control center for local coding agents.
 
@@ -12,6 +12,10 @@ This repository is the canonical machine runtime: CLI, MCP server, provider
 hooks, local adapters, and TypeScript wire schemas. Agents and provider
 credentials stay on your computer. Native iPhone and Apple Watch traffic is
 end-to-end encrypted.
+
+The source is public for inspection and contribution, but GrantTap MCP is
+proprietary paid software rather than open source. Production use requires an
+active GrantTap subscription or a separate commercial agreement.
 
 [Website](https://granttap.com) · [npm](https://www.npmjs.com/package/granttap-mcp) ·
 [Security model](SECURITY.md) ·
@@ -96,6 +100,9 @@ endpoint from the iPhone stops new Mesh operations immediately while local Task
 history stays on the device.
 
 ## Install
+
+Installation and production use require Authorized Access under the
+[GrantTap Commercial Source License](LICENSE).
 
 ```bash
 npm install -g granttap-mcp
@@ -216,5 +223,13 @@ gate on macOS, and `npm publish` enforces the same gate through
 
 Do not publish from a dirty checkout or before the package allowlist, tests,
 typecheck, and release checks pass.
+
+## License
+
+GrantTap MCP is distributed under the proprietary
+[GrantTap Commercial Source License 1.0](LICENSE). Public source access does not
+grant open-source, redistribution, hosted-service, or competing-product rights.
+Third-party dependencies retain their own terms; see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 GrantTap is not affiliated with Anthropic, OpenAI, Apple, Anysphere, or xAI.

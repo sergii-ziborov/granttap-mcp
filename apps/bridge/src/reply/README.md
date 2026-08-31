@@ -5,3 +5,6 @@ This module prepares phone attachments, routes selected MCP/skill intent, and ru
 `provider-headless.ts` owns the provider-neutral headless start used when a Mesh
 handoff resumes the same Task on another agent or computer. Providers without an
 implemented remote-start path fail closed instead of reporting parity.
+
+License: this module is distributed under the GrantTap Commercial Source License
+in the repository-root `LICENSE` file.

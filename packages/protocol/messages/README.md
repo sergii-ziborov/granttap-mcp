@@ -11,3 +11,5 @@ Both are strict schemas: unknown fields are rejected, and transcripts or hidden
 model reasoning are outside the contract.
 
 Tests are discoverable in `tests/core.test.ts` and the feature-level bridge and MCP suites.
+
+License: this module is distributed under the GrantTap Commercial Source License in the repository-root `LICENSE` file.

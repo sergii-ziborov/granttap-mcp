@@ -58,3 +58,8 @@ cargo build -p granttap-mcp --release
 - Monitor process itself stays Node until ported; Rust `setup` can point LaunchAgent at this binary's `monitor` subcommand once implemented
 - Policy verification is live in Rust `status`; Rust hook enforcement waits for the hook subcommand port, while the product bridge already enforces the same binary format
 - `wss://` uses macOS Secure Transport (`tls_macos`); non-macOS needs a TLS seam later
+
+## License
+
+This unpublished crate is distributed under the GrantTap Commercial Source License
+inherited from the workspace `LICENSE` file.

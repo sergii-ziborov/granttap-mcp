@@ -71,3 +71,8 @@ prompt must never resolve the current request.
 
 Troubleshooting details live in
 [`docs/cursor-authorize.md`](../docs/cursor-authorize.md).
+
+## License
+
+The plugin is distributed under the GrantTap Commercial Source License included
+in this directory. Production use requires Authorized Access to GrantTap.

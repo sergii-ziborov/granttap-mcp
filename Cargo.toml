@@ -6,7 +6,7 @@ resolver = "2"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.78"
-license = "MIT"
+license-file = "LICENSE"
 authors = ["Sergii Ziborov"]
 repository = "https://github.com/sergii-ziborov/granttap-mcp"
 

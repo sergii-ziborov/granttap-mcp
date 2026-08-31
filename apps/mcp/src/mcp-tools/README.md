@@ -21,3 +21,6 @@ It exposes only the twelve task-scoped Mesh operations, re-authorizes endpoint,
 credential, policy revision, expiry, actor, Project scope, and operation on every
 call, and can never create invites, expand scope, change the relay, or reach
 `setup`.
+
+License: this module is distributed under the GrantTap Commercial Source License
+in the repository-root `LICENSE` file.

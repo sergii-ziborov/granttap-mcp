@@ -1,7 +1,13 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
 
-const PUBLIC_FILES = new Set(["LICENSE", "README.md", "SECURITY.md", "package.json"]);
+const PUBLIC_FILES = new Set([
+  "LICENSE",
+  "README.md",
+  "SECURITY.md",
+  "THIRD_PARTY_NOTICES.md",
+  "package.json",
+]);
 const PUBLIC_PREFIXES = ["apps/", "bin/", "cursor-plugin/", "packages/"];
 const PUBLIC_DOCS = /^(?:docs\/cursor-authorize\.md|docs\/images\/[^/]+)$/;
 const INTERNAL_SEGMENT = /(?:^|\/)(?:tests?|scripts?|superpowers|plans?|roadmaps?|audits?|research)(?:\/|$)/i;
