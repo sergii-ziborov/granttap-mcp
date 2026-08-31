@@ -7,10 +7,15 @@ import test from "node:test";
 import { createPairing } from "../apps/bridge/src/config";
 import { forwardingRelay, waitFor } from "./support/forwarding-relay";
 
-function launch(configDir: string) {
+function launch(configDir: string, extraEnv: NodeJS.ProcessEnv = {}) {
   return spawn(process.execPath, ["--import", "tsx", "apps/bridge/src/bin/monitor.ts"], {
     cwd: process.cwd(),
-    env: { ...process.env, GRANTTAP_CONFIG_DIR: configDir, GRANTTAP_MONITOR_INTERVAL_MS: "60000" },
+    env: {
+      ...process.env,
+      GRANTTAP_CONFIG_DIR: configDir,
+      GRANTTAP_MONITOR_INTERVAL_MS: "60000",
+      ...extraEnv,
+    },
     stdio: ["ignore", "ignore", "pipe"],
   });
 }
@@ -33,10 +38,11 @@ test("monitor entry fails closed before pairing and stops cleanly on SIGTERM", a
   const config = join(root, "paired");
   await mkdir(config, { recursive: true });
   await writeFile(join(config, "machine.json"), JSON.stringify(createPairing(relay.url).machineCfg));
-  const paired = launch(config);
+  const paired = launch(config, { GRANTTAP_ENGINE_ENABLED: "1" });
   const completion = closed(paired);
   await waitFor(() => relay.connections() === 1, 2_000);
   paired.kill("SIGTERM");
   const stopped = await completion;
   assert.equal(stopped.code, 0, stopped.stderr);
+  assert.match(stopped.stderr, /engine unavailable.*legacy behavior remains active/i);
 });

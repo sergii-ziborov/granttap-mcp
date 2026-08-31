@@ -1,10 +1,12 @@
 /** Persistent, terminal-free task sync for the GrantTap phone app on macOS. */
 import { RelayClient } from "../../../../packages/core/relay-client";
 import { loadConfig, machineConfigPath } from "../config";
+import { EngineSupervisor } from "../engine/engine-supervisor";
 import { startSessionMonitor } from "../monitor";
 
 let client: RelayClient;
 let monitor: ReturnType<typeof startSessionMonitor>;
+const engine = new EngineSupervisor();
 
 try {
   client = new RelayClient(loadConfig(machineConfigPath()), { autoReconnect: true });
@@ -17,6 +19,7 @@ try {
 }
 
 const stop = (): void => {
+  engine.stop();
   monitor.close();
   client.close();
   process.exit(0);
@@ -24,6 +27,15 @@ const stop = (): void => {
 
 process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
+
+void engine.ensureAvailable().then((health) => {
+  if (health.state !== "disabled" && health.state !== "healthy") {
+    const reason = health.reason ? `: ${health.reason}` : "";
+    process.stderr.write(
+      `[granttap-mcp] Project engine ${health.state}${reason}; legacy behavior remains active\n`,
+    );
+  }
+});
 
 void client
   .connect()
