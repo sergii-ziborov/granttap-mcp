@@ -15,6 +15,10 @@ import {
   machineConfigPath,
   shouldAutoAcceptCursorShell,
 } from "../config";
+import {
+  evaluateEffectiveAction,
+  legacyGrantTapFlowAllowed,
+} from "../policy/effective-action";
 import { cursorRootSessionId } from "../sessions/cursor";
 import { protectedGrantTapAccess } from "../self-protection";
 
@@ -48,6 +52,10 @@ async function main(): Promise<void> {
     nativeAsk("GrantTap could not read this shell call; use Cursor approval.");
     return;
   }
+  await handleShell(input);
+}
+
+async function handleShell(input: CursorHookInput): Promise<void> {
   const protectedAccess = protectedGrantTapAccess(
     input.tool_name, input.tool_input, input.command,
   );
@@ -66,19 +74,42 @@ async function main(): Promise<void> {
     input.tool_name ?? "Shell",
     input.tool_input ?? { command: input.command },
   );
-  if (blocked) {
-    deny(blocked.reason);
+  const projectDecision = await evaluateEffectiveAction({
+    provider: "cursor",
+    sessionId,
+    cwd: cursorCwd(input),
+    toolName: input.tool_name ?? "Shell",
+    toolInput: input.tool_input ?? { command: input.command },
+    legacyDenyReason: blocked?.reason,
+  });
+  if (projectDecision.effect === "deny") {
+    deny(projectDecision.reason);
     return;
   }
-  if (!sessionId || isGatingSkipped(sessionId)) {
+  const legacyFlow = legacyGrantTapFlowAllowed(projectDecision);
+  if (!sessionId) {
+    if (!legacyFlow) deny("Project approval cannot be bound to an exact Cursor chat");
+    else nativeAsk("GrantTap is paused or this shell call is unscoped; use Cursor approval.");
+    return;
+  }
+  if (legacyFlow && isGatingSkipped(sessionId)) {
     nativeAsk("GrantTap is paused or this shell call is unscoped; use Cursor approval.");
     return;
   }
+  await continueApproval(input, sessionId, legacyFlow);
+}
+
+async function continueApproval(
+  input: CursorHookInput,
+  sessionId: string,
+  legacyFlow: boolean,
+): Promise<void> {
   let config;
   try {
     config = loadConfig(machineConfigPath());
   } catch {
-    nativeAsk("GrantTap is not paired; use Cursor approval.");
+    if (!legacyFlow) deny("Project policy requires GrantTap approval, but this computer is not paired");
+    else nativeAsk("GrantTap is not paired; use Cursor approval.");
     return;
   }
   const request = cursorToRequest({
@@ -90,18 +121,33 @@ async function main(): Promise<void> {
   // Eligible levels approve locally — never wait on phone WS/APNs for an action
   // the configured level already allows.
   const level = autoAcceptLevelFor(sessionId);
-  if (shouldAutoAcceptCursorShell(level, request.tool, request.command)) {
+  if (legacyFlow && shouldAutoAcceptCursorShell(level, request.tool, request.command)) {
     process.stdout.write(JSON.stringify({ permission: "allow", continue: true }));
     return;
   }
 
   const timeoutMs = Number(process.env.GRANTTAP_APPROVAL_TIMEOUT_MS ?? 60_000);
-  const decision = await requestApproval(config, request, { timeoutMs });
+  let decision;
+  try {
+    decision = await requestApproval(config, request, { timeoutMs });
+  } catch {
+    if (!legacyFlow) deny("Project approval failed before a decision was recorded");
+    else nativeAsk("GrantTap shell hook failed; use Cursor approval.");
+    return;
+  }
   if (isUnanswered(decision)) {
-    nativeAsk("GrantTap got no answer; use Cursor approval.");
+    if (!legacyFlow) deny("Project approval was required but no decision was received");
+    else nativeAsk("GrantTap got no answer; use Cursor approval.");
     return;
   }
   process.stdout.write(JSON.stringify(decisionToCursorOutput(decision)));
+}
+
+function cursorCwd(input: CursorHookInput): string | undefined {
+  if (typeof input.cwd === "string" && input.cwd.trim()) return input.cwd;
+  return Array.isArray(input.workspace_roots) && typeof input.workspace_roots[0] === "string"
+    ? input.workspace_roots[0]
+    : undefined;
 }
 
 main().catch(() => {

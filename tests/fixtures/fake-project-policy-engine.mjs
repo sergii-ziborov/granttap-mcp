@@ -39,7 +39,11 @@ function responseFor(request) {
   }
   if (request.operation !== "policy.evaluate_action") throw new Error("unexpected operation");
   const kind = request.input?.capability?.kind;
-  const effect = kind === "file_write" ? "deny" : kind === "shell" ? "ask" : "allow";
+  const effect = kind === "file_write" || kind === "mcp"
+    ? "deny"
+    : kind === "shell"
+      ? "ask"
+      : "allow";
   return {
     operation: "policy.evaluated",
     decision: {

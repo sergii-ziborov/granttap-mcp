@@ -8,7 +8,10 @@ import {
   pendingApprovalRequests,
   registerPendingApproval,
 } from "../apps/bridge/src/approval-state";
-import { resolveCursorMcpServer } from "../apps/bridge/src/cursor-mcp-policy";
+import {
+  resolveCursorMcpCapability,
+  resolveCursorMcpServer,
+} from "../apps/bridge/src/cursor-mcp-policy";
 import { runHook } from "./provider-hook-harness";
 
 test("provider hooks enforce disabled capabilities only in the exact root chat", (t) => {
@@ -146,6 +149,13 @@ test("Cursor MCP resolver abstains when a command identifies multiple servers", 
     resolveCursorMcpServer({ url: "https://mcp.example.test/context" }, cursorDir),
     "context7",
   );
+  const capability = resolveCursorMcpCapability({
+    url: "https://mcp.example.test/context",
+  }, cursorDir);
+  assert.equal(capability.server, "context7");
+  assert.equal(capability.transport, "remote");
+  assert.match(capability.configHash ?? "", /^[0-9a-f]{64}$/);
+  assert.doesNotMatch(JSON.stringify(capability), /mcp\.example\.test/);
   assert.equal(resolveCursorMcpServer({ command: "npx" }, cursorDir), null);
 });
 

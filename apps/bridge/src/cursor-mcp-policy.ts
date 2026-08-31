@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -19,6 +20,12 @@ export type CursorMcpHookInput = {
   url?: unknown;
   mcp_server_name?: unknown;
   server_name?: unknown;
+};
+
+export type CursorMcpCapability = {
+  server: string | null;
+  transport?: string;
+  configHash?: string;
 };
 
 function boundedName(raw: unknown): string | null {
@@ -124,6 +131,13 @@ export function resolveCursorMcpServer(
   input: CursorMcpHookInput,
   cursorDir = process.env.GRANTTAP_CURSOR_DIR ?? join(homedir(), ".cursor"),
 ): string | null {
+  return resolveCursorMcpCapability(input, cursorDir).server;
+}
+
+export function resolveCursorMcpCapability(
+  input: CursorMcpHookInput,
+  cursorDir = process.env.GRANTTAP_CURSOR_DIR ?? join(homedir(), ".cursor"),
+): CursorMcpCapability {
   const servers = configuredServers(input, cursorDir);
   const explicit = new Set<string>();
   for (const raw of [input.mcp_server_name, input.server_name]) {
@@ -152,7 +166,17 @@ export function resolveCursorMcpServer(
     if (url && boundedString(descriptor.url) === url) matches.add(name);
     if (command && exactDescriptorCommand(descriptor).includes(command)) matches.add(name);
   }
-  return matches.size === 1 ? ([...matches][0] ?? null) : null;
+  const server = matches.size === 1 ? ([...matches][0] ?? null) : null;
+  if (!server) return { server: null };
+  const descriptor = servers.get(server);
+  if (!descriptor) return { server };
+  return {
+    server,
+    transport: boundedString(descriptor.url) ? "remote" : "stdio",
+    configHash: createHash("sha256")
+      .update(JSON.stringify(canonical(descriptor)))
+      .digest("hex"),
+  };
 }
 
 export function cursorConversationId(input: CursorMcpHookInput): string | null {
@@ -160,4 +184,15 @@ export function cursorConversationId(input: CursorMcpHookInput): string | null {
   return typeof value === "string" && value.trim() && value.trim().length <= 256
     ? value.trim()
     : null;
+}
+
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+      .filter(([, item]) => item !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => [key, canonical(item)]));
+  }
+  return value;
 }

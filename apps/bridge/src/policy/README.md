@@ -12,5 +12,12 @@ or absolute file paths into the fingerprint. Project `DENY` and `ASK` are parent
 boundaries; legacy bypass, paused gating, and auto-accept may run only after an
 `ALLOW` or `INHERIT` result.
 
+Codex `PreToolUse` never waits for a phone. A Project `ASK` creates an owner-only
+30-second marker bound to the exact session, `tool_use_id`, tool, and normalized
+argument hash. `PermissionRequest` atomically consumes that marker once and
+forces the existing GrantTap approval path. Cursor evaluates Project policy
+directly in its shell and MCP hooks; MCP evidence contains only bounded names,
+transport, and a configuration SHA-256, never the descriptor or call arguments.
+
 License: this module is distributed under the GrantTap Commercial Source License
 in the repository-root `LICENSE` file.

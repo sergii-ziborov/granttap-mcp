@@ -1,7 +1,9 @@
 #!/usr/bin/env -S npx tsx
-/** Deny-only Codex PreToolUse policy for exact per-chat capability switches. */
+/** Codex PreToolUse: deterministic deny or one-shot Project ASK handoff. */
 import type { HookInput } from "../adapters";
 import { blockedSessionCapability, isProviderEnabled } from "../config";
+import { recordCodexProjectAsk } from "../policy/codex-project-ask";
+import { evaluateEffectiveAction } from "../policy/effective-action";
 import { protectedGrantTapAccess } from "../self-protection";
 
 async function readStdin(): Promise<string> {
@@ -19,13 +21,7 @@ async function main(): Promise<void> {
   }
   const protectedAccess = protectedGrantTapAccess(input.tool_name, input.tool_input);
   if (protectedAccess) {
-    process.stdout.write(JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: "PreToolUse",
-        permissionDecision: "deny",
-        permissionDecisionReason: protectedAccess.reason,
-      },
-    }));
+    deny(protectedAccess.reason);
     return;
   }
   if (!isProviderEnabled("codex")) return;
@@ -34,12 +30,36 @@ async function main(): Promise<void> {
     input.tool_name,
     input.tool_input,
   );
-  if (!blocked) return;
+  const decision = await evaluateEffectiveAction({
+    provider: "codex",
+    sessionId: input.session_id,
+    cwd: input.cwd,
+    toolName: input.tool_name,
+    toolInput: input.tool_input,
+    legacyDenyReason: blocked?.reason,
+  });
+  if (decision.effect === "deny") {
+    deny(decision.reason);
+    return;
+  }
+  if (decision.effect !== "ask") return;
+  const recorded = recordCodexProjectAsk({
+    sessionId: input.session_id,
+    toolUseId: input.tool_use_id,
+    toolName: input.tool_name,
+    toolInput: input.tool_input,
+  }, decision.reason);
+  if (!recorded) {
+    deny("Project approval could not be bound to this exact Codex call");
+  }
+}
+
+function deny(reason: string): void {
   process.stdout.write(JSON.stringify({
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "deny",
-      permissionDecisionReason: blocked.reason,
+      permissionDecisionReason: reason,
     },
   }));
 }

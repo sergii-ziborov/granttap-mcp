@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { capabilityFingerprint } from "../apps/bridge/src/policy/capability-fingerprint";
+import {
+  capabilityFingerprint,
+  mcpCapabilityFingerprint,
+} from "../apps/bridge/src/policy/capability-fingerprint";
 import {
   evaluateEffectiveAction,
   legacyGrantTapFlowAllowed,
@@ -142,6 +145,28 @@ test("capability fingerprints classify without retaining raw arguments", () => {
   assert.equal(capabilityFingerprint({
     provider: "claude", toolName: "Bash", toolInput: { command: "./verify.sh" },
   }).display_name, "verify.sh");
+  const plugin = capabilityFingerprint({
+    provider: "claude", cwd: "/repo", toolName: "Bash",
+    toolInput: { command: "bash ~/.claude/plugins/cache/superpowers/2.0/run.sh" },
+  });
+  assert.equal(plugin.kind, "skill");
+  assert.equal(plugin.display_name, "superpowers");
+  assert.match(plugin.executable_path_hash ?? "", /^[0-9a-f]{64}$/);
+  assert.equal(capabilityFingerprint({
+    provider: "claude", toolName: "Bash",
+    toolInput: { command: "bash ~/.claude/skills/release-check/run.sh" },
+  }).kind, "skill");
+  assert.equal(capabilityFingerprint({
+    provider: "claude", toolName: "Bash",
+    toolInput: { command: "env MODE=test bash ~/.claude/plugins/cache/superpowers/2.0/run.sh" },
+  }).display_name, "superpowers");
+
+  const configuredMcp = mcpCapabilityFingerprint("cursor", {
+    serverName: "github", transport: "remote", configHash: "a".repeat(64),
+  });
+  assert.equal(configuredMcp.confidence, "exact");
+  assert.equal(configuredMcp.config_hash, "a".repeat(64));
+  assert.equal(mcpCapabilityFingerprint("cursor", {}).confidence, "unknown");
 });
 
 function policyClient(effect: "allow" | "ask" | "deny"): EngineClientLike {

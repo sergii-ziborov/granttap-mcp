@@ -1,4 +1,6 @@
-import { basename } from "node:path";
+import { createHash } from "node:crypto";
+import { homedir } from "node:os";
+import { basename, isAbsolute, normalize, resolve } from "node:path";
 import type {
   CapabilityFingerprint,
   CapabilityKind,
@@ -6,8 +8,15 @@ import type {
 
 export type ActionFingerprintInput = {
   provider: "claude" | "codex" | "cursor" | "grok";
+  cwd?: string;
   toolName?: string;
   toolInput?: Record<string, unknown>;
+};
+
+export type McpFingerprintEvidence = {
+  serverName?: string | null;
+  transport?: string;
+  configHash?: string;
 };
 
 const SHELL_TOOLS = new Set([
@@ -35,19 +44,52 @@ export function capabilityFingerprint(input: ActionFingerprintInput): Capability
   if (AGENT_TOOLS.has(normalized)) {
     return fingerprint("agent", tool, input.provider, "provider-tool");
   }
-  if (isShellTool(normalized)) return shellFingerprint(input.provider, input.toolInput);
+  if (isShellTool(normalized)) return shellFingerprint(input.provider, input.toolInput, input.cwd);
   return fingerprint("agent", tool, input.provider, "provider-tool");
+}
+
+export function mcpCapabilityFingerprint(
+  provider: ActionFingerprintInput["provider"],
+  evidence: McpFingerprintEvidence,
+): CapabilityFingerprint {
+  const displayName = bounded(evidence.serverName, 160) ?? "Unknown MCP";
+  const transport = bounded(evidence.transport, 160) ?? undefined;
+  const configHash = sha256Evidence(evidence.configHash);
+  const confidence = displayName === "Unknown MCP"
+    ? "unknown"
+    : configHash ? "exact" : transport ? "strong" : "name_only";
+  return {
+    kind: "mcp",
+    display_name: displayName,
+    provider,
+    origin: "provider-mcp-config",
+    ...(transport ? { transport } : {}),
+    ...(configHash ? { config_hash: configHash } : {}),
+    confidence,
+  };
 }
 
 function shellFingerprint(
   provider: ActionFingerprintInput["provider"],
   toolInput?: Record<string, unknown>,
+  cwd?: string,
 ): CapabilityFingerprint {
   const command = commandText(toolInput?.command);
+  const script = scriptIdentity(command, cwd);
+  if (script?.plugin) {
+    return {
+      ...fingerprint("skill", script.plugin, provider, "shell-plugin"),
+      ...(script.pathHash ? { executable_path_hash: script.pathHash, confidence: "exact" } : {}),
+    };
+  }
   if (isDeploy(command)) return fingerprint("deploy", "Deploy", provider, "shell-command");
   if (isNetwork(command)) return fingerprint("network", "Network command", provider, "shell-command");
-  const script = scriptName(command);
-  if (script) return fingerprint("script", script, provider, "shell-script");
+  if (script) {
+    return {
+      ...fingerprint("script", script.name, provider, "shell-script"),
+      ...(script.pathHash ? { executable_path_hash: script.pathHash, confidence: "exact" } : {}),
+    };
+  }
   return fingerprint("shell", "Shell", provider, "provider-shell");
 }
 
@@ -93,10 +135,72 @@ function isNetwork(command: string): boolean {
   return /\b(?:curl|wget|ssh|scp|rsync)\b/i.test(command);
 }
 
-function scriptName(command: string): string | undefined {
-  const token = command.trim().split(/\s+/)[0]?.replace(/^['"]|['"]$/g, "");
-  if (!token || !/\.(?:sh|bash|zsh|py|js|mjs|cjs|ts)$/i.test(token)) return undefined;
-  return bounded(basename(token), 160) ?? undefined;
+function scriptIdentity(
+  command: string,
+  cwd?: string,
+): { name: string; plugin?: string; pathHash?: string } | undefined {
+  const words = commandWords(command);
+  const executable = basename(words[0] ?? "").toLowerCase();
+  const interpreters = new Set(["bash", "sh", "zsh", "python", "python3", "node", "tsx"]);
+  const pluginToken = words.find((word) => {
+    const token = cleanScriptToken(word);
+    return isScriptToken(token) && pluginName(pathSegments(token)) != null;
+  });
+  const selected = pluginToken ?? (interpreters.has(executable)
+    ? words.slice(1).find((word) => !word.startsWith("-"))
+    : words[0]);
+  const token = cleanScriptToken(selected ?? "");
+  if (!isScriptToken(token)) return undefined;
+  const path = resolvedPath(token, cwd);
+  const segments = pathSegments(token);
+  const plugin = pluginName(segments);
+  return {
+    name: bounded(basename(token), 160) ?? "Unknown script",
+    ...(plugin ? { plugin } : {}),
+    ...(path ? { pathHash: createHash("sha256").update(path).digest("hex") } : {}),
+  };
+}
+
+function cleanScriptToken(value: string): string {
+  return value.replace(/^[('"`]+|[)'"`;|&]+$/g, "");
+}
+
+function isScriptToken(value: string): boolean {
+  return /\.(?:sh|bash|zsh|py|js|mjs|cjs|ts)$/i.test(value);
+}
+
+function pathSegments(value: string): string[] {
+  return normalize(value).split(/[\\/]/).filter(Boolean);
+}
+
+function pluginName(segments: string[]): string | undefined {
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    if (!/^(?:plugins?|skills?)$/i.test(segments[index] ?? "")) continue;
+    const next = segments[index + 1];
+    const candidate = /^(?:cache|marketplaces)$/i.test(next ?? "")
+      ? segments[index + 2]
+      : next;
+    const boundedName = bounded(candidate, 160) ?? undefined;
+    if (boundedName && !/^(?:cache|marketplaces)$/i.test(boundedName)) return boundedName;
+  }
+  return undefined;
+}
+
+function commandWords(command: string): string[] {
+  return [...command.matchAll(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g)]
+    .map((match) => match[0].replace(/^(['"])(.*)\1$/, "$2"))
+    .slice(0, 16);
+}
+
+function resolvedPath(token: string, cwd?: string): string | undefined {
+  const expanded = token.startsWith("~/") ? resolve(homedir(), token.slice(2)) : token;
+  if (isAbsolute(expanded)) return normalize(expanded);
+  return cwd && isAbsolute(cwd) && token.includes("/") ? resolve(cwd, token) : undefined;
+}
+
+function sha256Evidence(value: unknown): string | undefined {
+  const clean = bounded(value, 64);
+  return clean && /^[0-9a-f]{64}$/i.test(clean) ? clean.toLowerCase() : undefined;
 }
 
 function bounded(value: unknown, maximum: number): string | null {

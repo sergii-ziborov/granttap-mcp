@@ -25,6 +25,7 @@ import {
 } from "../config";
 import { recordAttributedCall } from "../mesh/call-scope";
 import { classifyAction } from "../policy";
+import { consumeCodexProjectAsk } from "../policy/codex-project-ask";
 import { protectedGrantTapAccess } from "../self-protection";
 
 async function readStdin(): Promise<string> {
@@ -77,9 +78,15 @@ async function main(): Promise<void> {
     process.stdout.write(denyOutput(blocked.reason));
     return;
   }
+  const projectAsk = consumeCodexProjectAsk({
+    sessionId: input.session_id,
+    toolUseId: input.tool_use_id,
+    toolName: input.tool_name,
+    toolInput: input.tool_input,
+  });
 
   // Gating paused or this session exempt → stay silent (Codex uses its own flow).
-  if (isGatingSkipped(input.session_id)) return;
+  if (!projectAsk && isGatingSkipped(input.session_id)) return;
 
   let cfg;
   try {
@@ -91,7 +98,7 @@ async function main(): Promise<void> {
 
   // Local policy, evaluated after pairing is confirmed — see claude-hook.
   const req = codexToRequest(input);
-  if (shouldAutoAcceptTool(input.session_id, req.tool, req.command)) {
+  if (!projectAsk && shouldAutoAcceptTool(input.session_id, req.tool, req.command)) {
     const level = autoAcceptLevelFor(input.session_id);
     const cls = classifyAction(req.tool, req.command);
     process.stdout.write(
@@ -116,9 +123,14 @@ async function main(): Promise<void> {
   );
   const decision = await requestApproval(cfg, req, { timeoutMs });
 
-  // Relay down or phone never answered: stay silent — an empty hook result
-  // sends Codex back to its own approval flow, so desk work keeps going.
-  if (isUnanswered(decision)) return;
+  // Routine relay failure stays in Codex's native flow. A Project ASK cannot
+  // fall through to provider approval because that would weaken the parent rule.
+  if (isUnanswered(decision)) {
+    if (projectAsk) {
+      process.stdout.write(denyOutput("Project approval was required but no decision was received"));
+    }
+    return;
+  }
 
   process.stdout.write(JSON.stringify(decisionToCodexOutput(decision)));
 }

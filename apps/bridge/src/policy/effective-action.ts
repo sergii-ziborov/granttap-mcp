@@ -3,6 +3,7 @@ import { isAbsolute, join, normalize } from "node:path";
 import { configDir } from "../config/paths";
 import { EngineClient } from "../engine/engine-client";
 import type {
+  CapabilityFingerprint,
   EnginePolicyDecision,
   PolicyEffect,
   PolicySource,
@@ -18,6 +19,7 @@ export type EffectiveActionInput = {
   cwd?: string;
   toolName?: string;
   toolInput?: Record<string, unknown>;
+  capability?: CapabilityFingerprint;
   legacyDenyReason?: string;
 };
 
@@ -76,10 +78,9 @@ export async function evaluateEffectiveAction(
         task: "inherit",
         project_id: projectId,
         endpoint_id: endpointId,
-        capability: capabilityFingerprint({
-          provider: input.provider,
-          toolName: input.toolName,
-          toolInput: input.toolInput,
+        capability: input.capability ?? capabilityFingerprint({
+          provider: input.provider, cwd: input.cwd,
+          toolName: input.toolName, toolInput: input.toolInput,
         }),
         impact_available: false,
       },

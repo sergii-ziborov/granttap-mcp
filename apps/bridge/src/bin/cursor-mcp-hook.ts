@@ -14,10 +14,15 @@ import {
 } from "../config";
 import {
   cursorConversationId,
-  resolveCursorMcpServer,
+  resolveCursorMcpCapability,
   type CursorMcpHookInput,
 } from "../cursor-mcp-policy";
 import { recordAttributedCall } from "../mesh/call-scope";
+import { mcpCapabilityFingerprint } from "../policy/capability-fingerprint";
+import {
+  evaluateEffectiveAction,
+  legacyGrantTapFlowAllowed,
+} from "../policy/effective-action";
 import { cursorRootSessionId } from "../sessions/cursor";
 import { protectedGrantTapAccess } from "../self-protection";
 
@@ -35,6 +40,14 @@ function nativeAsk(message: string): void {
   }));
 }
 
+function deny(message: string): void {
+  process.stdout.write(JSON.stringify({
+    permission: "deny", continue: false,
+    user_message: message, agent_message: message,
+    userMessage: message, agentMessage: message,
+  }));
+}
+
 async function main(): Promise<void> {
   let input: CursorMcpHookInput;
   try {
@@ -43,15 +56,15 @@ async function main(): Promise<void> {
     nativeAsk("GrantTap could not correlate this MCP call; use Cursor approval.");
     return;
   }
+  await handleMcp(input);
+}
+
+async function handleMcp(input: CursorMcpHookInput): Promise<void> {
   const protectedAccess = protectedGrantTapAccess(
     input.tool_name, input.tool_input, input.command,
   );
   if (protectedAccess) {
-    process.stdout.write(JSON.stringify({
-      permission: "deny",
-      user_message: protectedAccess.reason,
-      agent_message: protectedAccess.reason,
-    }));
+    deny(protectedAccess.reason);
     return;
   }
   if (!isProviderEnabled("cursor")) {
@@ -67,59 +80,107 @@ async function main(): Promise<void> {
     toolName: input.tool_name,
     args: input.tool_input,
   });
-  const server = resolveCursorMcpServer(input);
+  const capability = resolveCursorMcpCapability(input);
+  const server = capability.server;
   const blocked = blockedSessionMcpServer(sessionId, server);
-  if (blocked) {
-    process.stdout.write(JSON.stringify({
-      permission: "deny",
-      user_message: blocked.reason,
-      agent_message: blocked.reason,
-    }));
+  const toolName = boundedToolName(input.tool_name);
+  const projectDecision = await evaluateEffectiveAction({
+    provider: "cursor",
+    sessionId: sessionId ?? undefined,
+    cwd: cursorWorkspaceRoot(input),
+    toolName: server ? `mcp__${server}__${toolName}` : toolName,
+    capability: mcpCapabilityFingerprint("cursor", {
+      serverName: server,
+      transport: capability.transport,
+      configHash: capability.configHash,
+    }),
+    legacyDenyReason: blocked?.reason,
+  });
+  if (projectDecision.effect === "deny") {
+    deny(projectDecision.reason);
     return;
   }
-  if (!sessionId || isGatingSkipped(sessionId)) {
+  const legacyFlow = legacyGrantTapFlowAllowed(projectDecision);
+  if (!sessionId) {
+    if (!legacyFlow) deny("Project approval cannot be bound to an exact Cursor chat");
+    else nativeAsk("GrantTap is paused or this MCP call is unscoped; use Cursor approval.");
+    return;
+  }
+  if (legacyFlow && isGatingSkipped(sessionId)) {
     nativeAsk("GrantTap is paused or this MCP call is unscoped; use Cursor approval.");
     return;
   }
+  await continueApproval(input, sessionId, server, toolName, legacyFlow);
+}
+
+async function continueApproval(
+  input: CursorMcpHookInput,
+  sessionId: string,
+  server: string | null,
+  toolName: string,
+  legacyFlow: boolean,
+): Promise<void> {
   let config;
   try {
     config = loadConfig(machineConfigPath());
   } catch {
-    nativeAsk("GrantTap is not paired; use Cursor approval.");
+    if (!legacyFlow) deny("Project policy requires GrantTap approval, but this computer is not paired");
+    else nativeAsk("GrantTap is not paired; use Cursor approval.");
     return;
   }
-  const rawTool = typeof input.tool_name === "string" ? input.tool_name.trim() : "MCP tool";
-  const toolName = (rawTool || "MCP tool").slice(0, 160);
   const identity = server ? `${server}/${toolName}` : toolName;
-  const request: ApprovalRequest = {
-    type: "approval.request",
-    requestId: randomId(6),
-    agent: "cursor",
-    kind: "permission",
-    tool: server ? `mcp__${server}__${toolName}`.slice(0, 240) : toolName,
-    title: `MCP · ${identity}`.slice(0, 180),
-    // Never forward unredacted tool arguments; they may contain credentials.
-    command: identity.slice(0, 240),
-    cwd: Array.isArray(input.workspace_roots) && typeof input.workspace_roots[0] === "string"
-      ? input.workspace_roots[0].slice(0, 4096)
-      : undefined,
-    sessionId,
-    risk: "medium",
-    createdAt: Date.now(),
-  };
+  const request = approvalRequest(input, sessionId, server, toolName, identity);
   // Eligible levels approve locally — an MCP call must not hang on a sleeping phone.
-  if (shouldAutoAcceptTool(sessionId, request.tool, request.command)) {
+  if (legacyFlow && shouldAutoAcceptTool(sessionId, request.tool, request.command)) {
     process.stdout.write(JSON.stringify({ permission: "allow", continue: true }));
     return;
   }
 
   const timeoutMs = Number(process.env.GRANTTAP_APPROVAL_TIMEOUT_MS ?? 60_000);
-  const decision = await requestApproval(config, request, { timeoutMs });
+  let decision;
+  try {
+    decision = await requestApproval(config, request, { timeoutMs });
+  } catch {
+    if (!legacyFlow) deny("Project approval failed before a decision was recorded");
+    else nativeAsk("GrantTap MCP hook failed; use Cursor approval.");
+    return;
+  }
   if (isUnanswered(decision)) {
-    nativeAsk("GrantTap got no answer; use Cursor approval.");
+    if (!legacyFlow) deny("Project approval was required but no decision was received");
+    else nativeAsk("GrantTap got no answer; use Cursor approval.");
     return;
   }
   process.stdout.write(JSON.stringify(decisionToCursorOutput(decision)));
+}
+
+function approvalRequest(
+  input: CursorMcpHookInput,
+  sessionId: string,
+  server: string | null,
+  toolName: string,
+  identity: string,
+): ApprovalRequest {
+  return {
+    type: "approval.request", requestId: randomId(6), agent: "cursor", kind: "permission",
+    tool: server ? `mcp__${server}__${toolName}`.slice(0, 240) : toolName,
+    title: `MCP · ${identity}`.slice(0, 180),
+    // Never forward unredacted tool arguments; they may contain credentials.
+    command: identity.slice(0, 240),
+    cwd: cursorWorkspaceRoot(input)?.slice(0, 4096),
+    sessionId, risk: "medium", createdAt: Date.now(),
+  };
+}
+
+function boundedToolName(value: unknown): string {
+  const raw = typeof value === "string" ? value.trim() : "MCP tool";
+  return (raw || "MCP tool").slice(0, 160);
+}
+
+function cursorWorkspaceRoot(input: CursorMcpHookInput): string | undefined {
+  if (typeof input.cwd === "string" && input.cwd.trim()) return input.cwd;
+  return Array.isArray(input.workspace_roots) && typeof input.workspace_roots[0] === "string"
+    ? input.workspace_roots[0]
+    : undefined;
 }
 
 main().catch(() => {
