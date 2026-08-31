@@ -10,6 +10,36 @@ export type CapabilityUsageKind = z.infer<typeof CapabilityUsageKind>;
 export const CapabilityOutcome = z.enum(["success", "error", "cancelled", "unknown"]);
 export type CapabilityOutcome = z.infer<typeof CapabilityOutcome>;
 
+export const CapabilityResourceAttribution = z.enum([
+  "measured",
+  "attributed",
+  "estimated",
+  "unknown",
+]);
+export type CapabilityResourceAttribution = z.infer<typeof CapabilityResourceAttribution>;
+
+const ResourceDuration = z.number().int().nonnegative().max(30 * 24 * 60 * 60 * 1_000);
+const ResourceBytes = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+const ResourceDelta = z.number().int().min(-Number.MAX_SAFE_INTEGER)
+  .max(Number.MAX_SAFE_INTEGER);
+
+export const CapabilityResourceUsage = z.object({
+  attribution: CapabilityResourceAttribution,
+  cpuTimeMs: ResourceDuration.optional(),
+  cpuUserMs: ResourceDuration.optional(),
+  cpuSystemMs: ResourceDuration.optional(),
+  rssStartBytes: ResourceBytes.optional(),
+  rssEndBytes: ResourceBytes.optional(),
+  peakRssBytes: ResourceBytes.optional(),
+  memoryDeltaBytes: ResourceDelta.optional(),
+  childPeakRssBytes: ResourceBytes.optional(),
+  processCount: z.number().int().nonnegative().max(1_000_000).optional(),
+  ioReadBytes: ResourceBytes.optional(),
+  ioWriteBytes: ResourceBytes.optional(),
+  sampleWindowMs: ResourceDuration.optional(),
+}).strict();
+export type CapabilityResourceUsage = z.infer<typeof CapabilityResourceUsage>;
+
 export const CapabilityChatTarget = z.object({
   kind: z.literal("chat"),
   roomId: CapabilityRoomId,
@@ -27,6 +57,7 @@ export const ObservedCapability = z.object({
   durationMs: z.number().int().nonnegative().optional(),
   outcome: CapabilityOutcome.default("unknown"),
   errorClass: z.string().trim().min(1).max(80).optional(),
+  resource: CapabilityResourceUsage.optional(),
 });
 export type ObservedCapability = z.infer<typeof ObservedCapability>;
 
@@ -62,6 +93,7 @@ export const CapabilityUsageEvent = z.object({
   durationMs: z.number().int().nonnegative().optional(),
   outcome: CapabilityOutcome.default("unknown"),
   errorClass: z.string().trim().min(1).max(80).optional(),
+  resource: CapabilityResourceUsage.optional(),
 });
 export type CapabilityUsageEvent = z.infer<typeof CapabilityUsageEvent>;
 export const RemoteCapabilityUsageEvent = CapabilityUsageEvent;

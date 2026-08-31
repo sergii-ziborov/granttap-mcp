@@ -10,6 +10,10 @@ Grok Bot endpoint, its one-time invite, credential, actors, and revocable policy
 Both are strict schemas: unknown fields are rejected, and transcripts or hidden
 model reasoning are outside the contract.
 
+`capabilities.ts` keeps resource evidence optional and bounded. CPU, RAM, I/O,
+and process counters carry an explicit measured, attributed, estimated, or
+unknown provenance instead of implying ownership the runtime cannot prove.
+
 Tests are discoverable in `tests/core.test.ts` and the feature-level bridge and MCP suites.
 
 License: this module is distributed under the GrantTap Commercial Source License in the repository-root `LICENSE` file.

@@ -2,6 +2,7 @@
 import type {
   ActivityEntry,
   CapabilityOutcome,
+  CapabilityResourceUsage,
   ObservedCapability,
   RemoteCapabilityUsageEvent,
 } from "../../../../packages/protocol/schema";
@@ -49,6 +50,7 @@ export type CapabilityObservation = {
   durationMs?: number;
   outcome: CapabilityOutcome;
   errorClass?: string;
+  resource?: CapabilityResourceUsage;
 };
 
 const remoteCapabilityEventCache = new WeakMap<
@@ -163,6 +165,7 @@ export function toObservedCapability(
     durationMs: observation.durationMs,
     outcome: observation.outcome,
     errorClass: observation.errorClass,
+    resource: observation.resource,
   };
 }
 
@@ -209,6 +212,7 @@ export function toRemoteCapabilityUsageEvent(
     durationMs: observation.durationMs,
     outcome: observation.outcome,
     errorClass: observation.errorClass,
+    resource: observation.resource,
   };
   remoteCapabilityEventCache.set(observation, event);
   return event;
@@ -216,6 +220,7 @@ export function toRemoteCapabilityUsageEvent(
 
 function richness(event: RemoteCapabilityUsageEvent): number {
   return (event.durationMs != null ? 4 : 0) + (event.outcome !== "unknown" ? 4 : 0) +
+    (event.resource != null ? 3 : 0) +
     (event.estimatedBaselineTokens != null ? 2 : 0) +
     (event.commandPreview != null ? 1 : 0) +
     (event.estimatedContextTokens ?? 0) / MAX_TOKEN_ESTIMATE;
