@@ -2,7 +2,13 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "n
 import { join } from "node:path";
 import { generateTransferKey } from "../../../packages/core/crypto";
 import { RelayClient, type SendOptions } from "../../../packages/core/relay-client";
-import type { MeshEvent, MeshSnapshot, Payload, Role } from "../../../packages/protocol/schema";
+import type {
+  MeshEvent,
+  MeshSnapshot,
+  Payload,
+  ProjectPolicyPayload,
+  Role,
+} from "../../../packages/protocol/schema";
 import { configDir } from "./config";
 
 type SessionKeys = Record<string, string>;
@@ -64,6 +70,15 @@ export async function sendMeshPayload(
 ): Promise<void> {
   const purpose = payload.type === "mesh.snapshot" ? "project" : "task";
   await sendScopedPayload(client, payload, payload.sessionId, purpose, to, options);
+}
+
+export async function sendProjectPayload(
+  client: RelayClient,
+  payload: ProjectPolicyPayload,
+  to: Role | "all" = "phone",
+  options: SendOptions = {},
+): Promise<void> {
+  await sendScopedPayload(client, payload, payload.projectId, "project", to, options);
 }
 
 async function sendScopedPayload(

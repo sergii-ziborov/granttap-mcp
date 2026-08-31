@@ -50,5 +50,12 @@ heartbeat, and a colliding claim is rejected before it is recorded. The agent
 may choose other work or ask the current owner; the conflict reaches the human
 only after explicit `needsUser` escalation.
 
+Project Governance is a separate bounded record stream rather than Mesh
+snapshot state. The monitor accepts only project-scoped policy-set records,
+applies them to the local Rust engine, publishes one truthful coverage ACK per
+installed provider, and periodically projects the canonical policy plus current
+coverage back to the phone. Engine or feature unavailability leaves existing
+GrantTap behavior intact; strict fail-closed decisions remain on the hook path.
+
 License: this module is distributed under the GrantTap Commercial Source License
 in the repository-root `LICENSE` file.

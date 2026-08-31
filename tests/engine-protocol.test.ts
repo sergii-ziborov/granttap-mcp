@@ -53,6 +53,36 @@ test("response parser accepts every Rust v1 result", () => {
         fingerprint_confidence: "strong", coverage: "enforced",
       },
     },
+    {
+      operation: "policy.found",
+      policy: { project_id: "project", revision: 0, enforcement: "best_available", rules: [] },
+    },
+    {
+      operation: "policy.applied",
+      policy: {
+        project_id: "project", revision: 1, enforcement: "strict",
+        rules: [{
+          rule_id: "deny-mcp", project_id: "project", selector: { kind: "mcp" },
+          effect: "deny", conditions: { endpoint_ids: [], providers: [] },
+          revision: 1, created_by: "phone",
+        }],
+      },
+    },
+    {
+      operation: "policy.coverage",
+      coverage: {
+        project_id: "project", policy_revision: 1, enforcement: "strict",
+        required_capabilities: ["mcp"], endpoints: [], strict_ready: false,
+      },
+    },
+    {
+      operation: "policy.acknowledged",
+      acknowledgement: {
+        project_id: "project", policy_revision: 1, endpoint_id: "mac",
+        provider: "claude", capabilities: [{ kind: "mcp", status: "enforced" }],
+        observed_at: 1,
+      },
+    },
   ];
   for (const result of results) {
     assert.equal(parseEngineResponse(response(result), "request-1").operation, result.operation);
@@ -104,6 +134,29 @@ test("response parser rejects malformed and incompatible wire values", () => {
     response({
       operation: "policy.evaluated",
       decision: { effect: "deny", source: "project", reason: "x", coverage: "claimed" },
+    }),
+    response({
+      operation: "policy.applied",
+      policy: { project_id: "project", revision: 1, enforcement: "strict", rules: [{}] },
+    }),
+    response({
+      operation: "policy.applied",
+      policy: { project_id: "project", revision: 0, enforcement: "best_available", rules: [] },
+    }),
+    response({
+      operation: "policy.coverage",
+      coverage: {
+        project_id: "project", policy_revision: 1, enforcement: "strict",
+        required_capabilities: ["future"], endpoints: [], strict_ready: true,
+      },
+    }),
+    response({
+      operation: "policy.acknowledged",
+      acknowledgement: {
+        project_id: "project", policy_revision: 1, endpoint_id: "mac",
+        provider: "claude", capabilities: [{ kind: "mcp", status: "claimed" }],
+        observed_at: 1,
+      },
     }),
   ];
   for (const value of invalid) {

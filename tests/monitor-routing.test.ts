@@ -56,10 +56,18 @@ test("monitor routes settings and task messages without weakening provider gates
   process.env.GRANTTAP_CONFIG_DIR = join(root, "config");
   process.env.GRANTTAP_GROK_SESSIONS_DIR = fixture.sessions;
   process.env.GRANTTAP_GROK_BIN = fixture.bin;
+  const engineFlag = process.env.GRANTTAP_ENGINE_ENABLED;
+  const policyFlag = process.env.GRANTTAP_PROJECT_POLICY_ENABLED;
+  delete process.env.GRANTTAP_ENGINE_ENABLED;
+  delete process.env.GRANTTAP_PROJECT_POLICY_ENABLED;
   t.after(() => {
     delete process.env.GRANTTAP_CONFIG_DIR;
     delete process.env.GRANTTAP_GROK_SESSIONS_DIR;
     delete process.env.GRANTTAP_GROK_BIN;
+    if (engineFlag == null) delete process.env.GRANTTAP_ENGINE_ENABLED;
+    else process.env.GRANTTAP_ENGINE_ENABLED = engineFlag;
+    if (policyFlag == null) delete process.env.GRANTTAP_PROJECT_POLICY_ENABLED;
+    else process.env.GRANTTAP_PROJECT_POLICY_ENABLED = policyFlag;
   });
   const {
     handleUserMessage, startSessionMonitor,
@@ -100,6 +108,13 @@ test("monitor routes settings and task messages without weakening provider gates
     meshEnabled: true,
     providerSettings: { claude: true, codex: true, cursor: true, grok: true },
   });
+  assert.equal(await emit({
+    type: "project.policy.set", sessionId: "project", projectId: "project",
+    expectedRevision: 0, createdAt: Date.now(),
+    policy: {
+      projectId: "project", revision: 1, enforcement: "best_available", rules: [],
+    },
+  }), false);
   await handleUserMessage(fake as never, {
     ...base, messageId: "unknown-workspace", agent: "grok", cwd: join(root, "unknown"),
   });

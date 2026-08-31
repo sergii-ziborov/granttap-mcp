@@ -196,5 +196,9 @@ function expectedResultOperation(
   if (operation === "project.get") return "project.found";
   if (operation === "project.list_bindings") return "project.bindings";
   if (operation === "project.upsert_binding") return "project.binding_upserted";
+  if (operation === "policy.get") return "policy.found";
+  if (operation === "policy.apply") return "policy.applied";
+  if (operation === "policy.coverage") return "policy.coverage";
+  if (operation === "policy.ack") return "policy.acknowledged";
   return "policy.evaluated";
 }

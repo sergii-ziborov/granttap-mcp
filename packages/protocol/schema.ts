@@ -25,6 +25,11 @@ import {
 } from "./messages/mesh";
 import { MachineLoad } from "./messages/machine";
 import {
+  ProjectPolicyAck,
+  ProjectPolicySet,
+  ProjectPolicyStatus,
+} from "./messages/project-policy";
+import {
   ConfigSet,
   SessionAccessSet,
   SessionActivity,
@@ -44,6 +49,7 @@ export * from "./messages/interaction";
 export * from "./messages/machine";
 export * from "./messages/mesh";
 export * from "./messages/primitives";
+export * from "./messages/project-policy";
 export * from "./messages/sessions";
 
 export const PROTOCOL_VERSION = 1 as const;
@@ -102,6 +108,9 @@ export const Payload = z.union([
   MeshHandoffPrepare,
   MeshSnapshot,
   MeshEndpointPolicy,
+  ProjectPolicySet,
+  ProjectPolicyStatus,
+  ProjectPolicyAck,
   Hello,
   MachineHeartbeat,
   MachineLoad,

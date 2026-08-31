@@ -44,6 +44,10 @@ import { singleFlightPublisher } from "./monitor-single-flight";
 import { createMachineLoadPublisher } from "./machine-load";
 import { startMachineLoadLoop } from "./machine-load/loop";
 import {
+  handleProjectPolicySet,
+  publishProjectPolicyStatuses,
+} from "./project-policy/runtime";
+import {
   scanCapabilityUsage,
   scanSessionHistory,
   scanSessions,
@@ -220,12 +224,17 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
     // Project Mesh is separately encrypted under each project key. The relay
     // sees only the legacy routing envelope and ciphertext.
     if (loadRuntimeConfig().meshEnabled) {
-      for (const mesh of meshSnapshots()) {
+      const meshes = meshSnapshots();
+      for (const mesh of meshes) {
         await sendMeshPayload(client, mesh, "phone", {
           ttlMs: INTERVAL_MS * 24,
           reliable: false,
         }).catch(() => {});
       }
+      await publishProjectPolicyStatuses(
+        client,
+        meshes.map((mesh) => mesh.projectId),
+      ).catch(() => {});
     }
 
     // Detail follows the lean catalog, before unrelated snapshots can delay it.
@@ -315,6 +324,8 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       await handleCompact(client, payload);
       void publish().catch(() => {});
       return true;
+    } else if (payload.type === "project.policy.set" && loadRuntimeConfig().meshEnabled) {
+      return handleProjectPolicySet(client, payload);
     } else if ((payload.type === "mesh.event" || payload.type === "mesh.snapshot")
       && loadRuntimeConfig().meshEnabled) {
       await handleMeshPayload(client, payload);
