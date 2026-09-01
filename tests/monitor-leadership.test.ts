@@ -84,3 +84,27 @@ test("the persistent primary replaces a per-chat publisher without killing it", 
   assert.equal(primary.acquire(), true);
   primary.release();
 });
+
+test("a departed primary does not silence the next one for a whole lease", async (t) => {
+  const root = await configured(t);
+  const lock = join(root, "monitor.lock");
+  // launchd runs one persistent monitor, so this lease belongs to a primary that
+  // is gone. Its recorded id is alive -- it now belongs to an unrelated process --
+  // which is exactly why liveness must not gate the takeover.
+  await writeFile(lock, `${process.pid}:a-departed-primary:primary`, { mode: 0o600 });
+  const unrenewed = new Date(Date.now() - LEADERSHIP_TTL_MS - 1_000);
+  await utimes(lock, unrenewed, unrenewed);
+
+  process.env.GRANTTAP_MONITOR_PRIMARY = "1";
+  const messages: string[] = [];
+  const primary = monitorLeadership(Date.now, (message) => messages.push(message));
+  assert.equal(primary.acquire(), true, "an unrenewed lease never silences the publisher");
+  assert.match(await readFile(lock, "utf8"), /:primary$/);
+  assert.deepEqual(messages, [], "taking over from a departed primary is normal");
+  primary.release();
+});
+
+test("the lease expires within a few publish ticks, not minutes", () => {
+  // The phone waits out this window with no sessions and no load.
+  assert.ok(LEADERSHIP_TTL_MS <= 120_000, `lease TTL is ${LEADERSHIP_TTL_MS}ms`);
+});

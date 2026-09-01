@@ -26,7 +26,10 @@ import {
 import { join } from "node:path";
 import { configDir } from "./config";
 
-export const LEADERSHIP_TTL_MS = 5 * 60_000;
+// Three publish ticks. The leader rewrites the lease on every publish, so a
+// lease this old was left by a publisher that is gone. Five minutes of it
+// meant five minutes of a silent phone.
+export const LEADERSHIP_TTL_MS = 90_000;
 const REPORT_INTERVAL_MS = 10 * 60_000;
 
 export type MonitorLeadership = { acquire: () => boolean; release: () => void };
@@ -59,19 +62,6 @@ export function monitorLeadership(
       return now() - statSync(path).mtimeMs > LEADERSHIP_TTL_MS;
     } catch {
       return true;
-    }
-  };
-
-  const ownerIsAlive = (): boolean => {
-    const raw = read();
-    if (raw == null) return false;
-    const pid = Number(raw.split(":", 1)[0]);
-    if (!Number.isSafeInteger(pid) || pid <= 0) return false;
-    try {
-      process.kill(pid, 0);
-      return true;
-    } catch (error) {
-      return (error as NodeJS.ErrnoException).code === "EPERM";
     }
   };
 
@@ -118,7 +108,9 @@ export function monitorLeadership(
           }
           continue;
         }
-        if (ownerIsAlive() && !expired()) {
+        // Renewal is the only proof of a live publisher. A recorded id can
+        // already belong to an unrelated process, so it is never consulted.
+        if (!expired()) {
           reportRefusal();
           return false;
         }
