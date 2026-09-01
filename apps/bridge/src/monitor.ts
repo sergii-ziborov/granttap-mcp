@@ -33,6 +33,7 @@ import {
 } from "./reply";
 import { abandonDelivery, beginDelivery, completeDelivery } from "./delivery";
 import { inspectAgentIntegrations } from "./install";
+import { refreshMcpLoad } from "./machine-load/mcp-load-refresh";
 import { approvalsStatus } from "./approval-state";
 import { primeSessionKeys, sendSessionPayload } from "./session-keys";
 import { sendMeshPayload } from "./session-keys";
@@ -220,6 +221,9 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
     // The load loop consumes this bounded snapshot, then samples processes on
     // its own cadence without re-running provider discovery.
     loadLoop.updateStatus(status);
+    // What each MCP server costs is sampled beside it, so a finished call has
+    // something honest to report instead of an empty resource row.
+    void refreshMcpLoad(status.sessions).catch(() => {});
 
     // Project Mesh is separately encrypted under each project key. The relay
     // sees only the legacy routing envelope and ciphertext.

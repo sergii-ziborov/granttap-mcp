@@ -109,6 +109,8 @@ export function pendingCapabilityObservation(
   };
 }
 
+import { attributedMcpResource } from "../machine-load/mcp-load-cache";
+
 export function observeCapability(
   pending: PendingCapabilityTool,
   resultContent: unknown,
@@ -130,6 +132,11 @@ export function observeCapability(
       ? estimateBaselineTokens(pending.input, contextTokens, pending.cwd)
       : undefined,
     durationMs: elapsed >= 0 ? Math.min(MAX_DURATION_MS, Math.round(elapsed)) : undefined,
+    // A call cannot be measured after the fact; what its server was costing
+    // around then can be, and only while a sample still speaks for that moment.
+    resource: observation.mcpServer
+      ? attributedMcpResource(observation.mcpServer, resultAt, Date.now())
+      : undefined,
   };
 }
 

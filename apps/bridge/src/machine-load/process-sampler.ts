@@ -80,16 +80,20 @@ export function attributeProcesses(
   return byAgent;
 }
 
-/** Read process load asynchronously so sampling cannot starve the relay socket. */
-export async function sampleAgentProcesses(): Promise<Record<string, AgentProcessLoad>> {
+/** Read process rows asynchronously so sampling cannot starve the relay socket. */
+export async function sampleProcessRows(): Promise<ProcessRow[]> {
   try {
     const { stdout } = await run("ps", ["-Ao", "pid=,pcpu=,rss=,command="], {
       encoding: "utf8",
       maxBuffer: 4_000_000,
       timeout: 5_000,
     });
-    return attributeProcesses(parsePsOutput(String(stdout)));
+    return parsePsOutput(String(stdout));
   } catch {
-    return {};
+    return [];
   }
+}
+
+export async function sampleAgentProcesses(): Promise<Record<string, AgentProcessLoad>> {
+  return attributeProcesses(await sampleProcessRows());
 }
