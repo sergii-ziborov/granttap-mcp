@@ -209,7 +209,7 @@ test("a policy set is applied, acknowledged per provider, and projected to phone
   assert.equal(sent.at(-1)?.type, "project.policy.status");
 });
 
-test("periodic projection is ordered, deduplicated, and skips missing policies", async () => {
+test("periodic projection is ordered, deduplicated, and reports unauthored policies", async () => {
   const operations: string[] = [];
   const sent: ProjectPolicyPayload[] = [];
   const client: EngineClientLike = {
@@ -249,5 +249,14 @@ test("periodic projection is ordered, deduplicated, and skips missing policies",
     "policy.get:empty", "policy.coverage:empty",
     "policy.get:project", "policy.coverage:project",
   ]);
-  assert.deepEqual(sent.map((item) => item.type), ["project.policy.status"]);
+  // A Project with no policy is still reported, so the phone can author the
+  // first revision instead of showing an empty Governance screen forever.
+  assert.deepEqual(
+    sent.map((item) => item.type),
+    ["project.policy.status", "project.policy.status"],
+  );
+  assert.deepEqual(
+    sent.map((item) => item.type === "project.policy.status" ? item.policy.revision : -1),
+    [0, 2],
+  );
 });

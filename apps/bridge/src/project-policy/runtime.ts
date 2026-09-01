@@ -95,7 +95,10 @@ export function createProjectPolicyRuntime(deps: ProjectPolicyRuntimeDependencie
           operation: "policy.coverage", input: { project_id: projectId },
         }, { timeoutMs: 250 }),
       ]);
-      if (found.operation !== "policy.found" || found.policy.revision === 0
+      // Revision 0 means this Project has no policy yet. Withholding it left the
+      // phone showing "Governance not reported" with no way to author the first
+      // one, because the editor only unlocks once a policy has been reported.
+      if (found.operation !== "policy.found"
         || reported.operation !== "policy.coverage") return false;
       return sendStatus(relay, found.policy, reported.coverage);
     } catch {
