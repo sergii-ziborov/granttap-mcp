@@ -24,7 +24,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import type { CodingAgent } from "../../../packages/protocol/schema";
 import { refusesLiveLaunchd } from "./launchd-safety";
-import { configDir } from "./config";
+import { configDir, loadRuntimeConfig, verifiableEngine } from "./config";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
@@ -363,6 +363,30 @@ export function resolveMonitorNodeBin(): string | null {
  * - Development pins are opt-in through `GRANTTAP_PINNED_MONITOR_BIN`.
  * - Never put Cursor.app helpers/node in ProgramArguments.
  */
+/**
+ * Carry a declared engine into the one process that publishes.
+ *
+ * The engine ships separately from this package, so its location is declared in
+ * the runtime config rather than assumed. Without these four variables the
+ * rollout flags stay off, `publishProjectPolicyStatuses` returns immediately,
+ * and the phone shows "Governance not reported" forever with nothing in any log
+ * to say why.
+ */
+function engineEnvironment(): string[] {
+  const engine = verifiableEngine(loadRuntimeConfig());
+  if (!engine) return [];
+  return [
+    "    <key>GRANTTAP_ENGINE_BINARY</key>",
+    `    <string>${xml(engine.path)}</string>`,
+    "    <key>GRANTTAP_ENGINE_SHA256</key>",
+    `    <string>${engine.sha256}</string>`,
+    "    <key>GRANTTAP_ENGINE_ENABLED</key>",
+    '    <string>1</string>',
+    "    <key>GRANTTAP_PROJECT_POLICY_ENABLED</key>",
+    '    <string>1</string>',
+  ];
+}
+
 export function installMonitorHelper(): InstallResult {
   if (process.platform !== "darwin") {
     return { status: "manual", detail: "background task sync currently requires macOS" };
@@ -438,6 +462,7 @@ export function installMonitorHelper(): InstallResult {
       : []),
     "    <key>GRANTTAP_MONITOR_PRIMARY</key>",
     "    <string>1</string>",
+    ...engineEnvironment(),
     "    <key>PATH</key>",
     `    <string>${xml(environmentPath)}</string>`,
     "  </dict>",

@@ -25,6 +25,10 @@ export type RuntimeConfig = {
   sessionShellDisabled: string[];
   providerSettings: ProviderRuntimeSettings;
   meshEnabled: boolean;
+  /** Absolute path to the separately distributed GrantTap Engine binary. */
+  enginePath: string | null;
+  /** Expected SHA-256 of that binary, in lowercase hex. */
+  engineSha256: string | null;
 };
 
 const DEFAULT_RUNTIME: RuntimeConfig = {
@@ -39,6 +43,8 @@ const DEFAULT_RUNTIME: RuntimeConfig = {
   sessionShellDisabled: [],
   providerSettings: { claude: true, codex: true, cursor: true, grok: true },
   meshEnabled: true,
+  enginePath: null,
+  engineSha256: null,
 };
 
 function parseProviderSettings(raw: unknown): ProviderRuntimeSettings {
@@ -91,6 +97,24 @@ function parseDisabledCapabilities(raw: unknown): Record<string, string[]> {
   return result;
 }
 
+/** Only an absolute path can be verified, so a relative one is not kept. */
+function parseEnginePath(raw: unknown): string | null {
+  return typeof raw === "string" && raw.startsWith("/") && raw.length <= 1024 ? raw : null;
+}
+
+function parseEngineChecksum(raw: unknown): string | null {
+  return typeof raw === "string" && /^[a-f\d]{64}$/i.test(raw) ? raw.toLowerCase() : null;
+}
+
+/** A declaration is usable only when both halves survived parsing. */
+export function verifiableEngine(
+  config: Pick<RuntimeConfig, "enginePath" | "engineSha256">,
+): { path: string; sha256: string } | null {
+  const path = parseEnginePath(config.enginePath);
+  const sha256 = parseEngineChecksum(config.engineSha256);
+  return path && sha256 ? { path, sha256 } : null;
+}
+
 export function loadRuntimeConfig(): RuntimeConfig {
   try {
     const raw = JSON.parse(readFileSync(runtimeConfigPath(), "utf8"));
@@ -119,6 +143,8 @@ export function loadRuntimeConfig(): RuntimeConfig {
         : [],
       providerSettings: parseProviderSettings(raw.providerSettings),
       meshEnabled: raw.meshEnabled !== false,
+      enginePath: parseEnginePath(raw.enginePath),
+      engineSha256: parseEngineChecksum(raw.engineSha256),
     };
   } catch {
     return {
