@@ -10,6 +10,7 @@ import {
   type InstallResult,
 } from "../install";
 import { createOneTimePairing, DEFAULT_RELAY, PAIRING_CODE_TTL_MINUTES } from "../pairing";
+import { declareEngine } from "../engine/engine-declaration";
 import { isMachineConfigured } from "../../../mcp/src/pairing-status";
 import { installCursorHttpConfig } from "../../../mcp/src/cursor-config";
 import { installHttpMcpService } from "../../../mcp/src/http-service";
@@ -54,6 +55,12 @@ async function main(): Promise<void> {
   const cursorHook = installCursorHook();
   const claudeHook = installClaudeHook();
   const codexHook = installCodexHook();
+  // Declared before the helper is written, so the LaunchAgent picks the engine
+  // up in the same run rather than needing a second one.
+  const engineFlag = process.argv.indexOf("--engine");
+  const engine = declareEngine(
+    engineFlag >= 0 ? process.argv[engineFlag + 1] : undefined,
+  );
   const helper = installMonitorHelper();
   let cursorService: InstallResult | null = null;
   let cursorConfig: InstallResult | null = null;
@@ -80,12 +87,19 @@ async function main(): Promise<void> {
       : "Not installed"}`,
     `Cursor              ${before.cursor.installed ? `Beta · ${cursorReady ? "Authorize in Cursor" : "Needs repair"}` : "Not installed"}`,
     `Grok Build          ${installed.has("grok") ? "Ready" : "Not installed"}`,
+    // Governance is edited on the phone but cannot report until an engine is
+    // declared here, so say plainly which of the two is missing.
+    `Project Governance  ${engine ? "Ready" : "No engine found"}`,
     "",
     paired && installed.has("codex")
       ? `Next: ${CODEX_TRUST_INSTRUCTION}`
       : paired && before.cursor.installed
         ? "Next: open Cursor Settings → MCP → GrantTap → Authorize."
-        : "Next: run granttap connect.",
+        : !paired
+          ? "Next: run granttap connect."
+          : engine
+            ? "Governance is live. Restart the helper to pick it up: launchctl kickstart -k gui/$(id -u)/com.granttap.monitor"
+            : "Governance stays off until an engine is found. Point at one with: granttap setup --engine <path>",
     "",
   ].join("\n"));
 }
