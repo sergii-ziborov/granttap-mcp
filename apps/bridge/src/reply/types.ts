@@ -6,4 +6,6 @@ export type DeliveryOptions = {
   preferredMcp?: string;
   skill?: string;
   model?: string;
+  permissionMode?: string;
+  effort?: string;
 };

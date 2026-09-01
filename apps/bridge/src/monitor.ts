@@ -592,6 +592,8 @@ export async function handleUserMessage(client: RelayClient, message: UserMessag
     preferredMcp: message.preferredMcp,
     skill: message.skill,
     model: message.model,
+    permissionMode: message.permissionMode,
+    effort: message.effort,
   });
   if (result.ok) {
     await say(result.text, result.sessionId ?? target.sessionId, true);

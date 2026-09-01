@@ -133,8 +133,13 @@ function runClaude(
     ? []
     : ["--disallowedTools", disabled.map((name) => `mcp__${name}`).join(",")];
   const modelArgs = options.model ? ["--model", options.model] : [];
+  const modeArgs = options.permissionMode
+    ? ["--permission-mode", options.permissionMode]
+    : [];
+  const effortArgs = options.effort ? ["--effort", options.effort] : [];
   const args = [
     "-p", "--resume", session.sessionId, ...mcpArgs, ...modelArgs,
+    ...modeArgs, ...effortArgs,
     "--output-format", "json", text,
   ];
   return runProcess(CLAUDE_BIN, args, session.cwd, timeoutMs, (stdout) => {

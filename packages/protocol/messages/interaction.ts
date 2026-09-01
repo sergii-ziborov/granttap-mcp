@@ -24,6 +24,13 @@ export const UserMessage = z.object({
   skill: z.string().min(1).max(180).optional(),
   model: z.string().min(1).max(120)
     .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/).optional(),
+  // Spelled out as the CLI spells them. An unknown value is refused here rather
+  // than handed to the agent, and a turn that chose nothing omits the field so
+  // it reaches the session exactly as it always did.
+  permissionMode: z.enum([
+    "acceptEdits", "auto", "bypassPermissions", "manual", "dontAsk", "plan",
+  ]).optional(),
+  effort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional(),
   createdAt: z.number(),
 });
 export type UserMessage = z.infer<typeof UserMessage>;
