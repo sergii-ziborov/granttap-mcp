@@ -52,7 +52,7 @@ export function createProjectPolicyRuntime(deps: ProjectPolicyRuntimeDependencie
           expected_revision: request.expectedRevision,
           policy: policyToEngine(request.policy),
         },
-      }, { timeoutMs: 250 });
+      }, { timeoutMs: 2_000 });
       if (applied.operation !== "policy.applied") return false;
       const targets = new Map(deps.providers().map((item) => [item.provider, item]));
       for (const target of [...targets.values()].sort((left, right) =>
@@ -62,7 +62,7 @@ export function createProjectPolicyRuntime(deps: ProjectPolicyRuntimeDependencie
         );
         const accepted = await deps.client.request({
           operation: "policy.ack", input: { acknowledgement },
-        }, { timeoutMs: 250 });
+        }, { timeoutMs: 2_000 });
         if (accepted.operation !== "policy.acknowledged") return false;
         if (accepted.acknowledgement.project_id !== request.projectId
           || accepted.acknowledgement.policy_revision !== applied.policy.revision
@@ -77,7 +77,7 @@ export function createProjectPolicyRuntime(deps: ProjectPolicyRuntimeDependencie
       }
       const reported = await deps.client.request({
         operation: "policy.coverage", input: { project_id: request.projectId },
-      }, { timeoutMs: 250 });
+      }, { timeoutMs: 2_000 });
       if (reported.operation !== "policy.coverage") return false;
       return sendStatus(relay, applied.policy, reported.coverage);
     } catch {
@@ -90,10 +90,10 @@ export function createProjectPolicyRuntime(deps: ProjectPolicyRuntimeDependencie
       const [found, reported] = await Promise.all([
         deps.client.request({
           operation: "policy.get", input: { project_id: projectId },
-        }, { timeoutMs: 250 }),
+        }, { timeoutMs: 2_000 }),
         deps.client.request({
           operation: "policy.coverage", input: { project_id: projectId },
-        }, { timeoutMs: 250 }),
+        }, { timeoutMs: 2_000 }),
       ]);
       // Revision 0 means this Project has no policy yet. Withholding it left the
       // phone showing "Governance not reported" with no way to author the first
