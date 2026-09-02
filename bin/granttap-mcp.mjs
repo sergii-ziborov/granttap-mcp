@@ -96,7 +96,7 @@ if (!preflight || !loader) {
   process.exit(1);
 }
 
-const forwardedArgs = ["connect", "status", "reset", "mesh"].includes(command)
+const forwardedArgs = ["connect", "status", "reset", "mesh", "setup"].includes(command)
   ? (command === "mesh" ? commandArgs.slice(1) : commandArgs)
   : [];
 const child = spawn(
