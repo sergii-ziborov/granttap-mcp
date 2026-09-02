@@ -17,6 +17,7 @@ import express from "express";
 import QRCode from "qrcode";
 import { createOneTimePairing, DEFAULT_RELAY } from "../../bridge/src/pairing";
 import { createGrantTapServer, relay, resetRelay } from "./create-server";
+import { isAllowedLoopbackOrigin } from "./oauth/loopback-origin";
 import { GrantTapOAuthProvider } from "./oauth-provider";
 import { isMachineConfigured } from "./pairing-status";
 
@@ -65,7 +66,7 @@ export async function startHttpMcpServer(options: ServeOptions = {}): Promise<{
     res.set("Cache-Control", "no-store");
     try {
       const origin = req.get("origin");
-      if (origin && origin !== issuerUrl.origin) {
+      if (!isAllowedLoopbackOrigin(origin, issuerUrl.origin)) {
         res.status(403).json({ error: "Cross-origin pairing requests are not allowed." });
         return;
       }
@@ -118,7 +119,7 @@ export async function startHttpMcpServer(options: ServeOptions = {}): Promise<{
     res.set("Cache-Control", "no-store");
     try {
       const origin = req.get("origin");
-      if (origin && origin !== issuerUrl.origin) {
+      if (!isAllowedLoopbackOrigin(origin, issuerUrl.origin)) {
         res.status(403).type("html").send("<!DOCTYPE html><html><body><p>Cross-origin consent is not allowed.</p></body></html>");
         return;
       }

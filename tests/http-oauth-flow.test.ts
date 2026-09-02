@@ -79,6 +79,18 @@ test("HTTP OAuth pairs, consents, exchanges a token, and initializes MCP", async
     body: new URLSearchParams({ pending_id: first.pendingId, decision: "approve" }),
   });
   assert.equal(foreignConsent.status, 403);
+  // Cursor Settings loads the loopback consent page inside a vscode-webview.
+  // That webview still POSTs Origin: vscode-webview://… — allow it, keep https blocked.
+  const webviewAuth = await registeredAuthorization(base, verifier);
+  const cursorWebviewConsent = await fetch(`${base}/consent`, {
+    method: "POST", redirect: "manual",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      origin: "vscode-webview://anysphere.cursor-mcp",
+    },
+    body: new URLSearchParams({ pending_id: webviewAuth.pendingId, decision: "deny" }),
+  });
+  assert.equal(cursorWebviewConsent.status, 302);
   const pairing = await fetch(`${base}/oauth/pairing`, {
     method: "POST", headers: {
       "content-type": "application/x-www-form-urlencoded", origin: base,
