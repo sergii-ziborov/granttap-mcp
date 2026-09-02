@@ -164,7 +164,7 @@ function observeBlocks(
       const observation = observeCapability(pending, block.content, rowAt, {
         outcome: block.is_error === true ? "error" : "success",
         errorClass: block.is_error === true ? "tool_result" : undefined,
-      })
+      }, "cursor")
         ?? pendingCapabilityObservation(pending);
       if (observation) rememberCapabilityObservation(acc.observations, observation);
       acc.pending.delete(key);

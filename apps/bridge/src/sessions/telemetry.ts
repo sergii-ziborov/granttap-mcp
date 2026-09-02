@@ -110,12 +110,14 @@ export function pendingCapabilityObservation(
 }
 
 import { attributedMcpResource } from "../machine-load/mcp-load-cache";
+import { attributedAgentResource } from "../machine-load/agent-load-history";
 
 export function observeCapability(
   pending: PendingCapabilityTool,
   resultContent: unknown,
   resultAt: number,
   completion?: { outcome?: CapabilityOutcome; errorClass?: string },
+  agent?: string,
 ): CapabilityObservation | null {
   const observation = pendingCapabilityObservation(pending);
   if (!observation) return null;
@@ -132,11 +134,14 @@ export function observeCapability(
       ? estimateBaselineTokens(pending.input, contextTokens, pending.cwd)
       : undefined,
     durationMs: elapsed >= 0 ? Math.min(MAX_DURATION_MS, Math.round(elapsed)) : undefined,
-    // A call cannot be measured after the fact; what its server was costing
-    // around then can be, and only while a sample still speaks for that moment.
+    // A call cannot be measured after the fact. An MCP server outlives its
+    // calls, so it can be asked directly; a built-in tool does not, so the
+    // samples taken while it ran are what describe it.
     resource: observation.mcpServer
       ? attributedMcpResource(observation.mcpServer, resultAt, Date.now())
-      : undefined,
+      : agent
+        ? attributedAgentResource(agent, pending.createdAt, resultAt)
+        : undefined,
   };
 }
 

@@ -569,6 +569,8 @@ export function codexCapabilityUsage(
         item,
         payload.output ?? payload.content ?? payload.result,
         rowAt || item.createdAt,
+        undefined,
+        "codex",
       ) ?? pendingCapabilityObservation(item);
     const nested = nestedByCall.get(callId) ?? [];
     // `functions.exec` is only an orchestrator when its source names nested
