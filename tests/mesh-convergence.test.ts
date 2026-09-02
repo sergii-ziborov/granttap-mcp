@@ -5,7 +5,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import type { MeshEvent, SessionInfo, TaskCapsule } from "../packages/protocol/schema";
-import { hasUncommittedWork, linkSessionsToProjects } from "../apps/bridge/src/mesh/catalog";
+import {
+  hasUncommittedWork,
+  linkSessionsToProjects,
+  meshTaskTitle,
+} from "../apps/bridge/src/mesh/catalog";
 import { preferExecution, preferTask } from "../apps/bridge/src/mesh/convergence";
 import { handoffReceipt } from "../apps/bridge/src/mesh/handoff";
 import {
@@ -324,4 +328,28 @@ test("a second computer joining a Project does not silence the first one's bindi
   );
   // The rest of the pass survived too, which is what the throw used to cost.
   assert.equal(store.snapshot("project")?.tasks.length, 1);
+});
+
+test("a Task is named by its chat, and never by a whole agent summary", () => {
+  // A chat that named itself keeps that name.
+  assert.equal(
+    meshTaskTitle({ title: "Pairing refactor", summary: "Long\nparagraph" } as never, "claude"),
+    "Pairing refactor",
+  );
+  // Without one, only the opening line of the summary is a candidate: the rest
+  // is a paragraph about the work, and publishing it named Tasks with prose.
+  assert.equal(
+    meshTaskTitle(
+      { summary: "Fix the relay handshake\n\nIt drops the first frame." } as never,
+      "claude",
+    ),
+    "Fix the relay handshake",
+  );
+  // Blank leading lines are not a name either.
+  assert.equal(
+    meshTaskTitle({ summary: "\n\n  Rebuild the index  \n" } as never, "codex"),
+    "Rebuild the index",
+  );
+  assert.equal(meshTaskTitle({} as never, "codex"), "codex task");
+  assert.equal(meshTaskTitle({ summary: "   " } as never, "grok"), "grok task");
 });

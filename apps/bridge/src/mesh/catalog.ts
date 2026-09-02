@@ -89,6 +89,25 @@ function provider(value: string): MeshProvider | undefined {
     : undefined;
 }
 
+/**
+ * What to call a Task in a list that spans machines.
+ *
+ * The chat's own title is what a person recognises. An agent summary is a
+ * paragraph about the work, and publishing it verbatim named Tasks with the
+ * opening message — so the same chat read one way in the list of live chats and
+ * another in the Project. Only its first line is a candidate for a name, and
+ * even that is the fallback.
+ */
+export function meshTaskTitle(session: SessionInfo, agent: string): string {
+  const named = session.title?.trim();
+  if (named) return named.slice(0, 160);
+  const opening = session.summary
+    ?.split("\n")
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
+  return (opening ?? `${agent} task`).slice(0, 160);
+}
+
 function taskState(session: SessionInfo): TaskState {
   if (session.state === "waiting") return "needs_user";
   if (session.state === "working") return "working";
@@ -169,7 +188,7 @@ export function linkSessionsToProjects(
     const task: MeshTask = {
       taskId,
       projectId,
-      title: (session.title ?? session.summary ?? `${agent} task`).slice(0, 160),
+      title: meshTaskTitle(session, agent),
       goal: (session.summary ?? session.title ?? "Continue this coding task").slice(0, 1_000),
       state: taskState(session),
       ownerSessionId: session.sessionId,
