@@ -114,10 +114,17 @@ hooks, installs the background helper, configures Cursor's persistent local
 OAuth service when Cursor is present, and starts phone pairing when run in an
 interactive terminal. It ends with one exact next action.
 
+Setup also declares the separately distributed GrantTap Engine, which Project
+Governance needs before it can report anything. The standard locations are
+searched, and `--engine <path>` points at one that lives elsewhere; the binary
+is checksummed here, because that checksum is the only thing verified before it
+is launched. Without an engine the rollout stays off and setup says so, rather
+than leaving "Governance not reported" on the phone as the only symptom.
+
 The normal CLI surface is intentionally small:
 
 ```text
-granttap setup
+granttap setup [--engine <path>]
 granttap status [--json]
 granttap connect [--relay <wss-url>]
 granttap reset [--yes]
@@ -169,10 +176,18 @@ The bounded encrypted protocol preserves:
 - visible activity, delivery state, context and token counters;
 - MCP, Skill, and CLI observations;
 - child-agent relationships;
-- per-capability outcome: `success`, `error`, `cancelled`, or `unknown`.
+- per-capability outcome: `success`, `error`, `cancelled`, or `unknown`;
+- what a call cost, where the machine can be observed while it ran.
 
 An optional bounded `errorClass` may describe an error category. Full tool
 error payloads are not copied into usage telemetry by default.
+
+Cost is reported as attributed rather than measured, because that is what it
+is. A call is read back from the transcript once it has finished, so it can
+never be measured directly: an MCP server outlives its calls and is sampled
+directly, while a built-in tool leaves nothing behind and is costed from the
+samples that fall inside its own start and end. A call with no sample near it
+reports nothing rather than a number borrowed from another moment.
 
 ## Local enforcement
 
