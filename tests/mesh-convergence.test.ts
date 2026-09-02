@@ -291,3 +291,37 @@ test("a provider missing from this scan keeps its executions open", async () => 
     undefined,
   );
 });
+
+test("a second computer joining a Project does not silence the first one's binding", async () => {
+  const store = await freshStore();
+  store.upsertProject(project());
+  // The other machine published this repository first, under its own binding.
+  store.upsertBinding({
+    bindingId: "binding-workstation", projectId: "project", endpointId: "Workstation",
+    repositoryId: "github.com/example/granttap", displayName: "granttap", available: true,
+  });
+
+  const session: SessionInfo = {
+    sessionId: "claude", agent: "claude", title: "Pairing refactor", cwd: "/repo",
+    branch: "main", state: "working", startedAt: now, lastActivityAt: now + 60_000,
+    tokensSession: 10, tokensLastTurn: 2,
+  };
+  // Reusing the remote binding's id for a local endpoint is a conflict the
+  // store rejects, and the throw used to take the whole catalog pass with it.
+  linkSessionsToProjects(store, [session], "MacBook", () => ({
+    root: "/repo", canonicalRepositoryId: "github.com/example/granttap", worktree: "/repo",
+  }));
+
+  const bindings = store.snapshot("project")?.bindings ?? [];
+  assert.deepEqual(
+    bindings.map((binding) => binding.endpointId).sort(),
+    ["MacBook", "Workstation"],
+    "both computers report their own binding for the shared repository",
+  );
+  assert.equal(
+    store.bindingForEndpoint("github.com/example/granttap", "MacBook")?.projectId,
+    "project",
+  );
+  // The rest of the pass survived too, which is what the throw used to cost.
+  assert.equal(store.snapshot("project")?.tasks.length, 1);
+});

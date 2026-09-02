@@ -24,6 +24,7 @@ import { mergeBy, resourceOverlap } from "./store-support";
 import { closeVanished } from "./execution-sweep";
 import { receiptMovesOwnership, taskAfterEvent, taskAfterLocalReading } from "./task-state";
 import {
+  bindingForEndpoint,
   bindingForRepository,
   upsertBinding as updateBinding,
   workspaceForRepository as boundWorkspace,
@@ -70,6 +71,11 @@ export class MeshStore {
 
   bindingForRepository(repositoryId: string, endpointId?: string): BindingValue | undefined {
     return bindingForRepository(this.state.bindings, repositoryId, endpointId);
+  }
+
+  /** This endpoint's own binding, never another computer's. */
+  bindingForEndpoint(repositoryId: string, endpointId: string): BindingValue | undefined {
+    return bindingForEndpoint(this.state.bindings, repositoryId, endpointId);
   }
 
   upsertTask(input: TaskValue): void {

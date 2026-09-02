@@ -132,7 +132,12 @@ export function linkSessionsToProjects(
       };
       store.upsertProject(project);
     }
-    const knownBinding = store.bindingForRepository(repository.canonicalRepositoryId, computerId);
+    // Identity comes from this endpoint's own row. Another computer's binding
+    // answers which Project the repository belongs to, but adopting its
+    // `bindingId` would write a row whose stable key is owned elsewhere, and
+    // the store rejects that — which is how a second computer joining a Project
+    // once silenced repository bindings on the first one entirely.
+    const knownBinding = store.bindingForEndpoint(repository.canonicalRepositoryId, computerId);
     const binding = {
       bindingId: knownBinding?.bindingId
         ?? projectBindingIdentity(projectId, computerId, repository.canonicalRepositoryId),
@@ -143,15 +148,22 @@ export function linkSessionsToProjects(
       available: true,
       revision: repository.revision,
     };
-    store.upsertBinding(binding);
-    void syncProjectBinding(project, {
-      summary: binding,
-      localRoot: repository.root,
-      canonicalRemote: repository.baseRemote
-        ? sanitizedRepositoryRemote(repository.baseRemote)
-        : undefined,
-      lastSeenAt: session.lastActivityAt,
-    });
+    // A binding the store refuses is one repository going unreported. It must
+    // not also cost the Task, the execution, and every other session in the
+    // same pass, which is what an escaping throw did.
+    try {
+      store.upsertBinding(binding);
+      void syncProjectBinding(project, {
+        summary: binding,
+        localRoot: repository.root,
+        canonicalRemote: repository.baseRemote
+          ? sanitizedRepositoryRemote(repository.baseRemote)
+          : undefined,
+        lastSeenAt: session.lastActivityAt,
+      });
+    } catch {
+      // Reported as an absent binding rather than an absent Mesh.
+    }
     const knownTask = store.taskForExecution(computerId, agent, session.sessionId);
     const taskId = knownTask ?? taskIdentity(projectId, agent, session.sessionId);
     const task: MeshTask = {

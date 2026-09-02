@@ -4,13 +4,32 @@ import {
 } from "../../../../packages/protocol/schema";
 import type { StoreState } from "./store-state";
 
+/**
+ * The binding this endpoint owns for this repository, and nothing else.
+ *
+ * `bindingForRepository` deliberately falls back to a match on any endpoint so
+ * a machine joining a Project can learn which Project a repository belongs to.
+ * That answer must never be read as an identity: adopting another computer's
+ * `bindingId` for a local endpoint writes a row whose stable key is already
+ * owned elsewhere, which is a conflict the store rejects outright.
+ */
+export function bindingForEndpoint(
+  bindings: BindingValue[],
+  repositoryId: string,
+  endpointId: string,
+): BindingValue | undefined {
+  return bindings.find((item) =>
+    item.endpointId === endpointId && item.repositoryId === repositoryId);
+}
+
 export function bindingForRepository(
   bindings: BindingValue[],
   repositoryId: string,
   endpointId?: string,
 ): BindingValue | undefined {
-  const exact = endpointId == null ? undefined : bindings.find((item) =>
-    item.endpointId === endpointId && item.repositoryId === repositoryId);
+  const exact = endpointId == null
+    ? undefined
+    : bindingForEndpoint(bindings, repositoryId, endpointId);
   if (exact) return exact;
   const matches = bindings.filter((item) => item.repositoryId === repositoryId);
   const projects = new Set(matches.map((item) => item.projectId));
