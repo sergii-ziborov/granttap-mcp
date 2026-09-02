@@ -2,9 +2,10 @@ import { randomUUID } from "node:crypto";
 import type { SessionInfo } from "../../../../packages/protocol/schema";
 import { runProcess } from "./process";
 import type { ReplyResult } from "./types";
+import { resolveCursorAgentBin } from "./cursor-agent-bin";
 
 function cursorBin(): string {
-  return process.env.GRANTTAP_CURSOR_AGENT_BIN ?? "cursor-agent";
+  return resolveCursorAgentBin();
 }
 
 function grokBin(): string {
