@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { agentLanes } from "../apps/bridge/src/machine-load/mcp-load-refresh";
 
 const status = {
   type: "sessions.status" as const,
@@ -197,5 +198,43 @@ describe("machine load assembly", () => {
     assert.equal(samples, 1);
     release?.();
     await first;
+  });
+});
+
+describe("parallel lane counting", () => {
+  const lane = (
+    agent: string,
+    sessionId: string,
+    state: "working" | "idle",
+    children: Array<"working" | "idle"> = [],
+  ) => ({
+    sessionId, agent, state, startedAt: 1, lastActivityAt: 2,
+    tokensSession: 0, tokensLastTurn: 0,
+    childThreads: children.length
+      ? children.map((childState, index) => ({
+          sessionId: `${sessionId}-child-${index}`,
+          agent,
+          state: childState,
+          startedAt: 1,
+          lastActivityAt: 2,
+          tokensSession: 0,
+          tokensLastTurn: 0,
+        }))
+      : undefined,
+  });
+
+  it("counts working sessions and their working sub-agents, per agent", () => {
+    const lanes = agentLanes([
+      lane("claude", "a", "working", ["working", "idle"]),
+      lane("claude", "b", "working"),
+      lane("claude", "c", "idle"),
+      lane("codex", "d", "working"),
+    ] as never);
+    // Two working Claude sessions, one of them carrying a working sub-agent.
+    assert.deepEqual(lanes, { claude: 3, codex: 1 });
+  });
+
+  it("reports nothing for a machine where no agent is working", () => {
+    assert.deepEqual(agentLanes([lane("claude", "a", "idle")] as never), {});
   });
 });

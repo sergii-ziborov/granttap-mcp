@@ -70,3 +70,37 @@ test("the history stays bounded so a long session cannot grow without end", (t) 
   assert.ok(attributedAgentResource("claude", late - 10_000, late) != null);
   assert.equal(attributedAgentResource("claude", START, START + 10_000), undefined);
 });
+
+test("parallel lanes each carry their share of one machine-wide sample", (t) => {
+  t.after(clearAgentLoad);
+  clearAgentLoad();
+  // One `ps` reading covers every Claude lane on the machine. Four of them were
+  // in flight: one session working with three sub-agents under it.
+  recordAgentLoad(
+    { claude: { processes: 4, cpuPercent: 200, memoryBytes: 4_000_000_000 } },
+    START + 5_000,
+    { claude: 4 },
+  );
+
+  const resource = attributedAgentResource("claude", START, START + 10_000);
+  // 10s at 200% would be 20s of CPU for the machine; one lane of four is 5s.
+  assert.equal(resource?.cpuTimeMs, 5_000);
+  assert.equal(resource?.peakRssBytes, 1_000_000_000);
+  // The machine still had four processes, and saying so is what explains
+  // where a quarter share came from.
+  assert.equal(resource?.processCount, 4);
+});
+
+test("a lone lane is charged the whole sample, and a missing count never divides by zero", (t) => {
+  t.after(clearAgentLoad);
+  clearAgentLoad();
+  recordAgentLoad(
+    { claude: { processes: 1, cpuPercent: 100, memoryBytes: 800_000_000 } },
+    START + 5_000,
+    { claude: 0 },
+  );
+
+  const resource = attributedAgentResource("claude", START, START + 10_000);
+  assert.equal(resource?.cpuTimeMs, 10_000);
+  assert.equal(resource?.peakRssBytes, 800_000_000);
+});

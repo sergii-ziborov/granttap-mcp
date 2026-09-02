@@ -22,6 +22,25 @@ export function configuredMcpCommands(sessions: readonly SessionInfo[]): McpServ
 }
 
 /**
+ * How many calls each agent could have had in flight, counted per agent.
+ *
+ * A working session is one lane, and every working sub-agent under it is
+ * another: they share the same processes, so they share what those processes
+ * cost. Sessions that are not working are not counted, because a call is only
+ * ever attributed to a moment when something was running.
+ */
+export function agentLanes(sessions: readonly SessionInfo[]): Record<string, number> {
+  const lanes: Record<string, number> = {};
+  for (const session of sessions) {
+    const working = (session.state === "working" ? 1 : 0)
+      + (session.childThreads?.filter((child) => child.state === "working").length ?? 0);
+    if (working === 0) continue;
+    lanes[session.agent] = (lanes[session.agent] ?? 0) + working;
+  }
+  return lanes;
+}
+
+/**
  * Sample what each MCP server is costing right now.
  *
  * Discovery reads agent config from disk, so a failure here must never break a
@@ -36,7 +55,7 @@ export async function refreshMcpLoad(
     const rows = await sampleProcessRows();
     // Agents first: a built-in tool has nothing left to inspect once it ends,
     // so the running sample is the only description its call will ever get.
-    recordAgentLoad(attributeProcesses(rows), now);
+    recordAgentLoad(attributeProcesses(rows), now, agentLanes(sessions));
     const servers = configuredMcpCommands(sessions);
     if (servers.length === 0) return;
     recordMcpLoad(attributeMcpProcesses(rows, servers), now);

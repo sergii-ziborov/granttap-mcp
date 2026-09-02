@@ -13,7 +13,20 @@ import type { AgentProcessLoad } from "./process-sampler";
  * Built-in tools are the reason this exists at all: a Bash call is a child of
  * the agent that lives for seconds, so nothing survives afterwards to inspect.
  */
-export type AgentLoadSample = { at: number; byAgent: Record<string, AgentProcessLoad> };
+export type AgentLoadSample = {
+  at: number;
+  byAgent: Record<string, AgentProcessLoad>;
+  /**
+   * How many calls that agent could have had in flight at this moment.
+   *
+   * `ps` reports one machine-wide figure per agent, and crediting all of it to
+   * every call multiplies the cost of the machine by the number of things
+   * running on it: four parallel Claude lanes each claimed the CPU and memory
+   * of all four. The sample describes what the lanes cost together, so each one
+   * is worth its share.
+   */
+  lanes?: Record<string, number>;
+};
 
 /** Two hours at a thirty-second cadence, so a long session still has a tail. */
 const MAX_SAMPLES = 240;
@@ -22,8 +35,12 @@ const MAX_GAP_MS = 120_000;
 
 let samples: AgentLoadSample[] = [];
 
-export function recordAgentLoad(byAgent: Record<string, AgentProcessLoad>, at: number): void {
-  samples.push({ at, byAgent });
+export function recordAgentLoad(
+  byAgent: Record<string, AgentProcessLoad>,
+  at: number,
+  lanes: Record<string, number> = {},
+): void {
+  samples.push({ at, byAgent, lanes });
   if (samples.length > MAX_SAMPLES) samples = samples.slice(-MAX_SAMPLES);
 }
 
@@ -37,6 +54,9 @@ export function clearAgentLoad(): void {
  * CPU percent is a rate, so it is multiplied by the time each sample stands
  * for; memory is a level, so the largest is taken. A call with no sample near
  * it reports nothing at all rather than a number borrowed from another moment.
+ *
+ * Both are divided by the lanes the sample covered, because one `ps` reading
+ * describes every call the agent had in flight, not the one being priced.
  */
 export function attributedAgentResource(
   agent: string,
@@ -56,8 +76,11 @@ export function attributedAgentResource(
   let processes = 0;
   for (const sample of covering) {
     const load = sample.byAgent[agent]!;
-    cpuMs += (load.cpuPercent / 100) * share;
-    peak = Math.max(peak, load.memoryBytes);
+    const lanes = Math.max(1, Math.trunc(sample.lanes?.[agent] ?? 1));
+    cpuMs += (load.cpuPercent / 100) * share / lanes;
+    peak = Math.max(peak, Math.round(load.memoryBytes / lanes));
+    // The process count describes the machine rather than this call, so it is
+    // reported as observed: it is what explains where the share came from.
     processes = Math.max(processes, load.processes);
   }
   const rounded = Math.round(cpuMs);
