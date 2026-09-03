@@ -291,13 +291,18 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       void publish().catch(() => {});
       return true;
     } else if (payload.type === "session.subscribe") {
-      // Newly opening a chat earns one catalog republish: that row gains its
-      // complete Skills catalog. A repeated heartbeat for a chat already being
-      // watched changes nothing and must not rescan every provider.
+      // Whoever sent this is looking at the chat right now, so its transcript
+      // goes first and on its own. Opening a chat for the first time used to
+      // start with the catalog rescan instead — seconds of provider discovery
+      // and history scanning — and the transcript only rode out at the end of
+      // it, so a live chat showed "no messages loaded" for as long as that
+      // took. A chat already being watched took the fast path all along.
+      void publishSessionEvents(client, payload.sessionId).catch(() => false);
+      // A newly opened chat still earns one catalog republish, for the complete
+      // Skills catalog its row gains. A repeated heartbeat for a chat already
+      // being watched changes nothing and must not rescan every provider.
       if (handleSubscription(subscriptions, payload)) {
         void publish(true).catch(() => {});
-      } else {
-        void publishSessionEvents(client, payload.sessionId).catch(() => false);
       }
       return true;
     } else if (payload.type === "session.events") {
