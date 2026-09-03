@@ -92,24 +92,46 @@ function collapseSplitChats(state: StoreState): StoreState {
   const taskById = new Map(state.tasks.map((task) => [task.taskId, task]));
   const winnerByChat = new Map<string, string>();
   const rewritten = new Map<string, string>();
-  for (const execution of state.executions) {
-    const chat = `${execution.provider}\u0000${execution.sessionId}`;
+
+  const claim = (chat: string, taskId: string): void => {
     const held = winnerByChat.get(chat);
     if (held == null) {
-      winnerByChat.set(chat, execution.taskId);
-      continue;
+      winnerByChat.set(chat, taskId);
+      return;
     }
-    if (held === execution.taskId) continue;
-    const [keep, drop] = olderFirst(taskById.get(held), taskById.get(execution.taskId))
-      ?? [held, execution.taskId];
+    if (held === taskId) return;
+    const [keep, drop] = olderFirst(taskById.get(held), taskById.get(taskId))
+      ?? [held, taskId];
     winnerByChat.set(chat, keep);
     rewritten.set(drop, keep);
+  };
+
+  // An execution is identified by computer, provider, and chat together, so two
+  // Tasks for one chat on one computer share an execution and the other Task is
+  // left carrying none. Walking executions alone would never see it. A Task
+  // names its own chat in `ownerSessionId`, and a session id is unique on its
+  // own, so both are claims about the same conversation.
+  for (const execution of [...state.executions].sort((a, b) => a.startedAt - b.startedAt)) {
+    claim(execution.sessionId, execution.taskId);
+  }
+  for (const task of [...state.tasks].sort((a, b) => a.createdAt - b.createdAt)) {
+    if (task.ownerSessionId) claim(task.ownerSessionId, task.taskId);
   }
   if (rewritten.size === 0) return state;
-  const target = (taskId: string): string => rewritten.get(taskId) ?? taskId;
+  // A Task chosen as a winner early can be dropped later, so a rewrite is
+  // followed to its end rather than applied once.
+  const target = (taskId: string): string => {
+    let current = taskId;
+    for (let step = 0; step < state.tasks.length; step += 1) {
+      const next = rewritten.get(current);
+      if (next == null || next === current) break;
+      current = next;
+    }
+    return current;
+  };
   return {
     ...state,
-    tasks: state.tasks.filter((task) => !rewritten.has(task.taskId)),
+    tasks: state.tasks.filter((task) => target(task.taskId) === task.taskId),
     executions: state.executions.map((item) => ({ ...item, taskId: target(item.taskId) })),
     claims: state.claims.map((item) => ({ ...item, taskId: target(item.taskId) })),
     dependencies: state.dependencies.map((item) => ({ ...item, taskId: target(item.taskId) })),

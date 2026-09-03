@@ -118,7 +118,10 @@ test("process delivery reports spawn, exit, parse, and timeout failures", async 
   const failed = await script(root, "failed.mjs", "process.stderr.write('fixture failed'); process.exit(7);");
   const slow = await script(root, "slow.mjs", "setTimeout(() => {}, 5_000);");
   assert.equal((await runProcess(join(root, "missing"), [], root, 100, () => ({ ok: true, text: "x" }))).ok, false);
-  assert.deepEqual(await runProcess(failed, [], root, 1_000, () => ({ ok: true, text: "x" })), {
+  // This case is about how a non-zero exit is reported, not about how fast a
+  // machine can start Node. A one-second deadline made it a race the fixture
+  // lost under the load of a full run, and the failure then read as a timeout.
+  assert.deepEqual(await runProcess(failed, [], root, 15_000, () => ({ ok: true, text: "x" })), {
     ok: false, error: `${failed} exited with code 7: fixture failed`,
   });
   assert.equal((await runProcess(slow, [], root, 20, () => ({ ok: true, text: "x" }))).ok, false);

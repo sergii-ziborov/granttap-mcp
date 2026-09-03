@@ -424,3 +424,32 @@ test("a chat already split across two Tasks is rejoined when the store loads", a
     "both computers' executions now belong to the surviving Task",
   );
 });
+
+test("a duplicate on one computer is rejoined though it carries no execution", async () => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-mesh-owner-"));
+  const path = join(root, "mesh.json");
+  // Executions are keyed by computer, provider, and chat, so two Tasks for one
+  // chat on one computer share an execution and the other Task holds none.
+  await writeFile(path, JSON.stringify({
+    version: 1,
+    projects: [project()],
+    bindings: [],
+    tasks: [
+      { taskId: "task-old", projectId: "project", title: "Pairing refactor",
+        goal: "Finish pairing", state: "working", ownerSessionId: "chat",
+        createdAt: now, updatedAt: now },
+      { taskId: "task-again", projectId: "project", title: "Pairing refactor",
+        goal: "Publish it", state: "working", ownerSessionId: "chat",
+        createdAt: now + 5_000, updatedAt: now + 5_000 },
+    ],
+    executions: [
+      { taskId: "task-old", sessionId: "chat", provider: "claude",
+        computerId: "Mac.lan", workspace: "/repo", startedAt: now },
+    ],
+    claims: [], dependencies: [], events: [], receipts: [],
+  }));
+
+  const snapshot = new MeshStore(path, () => now).snapshot("project");
+  assert.equal(snapshot?.tasks.length, 1, "one chat is one Task, execution or not");
+  assert.equal(snapshot?.tasks[0]?.taskId, "task-old");
+});
