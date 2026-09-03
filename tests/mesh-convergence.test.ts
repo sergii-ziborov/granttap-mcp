@@ -389,3 +389,38 @@ test("one chat stays one Task when a second computer reports it", async () => {
     "both executions belong to the same Task",
   );
 });
+
+test("a chat already split across two Tasks is rejoined when the store loads", async () => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-mesh-split-"));
+  const path = join(root, "mesh.json");
+  // What a machine renamed by its network left behind: one chat, two Tasks,
+  // and an execution under a computer that will never report again.
+  await writeFile(path, JSON.stringify({
+    version: 1,
+    projects: [project()],
+    bindings: [],
+    tasks: [
+      { taskId: "task-old", projectId: "project", title: "Pairing refactor",
+        goal: "Finish pairing", state: "working", createdAt: now, updatedAt: now },
+      { taskId: "task-new", projectId: "project", title: "Pairing refactor",
+        goal: "Finish pairing", state: "working", createdAt: now + 5_000, updatedAt: now + 5_000 },
+    ],
+    executions: [
+      { taskId: "task-old", sessionId: "chat", provider: "claude",
+        computerId: "Mac.lan", workspace: "/repo", startedAt: now },
+      { taskId: "task-new", sessionId: "chat", provider: "claude",
+        computerId: "Serhiis-MacBook-Pro.local", workspace: "/repo", startedAt: now + 5_000 },
+    ],
+    claims: [], dependencies: [], events: [], receipts: [],
+  }));
+
+  const store = new MeshStore(path, () => now);
+  const snapshot = store.snapshot("project");
+  assert.equal(snapshot?.tasks.length, 1, "one conversation is one Task");
+  // The older Task wins: it is what dependencies, claims, and events reference.
+  assert.equal(snapshot?.tasks[0]?.taskId, "task-old");
+  assert.deepEqual(
+    (snapshot?.executions ?? []).map((item) => item.taskId), ["task-old", "task-old"],
+    "both computers' executions now belong to the surviving Task",
+  );
+});

@@ -59,7 +59,7 @@ export function loadStoreState(path: string): StoreState {
       parsedArray(value.bindings, ProjectBindingSummary),
       new Set(projects.map((project) => project.projectId)),
     );
-    return {
+    return collapseSplitChats({
       version: 1,
       projects,
       bindings,
@@ -69,10 +69,65 @@ export function loadStoreState(path: string): StoreState {
       dependencies: parsedArray(value.dependencies, TaskDependency),
       events: parsedArray(value.events, MeshEvent),
       receipts: parsedArray(value.receipts, HandoffReceipt),
-    };
+    });
   } catch {
     return structuredClone(EMPTY);
   }
+}
+
+/**
+ * Rejoin a chat that was split across two Tasks.
+ *
+ * A Task used to be looked up by computer as well as by chat, so a machine
+ * renamed by the network it joined, or a chat read from a second machine,
+ * minted a second Task for the same conversation. Nothing swept the older one:
+ * its execution belongs to a computer that no longer reports, so it was never
+ * seen to vanish, and the chat stayed listed twice.
+ *
+ * A provider session id identifies one conversation, so its executions belong
+ * to one Task. The oldest surviving Task wins, because it is the one other
+ * records — dependencies, claims, events — were written against.
+ */
+function collapseSplitChats(state: StoreState): StoreState {
+  const taskById = new Map(state.tasks.map((task) => [task.taskId, task]));
+  const winnerByChat = new Map<string, string>();
+  const rewritten = new Map<string, string>();
+  for (const execution of state.executions) {
+    const chat = `${execution.provider}\u0000${execution.sessionId}`;
+    const held = winnerByChat.get(chat);
+    if (held == null) {
+      winnerByChat.set(chat, execution.taskId);
+      continue;
+    }
+    if (held === execution.taskId) continue;
+    const [keep, drop] = olderFirst(taskById.get(held), taskById.get(execution.taskId))
+      ?? [held, execution.taskId];
+    winnerByChat.set(chat, keep);
+    rewritten.set(drop, keep);
+  }
+  if (rewritten.size === 0) return state;
+  const target = (taskId: string): string => rewritten.get(taskId) ?? taskId;
+  return {
+    ...state,
+    tasks: state.tasks.filter((task) => !rewritten.has(task.taskId)),
+    executions: state.executions.map((item) => ({ ...item, taskId: target(item.taskId) })),
+    claims: state.claims.map((item) => ({ ...item, taskId: target(item.taskId) })),
+    dependencies: state.dependencies.map((item) => ({ ...item, taskId: target(item.taskId) })),
+    events: state.events.map((item) => ({ ...item, taskId: target(item.taskId) })),
+    // A receipt decides who owns a chat, so it must name the surviving Task.
+    receipts: state.receipts.map((item) => ({ ...item, taskId: target(item.taskId) })),
+  };
+}
+
+/** The Task to keep first, or nothing when either side is already gone. */
+function olderFirst(
+  left: StoreState["tasks"][number] | undefined,
+  right: StoreState["tasks"][number] | undefined,
+): [string, string] | undefined {
+  if (!left || !right) return undefined;
+  return left.createdAt <= right.createdAt
+    ? [left.taskId, right.taskId]
+    : [right.taskId, left.taskId];
 }
 
 function validBindings(bindings: BindingValue[], projectIds: ReadonlySet<string>): BindingValue[] {
