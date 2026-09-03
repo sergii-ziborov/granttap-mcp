@@ -13,6 +13,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import {
+  isConfiguredHttpService,
+  isOwnedHttpService,
+} from "../apps/mcp/src/http-service/common";
+import {
   httpMcpLaunchAgentPath,
   inspectHttpMcpService,
   installHttpMcpService,
@@ -277,4 +281,22 @@ test("authorize installs a persistent loopback service, verifies health, then ex
   assert.equal(readFileSync(plistPath, "utf8"), plistBefore);
   assert.equal(await isHttpMcpPortOccupied(mcpUrl), true, "foreign listener remains untouched");
   await new Promise<void>((resolve) => foreign.close(() => resolve()));
+});
+
+test("repair adopts the plist GrantTap itself wrote before serve moved under internal", () => {
+  const earlier = [
+    '<?xml version="1.0" encoding="UTF-8"?>', "<plist><dict>", "<key>Label</key>",
+    "<string>com.granttap.mcp-http</string>", "<key>ProgramArguments</key>", "<array>",
+    "<string>/somewhere/bin/granttap-mcp.mjs</string>", "<string>serve</string>",
+    "</array>", "</dict></plist>", "",
+  ].join("\n");
+  // Refusing this as foreign left the machine unable to repair Cursor at all.
+  assert.equal(isOwnedHttpService(earlier), true);
+  // It is ours, but it is not what this version writes, so a repair rewrites it.
+  assert.equal(isConfiguredHttpService(earlier), false);
+
+  // Somebody else's LaunchAgent is still refused, label or launcher alike.
+  assert.equal(isOwnedHttpService(earlier.replace("com.granttap.mcp-http", "com.other")), false);
+  assert.equal(isOwnedHttpService(earlier.replace("granttap-mcp.mjs", "other.mjs")), false);
+  assert.equal(isOwnedHttpService("foreign plist contents\n"), false);
 });
