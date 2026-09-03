@@ -7,7 +7,21 @@ import {
 export const ENGINE_PROTOCOL_VERSION = 1 as const;
 export const MAX_ENGINE_FRAME_BYTES = 64 * 1024;
 export const MAX_ENGINE_PENDING_REQUESTS = 128;
-export const DEFAULT_ENGINE_POLICY_TIMEOUT_MS = 50;
+/**
+ * How long a policy question may wait for the engine to answer it.
+ *
+ * A missed deadline is not a refusal: evaluation falls back to legacy GrantTap
+ * behavior, and `inherit` reads as allowed. Fifty milliseconds had to cover
+ * connecting, resolving the Project, and evaluating the action, so a busy
+ * machine turned a Project rule that says deny into an allow — the enforcement
+ * held only while nothing else was running.
+ *
+ * A larger deadline costs nothing when the engine is absent, because a missing
+ * unix socket refuses the connection at once rather than at the timeout. It is
+ * spent only when the engine is there and slow, which is exactly when the
+ * answer is worth waiting for.
+ */
+export const DEFAULT_ENGINE_POLICY_TIMEOUT_MS = 2_000;
 
 export type {
   CapabilityFingerprint,

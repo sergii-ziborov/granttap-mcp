@@ -126,6 +126,39 @@ test("engine failure is explicit fallback and never becomes an invented deny", a
   assert.equal(decision.engineEvaluated, false);
 });
 
+test("a Project deny survives an engine that answers slowly", async () => {
+  // The whole evaluation once had fifty milliseconds to connect, resolve the
+  // Project, and decide. A busy machine missed that, fell back to legacy
+  // behavior, and `inherit` reads as allowed — so enforcement held only while
+  // nothing else was running.
+  const seen: number[] = [];
+  const client = fakeClient(async (operation, options) => {
+    seen.push(options?.timeoutMs ?? 0);
+    if (operation.operation !== "policy.evaluate_action") throw new Error("unexpected");
+    return {
+      operation: "policy.evaluated",
+      decision: {
+        effect: "deny",
+        source: "project",
+        reason: "Project rule deny-write requires deny",
+        rule_id: "deny-write",
+        policy_revision: 4,
+      },
+    };
+  });
+  // A machine slow enough to spend half a second before the question is asked.
+  let time = 1_000;
+  const decision = await evaluateEffectiveAction({ provider: "claude", toolName: "Write" }, {
+    env: flags, projectId: "project", client, now: () => (time += 250),
+  });
+  assert.equal(decision.effect, "deny");
+  assert.equal(legacyGrantTapFlowAllowed(decision), false);
+  assert.ok(
+    (seen[0] ?? 0) > 0,
+    "the deadline still had room left after the machine spent half a second",
+  );
+});
+
 test("capability fingerprints classify without retaining raw arguments", () => {
   const mcp = capabilityFingerprint({
     provider: "claude",
