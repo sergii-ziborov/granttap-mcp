@@ -108,9 +108,25 @@ export class MeshStore {
     return closed;
   }
 
+  /**
+   * The Task this chat already belongs to, whichever computer reports it.
+   *
+   * A chat is identified by its provider session id, which is unique across
+   * machines — and the same chat is genuinely visible from more than one, both
+   * because an agent can read another machine's conversations and because a
+   * machine's own name is not stable: macOS renames a Mac with the network it
+   * joins. Keying the lookup by computer therefore minted a second Task for one
+   * chat every time either changed, and the list showed the chat twice.
+   *
+   * Executions stay per computer, so two machines working one chat still read
+   * as two executions of a single Task, which is what they are.
+   */
   taskForExecution(computerId: string, provider: string, sessionId: string): string | undefined {
+    const own = this.state.executions.find((item) =>
+      item.computerId === computerId && item.provider === provider && item.sessionId === sessionId);
+    if (own) return own.taskId;
     return this.state.executions.find((item) =>
-      item.computerId === computerId && item.provider === provider && item.sessionId === sessionId)?.taskId;
+      item.provider === provider && item.sessionId === sessionId)?.taskId;
   }
 
   linkExecution(input: ExecutionValue): void {

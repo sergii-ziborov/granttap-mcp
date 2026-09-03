@@ -353,3 +353,39 @@ test("a Task is named by its chat, and never by a whole agent summary", () => {
   assert.equal(meshTaskTitle({} as never, "codex"), "codex task");
   assert.equal(meshTaskTitle({ summary: "   " } as never, "grok"), "grok task");
 });
+
+test("one chat stays one Task when a second computer reports it", async () => {
+  const store = await freshStore();
+  store.upsertProject(project());
+  const inspect = () => ({
+    root: "/repo", canonicalRepositoryId: "github.com/example/granttap", worktree: "/repo",
+  });
+  const session: SessionInfo = {
+    sessionId: "shared-chat", agent: "claude", title: "Pairing refactor", cwd: "/repo",
+    branch: "main", state: "working", startedAt: now, lastActivityAt: now + 1_000,
+    tokensSession: 10, tokensLastTurn: 2,
+  };
+
+  // An agent can read another machine's conversations, and a Mac is renamed by
+  // the network it joins, so the same chat legitimately arrives under two
+  // computers. Keying the Task by computer minted a second one either way.
+  linkSessionsToProjects(store, [session], "MacBook", inspect);
+  linkSessionsToProjects(store, [session], "Mac.lan", inspect);
+
+  // The repository resolves to its own derived Project when nothing bound it.
+  const snapshots = store.projectIds().flatMap((id) => store.snapshot(id) ?? []);
+  const snapshot = snapshots.find((item) => item.tasks.length > 0);
+  assert.equal(
+    snapshots.reduce((total, item) => total + item.tasks.length, 0), 1,
+    "one chat is one Task",
+  );
+  assert.deepEqual(
+    (snapshot?.executions ?? []).map((item) => item.computerId).sort(),
+    ["Mac.lan", "MacBook"],
+    "each computer still reports its own execution of that Task",
+  );
+  assert.equal(
+    new Set((snapshot?.executions ?? []).map((item) => item.taskId)).size, 1,
+    "both executions belong to the same Task",
+  );
+});
