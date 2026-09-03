@@ -19,6 +19,15 @@ export type RelayClientOptions = {
   autoReconnect?: boolean;
   minReconnectMs?: number;
   maxReconnectMs?: number;
+  /**
+   * How often to ask the relay to prove the socket is still alive, and how long
+   * to wait for the answer. A laptop that changes network leaves its socket
+   * half-open: no close arrives, `readyState` stays OPEN, and nothing schedules
+   * a reconnect — the computer believes it is online while the phone has
+   * already been told it is not.
+   */
+  pingIntervalMs?: number;
+  pongTimeoutMs?: number;
 };
 
 export type SendOptions = {

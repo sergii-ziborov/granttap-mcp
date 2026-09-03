@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createServer } from "node:http";
+import { WebSocketServer } from "ws";
 import { generateKeyPair, generateTransferKey, seal, sealWithTransferKey } from "../packages/core/crypto";
 import { RelayClient, type PeerConfig } from "../packages/core/relay-client";
 import type { Envelope, Payload } from "../packages/protocol/schema";
@@ -268,4 +270,43 @@ test("per-task sealed traffic is bound to its outer task and only machine grants
     "authorized-task-grant",
   ));
   assert.equal(machineClient.hasSessionKey("task-a"), true);
+});
+
+test("a relay that stops answering is treated as gone, not as connected", async () => {
+  // A machine that changes network leaves its socket half-open: no close
+  // arrives, `readyState` stays OPEN, and the computer keeps reporting itself
+  // online while everything it sends goes nowhere.
+  const http = createServer((_request, response) => {
+    response.statusCode = 404;
+    response.end();
+  });
+  const wss = new WebSocketServer({ server: http, autoPong: false });
+  let accepted = 0;
+  wss.on("connection", () => { accepted += 1; });
+  await new Promise<void>((resolve) => http.listen(0, "127.0.0.1", resolve));
+  const address = http.address();
+  assert.ok(address && typeof address === "object");
+
+  const keys = generateKeyPair();
+  const peer = generateKeyPair();
+  const client = new RelayClient({
+    relayUrl: `ws://127.0.0.1:${(address as { port: number }).port}`,
+    room: "room-liveness", role: "machine", deviceName: "mac", senderId: "machine-1",
+    myPublicKey: keys.publicKey, mySecretKey: keys.secretKey, peerPublicKey: peer.publicKey,
+  }, { autoReconnect: false, pingIntervalMs: 40 });
+
+  await client.connect();
+  assert.equal(client.isConnected, true);
+
+  // Two ping periods: the first goes unanswered, the second gives up.
+  const deadline = Date.now() + 5_000;
+  while (client.isConnected && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  assert.equal(client.isConnected, false, "an unanswered ping ends the connection");
+  assert.equal(accepted, 1);
+
+  client.close();
+  await new Promise<void>((resolve) => wss.close(() => resolve()));
+  await new Promise<void>((resolve) => http.close(() => resolve()));
 });

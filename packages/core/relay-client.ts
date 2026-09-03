@@ -28,6 +28,8 @@ export class RelayClient {
   private connectPromise?: Promise<void>;
   private reconnectTimer?: NodeJS.Timeout;
   private reconnectDelay: number;
+  private livenessTimer?: NodeJS.Timeout;
+  private awaitingPong = false;
   private readonly sessionKeys = new Map<string, string>();
   /**
    * Delivery ids are relay-controlled metadata, so replay protection is bound
@@ -78,10 +80,14 @@ export class RelayClient {
         reject(new Error(`relay connect timeout (${this.cfg.relayUrl})`));
       }, timeoutMs);
 
+      ws.on("pong", () => {
+        if (this.ws === ws) this.awaitingPong = false;
+      });
       ws.on("open", () => {
         opened = true;
         clearTimeout(timer);
         this.reconnectDelay = this.opts.minReconnectMs ?? 1_000;
+        this.startLivenessChecks(ws);
         // Announce ourselves. The envelope's cleartext (room, from) is what the
         // relay uses to register this socket; the Hello body stays encrypted.
         void this
@@ -99,6 +105,7 @@ export class RelayClient {
       });
       ws.on("close", () => {
         clearTimeout(timer);
+        this.stopLivenessChecks();
         if (this.ws === ws) this.ws = undefined;
         if (!opened) reject(new Error(`relay connection closed (${this.cfg.relayUrl})`));
         this.scheduleReconnect();
@@ -248,6 +255,7 @@ export class RelayClient {
   }
 
   close(): void {
+    this.stopLivenessChecks();
     this.intentionalClose = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = undefined;
@@ -257,6 +265,48 @@ export class RelayClient {
 
   get isConnected(): boolean {
     return this.ws?.readyState === WebSocket.OPEN;
+  }
+
+  /**
+   * Prove the socket is still there, rather than trusting `readyState`.
+   *
+   * A machine that changes network — joining a hotspot, waking on another
+   * Wi-Fi — leaves its relay socket half-open. No close event arrives, so
+   * nothing reconnects, and the computer keeps reporting itself as connected
+   * while everything it sends goes nowhere. A ping with a deadline is the only
+   * thing that tells the two apart.
+   */
+  private startLivenessChecks(ws: WebSocket): void {
+    this.stopLivenessChecks();
+    const interval = this.opts.pingIntervalMs ?? 20_000;
+    this.awaitingPong = false;
+    this.livenessTimer = setInterval(() => {
+      if (this.ws !== ws || ws.readyState !== WebSocket.OPEN) {
+        this.stopLivenessChecks();
+        return;
+      }
+      if (this.awaitingPong) {
+        // The previous ping was never answered. Terminating fires `close`,
+        // which is what schedules the reconnect.
+        this.stopLivenessChecks();
+        ws.terminate();
+        return;
+      }
+      this.awaitingPong = true;
+      try {
+        ws.ping();
+      } catch {
+        this.stopLivenessChecks();
+        ws.terminate();
+      }
+    }, interval);
+    this.livenessTimer.unref?.();
+  }
+
+  private stopLivenessChecks(): void {
+    if (this.livenessTimer) clearInterval(this.livenessTimer);
+    this.livenessTimer = undefined;
+    this.awaitingPong = false;
   }
 
   private scheduleReconnect(): void {
