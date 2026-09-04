@@ -1,3 +1,4 @@
+import { recordObservedWrite, writtenPaths } from "../../mesh/observed-writes";
 import { readFileSync, statSync } from "node:fs";
 import { basename, dirname } from "node:path";
 import { normalizeMcpServerName } from "../activity-helpers";
@@ -154,6 +155,9 @@ function observeBlocks(
         createdAt: rowAt,
         cwd,
       };
+      for (const path of writtenPaths(toolName, input)) {
+        recordObservedWrite(rootSessionId, path, rowAt);
+      }
       if (pendingCapabilityObservation(pending)) {
         rememberPendingCapabilityCall(acc.pending, key, pending);
       }

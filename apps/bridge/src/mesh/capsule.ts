@@ -8,6 +8,7 @@ import {
 } from "../../../../packages/protocol/schema";
 import { workingTreeState } from "./catalog";
 import type { MeshStore } from "./store";
+import type { Checkpoint } from "./checkpoint";
 
 function git(cwd: string, args: string[]): string | undefined {
   try {
@@ -51,6 +52,7 @@ export function buildTaskCapsule(
   session: SessionInfo,
   request: MeshHandoffPrepare,
   computerId: string,
+  checkpoint?: Checkpoint,
 ): CapsuleValue | undefined {
   const cwd = session.worktree ?? session.cwd;
   const snapshot = store.snapshot(request.projectId);
@@ -83,6 +85,28 @@ export function buildTaskCapsule(
     importantDecisions: [],
     createdAt: Date.now(),
   };
-  const parsed = TaskCapsule.safeParse(capsule);
+  // A checkpoint commit is the fact the capsule carries instead of the dirty
+  // tree: it holds every change the tree had, so relative to it the tree is
+  // clean. Whether the destination has that commit is its own check.
+  const described = checkpoint
+    ? {
+      ...capsule,
+      latestCommit: checkpoint.sha,
+      branch: checkpoint.branch,
+      dirtyDiffHash: undefined,
+      workingTree: "clean" as const,
+      filesChanged: changedFilesBetween(cwd, head, checkpoint.sha),
+      remainingWork: [
+        `Continue from checkpoint ${checkpoint.sha.slice(0, 12)} on ${checkpoint.branch}.`,
+        `Push ${checkpoint.branch} from ${computerId} if the destination does not have it.`,
+      ],
+    }
+    : capsule;
+  const parsed = TaskCapsule.safeParse(described);
   return parsed.success ? parsed.data : undefined;
+}
+
+function changedFilesBetween(cwd: string, from: string, to: string): string[] {
+  const listed = git(cwd, ["diff", "--name-only", `${from}..${to}`]) ?? "";
+  return [...new Set(listed.split("\n").map((line) => line.trim()).filter(Boolean))].slice(0, 64);
 }

@@ -1,3 +1,4 @@
+import { recordObservedWrite, writtenPaths } from "../mesh/observed-writes";
 /**
  * Claude Code session logs:
  *   ~/.claude/projects/<encoded-cwd>/<sessionId>.jsonl
@@ -407,6 +408,9 @@ export function claudeCapabilityUsage(
           createdAt: rowAt || session.lastActivityAt,
           cwd: session.cwd ?? undefined,
         };
+        for (const path of writtenPaths(item.toolName, item.input)) {
+          recordObservedWrite(session.sessionId, path, item.createdAt);
+        }
         if (pendingCapabilityObservation(item)) {
           rememberPendingCapabilityCall(pending, block.id, item);
         }

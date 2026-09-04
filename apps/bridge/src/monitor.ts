@@ -38,6 +38,8 @@ import { approvalsStatus } from "./approval-state";
 import { primeSessionKeys, sendSessionPayload } from "./session-keys";
 import { sendMeshPayload } from "./session-keys";
 import { handleMeshPayload, meshCatalog, meshSnapshots, prepareMeshHandoff } from "./mesh/runtime";
+import { deriveObservedClaims } from "./mesh/observed-claims";
+import { localMeshStore } from "./mesh/local";
 import { cachedSessionActivity } from "./monitor-session-activity";
 import { HEARTBEAT_INTERVAL_MS, publishHeartbeat } from "./monitor-heartbeat";
 import { startPublishLoop } from "./monitor-publish-loop";
@@ -228,6 +230,9 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
     // Project Mesh is separately encrypted under each project key. The relay
     // sees only the legacy routing envelope and ciphertext.
     if (loadRuntimeConfig().meshEnabled) {
+      // What agents were seen editing becomes intent claims on their Tasks,
+      // so an overlap shows while the work happens rather than at the merge.
+      deriveObservedClaims(localMeshStore(), status.sessions);
       const meshes = meshSnapshots();
       for (const mesh of meshes) {
         await sendMeshPayload(client, mesh, "phone", {

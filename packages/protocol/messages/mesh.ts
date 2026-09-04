@@ -238,6 +238,11 @@ export const MeshHandoffPrepare = z.object({
   targetActorId: Identifier.optional(),
   targetComputer: Identifier,
   createdAt: z.number().nonnegative(),
+  /**
+   * Commit uncommitted work to a checkpoint branch first, so the Task can
+   * leave without losing it. The branch is local: GrantTap never pushes.
+   */
+  checkpoint: z.boolean().optional(),
 }).strict().superRefine((value, ctx) => {
   if ((value.targetProvider === "grok_bot") !== (value.targetActorId != null)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["targetActorId"], message: "actor required" });

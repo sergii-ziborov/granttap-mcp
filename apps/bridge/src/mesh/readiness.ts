@@ -27,12 +27,16 @@ export type HandoffReadiness = {
   ready: boolean;
   blockedReason?: string;
   checks: HandoffCheck[];
+  /** Worth a look before continuing; never a reason to refuse. */
+  warnings: string[];
 };
 
 export type HandoffReadinessInput = {
   capsule?: TaskCapsule;
   targetProviderEnabled: boolean;
   conflicts: ResourceClaim[];
+  /** Claims in the same module as this Task's own: a warning, never a block. */
+  moduleOverlaps?: ResourceClaim[];
 };
 
 function check(id: HandoffCheckId, ready: boolean, detail: string): HandoffCheck {
@@ -85,5 +89,9 @@ export function handoffReadiness(input: HandoffReadinessInput): HandoffReadiness
     ),
   ];
   const blocked = checks.find((item) => !item.ready);
-  return { ready: !blocked, blockedReason: blocked?.detail, checks };
+  // Same module, different file: the merge conflict that has not happened
+  // yet. Said out loud, not enforced — two agents can share a module.
+  const warnings = (input.moduleOverlaps ?? []).slice(0, 8).map((claim) =>
+    `${claim.ownerSessionId} is working in the same module (${claim.resource}).`);
+  return { ready: !blocked, blockedReason: blocked?.detail, checks, warnings };
 }

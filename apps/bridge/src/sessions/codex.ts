@@ -1,3 +1,4 @@
+import { recordObservedWrite, writtenPaths } from "../mesh/observed-writes";
 /**
  * Codex session logs:
  *   ~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl
@@ -546,6 +547,9 @@ export function codexCapabilityUsage(
         createdAt: rowAt || session.lastActivityAt,
         cwd: session.cwd ?? undefined,
       };
+      for (const path of writtenPaths(item.toolName, item.input)) {
+        recordObservedWrite(session.sessionId, path, item.createdAt);
+      }
       const nested = nestedMcpTools(item.input);
       if (nested.length > 0) nestedByCall.set(callId, nested);
       if (payload.type === "local_shell_call") {

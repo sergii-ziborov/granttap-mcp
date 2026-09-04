@@ -36,3 +36,42 @@ export function resourceOverlap(left: string, right: string): boolean {
   const b = prefix(right);
   return Boolean(a && b && (a.startsWith(b) || b.startsWith(a)));
 }
+
+/**
+ * Directory segments that mark the start of a module; the deepest match wins.
+ *
+ * A conflict on the exact file is found late: by the time two agents touch
+ * one file, the merge is already the problem. Two agents in one module are the
+ * earlier warning, and a module is recognised from the path alone so every
+ * computer and the phone reach the same answer with no filesystem to consult.
+ */
+const MODULE_CONTAINERS = new Set([
+  "apps", "packages", "crates", "services", "modules", "libs", "features",
+  "src", "lib", "internal", "cmd", "pkg", "sources", "tests",
+]);
+
+/**
+ * The module a repository-relative path belongs to: the child of the deepest
+ * container that is still a directory (`crates/X/src/a.rs` → `crates/X`,
+ * `apps/ios/App/Features/Mesh/V.swift` → `apps/ios/App/Features/Mesh`), or the
+ * parent directory when no container is in the path.
+ */
+export function moduleRoot(path: string): string {
+  const parts = path.replace(/^\/+/, "").split("/").filter((part) => part && part !== ".");
+  if (parts.length <= 1) return "";
+  const last = parts.length - 1;
+  for (let index = last - 1; index >= 0; index -= 1) {
+    if (MODULE_CONTAINERS.has(parts[index]!.toLowerCase()) && index + 1 < last) {
+      return parts.slice(0, index + 2).join("/");
+    }
+  }
+  return parts.slice(0, last).join("/");
+}
+
+/** How two claimed resources collide: on the file itself, or within a module. */
+export function overlapKind(left: string, right: string): "file" | "module" | null {
+  if (resourceOverlap(left, right)) return "file";
+  const a = moduleRoot(left);
+  const b = moduleRoot(right);
+  return a && b && a === b ? "module" : null;
+}

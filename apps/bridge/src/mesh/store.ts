@@ -20,7 +20,7 @@ import {
 import { loadStoreState, type StoreState } from "./store-state";
 import { preferExecution, isTerminalTaskState, mayOwnTask } from "./convergence";
 import { capsuleHash } from "./handoff";
-import { mergeBy, resourceOverlap } from "./store-support";
+import { mergeBy, overlapKind, resourceOverlap } from "./store-support";
 import { closeVanished } from "./execution-sweep";
 import { receiptMovesOwnership, taskAfterEvent, taskAfterLocalReading } from "./task-state";
 import {
@@ -217,6 +217,37 @@ export class MeshStore {
       claim.projectId === projectId
       && claim.ownerSessionId !== ownerSessionId
       && resourceOverlap(claim.resource, resource));
+  }
+
+  /**
+   * Claims by someone else in the same module, short of the same file.
+   *
+   * Not a conflict — two agents can work one module without colliding. It is
+   * the warning that comes before the conflict, reported rather than enforced.
+   */
+  moduleOverlaps(projectId: string, ownerSessionId: string, resource: string): ResourceClaimValue[] {
+    return this.activeClaims().filter((claim) =>
+      claim.projectId === projectId
+      && claim.ownerSessionId !== ownerSessionId
+      && overlapKind(claim.resource, resource) === "module");
+  }
+
+  /**
+   * Record what an agent was seen editing, as an intent claim.
+   *
+   * Agents rarely announce a claim; they just write. The transcript shows the
+   * write, so the claim is derived from it — marked `intent`, because nobody
+   * stated it, and extended while the writing continues. No event is
+   * appended: an observation is not something the agent said.
+   */
+  observeClaim(input: ResourceClaimValue): boolean {
+    const claim = ResourceClaim.parse(input);
+    const previous = this.state.claims.find((item) => item.claimId === claim.claimId);
+    if (previous && previous.ownerSessionId === claim.ownerSessionId
+      && previous.expiresAt >= claim.expiresAt) return false;
+    this.state.claims = mergeBy(this.state.claims, [claim], (item) => item.claimId);
+    this.save();
+    return true;
   }
 
   acceptEvent(input: MeshEventValue): boolean {

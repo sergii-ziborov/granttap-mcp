@@ -21,7 +21,8 @@ import {
 import { isProviderEnabled } from "../config/runtime";
 import { scanSessionHistory, scanSessions } from "../sessions";
 import { sendMeshPayload } from "../session-keys";
-import { linkSessionsToProjects } from "./catalog";
+import { linkSessionsToProjects, workingTreeState } from "./catalog";
+import { createCheckpoint } from "./checkpoint";
 import { buildTaskCapsule } from "./capsule";
 import { handoffReadiness } from "./readiness";
 import { createHandoffFlow } from "./runtime-handoff";
@@ -94,13 +95,21 @@ export function createMeshRuntime(deps: MeshRuntimeDependencies) {
       if (!session || session.projectId !== request.projectId || session.taskId !== request.taskId) {
         return false;
       }
-      const capsule = buildTaskCapsule(deps.store(), session, request, deps.computer());
+      // Asked to checkpoint, uncommitted work is committed to a branch of its
+      // own first, so the Task can leave without losing it. Nothing is pushed.
+      const cwd = session.worktree ?? session.cwd;
+      const checkpoint = request.checkpoint && cwd && workingTreeState(cwd) === "dirty"
+        ? createCheckpoint(cwd, request.taskId, session.title ?? request.taskId)
+        : undefined;
+      const capsule = buildTaskCapsule(deps.store(), session, request, deps.computer(), checkpoint);
       const readiness = handoffReadiness({
         capsule,
         targetProviderEnabled: request.targetProvider === "grok_bot"
           || deps.providerEnabled(request.targetProvider),
         conflicts: (capsule?.resourceClaims ?? []).flatMap((resource) =>
           deps.store().conflicts(request.projectId, request.sessionId, resource)),
+        moduleOverlaps: (capsule?.resourceClaims ?? []).flatMap((resource) =>
+          deps.store().moduleOverlaps(request.projectId, request.sessionId, resource)),
       });
       if (!readiness.ready) {
         await blockHandoff(client, request, readiness.blockedReason ?? "Handoff is not ready.");
