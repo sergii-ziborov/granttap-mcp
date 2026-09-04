@@ -205,6 +205,25 @@ The bounded encrypted protocol preserves:
 An optional bounded `errorClass` may describe an error category. Full tool
 error payloads are not copied into usage telemetry by default.
 
+### Run journal and prompt-time context
+
+A message from the phone is answered by a fresh `claude -p --resume` of the
+same chat. Its turns land in the transcript, but a session holding that chat
+open never sees them — its context was built before they happened. The runtime
+therefore journals every delivery: what was asked (without the attachment
+note), what came back, which files were written, how many tool calls it took,
+and whether the run was cut off by the ten-minute delivery limit. The Task
+carries the same digest as `TASK_PROGRESS`, so the phone's timeline and the
+Mesh show it. A `UserPromptSubmit` hook, installed beside the approval hook by
+`granttap setup`, adds the unread journal to the next prompt of the live
+session together with the Mesh brief — the other live Tasks in the Project,
+who is in the same file or module, the other side of the repository, and any
+question still unanswered — and names the MCP resource
+`granttap://mesh/{capability}/map`, one page of markdown with the whole
+Project: Tasks, who edits which module, the other side of each repository,
+dependencies, and what just happened. Background runs themselves receive
+nothing from the hook; the journal is kept for the session a person is in.
+
 ### Tool versions and updates from the phone
 
 The status also names each provider's command-line tool as it answers on this

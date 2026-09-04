@@ -34,6 +34,14 @@ import {
 import { abandonDelivery, beginDelivery, completeDelivery } from "./delivery";
 import { inspectAgentIntegrations } from "./install";
 import { handleToolUpdate } from "./tools/update-handler";
+import { noteDeliveredRun } from "./mesh/run-digest";
+
+/**
+ * How long one delivery may run. A phone message can ask for real work — read
+ * a photo, change code, run the tests — and four minutes cut such runs off
+ * mid-way, leaving half-done edits nobody was told about.
+ */
+const DELIVERY_TIMEOUT_MS = 10 * 60_000;
 import { refreshMcpLoad } from "./machine-load/mcp-load-refresh";
 import { approvalsStatus } from "./approval-state";
 import { primeSessionKeys, sendSessionPayload } from "./session-keys";
@@ -566,7 +574,7 @@ export async function handleUserMessage(client: RelayClient, message: UserMessag
       cursor: createCursorSession,
       grok: createGrokSession,
     }[agent];
-    const result = await create(message.text, requestedCwd, 240_000, message.attachments);
+    const result = await create(message.text, requestedCwd, DELIVERY_TIMEOUT_MS, message.attachments);
     if (result.ok) {
       await say(result.text, result.sessionId, true);
     } else {
@@ -613,13 +621,22 @@ export async function handleUserMessage(client: RelayClient, message: UserMessag
 
   // No "sent, waiting" line from a middleman: the delivery receipt already
   // marks the person's bubble, and the next words in the chat are the answer.
-  const result = await deliverToSession(target, message.text, 240_000, message.attachments, {
+  const startedAt = Date.now();
+  const result = await deliverToSession(target, message.text, DELIVERY_TIMEOUT_MS, message.attachments, {
     preferredMcp: message.preferredMcp,
     skill: message.skill,
     model: message.model,
     permissionMode: message.permissionMode,
     effort: message.effort,
   });
+  // The run's turns are in the transcript, but a session holding this chat
+  // open never sees them; the journal is how it finds out on its next prompt,
+  // and the Task carries the same digest as progress.
+  const noted = noteDeliveredRun(target, message.text, result, startedAt, Date.now());
+  if (noted?.event) {
+    await sendSessionPayload(client, noted.event, noted.event.taskId, "phone", { ttlMs: 24 * 60 * 60_000 })
+      .catch(() => {});
+  }
   if (result.ok) {
     await say(result.text, result.sessionId ?? target.sessionId, true);
   } else {

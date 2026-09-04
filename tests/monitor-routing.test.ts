@@ -148,6 +148,13 @@ test("monitor routes settings and task messages without weakening provider gates
     ...base, messageId: "existing-success", sessionId: "grok-existing", skill: "review",
   });
   assert.match(JSON.stringify(fake.sent.at(-1)), /Grok completed/);
+  // The delivery is journaled for the chat, so a live session learns of it on its next prompt.
+  const { runJournal } = await import("../apps/bridge/src/mesh/journal");
+  const journal = runJournal("grok-existing");
+  assert.equal(journal.length, 1);
+  assert.equal(journal[0]?.ok, true);
+  assert.match(journal[0]?.outcome ?? "", /Grok completed/);
+  assert.equal(journal[0]?.prompt, "Verify");
   await handleUserMessage(fake as never, {
     ...base, messageId: "new-success", agent: "grok", cwd: fixture.repo,
   });

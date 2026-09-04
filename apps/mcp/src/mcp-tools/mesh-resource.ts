@@ -1,6 +1,8 @@
 import { ResourceTemplate, type McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { resolveExecutionCapability } from "../../../bridge/src/mesh/capability";
 import { scopedMeshView } from "../../../bridge/src/mesh/scoped-view";
+import { liveExecutionScope } from "../../../bridge/src/mesh/capability";
+import { meshMap } from "../../../bridge/src/mesh/map";
 import { isMeshEnabled } from "../../../bridge/src/config/runtime";
 
 const MESH_URI = "granttap://mesh/current";
@@ -59,6 +61,27 @@ export function registerMeshResource(server: McpServer): void {
       const view = resolved ? scopedMeshView(resolved) : undefined;
       if (!view) return json(uri.href, { schema: "granttap.mesh-scope.v1", enabled: true, scoped: false, hint: SCOPE_HINT });
       return json(uri.href, { ...view, enabled: true, scoped: true });
+    },
+  );
+
+  // The same Project as one page of markdown: Tasks, who edits which module,
+  // the other side of each repository, dependencies, and what just happened.
+  server.registerResource(
+    "project-mesh-map",
+    new ResourceTemplate("granttap://mesh/{capability}/map", { list: undefined }),
+    {
+      title: "GrantTap Project Mesh map",
+      description: "This execution's Project as a readable map. Transcripts are never included.",
+      mimeType: "text/markdown",
+    },
+    async (uri, { capability }) => {
+      const token = Array.isArray(capability) ? capability[0] : capability;
+      const resolved = isMeshEnabled() ? resolveExecutionCapability(token) : undefined;
+      const scope = resolved ? liveExecutionScope(resolved.sessionId) : undefined;
+      const text = scope && scope.snapshot.projectId === resolved?.projectId
+        ? meshMap(scope.snapshot)
+        : `# Project Mesh\n\n${SCOPE_HINT}\n`;
+      return { contents: [{ uri: uri.href, mimeType: "text/markdown", text }] };
     },
   );
 }

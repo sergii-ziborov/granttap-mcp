@@ -132,6 +132,16 @@ test("scoped Mesh reads never expose another Project", async (t) => {
     event.sourceSessionId === alpha.sessionId), true);
   const serialized = JSON.stringify(view);
   assert.doesNotMatch(serialized, /Beta payment secrets/);
+
+  // The same Project as one page of markdown, scoped the same way.
+  const map = await client.readResource({ uri: `granttap://mesh/${token}/map` });
+  const page = (map.contents[0] as { text: string; mimeType: string });
+  assert.equal(page.mimeType, "text/markdown");
+  assert.match(page.text, /^# Project Mesh — Project project-alpha\n/);
+  assert.match(page.text, /\*\*Alpha docs\*\* — planned/);
+  assert.doesNotMatch(page.text, /Beta payment secrets|project-beta/);
+  const unscopedMap = await client.readResource({ uri: "granttap://mesh/current/map" });
+  assert.match((unscopedMap.contents[0] as { text: string }).text, /Project Mesh reads are scoped to one execution/);
   assert.doesNotMatch(serialized, new RegExp(beta.sessionId));
   assert.doesNotMatch(serialized, new RegExp(beta.projectId));
 

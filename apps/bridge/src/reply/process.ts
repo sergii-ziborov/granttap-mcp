@@ -14,6 +14,9 @@ export function runProcess(
     try {
       child = spawn(command, args, {
         cwd,
+        // A delivery is itself a prompt submission; the prompt hook must not
+        // hand a background run the journal kept for the live session.
+        env: { ...process.env, GRANTTAP_DELIVERY: "1" },
         stdio: [stdin == null ? "ignore" : "pipe", "pipe", "pipe"],
       });
     } catch (error) {

@@ -33,6 +33,7 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..")
 
 export type HookRoute =
   | "claude"
+  | "claude-prompt"
   | "codex"
   | "codex-policy"
   | "cursor"
@@ -567,6 +568,10 @@ export function installClaudeHook(): InstallResult {
     }
   }
 
+  // The prompt hook rides along with the approval hook: what the chat could
+  // not know by itself — background runs in it, the Mesh around it — is added
+  // to each prompt. It never blocks; anything wrong, and it adds nothing.
+  const promptHookChanged = ensureClaudePromptHook(settings);
   const entries: any[] = (((settings.hooks ??= {}).PreToolUse ??= []) as any[]);
   const currentCommand = hookCommand("claude");
   const presentEntry = entries.find((entry) =>
@@ -580,11 +585,14 @@ export function installClaudeHook(): InstallResult {
   if (present && presentEntry) {
     const matcherChanged = repairClaudeMatcher(presentEntry);
     const commandChanged = present.command !== currentCommand;
-    if (!matcherChanged && !commandChanged) return { status: "already", detail: path };
+    if (!matcherChanged && !commandChanged && !promptHookChanged) return { status: "already", detail: path };
     backupOnce(path);
     present.command = currentCommand;
     writeFileSync(path, JSON.stringify(settings, null, 2) + "\n");
-    return { status: "installed", detail: `${path}, GrantTap hook and matcher repaired` };
+    const detail = !matcherChanged && !commandChanged
+      ? `${path}, GrantTap prompt hook added`
+      : `${path}, GrantTap hook and matcher repaired`;
+    return { status: "installed", detail };
   }
 
   const legacyEntry = entries.find((entry) =>
@@ -612,6 +620,22 @@ export function installClaudeHook(): InstallResult {
   });
   writeFileSync(path, JSON.stringify(settings, null, 2) + "\n");
   return { status: "installed", detail: path };
+}
+
+/** Make sure the UserPromptSubmit hook is registered once, at the current command. */
+function ensureClaudePromptHook(settings: any): boolean {
+  const entries: any[] = (((settings.hooks ??= {}).UserPromptSubmit ??= []) as any[]);
+  const command = hookCommand("claude-prompt");
+  const present = entries
+    .flatMap((entry) => (Array.isArray(entry?.hooks) ? entry.hooks : []))
+    .find((hook: any) => commandHasRoute(hook?.command, "claude-prompt"));
+  if (present) {
+    if (present.command === command) return false;
+    present.command = command;
+    return true;
+  }
+  entries.push({ hooks: [{ type: "command", command, timeout: 10 }] });
+  return true;
 }
 
 // --------------------------------------------------------------------- Codex

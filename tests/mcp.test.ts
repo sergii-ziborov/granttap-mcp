@@ -91,6 +91,7 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   const templates = await client.listResourceTemplates();
   assert.deepEqual(templates.resourceTemplates.map((template) => template.uriTemplate), [
     "granttap://mesh/{capability}",
+    "granttap://mesh/{capability}/map",
   ]);
   // The unscoped URI must never carry Project state: it is readable by any
   // session on this computer, including one running an injected prompt.
