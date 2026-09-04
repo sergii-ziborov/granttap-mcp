@@ -33,6 +33,7 @@ import {
 } from "./reply";
 import { abandonDelivery, beginDelivery, completeDelivery } from "./delivery";
 import { inspectAgentIntegrations } from "./install";
+import { handleToolUpdate } from "./tools/update-handler";
 import { refreshMcpLoad } from "./machine-load/mcp-load-refresh";
 import { approvalsStatus } from "./approval-state";
 import { primeSessionKeys, sendSessionPayload } from "./session-keys";
@@ -336,6 +337,15 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       return true;
     } else if (payload.type === "session.compact") {
       await handleCompact(client, payload);
+      void publish().catch(() => {});
+      return true;
+    } else if (payload.type === "tool.update") {
+      // Minutes long, so the relay loop does not wait on it: the phone sees
+      // `updating` in the next status and the result when it lands.
+      void handleToolUpdate(
+        (result) => client.send(result, "phone", { ttlMs: 15 * 60_000 }),
+        payload,
+      ).catch(() => {}).finally(() => { void publish().catch(() => {}); });
       void publish().catch(() => {});
       return true;
     } else if (payload.type === "project.policy.set" && loadRuntimeConfig().meshEnabled) {

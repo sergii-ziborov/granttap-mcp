@@ -9,9 +9,10 @@
  * use. Nothing is downloaded or updated here — the helper never changes the
  * user's tools — only chosen. An explicit `GRANTTAP_CLAUDE_BIN` still wins.
  */
-import { accessSync, constants, readdirSync, realpathSync } from "node:fs";
+import { accessSync, constants, readdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, delimiter, join } from "node:path";
+import { delimiter, join } from "node:path";
+import { binaryVersion } from "./tools/version";
 
 export type ClaudeBinary = { path: string; version?: string };
 
@@ -24,9 +25,9 @@ function executable(path: string): boolean {
   }
 }
 
-/** `2.1.260` from a path segment such as `2.1.260` or `claude-2.1.260`. */
+/** `2.1.260` from an installer's directory name such as `2.1.260`. */
 export function versionOf(segment: string): string | undefined {
-  return /(\d+)\.(\d+)\.(\d+)/.exec(segment)?.[0];
+  return /^v?(\d+\.\d+\.\d+)$/.exec(segment.trim())?.[1];
 }
 
 export function compareVersions(left: string, right: string): number {
@@ -39,7 +40,7 @@ export function compareVersions(left: string, right: string): number {
   return 0;
 }
 
-function onPath(command: string, env: NodeJS.ProcessEnv): string | undefined {
+export function executableOnPath(command: string, env: NodeJS.ProcessEnv = process.env): string | undefined {
   for (const dir of (env.PATH ?? "").split(delimiter).filter(Boolean)) {
     const candidate = join(dir, command);
     if (executable(candidate)) return candidate;
@@ -48,20 +49,10 @@ function onPath(command: string, env: NodeJS.ProcessEnv): string | undefined {
 }
 
 function versioned(path: string): ClaudeBinary {
-  let resolved = path;
-  try {
-    resolved = realpathSync(path);
-  } catch {
-    // A dangling link is still the user's choice; keep the path as given.
-  }
-  // The native installer links `claude` to `.../versions/<version>`; the app
-  // keeps `.../claude-code/<version>/claude.app/Contents/MacOS/claude`.
-  const segments = resolved.split("/").reverse();
-  for (const segment of segments) {
-    const version = versionOf(segment);
-    if (version) return { path, version };
-  }
-  return { path };
+  // The native installer and the app state the version in the path; any other
+  // install is asked once and remembered until the binary changes.
+  const version = binaryVersion(path);
+  return version ? { path, version } : { path };
 }
 
 function children(dir: string): string[] {
@@ -78,7 +69,7 @@ export function installedClaudeBinaries(
   env: NodeJS.ProcessEnv = process.env,
 ): ClaudeBinary[] {
   const found: ClaudeBinary[] = [];
-  const fromPath = onPath("claude", env);
+  const fromPath = executableOnPath("claude", env);
   if (fromPath) found.push(versioned(fromPath));
   const installer = join(home, ".local", "share", "claude", "versions");
   for (const name of children(installer)) {

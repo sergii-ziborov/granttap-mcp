@@ -19,6 +19,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { resolveClaudeBinary } from "./claude-bin";
+import { describeCommand, inspectTools, updatingTools } from "./tools/updater";
 import { resolveCursorAgentBin } from "./reply/cursor-agent-bin";
 import { homedir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
@@ -61,6 +62,10 @@ export type AgentIntegrationStatus = {
   agent: CodingAgent;
   installed: boolean;
   hookConfigured: boolean;
+  version?: string;
+  updateCommand?: string;
+  newerOnThisMac?: string;
+  updating?: boolean;
 };
 
 function executableAvailable(command: string): boolean {
@@ -249,13 +254,24 @@ export function inspectAgentIntegrations(): AgentIntegrationStatus[] {
   const cursor = process.env.GRANTTAP_CURSOR_AGENT_BIN ?? resolveCursorAgentBin();
   const grok = process.env.GRANTTAP_GROK_BIN ?? "grok";
   const cursorStatus = inspectCursorIntegration();
+  const tools = new Map(inspectTools().map((tool) => [tool.agent, tool]));
+  const updating = new Set(updatingTools());
+  const tool = (agent: CodingAgent): Partial<AgentIntegrationStatus> => {
+    const status = tools.get(agent);
+    const extra: Partial<AgentIntegrationStatus> = {};
+    if (status?.version) extra.version = status.version;
+    if (status?.update) extra.updateCommand = describeCommand(status.update);
+    if (status?.newerOnThisMac) extra.newerOnThisMac = status.newerOnThisMac;
+    if (updating.has(agent)) extra.updating = true;
+    return extra;
+  };
   return [
-    { agent: "codex", installed: executableAvailable(codex), hookConfigured: codexHookConfigured() },
-    { agent: "claude", installed: executableAvailable(claude), hookConfigured: claudeHookConfigured() },
-    { agent: "cursor", installed: executableAvailable(cursor), hookConfigured: cursorStatus.hookConfigured },
+    { agent: "codex", installed: executableAvailable(codex), hookConfigured: codexHookConfigured(), ...tool("codex") },
+    { agent: "claude", installed: executableAvailable(claude), hookConfigured: claudeHookConfigured(), ...tool("claude") },
+    { agent: "cursor", installed: executableAvailable(cursor), hookConfigured: cursorStatus.hookConfigured, ...tool("cursor") },
     // Grok Build's headless session contract is direct; GrantTap does not
     // claim an approval hook exists when none has been installed.
-    { agent: "grok", installed: executableAvailable(grok), hookConfigured: false },
+    { agent: "grok", installed: executableAvailable(grok), hookConfigured: false, ...tool("grok") },
   ];
 }
 

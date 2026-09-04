@@ -23,7 +23,8 @@ async function mac(): Promise<{ home: string; bin: string }> {
 
 test("versions are read from paths and ordered numerically", () => {
   assert.equal(versionOf("2.1.260"), "2.1.260");
-  assert.equal(versionOf("claude-2.1.9"), "2.1.9");
+  assert.equal(versionOf("v2.1.9"), "2.1.9");
+  assert.equal(versionOf("claude-2.1.9"), undefined, "only a bare version names an install");
   assert.equal(versionOf("MacOS"), undefined);
   assert.ok(compareVersions("2.1.260", "2.1.9") > 0, "260 is newer than 9, not older");
   assert.equal(compareVersions("2.1.260", "2.1.260"), 0);

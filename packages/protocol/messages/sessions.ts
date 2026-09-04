@@ -87,8 +87,40 @@ export const AgentIntegrationStatus = z.object({
   agent: CodingAgent,
   installed: z.boolean(),
   hookConfigured: z.boolean(),
+  // The tool itself: which version answers on this computer, how it is kept
+  // current, and whether a newer copy already sits on the same disk.
+  version: z.string().trim().min(1).max(64).optional(),
+  updateCommand: z.string().trim().min(1).max(200).optional(),
+  newerOnThisMac: z.string().trim().min(1).max(64).optional(),
+  updating: z.boolean().optional(),
 });
 export type AgentIntegrationStatus = z.infer<typeof AgentIntegrationStatus>;
+
+/**
+ * The phone asks this computer to run one tool's own updater. The tool is the
+ * only choice the phone makes; the command is the helper's, fixed per install.
+ */
+export const ToolUpdate = z.object({
+  type: z.literal("tool.update"),
+  agent: CodingAgent,
+  requestId: z.string().trim().min(1).max(128),
+  createdAt: z.number(),
+});
+export type ToolUpdate = z.infer<typeof ToolUpdate>;
+
+export const ToolUpdateResult = z.object({
+  type: z.literal("tool.update.result"),
+  agent: CodingAgent,
+  requestId: z.string().trim().min(1).max(128),
+  ok: z.boolean(),
+  before: z.string().max(64).optional(),
+  after: z.string().max(64).optional(),
+  command: z.string().max(200).optional(),
+  message: z.string().max(1_000),
+  output: z.string().max(4_000).optional(),
+  createdAt: z.number(),
+});
+export type ToolUpdateResult = z.infer<typeof ToolUpdateResult>;
 
 export const ProviderRuntimeSettings = z.object({
   claude: z.boolean(),

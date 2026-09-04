@@ -205,6 +205,21 @@ The bounded encrypted protocol preserves:
 An optional bounded `errorClass` may describe an error category. Full tool
 error payloads are not copied into usage telemetry by default.
 
+### Tool versions and updates from the phone
+
+The status also names each provider's command-line tool as it answers on this
+computer — its version, how it is kept current, and, for Claude Code, whether a
+newer copy already sits on the disk (the Claude desktop app keeps its own; the
+runtime uses the newest one it finds). A tool that lags the rest of the
+environment fails in ways the phone can only report, so the phone can ask this
+computer to update one: the phone names only the tool, and the command is the
+runtime's, fixed by how the tool was installed — `claude update`, `agent
+update`, `grok update`, the npm that owns the tool's prefix, or Homebrew. The
+runtime never downloads a tool itself; a tool installed by an installer script
+is left to a trusted terminal, with the command spelled out in the answer. The
+result — version before and after, the updater's own output — comes back as
+`tool.update.result`.
+
 Cost is reported as attributed rather than measured, because that is what it
 is. A call is read back from the transcript once it has finished, so it can
 never be measured directly: an MCP server outlives its calls and is sampled
