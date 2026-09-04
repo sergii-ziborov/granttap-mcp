@@ -1,5 +1,6 @@
 #!/usr/bin/env -S npx tsx
 /** Cursor beforeMCPExecution: exact server/chat block, otherwise phone/native approval. */
+import { recordProjectDecision } from "../policy/decision-log";
 import { randomId } from "../../../../packages/core/crypto";
 import type { ApprovalRequest } from "../../../../packages/protocol/schema";
 import { decisionToCursorOutput } from "../adapters";
@@ -97,6 +98,12 @@ async function handleMcp(input: CursorMcpHookInput): Promise<void> {
     legacyDenyReason: blocked?.reason,
   });
   if (projectDecision.effect === "deny") {
+    if (sessionId) {
+      recordProjectDecision(sessionId, {
+        at: Date.now(), toolName: server ? `mcp__${server}__${toolName}` : toolName,
+        reason: projectDecision.reason, ruleId: projectDecision.rule_id,
+      });
+    }
     deny(projectDecision.reason);
     return;
   }

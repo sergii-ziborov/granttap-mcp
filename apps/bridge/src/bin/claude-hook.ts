@@ -12,6 +12,7 @@
  * Fails closed: any error or timeout denies the tool call rather than letting it
  * through unattended — unless GrantTap auto-accept allows it locally.
  */
+import { recordProjectDecision } from "../policy/decision-log";
 import { claudeToRequest, decisionToClaudeOutput, type HookInput } from "../adapters";
 import { isUnanswered, requestApproval } from "../approval";
 import {
@@ -82,6 +83,13 @@ async function handlePreToolUse(input: HookInput): Promise<void> {
     legacyDenyReason: blocked?.reason,
   });
   if (projectDecision.effect === "deny") {
+    // Say so where the action was, not only to the agent.
+    if (input.session_id) {
+      recordProjectDecision(input.session_id, {
+        at: Date.now(), toolName: input.tool_name ?? "tool", reason: projectDecision.reason,
+        ruleId: projectDecision.rule_id,
+      });
+    }
     writePermission("deny", projectDecision.reason);
     return;
   }

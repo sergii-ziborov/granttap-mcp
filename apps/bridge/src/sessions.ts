@@ -5,6 +5,7 @@
  * observations beside their session summary. Activity and telemetry therefore
  * do not trigger a second filesystem walk during the monitor publish cycle.
  */
+import { recentProjectDecisions } from "./policy/decision-log";
 import type {
   ActivityEntry,
   CapabilityUsageStatus,
@@ -171,7 +172,21 @@ function pickActivityEntries(all: ActivityEntry[], limit: number): ActivityEntry
 }
 
 export function scanSessionActivity(session: SessionInfo): SessionActivity {
-  const entries = pickActivityEntries(activityForSession(session), MAX_ACTIVITY_ENTRIES);
+  // A Project rule that refused something is part of what happened in this
+  // chat, so it is shown there, beside the call it stopped.
+  const refusals: ActivityEntry[] = recentProjectDecisions(session.sessionId).map((record) => ({
+    id: `decision:${record.at}:${record.toolName}`,
+    kind: "status",
+    text: record.ruleId
+      ? `Blocked by Project rule ${record.ruleId}: ${record.reason}`
+      : `Blocked by Project Governance: ${record.reason}`,
+    createdAt: record.at,
+    toolName: record.toolName,
+  }));
+  const entries = pickActivityEntries(
+    [...activityForSession(session), ...refusals].sort((a, b) => a.createdAt - b.createdAt),
+    MAX_ACTIVITY_ENTRIES,
+  );
   if (session.state !== "working") {
     for (let index = entries.length - 1; index >= 0; index -= 1) {
       if (entries[index]?.kind === "message") {

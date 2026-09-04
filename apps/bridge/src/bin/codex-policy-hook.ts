@@ -1,5 +1,6 @@
 #!/usr/bin/env -S npx tsx
 /** Codex PreToolUse: deterministic deny or one-shot Project ASK handoff. */
+import { recordProjectDecision } from "../policy/decision-log";
 import type { HookInput } from "../adapters";
 import { blockedSessionCapability, isProviderEnabled } from "../config";
 import { recordCodexProjectAsk } from "../policy/codex-project-ask";
@@ -39,6 +40,11 @@ async function main(): Promise<void> {
     legacyDenyReason: blocked?.reason,
   });
   if (decision.effect === "deny") {
+    if (input.session_id) {
+      recordProjectDecision(input.session_id, {
+        at: Date.now(), toolName: input.tool_name ?? "tool", reason: decision.reason, ruleId: decision.rule_id,
+      });
+    }
     deny(decision.reason);
     return;
   }

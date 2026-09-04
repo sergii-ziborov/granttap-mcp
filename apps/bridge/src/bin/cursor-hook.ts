@@ -1,5 +1,6 @@
 #!/usr/bin/env -S npx tsx
 /** Cursor beforeShellExecution: exact chat block, otherwise phone/native approval. */
+import { recordProjectDecision } from "../policy/decision-log";
 import {
   cursorToRequest,
   decisionToCursorOutput,
@@ -83,6 +84,12 @@ async function handleShell(input: CursorHookInput): Promise<void> {
     legacyDenyReason: blocked?.reason,
   });
   if (projectDecision.effect === "deny") {
+    if (sessionId) {
+      recordProjectDecision(sessionId, {
+        at: Date.now(), toolName: input.tool_name ?? "Shell",
+        reason: projectDecision.reason, ruleId: projectDecision.rule_id,
+      });
+    }
     deny(projectDecision.reason);
     return;
   }
