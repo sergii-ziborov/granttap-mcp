@@ -59,6 +59,9 @@ export const ExecutionSessionLink = z.object({
   actorId: Identifier.optional(),
   computerId: Identifier,
   workspace: Path,
+  // The repository the workspace belongs to, by canonical id, so a Task can be
+  // placed on the integration map without anyone re-reading its git remote.
+  repositoryId: z.string().trim().min(1).max(512).optional(),
   branch: z.string().trim().min(1).max(512).optional(),
   worktree: Path.optional(),
   // Uncommitted work cannot travel inside a Task Capsule, so the owning
@@ -250,12 +253,35 @@ export const MeshHandoffPrepare = z.object({
 });
 export type MeshHandoffPrepare = z.infer<typeof MeshHandoffPrepare>;
 
+export const IntegrationVia = z.enum(["database", "kafka", "api"]);
+export type IntegrationVia = z.infer<typeof IntegrationVia>;
+export const IntegrationRelation = z.enum(["produces", "consumes", "calls", "called_by", "shares"]);
+export type IntegrationRelation = z.infer<typeof IntegrationRelation>;
+
+/**
+ * One edge of the integration map a bound repository keeps in its
+ * `WEAVATRIX.md`: the other repository on the far side of a database, a topic,
+ * or an API, as that repository states it. Only stated edges travel; nothing is
+ * inferred on the way.
+ */
+export const IntegrationPeer = z.object({
+  projectId: Identifier,
+  repositoryId: z.string().trim().min(1).max(512),
+  peer: Label,
+  via: IntegrationVia,
+  relation: IntegrationRelation,
+  through: Label.optional(),
+  updatedAt: z.number().nonnegative(),
+}).strict();
+export type IntegrationPeer = z.infer<typeof IntegrationPeer>;
+
 export const MeshSnapshot = z.object({
   type: z.literal("mesh.snapshot"),
   sessionId: Identifier,
   projectId: Identifier,
   project: Project,
   bindings: z.array(ProjectBindingSummary).max(64).optional(),
+  peers: z.array(IntegrationPeer).max(64).optional(),
   tasks: z.array(MeshTask).max(64),
   executions: z.array(ExecutionSessionLink).max(128),
   claims: z.array(ResourceClaim).max(128),
@@ -274,6 +300,7 @@ export const MeshSnapshot = z.object({
   if (bindingIds.size !== (value.bindings?.length ?? 0)
     || bindingKeys.size !== (value.bindings?.length ?? 0)
     || value.bindings?.some((binding) => binding.projectId !== value.projectId)
+    || value.peers?.some((peer) => peer.projectId !== value.projectId)
     || value.tasks.some((task) => task.projectId !== value.projectId)
     || value.executions.some((execution) => !taskIds.has(execution.taskId))
     || value.claims.some((claim) => claim.projectId !== value.projectId || !taskIds.has(claim.taskId))

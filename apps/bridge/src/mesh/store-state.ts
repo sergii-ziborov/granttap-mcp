@@ -2,6 +2,7 @@
 import {
   ExecutionSessionLink,
   HandoffReceipt,
+  IntegrationPeer,
   MeshEvent,
   MeshTask,
   Project,
@@ -10,6 +11,7 @@ import {
   TaskDependency,
   type ExecutionSessionLink as ExecutionValue,
   type HandoffReceipt as ReceiptValue,
+  type IntegrationPeer as IntegrationPeerValue,
   type MeshEvent as MeshEventValue,
   type MeshTask as TaskValue,
   type Project as ProjectValue,
@@ -25,6 +27,7 @@ export type StoreState = {
   version: 1;
   projects: ProjectValue[];
   bindings: BindingValue[];
+  peers: IntegrationPeerValue[];
   tasks: TaskValue[];
   executions: ExecutionValue[];
   claims: ResourceClaimValue[];
@@ -34,9 +37,11 @@ export type StoreState = {
 };
 
 const EMPTY: StoreState = {
-  version: 1, projects: [], bindings: [], tasks: [], executions: [], claims: [],
+  version: 1, projects: [], bindings: [], peers: [], tasks: [], executions: [], claims: [],
   dependencies: [], events: [], receipts: [],
 };
+
+export const MAX_STORE_PEERS = 256;
 
 function parsedArray<T>(value: unknown, schema: { safeParse: (input: unknown) => { success: boolean; data?: T } }): T[] {
   if (!Array.isArray(value)) return [];
@@ -63,6 +68,9 @@ export function loadStoreState(path: string): StoreState {
       version: 1,
       projects,
       bindings,
+      peers: parsedArray(value.peers, IntegrationPeer)
+        .filter((peer) => projects.some((project) => project.projectId === peer.projectId))
+        .slice(-MAX_STORE_PEERS),
       tasks: parsedArray(value.tasks, MeshTask),
       executions: parsedArray(value.executions, ExecutionSessionLink),
       claims: parsedArray(value.claims, ResourceClaim),

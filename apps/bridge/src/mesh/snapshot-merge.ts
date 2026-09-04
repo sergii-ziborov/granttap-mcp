@@ -1,8 +1,9 @@
 import { MeshSnapshot, type MeshSnapshot as SnapshotValue } from "../../../../packages/protocol/schema";
 import { preferExecution, preferTask } from "./convergence";
 import { upsertBinding } from "./binding-state";
+import { integrationPeerKey } from "./other-side";
 import { mergeBy, mergeWith } from "./store-support";
-import type { StoreState } from "./store-state";
+import { MAX_STORE_PEERS, type StoreState } from "./store-state";
 
 export function mergeSnapshotState(state: StoreState, input: SnapshotValue): void {
   const snapshot = MeshSnapshot.parse(input);
@@ -11,6 +12,8 @@ export function mergeSnapshotState(state: StoreState, input: SnapshotValue): voi
   for (const binding of snapshot.bindings ?? []) {
     candidate.bindings = upsertBinding(candidate, binding).bindings;
   }
+  candidate.peers = mergeBy(candidate.peers, snapshot.peers ?? [], integrationPeerKey)
+    .slice(-MAX_STORE_PEERS);
   candidate.tasks = mergeWith(candidate.tasks, snapshot.tasks, (item) => item.taskId, preferTask);
   candidate.executions = mergeWith(
     candidate.executions,

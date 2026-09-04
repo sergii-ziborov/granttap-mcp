@@ -3,6 +3,7 @@ import { dirname } from "node:path";
 import {
   ExecutionSessionLink,
   HandoffReceipt,
+  IntegrationPeer,
   MeshEvent,
   MeshSnapshot,
   MeshTask,
@@ -17,7 +18,9 @@ import {
   type ProjectBindingSummary as BindingValue,
   type ResourceClaim as ResourceClaimValue,
 } from "../../../../packages/protocol/schema";
-import { loadStoreState, type StoreState } from "./store-state";
+import type { IntegrationEdge } from "./integration-map";
+import { integrationPeerKey } from "./other-side";
+import { loadStoreState, MAX_STORE_PEERS, type StoreState } from "./store-state";
 import { preferExecution, isTerminalTaskState, mayOwnTask } from "./convergence";
 import { capsuleHash } from "./handoff";
 import { mergeBy, overlapKind, resourceOverlap } from "./store-support";
@@ -324,17 +327,43 @@ export class MeshStore {
     return this.state.tasks.find((item) => item.taskId === taskId);
   }
 
+  /**
+   * What one bound repository states about its neighbours. The whole statement
+   * for that repository is replaced, so an edge removed from the map is removed
+   * here; nothing is written when the statement has not changed.
+   */
+  recordIntegrationPeers(projectId: string, repositoryId: string, edges: IntegrationEdge[]): void {
+    if (!this.state.projects.some((item) => item.projectId === projectId)) return;
+    const stated = edges.slice(0, 64).map((edge) => IntegrationPeer.parse({
+      projectId, repositoryId, peer: edge.peer, via: edge.via, relation: edge.relation,
+      through: edge.through, updatedAt: this.now(),
+    }));
+    const current = this.state.peers.filter((item) =>
+      item.projectId === projectId && item.repositoryId === repositoryId);
+    const same = current.length === stated.length
+      && current.every((item, index) => integrationPeerKey(item) === integrationPeerKey(stated[index]!));
+    if (same) return;
+    const kept = this.state.peers.filter((item) =>
+      !(item.projectId === projectId && item.repositoryId === repositoryId));
+    this.state.peers = [...kept, ...stated].slice(-MAX_STORE_PEERS);
+    this.save();
+  }
+
   snapshot(projectId: string): SnapshotValue | undefined {
     const project = this.state.projects.find((item) => item.projectId === projectId);
     if (!project) return undefined;
     const tasks = this.state.tasks.filter((task) => task.projectId === projectId).slice(-64);
     const taskIds = new Set(tasks.map((task) => task.taskId));
+    const peers = this.state.peers.filter((item) => item.projectId === projectId).slice(0, 64);
     return MeshSnapshot.parse({
       type: "mesh.snapshot",
       sessionId: projectId,
       projectId,
       project,
       bindings: this.state.bindings.filter((item) => item.projectId === projectId).slice(0, 64),
+      // Absent rather than empty: a repository without a map publishes the
+      // snapshot it always did.
+      peers: peers.length > 0 ? peers : undefined,
       tasks,
       executions: this.state.executions.filter((item) => taskIds.has(item.taskId)).slice(-128),
       claims: this.activeClaims().filter((item) => item.projectId === projectId).slice(-128),

@@ -18,6 +18,7 @@ import {
   readFileSync,
   writeFileSync,
 } from "node:fs";
+import { resolveClaudeBinary } from "./claude-bin";
 import { resolveCursorAgentBin } from "./reply/cursor-agent-bin";
 import { homedir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
@@ -244,7 +245,7 @@ export function inspectCursorIntegration(): CursorIntegrationStatus {
 /** Read-only capability check used by phone/watch connection states. */
 export function inspectAgentIntegrations(): AgentIntegrationStatus[] {
   const codex = process.env.GRANTTAP_CODEX_BIN ?? process.env.NODVOX_CODEX_BIN ?? "codex";
-  const claude = process.env.GRANTTAP_CLAUDE_BIN ?? process.env.NODVOX_CLAUDE_BIN ?? "claude";
+  const claude = resolveClaudeBinary().path;
   const cursor = process.env.GRANTTAP_CURSOR_AGENT_BIN ?? resolveCursorAgentBin();
   const grok = process.env.GRANTTAP_GROK_BIN ?? "grok";
   const cursorStatus = inspectCursorIntegration();

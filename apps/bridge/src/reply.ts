@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { SessionInfo, UserAttachment } from "../../../packages/protocol/schema";
 import type { CodingAgent } from "../../../packages/protocol/schema";
+import { explainClaudeFailure, resolveClaudeBinary } from "./claude-bin";
 import { configDir, loadRuntimeConfig } from "./config";
 import { withAttachments } from "./reply/attachments";
 import { runProcess } from "./reply/process";
@@ -16,7 +17,6 @@ import {
 } from "./reply/provider-headless";
 export type { DeliveryOptions, ReplyResult } from "./reply/types";
 
-const CLAUDE_BIN = process.env.GRANTTAP_CLAUDE_BIN ?? process.env.NODVOX_CLAUDE_BIN ?? "claude";
 const CODEX_BIN = process.env.GRANTTAP_CODEX_BIN ?? process.env.NODVOX_CODEX_BIN ?? "codex";
 export const GENERAL_WORKSPACE = "granttap:general";
 
@@ -142,10 +142,14 @@ function runClaude(
     ...modeArgs, ...effortArgs,
     "--output-format", "json", text,
   ];
-  return runProcess(CLAUDE_BIN, args, session.cwd, timeoutMs, (stdout) => {
+  // Chosen per delivery: the app may have installed a newer Claude Code since.
+  const claude = resolveClaudeBinary();
+  return runProcess(claude.path, args, session.cwd, timeoutMs, (stdout) => {
     try {
       const parsed = JSON.parse(stdout) as { result?: string; is_error?: boolean };
-      if (parsed.is_error) return { ok: false, error: parsed.result ?? "agent error" };
+      if (parsed.is_error) {
+        return { ok: false, error: explainClaudeFailure(parsed.result ?? "agent error", claude) };
+      }
       if (typeof parsed.result === "string") return { ok: true, text: parsed.result };
     } catch {
       // Fall through to the plain output fallback.
@@ -159,10 +163,13 @@ function runClaude(
 
 function runClaudeNew(text: string, cwd: string, timeoutMs: number): Promise<ReplyResult> {
   const args = ["-p", "--output-format", "json", text];
-  return runProcess(CLAUDE_BIN, args, cwd, timeoutMs, (stdout) => {
+  const claude = resolveClaudeBinary();
+  return runProcess(claude.path, args, cwd, timeoutMs, (stdout) => {
     try {
       const parsed = JSON.parse(stdout) as { result?: string; is_error?: boolean; session_id?: string };
-      if (parsed.is_error) return { ok: false, error: parsed.result ?? "agent error" };
+      if (parsed.is_error) {
+        return { ok: false, error: explainClaudeFailure(parsed.result ?? "agent error", claude) };
+      }
       if (typeof parsed.result === "string") {
         return { ok: true, text: parsed.result.slice(0, 4000), sessionId: parsed.session_id };
       }

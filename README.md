@@ -96,6 +96,16 @@ as explicitly when the named commit is not on its computer, or when the
 capsule's own resource claims overlap another execution's; GrantTap never
 pushes or fetches on its own.
 
+A Project usually binds more than one repository, and a bound repository can
+say which of the others sit on the far side of its databases, topics, and APIs:
+commit a [`WEAVATRIX.md`](https://github.com/Weavatrix/weavatrix-md) next to the
+README and the runtime reads it — only the edges it states, nothing inferred —
+and publishes them with the Project. The Task screen then names another Task
+that is working on the other side of a contract this Task touches (the consumer
+of a topic it produces, the caller of an API it changes), and the scoped
+`granttap://mesh/{capability}` resource gives the agent the same `peers`,
+`otherSide`, and `neighbours` so it can coordinate before it commits.
+
 ### Grok Bot as a scoped Mesh participant
 
 Grok Bot is a persistent agent, not a coding-agent integration. The iPhone

@@ -14,6 +14,7 @@ import {
   sanitizedRepositoryRemote,
   taskIdentity,
 } from "./identity";
+import { readIntegrationMap } from "./integration-map";
 import type { MeshStore } from "./store";
 import { syncProjectBinding } from "../engine/engine-projects";
 
@@ -172,6 +173,9 @@ export function linkSessionsToProjects(
     // same pass, which is what an escaping throw did.
     try {
       store.upsertBinding(binding);
+      store.recordIntegrationPeers(
+        projectId, repository.canonicalRepositoryId, readIntegrationMap(repository.root),
+      );
       void syncProjectBinding(project, {
         summary: binding,
         localRoot: repository.root,
@@ -202,6 +206,7 @@ export function linkSessionsToProjects(
       provider: agent,
       computerId,
       workspace: cwd,
+      repositoryId: repository.canonicalRepositoryId,
       branch: session.branch,
       worktree: repository.worktree,
       uncommitted: hasUncommittedWork(repository.worktree ?? cwd),
