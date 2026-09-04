@@ -25,9 +25,24 @@ function activityText(value: unknown, max = MAX_ACTIVITY_TEXT): string {
 }
 
 /** Remove host-injected transport context that is not a message the person typed. */
+/**
+ * The note GrantTap itself appends when a phone message carries attachments,
+ * so the provider's log shows the words the person typed and the phone can
+ * recognise them as its own bubble rather than render the prompt twice.
+ */
+export function stripAttachmentNote(text: string): string {
+  return text.replace(
+    /\n\nAttached files available locally(?: \(inspect them as part of this request\))?:\n(?:- [^\n]*(?:\n|$))+$/,
+    "",
+  ).trim();
+}
+
 export function visibleUserText(value: unknown): string {
-  const text = String(value ?? "").trim();
+  const text = stripAttachmentNote(String(value ?? "").trim());
   if (!text) return "";
+  // The host's own notes about what it showed the model: nobody typed them.
+  if (text.startsWith("[Image: original ") || text.startsWith("<local-command-caveat>")) return "";
+  if (/^(?:<system-reminder>[\s\S]*?<\/system-reminder>\s*)+$/.test(text)) return "";
   if (/^#\s+AGENTS\.md instructions for(?:\s|$)/i.test(text)) return "";
   const internal = [
     "recommended_plugins",
@@ -44,6 +59,46 @@ export function visibleUserText(value: unknown): string {
   }
   const marker = /^##\s+My request(?: for Codex)?:\s*$/im.exec(text);
   return marker ? text.slice(marker.index + marker[0].length).trim() : text;
+}
+
+/**
+ * A background-task event the host writes into the transcript as a "user"
+ * turn. Nobody typed it, so it is not the person's message; it is a status
+ * line about a command that finished, and reads as one.
+ */
+export function harnessTaskNotification(value: unknown): string | undefined {
+  const text = String(value ?? "").trim();
+  if (!text.startsWith("<task-notification>") && !text.startsWith("[SYSTEM NOTIFICATION")) return undefined;
+  const block = /<task-notification>([\s\S]*?)<\/task-notification>/.exec(text);
+  if (!block) return undefined;
+  const field = (name: string): string | undefined => {
+    const match = new RegExp(`<${name}>([\\s\\S]*?)</${name}>`).exec(block[1] ?? "");
+    return match?.[1]?.trim() || undefined;
+  };
+  const summary = field("summary");
+  if (summary) return compact(summary, 300);
+  const status = field("status");
+  return status ? `Background task ${compact(status, 40)}.` : "Background task finished.";
+}
+
+/**
+ * What the host wrote into the transcript as a "user" turn that is a notice,
+ * not a message: a finished background task, a slash command the person ran
+ * in the terminal, or that command's output. Each reads as a status line.
+ */
+export function harnessUserNotice(value: unknown): string | undefined {
+  const text = String(value ?? "").trim();
+  const task = harnessTaskNotification(text);
+  if (task) return task;
+  const command = /^<command-name>([\s\S]*?)<\/command-name>/.exec(text);
+  if (command) {
+    const args = /<command-args>([\s\S]*?)<\/command-args>/.exec(text)?.[1]?.trim();
+    const name = command[1]?.trim() ?? "";
+    return name ? compact(args ? `${name} ${args}` : name, 200) : undefined;
+  }
+  const stdout = /^<local-command-stdout>([\s\S]*?)<\/local-command-stdout>$/.exec(text);
+  if (stdout) return compact(stdout[1]?.trim() || "", 300) || undefined;
+  return undefined;
 }
 
 /** Map Cursor runtime MCP ids (`user-granttap`) onto mcp.json names (`granttap`). */
@@ -135,14 +190,17 @@ export function pushEntry(
   > = {},
   idOverride?: string,
 ): void {
-  const clean = activityText(kind === "user" ? visibleUserText(text) : text);
+  // The host's own notices arrive as "user" turns; they are shown as status.
+  const notification = kind === "user" ? harnessUserNotice(text) : undefined;
+  const shownKind: ActivityEntry["kind"] = notification ? "status" : kind;
+  const clean = activityText(notification ?? (kind === "user" ? visibleUserText(text) : text));
   if (!clean) return;
-  const duplicateKey = `${extras.childThreadId ?? "root"}:${kind}:${extras.toolName ?? ""}:${clean}`;
+  const duplicateKey = `${extras.childThreadId ?? "root"}:${shownKind}:${extras.toolName ?? ""}:${clean}`;
   if (seen.has(duplicateKey)) return;
   seen.add(duplicateKey);
   out.push({
     id: idOverride ?? `${sessionId}:${createdAt}:${ordinal}`,
-    kind,
+    kind: shownKind,
     text: clean,
     createdAt,
     ...extras,

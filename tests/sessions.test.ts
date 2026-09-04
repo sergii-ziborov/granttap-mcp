@@ -284,3 +284,69 @@ test("Codex tasks and visible activity are discovered from local rollouts", asyn
     "git status --short",
   ]);
 });
+
+import {
+  harnessTaskNotification, harnessUserNotice, pushEntry, stripAttachmentNote, visibleUserText,
+} from "../apps/bridge/src/sessions/activity-helpers";
+
+test("a background-task notice the host wrote as a user turn is shown as status, not as the person's words", () => {
+  const notice = [
+    "<task-notification>",
+    "<task-id>ba00cw567</task-id>",
+    "<tool-use-id>toolu_01F1</tool-use-id>",
+    "<output-file>/private/tmp/x/tasks/ba00cw567.output</output-file>",
+    "<status>completed</status>",
+    "<summary>Background command \"Build GrantTap Local (Build 70), install it on the iPhone\" completed (exit code 0)</summary>",
+    "</task-notification>",
+  ].join("\n");
+  assert.equal(
+    harnessTaskNotification(notice),
+    'Background command "Build GrantTap Local (Build 70), install it on the iPhone" completed (exit code 0)',
+  );
+  const preamble = `[SYSTEM NOTIFICATION - NOT USER INPUT]\nThis is an automated background-task event.\n\n${notice}`;
+  assert.equal(harnessTaskNotification(preamble)?.startsWith("Background command"), true);
+  assert.equal(harnessTaskNotification("<task-notification><status>failed</status></task-notification>"), "Background task failed.");
+  assert.equal(harnessTaskNotification("<task-notification></task-notification>"), "Background task finished.");
+  assert.equal(harnessTaskNotification("Вот это таск нотификейшин не парсится"), undefined, "a person's words are theirs");
+  assert.equal(harnessTaskNotification("<task-notification>unterminated"), undefined);
+
+  const out: import("../packages/protocol/schema").ActivityEntry[] = [];
+  const seen = new Set<string>();
+  pushEntry(out, seen, "s", "user", notice, 1, 0);
+  pushEntry(out, seen, "s", "user", "Вот это таск нотификейшин не парсится", 2, 1);
+  pushEntry(out, seen, "s", "message", notice, 3, 2);
+  assert.deepEqual(out.map((entry) => entry.kind), ["status", "user", "message"]);
+  assert.match(out[0]!.text, /^Background command/);
+  assert.equal(out[1]!.text, "Вот это таск нотификейшин не парсится");
+});
+
+test("the host's slash commands, their output, and its image notes are notices or nothing, never the person's words", () => {
+  assert.equal(
+    harnessUserNotice("<command-name>/model</command-name>\n<command-message>model</command-message>\n<command-args>claude-fable-5-1</command-args>"),
+    "/model claude-fable-5-1",
+  );
+  assert.equal(harnessUserNotice("<local-command-stdout>Set model to `claude-fable-5-1`</local-command-stdout>"), "Set model to `claude-fable-5-1`");
+  assert.equal(harnessUserNotice("<local-command-stdout></local-command-stdout>"), undefined);
+  assert.equal(harnessUserNotice("подними версию"), undefined);
+  assert.equal(visibleUserText("[Image: original 2494x5400, displayed at 924x2000.]"), "");
+  assert.equal(visibleUserText("<local-command-caveat>Caveat: generated while running local commands.</local-command-caveat>"), "");
+  assert.equal(visibleUserText("<system-reminder>a note</system-reminder>\n<system-reminder>another</system-reminder>"), "");
+  assert.equal(visibleUserText("<system-reminder>a note</system-reminder> and my words"), "<system-reminder>a note</system-reminder> and my words");
+
+  const out: import("../packages/protocol/schema").ActivityEntry[] = [];
+  const seen = new Set<string>();
+  pushEntry(out, seen, "s", "user", "<command-name>/model</command-name><command-args>opus</command-args>", 1, 0);
+  pushEntry(out, seen, "s", "user", "[Image: original 10x10, displayed at 5x5.]", 2, 1);
+  assert.deepEqual(out.map((entry) => [entry.kind, entry.text]), [["status", "/model opus"]]);
+});
+
+test("the attachment note GrantTap appended is stripped, so the phone's own bubble is recognised", () => {
+  const typed = "Вот это таск нотификейшин не парсится, и модет и не должен там быть";
+  const prompt = `${typed}\n\nAttached files available locally (inspect them as part of this request):\n- Photo-1.jpg: /var/folders/x/granttap-attachments-CuGMVk/1-Photo-1.jpg\n- notes.txt: /var/folders/x/granttap-attachments-CuGMVk/2-notes.txt`;
+  assert.equal(stripAttachmentNote(prompt), typed);
+  assert.equal(visibleUserText(prompt), typed);
+  assert.equal(stripAttachmentNote(`${typed}\n\nAttached files available locally:\n- a.txt: /tmp/a.txt`), typed, "the Codex variant too");
+  assert.equal(stripAttachmentNote("Please inspect the attached content.\n\nAttached files available locally:\n- a.png: /tmp/a.png"), "Please inspect the attached content.");
+  assert.equal(stripAttachmentNote("Attached files available locally: none, just saying"), "Attached files available locally: none, just saying", "words that merely resemble the note stay");
+});
+

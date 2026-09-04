@@ -611,7 +611,8 @@ export async function handleUserMessage(client: RelayClient, message: UserMessag
     return;
   }
 
-  await say("Sent to the task. Waiting for the answer…", target.sessionId);
+  // No "sent, waiting" line from a middleman: the delivery receipt already
+  // marks the person's bubble, and the next words in the chat are the answer.
   const result = await deliverToSession(target, message.text, 240_000, message.attachments, {
     preferredMcp: message.preferredMcp,
     skill: message.skill,
