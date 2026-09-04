@@ -78,7 +78,20 @@ parity.
 A capsule carries facts, not files. A handoff from a checkout with uncommitted
 changes is refused — "This task has uncommitted changes. Commit or checkpoint
 them before moving the task." — instead of silently continuing the Task from
-committed state and leaving that work behind. The destination is refused just
+committed state and leaving that work behind. Asked to checkpoint from the
+phone, the source computer commits everything to `granttap/checkpoint/<task>`
+from a temporary index, so HEAD, the current branch, and the working tree stay
+exactly as the agent left them, and the capsule carries that commit. Nothing is
+pushed; the destination says so if the commit has not reached it.
+
+Claims do not wait for an agent to announce them. Every edit an agent makes is
+visible in its transcript, so the runtime derives an intent claim from each
+recent write — marked as seen rather than said, and expiring ten minutes after
+the writing stops. Overlap is judged twice: the same file is a conflict, and
+the same module is the warning that comes before it. A module is recognised
+from the path alone, so every computer and the phone reach the same answer,
+and the Task screen names who else is in this Task's files or modules while it
+can still be avoided. The destination is refused just
 as explicitly when the named commit is not on its computer, or when the
 capsule's own resource claims overlap another execution's; GrantTap never
 pushes or fetches on its own.
@@ -227,6 +240,12 @@ Evaluation happens in the provider hook before the action runs, with a deadline
 long enough for a busy machine to answer. A missed answer falls back to the
 legacy GrantTap gate rather than to a silent allow, and content never crosses
 to the engine: it receives a capability fingerprint, not the command or file.
+
+A refusal is said where the action was. Each one is written down for its chat,
+and the timeline carries it as a status row naming the rule and the reason,
+beside the call it stopped. On the phone a rule is written where the need for
+it appears: touch and hold a tool on the Project page, or use the Governance
+menu on a tool's call history, to allow, ask, or deny it for the Project.
 
 ## Relay boundary
 
