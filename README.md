@@ -206,6 +206,28 @@ The user-facing approval modes map to the existing runtime policy:
 
 Legacy custom levels remain compatible but are not part of the primary flow.
 
+## Project Governance
+
+Capabilities are decided per Project, not per task. A policy names an effect —
+`allow`, `ask`, or `deny` — for each kind (skills, MCP servers, shell and
+scripts, file writes, deploy, network), and may name one capability alone: one
+MCP server can be forbidden without forbidding every server. A named rule wins
+over its kind, and a global deny always wins over a Project.
+
+The phone authors the policy and hands it to every Project computer through the
+relay, which holds the encrypted packet until each computer reads its mailbox;
+a computer that was asleep receives it when it returns. Each computer applies
+the policy through the GrantTap Engine, acknowledges the revision it enforces,
+and reports coverage — enforced, observed only, unsupported, or unknown — per
+capability kind, so the phone shows what is actually in force rather than what
+was sent. Revision zero is a Project with no policy yet, and it is reported so
+the first policy can be written.
+
+Evaluation happens in the provider hook before the action runs, with a deadline
+long enough for a busy machine to answer. A missed answer falls back to the
+legacy GrantTap gate rather than to a silent allow, and content never crosses
+to the engine: it receives a capability fingerprint, not the command or file.
+
 ## Relay boundary
 
 Pairing and task keys are generated locally. The relay receives opaque routing
