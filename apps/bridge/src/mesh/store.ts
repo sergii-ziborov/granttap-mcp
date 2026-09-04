@@ -143,7 +143,11 @@ export class MeshStore {
     // A closed execution stays closed: the Task moved on, even when the native
     // session it left behind is still running and still reports itself.
     const execution = previous ? preferExecution(previous, parsed) : parsed;
-    if (previous && JSON.stringify(previous) === JSON.stringify(execution)) return;
+    const closedElsewhere = this.closeElsewhere(execution);
+    if (previous && JSON.stringify(previous) === JSON.stringify(execution)) {
+      if (closedElsewhere) this.save();
+      return;
+    }
     this.state.executions = this.state.executions.filter((item) => !(
       item.computerId === execution.computerId
       && item.provider === execution.provider
@@ -152,6 +156,27 @@ export class MeshStore {
     this.state.executions.push(execution);
     this.claimTaskFor(execution);
     this.save();
+  }
+
+  /**
+   * One chat runs on one computer. The same Mac renamed by the network it
+   * joined ("Mac.lan", "Serhiis-MacBook-Pro.local") kept an open execution
+   * under each name, so its Task counted two computers and the phone drew two
+   * cards for one conversation. The execution seen now is the one that lives;
+   * the same chat's execution under any other computer name is over.
+   */
+  private closeElsewhere(execution: ExecutionValue): boolean {
+    if (execution.endedAt != null) return false;
+    const endedAt = this.now();
+    let closed = false;
+    for (const other of this.state.executions) {
+      if (other.endedAt != null || other.provider !== execution.provider
+        || other.sessionId !== execution.sessionId || other.computerId === execution.computerId) continue;
+      other.endedAt = endedAt;
+      other.updatedAt = endedAt;
+      closed = true;
+    }
+    return closed;
   }
 
   private claimTaskFor(execution: ExecutionValue): void {
