@@ -83,6 +83,12 @@ function shellFingerprint(
       ...(script.pathHash ? { executable_path_hash: script.pathHash, confidence: "exact" } : {}),
     };
   }
+  // A commit or a pull request that carries a co-authorship or "generated
+  // with" trailer is its own thing to decide about: a Project that wants its
+  // history authored by people can forbid the trailer without forbidding git.
+  if (carriesCoAuthorship(command)) {
+    return fingerprint("shell", CO_AUTHORSHIP, provider, "shell-command");
+  }
   // Named by the phrase that made it a deploy or a network call — "git push",
   // "curl" — so a Project can forbid pushing without forbidding every release.
   const deploy = deployPhrase(command);
@@ -132,6 +138,17 @@ function commandText(value: unknown): string {
   if (typeof value === "string") return value.slice(0, 4_096);
   if (Array.isArray(value)) return value.map(String).join(" ").slice(0, 4_096);
   return "";
+}
+
+/** The name a co-authored commit or PR is governed under; the phone offers it as a row. */
+export const CO_AUTHORSHIP = "co-authorship";
+
+const AUTHORSHIP_COMMANDS = /\bgit\s+(?:-C\s+\S+\s+|-c\s+\S+\s+)*(?:commit|merge|rebase|cherry-pick|am)\b|\bgh\s+pr\s+(?:create|edit|merge)\b/i;
+const AUTHORSHIP_TRAILERS = /co-authored-by\s*:|generated\s+with\s+\[?claude|noreply@anthropic\.com|🤖\s*generated/i;
+
+/** True when a commit or PR command writes a co-author or "generated with" trailer. */
+export function carriesCoAuthorship(command: string): boolean {
+  return AUTHORSHIP_COMMANDS.test(command) && AUTHORSHIP_TRAILERS.test(command);
 }
 
 export function deployPhrase(command: string): string | undefined {

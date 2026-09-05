@@ -341,6 +341,10 @@ value and the whole status dropped.
 A shell call is fingerprinted by the command it runs (`git`, `rm`), a deploy or
 network call by the phrase that made it one (`git push`, `curl`), so a named
 rule can forbid pushing or deleting while the rest of the shell stays allowed.
+A commit or pull request whose command carries a co-author or "generated with"
+trailer is fingerprinted as `co-authorship`, its own row in the phone's Shell
+table, so a Project whose history is authored by people can deny the trailer
+and leave git alone.
 
 Evaluation happens in the provider hook before the action runs, with a deadline
 long enough for a busy machine to answer. A missed answer falls back to the

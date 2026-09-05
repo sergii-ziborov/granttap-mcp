@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   capabilityFingerprint,
+  carriesCoAuthorship,
   mcpCapabilityFingerprint,
 } from "../apps/bridge/src/policy/capability-fingerprint";
 import {
@@ -234,4 +235,22 @@ test("a deploy or network call is fingerprinted by the phrase that made it one",
   const curl = capabilityFingerprint({ provider: "claude", toolName: "Bash", toolInput: { command: "curl -s https://example.com" } });
   assert.equal(curl.kind, "network");
   assert.equal(curl.display_name, "curl");
+});
+
+test("a commit or PR that carries a co-authorship trailer is governed under its own name", () => {
+  const coAuthored = capabilityFingerprint({
+    provider: "claude", toolName: "Bash",
+    toolInput: { command: "git commit -m \"Fix the thing\n\nCo-Authored-By: Claude <noreply@anthropic.com>\"" },
+  });
+  assert.equal(coAuthored.kind, "shell");
+  assert.equal(coAuthored.display_name, "co-authorship");
+  const generated = capabilityFingerprint({
+    provider: "codex", toolName: "shell",
+    toolInput: { command: "gh pr create --title x --body \"Done.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\"" },
+  });
+  assert.equal(generated.display_name, "co-authorship");
+  // The same words outside a commit are not a trailer, and a plain commit is just git.
+  assert.equal(capabilityFingerprint({ provider: "claude", toolName: "Bash", toolInput: { command: "grep -rn Co-Authored-By: docs/" } }).display_name, "grep");
+  assert.equal(capabilityFingerprint({ provider: "claude", toolName: "Bash", toolInput: { command: "git commit -m \"Fix the thing\"" } }).display_name, "git");
+  assert.equal(carriesCoAuthorship("git -C repo commit -F msg.txt"), false, "a message in a file cannot be read here");
 });
