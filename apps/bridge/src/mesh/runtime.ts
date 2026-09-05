@@ -29,6 +29,7 @@ import { createHandoffFlow } from "./runtime-handoff";
 import type { MeshRuntimeDependencies } from "./runtime-dependencies";
 import { localMeshStore } from "./local";
 import { createHandoffWorktree, repositoryHasCommit } from "./worktree";
+import { fetchRevision, pushBranch } from "./remote";
 
 export type { MeshRuntimeDependencies };
 
@@ -55,6 +56,8 @@ const defaultDependencies: MeshRuntimeDependencies = {
   },
   deliver: deliverToSession,
   hasCommit: repositoryHasCommit,
+  push: pushBranch,
+  fetch: fetchRevision,
   send: (client, payload, options) => sendMeshPayload(client, payload, "phone", options),
   worktree: (repository, taskId, provider, revision) => createHandoffWorktree(
     repository,
@@ -116,6 +119,17 @@ export function createMeshRuntime(deps: MeshRuntimeDependencies) {
         return false;
       }
       if (!capsule) return false;
+      const local = request.targetComputer === deps.computer();
+      // Another computer needs the commit; asked to, the branch is published
+      // first, and a push that fails blocks the move rather than sending a
+      // capsule the destination cannot honour.
+      if (request.push && !local && cwd) {
+        const pushed = deps.push(cwd, capsule.branch);
+        if (!pushed.ok) {
+          await blockHandoff(client, request, pushed.error);
+          return false;
+        }
+      }
       const createdAt = deps.now();
       const event: MeshEvent = {
         type: "mesh.event",
@@ -131,6 +145,9 @@ export function createMeshRuntime(deps: MeshRuntimeDependencies) {
       };
       deps.store().acceptEvent(event);
       await deps.send(client, event, { ttlMs: 60 * 60_000, wake: true });
+      // The same computer, another agent: the request would come back as a
+      // duplicate of an event this store already holds, so it is taken up here.
+      if (local) await acceptHandoff(client, event);
       return true;
     },
     capsulePrompt,

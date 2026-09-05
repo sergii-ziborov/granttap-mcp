@@ -80,6 +80,8 @@ export const SessionInfo = z.object({
   skills: z.array(SkillInfo).optional(),
   childThreads: z.array(ChildThreadInfo).max(32).optional(),
   shellAllowed: z.boolean().optional(),
+  /** Held from the phone: its tool calls are refused until it is resumed. */
+  paused: z.boolean().optional(),
 });
 export type SessionInfo = z.infer<typeof SessionInfo>;
 
@@ -226,3 +228,33 @@ export const SessionCompactResult = z.object({
   createdAt: z.number(),
 });
 export type SessionCompactResult = z.infer<typeof SessionCompactResult>;
+
+/**
+ * Pause or resume one chat from the phone.
+ *
+ * A pause is enforced where the work happens: every tool call the chat makes
+ * is refused by the provider hook until the chat is resumed, and a delivery
+ * still running for it is stopped. Resuming lifts the hold; with `continue`
+ * the computer also asks the agent to carry on, so "start" is one tap.
+ */
+export const SessionControlAction = z.enum(["pause", "resume"]);
+export type SessionControlAction = z.infer<typeof SessionControlAction>;
+
+export const SessionControl = z.object({
+  type: z.literal("session.control"),
+  sessionId: CapabilitySessionId,
+  action: SessionControlAction,
+  continue: z.boolean().optional(),
+  createdAt: z.number(),
+}).strict();
+export type SessionControl = z.infer<typeof SessionControl>;
+
+export const SessionControlResult = z.object({
+  type: z.literal("session.control.result"),
+  sessionId: z.string(),
+  action: SessionControlAction,
+  ok: z.boolean(),
+  message: z.string().max(1_000),
+  createdAt: z.number(),
+}).strict();
+export type SessionControlResult = z.infer<typeof SessionControlResult>;

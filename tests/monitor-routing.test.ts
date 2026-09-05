@@ -94,7 +94,11 @@ test("monitor routes settings and task messages without weakening provider gates
     { type: "session.events", sessionId: "grok-existing", createdAt: Date.now() },
     { type: "sessions.refresh", createdAt: Date.now() },
     { type: "session.compact", sessionId: "missing", createdAt: Date.now() },
+    { type: "session.control", sessionId: "missing", action: "pause", createdAt: Date.now() },
+    { type: "session.control", sessionId: "missing", action: "resume", continue: true, createdAt: Date.now() },
   ] as Payload[]) assert.equal(await emit(payload), true);
+  assert.match(JSON.stringify(fake.sent.filter((item) => item.type === "session.control.result")),
+    /not on this computer any more/);
   assert.equal(await emit({
     type: "mesh.snapshot", sessionId: "project", projectId: "project",
     project: { projectId: "project", name: "Project", canonicalRepositoryId: "repo", createdAt: Date.now() },

@@ -40,6 +40,7 @@ test("gating can exclude exactly one chat without disabling every chat", async (
     sessionMcpDisabled: {},
     sessionSkillsDisabled: {},
     sessionShellDisabled: [],
+    pausedSessions: [],
     providerSettings: { claude: true, codex: true, cursor: true, grok: true },
     meshEnabled: true,
     // The engine ships separately, so nothing is assumed about where it lives.
@@ -78,6 +79,7 @@ test("gating can exclude exactly one chat without disabling every chat", async (
     sessionMcpDisabled: {},
     sessionSkillsDisabled: {},
     sessionShellDisabled: [],
+    pausedSessions: [],
   });
   assert.equal(isGatingSkipped("chat-a"), true);
   assert.equal(isGatingSkipped(undefined), true);
@@ -103,6 +105,7 @@ test("legacy Nodvox environment and pairing links remain readable during migrati
     sessionMcpDisabled: {},
     sessionSkillsDisabled: {},
     sessionShellDisabled: [],
+    pausedSessions: [],
   });
   assert.equal(isGatingSkipped("legacy-chat"), true);
 

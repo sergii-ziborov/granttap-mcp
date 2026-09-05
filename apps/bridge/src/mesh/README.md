@@ -32,6 +32,11 @@ named commit or when the capsule's resource claims overlap another execution.
 "Uncommitted" is read from `git status` including untracked files, because an
 untracked file is work no commit would carry. A probe that cannot answer
 publishes `unknown`, and only an explicit `clean` releases the handoff.
+`remote.ts` is the one place a remote is touched: a push of the branch the
+capsule names when the phone asked for it, never forced, and a fetch of that
+branch on a destination that lacks the commit. A handoff whose target is this
+computer is taken up by `prepare` itself, since the request would only come
+back as a duplicate of an event the store already holds.
 
 `convergence.ts` and `task-state.ts` keep one Task identity while snapshots and
 events arrive late, twice, and from several computers. Every writer raises the

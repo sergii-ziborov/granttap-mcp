@@ -44,3 +44,21 @@ test("a preview cut short at a variable name does not name the call after the va
   assert.equal(observed.name, "xcodebuild", "named from the whole command, not the preview");
   assert.equal(observed.commandPreview?.length, 160);
 });
+
+test("shell structure never names a call: the command it introduced does", () => {
+  assert.equal(commandName("if [ -d build ]; then rm -rf build; fi"), "rm");
+  assert.equal(commandName("export FOO=1; npm test"), "npm");
+  assert.equal(commandName("for f in a b; do cat $f; done"), "cat");
+  assert.equal(commandName("while read line; do echo $line; done < file"), "echo");
+  assert.equal(commandName("set -e && ./scripts/gate.sh"), "gate.sh");
+  assert.equal(commandName("source ~/.zshrc && which node"), "which");
+  assert.equal(commandName("[ -f x ] && lsof -i :8080"), "lsof");
+  assert.equal(commandName("! grep -q x file"), "grep");
+  assert.equal(commandName("{ sleep 1; }"), "sleep");
+  assert.equal(commandName("time xcodebuild test"), "xcodebuild");
+  assert.equal(commandName("33644"), undefined, "a number is an argument that lost its command");
+  assert.equal(commandName("kill -STOP 33644"), "kill");
+  assert.equal(commandName("if [ -d build ]"), undefined, "a bare condition ran nothing");
+  assert.equal(commandName("true"), undefined);
+  assert.equal(commandName("print hello"), "print");
+});

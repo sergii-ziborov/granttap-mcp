@@ -172,22 +172,45 @@ export function commandName(preview: string | undefined | null): string | undefi
   for (const segment of preview.split(/\s*(?:&&|\|\||;|\|)\s*/)) {
     const words = segment.trim().split(/\s+/).filter(Boolean);
     let index = 0;
+    let structural = false;
     while (index < words.length) {
       const word = words[index]!;
       if (word === "cd") { index += 2; continue; }
       if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(word) || prefixes.has(word)) { index += 1; continue; }
+      // "then rm -rf build" ran rm; the keyword only introduced it.
+      if (SHELL_LEADERS.has(word)) { index += 1; continue; }
+      // "if [ -f x ]", "export FOO=1", "for f in …" ran nothing themselves:
+      // what they ran is in a later segment, after "then" or "do".
+      if (SHELL_STRUCTURE.has(word)) { structural = true; break; }
       break;
     }
+    if (structural) continue;
     const word = words[index];
     if (!word) continue;
     const leaf = word.split("/").pop() ?? word;
     // A shouting name is a variable, not a command: a preview cut short at
     // "DEVELOPER_DIR" must not name the call DEVELOPER_DIR.
     if (/^[A-Z_][A-Z0-9_]*$/.test(leaf)) continue;
+    // A number is an argument that lost its command, never a command.
+    if (/^\d+$/.test(leaf)) continue;
     if (/^[A-Za-z0-9._+-]{1,40}$/.test(leaf) && !/^[-.]/.test(leaf)) return leaf;
   }
   return undefined;
 }
+
+/** Keywords that introduce the command that follows them in the same segment. */
+const SHELL_LEADERS = new Set(["then", "do", "else", "elif", "!", "{", "(", "time"]);
+
+/**
+ * Words that structure a shell script without running anything a person
+ * would recognise as the call: conditions, loops, declarations, tests.
+ */
+const SHELL_STRUCTURE = new Set([
+  "if", "for", "while", "until", "case", "select", "function", "fi", "done", "esac", "in",
+  "export", "set", "unset", "local", "declare", "typeset", "readonly", "alias", "unalias",
+  "source", ".", "eval", "wait", "shift", "return", "exit", "true", "false", ":", "read",
+  "trap", "test", "[", "[[", "]", "]]", "}", ")", "pushd", "popd", "shopt", "setopt",
+]);
 
 export function toObservedCapability(
   observation: CapabilityObservation,

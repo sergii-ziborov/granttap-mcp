@@ -85,6 +85,8 @@ async function harness(overrides: Partial<MeshRuntimeDependencies> = {}) {
     send: async (_client, payload) => { sent.push(payload); },
     worktree: () => ({ path: "/repo-worktree", branch: "granttap/codex/task" }),
     hasCommit: () => true,
+    push: () => ({ ok: true, remote: "origin" }),
+    fetch: () => false,
     ...overrides,
   };
   return { runtime: createMeshRuntime(deps), store, sent, sessions };
@@ -249,4 +251,70 @@ test("default entry points share one protected local mesh store", async () => {
   }), false);
   resetLocalMeshStore();
   delete process.env.GRANTTAP_CONFIG_DIR;
+});
+
+test("a handoff to another agent on the same computer is taken up at once", async () => {
+  const repo = await gitRepository();
+  let startedIn = "";
+  const run = await harness({
+    start: async (_provider: MeshProvider, _prompt: string, cwd: string) => {
+      startedIn = cwd;
+      return { ok: true, text: "Started", sessionId: "codex-local" };
+    },
+  });
+  run.sessions.push(session(repo));
+  const source = run.runtime.catalog(run.sessions)[0]!;
+  run.sessions[0] = source;
+  assert.equal(await run.runtime.prepare(client, {
+    type: "mesh.handoff.prepare", sessionId: source.sessionId, projectId: source.projectId!,
+    taskId: source.taskId!, targetProvider: "codex", targetComputer: "Workstation", createdAt: now,
+    push: true,
+  }), true);
+  const types = run.sent.map((item) => (item as MeshEvent).eventType);
+  assert.deepEqual(types, ["HANDOFF_REQUEST", "HANDOFF_ACCEPTED"], "no push for the same computer");
+  assert.equal(startedIn, "/repo-worktree");
+  assert.equal(run.store.snapshot(source.projectId!)?.tasks[0]?.ownerSessionId, "codex-local");
+});
+
+test("a push the person asked for happens before the capsule leaves, and blocks the move when it fails", async () => {
+  const repo = await gitRepository();
+  const pushes: string[] = [];
+  const run = await harness({
+    push: (_cwd, branch) => { pushes.push(branch ?? "?"); return { ok: true, remote: "origin" }; },
+  });
+  run.sessions.push(session(repo));
+  const source = run.runtime.catalog(run.sessions)[0]!;
+  run.sessions[0] = source;
+  const request = {
+    type: "mesh.handoff.prepare" as const, sessionId: source.sessionId, projectId: source.projectId!,
+    taskId: source.taskId!, targetProvider: "codex" as const, targetComputer: "Air", createdAt: now,
+  };
+  assert.equal(await run.runtime.prepare(client, { ...request, push: true }), true);
+  assert.deepEqual(pushes, ["claude/pairing"]);
+  assert.equal((run.sent.at(-1) as MeshEvent).eventType, "HANDOFF_REQUEST");
+
+  const failing = await harness({ push: () => ({ ok: false, error: "Push of x to origin failed: rejected" }) });
+  failing.sessions.push(session(repo));
+  failing.sessions[0] = failing.runtime.catalog(failing.sessions)[0]!;
+  assert.equal(await failing.runtime.prepare(client, { ...request, sessionId: failing.sessions[0]!.sessionId, push: true }), false);
+  const blocked = failing.sent.at(-1) as MeshEvent;
+  assert.equal(blocked.eventType, "TASK_BLOCKED");
+  assert.match(blocked.payload.reason ?? "", /rejected/);
+});
+
+test("a destination without the commit fetches it before refusing", async () => {
+  const fetched: string[] = [];
+  const run = await harness({
+    hasCommit: () => false,
+    fetch: (_repository, revision, branch) => { fetched.push(`${revision.slice(0, 4)}@${branch ?? "-"}`); return true; },
+  });
+  seedLocalCheckout(run.store);
+  await run.runtime.handle(client, handoff("fetched", capsule({ branch: "granttap/checkpoint/task" })));
+  assert.deepEqual(fetched, ["bbbb@granttap/checkpoint/task"]);
+  assert.equal((run.sent.at(-1) as MeshEvent).eventType, "HANDOFF_ACCEPTED");
+
+  const stillMissing = await harness({ hasCommit: () => false, fetch: () => false });
+  seedLocalCheckout(stillMissing.store);
+  await stillMissing.runtime.handle(client, handoff("unfetched"));
+  assert.match((stillMissing.sent.at(-1) as MeshEvent).payload.reason ?? "", /not on this computer/);
 });

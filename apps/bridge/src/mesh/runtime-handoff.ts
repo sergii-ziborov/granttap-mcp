@@ -108,7 +108,7 @@ export function createHandoffFlow(deps: MeshRuntimeDependencies) {
       return rejectHandoff(client, event, `${conflict.ownerSessionId} currently claims ${conflict.resource}.`);
     }
     const revision = capsule.latestCommit ?? capsule.baseSha;
-    if (!deps.hasCommit(repository, revision)) {
+    if (!deps.hasCommit(repository, revision) && !deps.fetch(repository, revision, capsule.branch)) {
       return rejectHandoff(
         client,
         event,

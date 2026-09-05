@@ -5,6 +5,7 @@ import type {
   ConfigSet,
   SessionAccessSet,
   SessionCompact,
+  SessionControl,
   SessionInfo,
   SessionMcpSet,
   SessionShellSet,
@@ -18,6 +19,7 @@ import {
   loadRuntimeConfig,
   saveRuntimeConfig,
   setSessionMcpAllowed,
+  setSessionPaused,
   setSessionShellAllowed,
   setSessionSkillAllowed,
 } from "./config";
@@ -30,6 +32,7 @@ import {
   createCursorSession,
   createGrokSession,
   deliverToSession,
+  stopDeliveries,
 } from "./reply";
 import { abandonDelivery, beginDelivery, completeDelivery } from "./delivery";
 import { inspectAgentIntegrations } from "./install";
@@ -174,6 +177,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
           runtime.sessionMcpDisabled[session.sessionId] ?? [],
         ),
         shellAllowed: !runtime.sessionShellDisabled.includes(session.sessionId),
+        ...(runtime.pausedSessions.includes(session.sessionId) ? { paused: true } : {}),
       };
       // Global/repository skill arrays can be large. The open task gets the
       // complete row immediately after session.subscribe; list-only rows stay lean.
@@ -354,6 +358,10 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       await handleCompact(client, payload);
       void publish().catch(() => {});
       return true;
+    } else if (payload.type === "session.control") {
+      await handleSessionControl(client, payload, () => { void publish().catch(() => {}); });
+      void publish().catch(() => {});
+      return true;
     } else if (payload.type === "tool.update") {
       // Minutes long, so the relay loop does not wait on it: the phone sees
       // `updating` in the next status and the result when it lands.
@@ -459,6 +467,62 @@ function handleSkillSet(message: SessionSkillSet): void {
 
 function handleShellSet(message: SessionShellSet): void {
   setSessionShellAllowed(message.sessionId, message.allowed);
+}
+
+/** What the agent is told when the person lifts the hold and asks it to go on. */
+export const RESUME_PROMPT =
+  "GrantTap: this chat was resumed from the phone. Continue the work you were doing before the pause; tool calls are allowed again.";
+
+/**
+ * Pause or resume one chat.
+ *
+ * A pause is a hold on tool calls, enforced by the provider hooks on every call
+ * the chat makes, plus a stop of any delivery already running for it. The
+ * result goes back at once; the continuation a resume asks for runs in the
+ * background, so a phone that tapped "resume" does not wait on a whole turn.
+ */
+export async function handleSessionControl(
+  client: RelayClient,
+  message: SessionControl,
+  afterContinue: () => void = () => {},
+): Promise<void> {
+  const sessionId = message.sessionId;
+  const reply = async (ok: boolean, text: string): Promise<void> => {
+    await sendSessionPayload(client, {
+      type: "session.control.result",
+      sessionId,
+      action: message.action,
+      ok,
+      message: text.slice(0, 1_000),
+      createdAt: Date.now(),
+    }, sessionId, "phone", { ttlMs: 15 * 60_000 });
+  };
+  try {
+    setSessionPaused(sessionId, message.action === "pause");
+  } catch (error) {
+    return reply(false, error instanceof Error ? error.message : String(error));
+  }
+  if (message.action === "pause") {
+    const stopped = stopDeliveries(sessionId);
+    return reply(true, stopped > 0
+      ? `Paused. ${stopped} running turn stopped; every tool call from this chat is refused until you resume.`
+      : "Paused: every tool call from this chat is refused until you resume.");
+  }
+  if (!message.continue) return reply(true, "Resumed: tool calls are allowed again.");
+  const session = scanSessions().sessions.find((item) => item.sessionId === sessionId)
+    ?? scanSessionHistory().find((item) => item.sessionId === sessionId);
+  if (!session) {
+    return reply(true, "Resumed. This chat is not on this computer any more, so nothing was asked to continue.");
+  }
+  await reply(true, "Resumed and asked to continue.");
+  void deliverToSession(session, RESUME_PROMPT, DELIVERY_TIMEOUT_MS, [], { ignorePause: true })
+    .then((result) => {
+      if (!result.ok) {
+        process.stderr.write(`[monitor] resume of ${sessionId.slice(0, 8)} did not continue: ${result.error}\n`);
+      }
+    })
+    .catch(() => {})
+    .finally(afterContinue);
 }
 
 async function handleCompact(client: RelayClient, message: SessionCompact): Promise<void> {

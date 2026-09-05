@@ -250,6 +250,12 @@ export const MeshHandoffPrepare = z.object({
    * leave without losing it. The branch is local: GrantTap never pushes.
    */
   checkpoint: z.boolean().optional(),
+  /**
+   * Publish the branch the capsule names to the repository's remote before the
+   * capsule leaves, so a destination on another computer can fetch the commit.
+   * Never a force push; the person asks for it per handoff.
+   */
+  push: z.boolean().optional(),
 }).strict().superRefine((value, ctx) => {
   if ((value.targetProvider === "grok_bot") !== (value.targetActorId != null)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["targetActorId"], message: "actor required" });

@@ -71,6 +71,7 @@ export function runCursorResume(
   return runProcess(
     cursorBin(), ["-p", "--resume", session.sessionId, "--output-format", "json", text],
     session.cwd, timeoutMs, (stdout) => parseCursor(stdout, session.sessionId),
+    undefined, session.sessionId,
   );
 }
 
@@ -93,5 +94,6 @@ export function runGrokResume(
   return runProcess(
     grokBin(), args, session.cwd, timeoutMs,
     (stdout) => parseGrok(stdout, session.sessionId),
+    undefined, session.sessionId,
   );
 }

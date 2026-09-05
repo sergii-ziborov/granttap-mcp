@@ -82,7 +82,25 @@ committed state and leaving that work behind. Asked to checkpoint from the
 phone, the source computer commits everything to `granttap/checkpoint/<task>`
 from a temporary index, so HEAD, the current branch, and the working tree stay
 exactly as the agent left them, and the capsule carries that commit. Nothing is
-pushed; the destination says so if the commit has not reached it.
+pushed unless the phone asks for it per handoff: then the source publishes the
+branch the capsule names to the checkout's remote — never by force — before the
+capsule leaves, a push that fails blocks the move, and a destination that lacks
+the commit fetches that branch once before refusing. A handoff can also stay on
+one computer: the same Task continues with another agent there, in a worktree
+of its own from the same commit, taken up at once by the computer that
+prepared it.
+
+### Pause and resume
+
+A chat can be held from the phone. The hold is enforced where the work
+happens: every provider hook refuses every tool call from that chat — the
+agent reads "GrantTap paused this chat from the phone" and is told to wait —
+and a delivery already running for the chat is stopped. A message sent to a
+held chat is refused for the same reason. Resuming lifts the hold; asked to
+continue, the computer answers the phone at once and then delivers one
+continuation prompt in the background, so "start" is one tap. The hold lives
+in the runtime config as `pausedSessions` and is published on the session as
+`paused`.
 
 Claims do not wait for an agent to announce them. Every edit an agent makes is
 visible in its transcript, so the runtime derives an intent claim from each

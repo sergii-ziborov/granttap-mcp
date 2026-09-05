@@ -23,6 +23,8 @@ export type RuntimeConfig = {
   sessionMcpDisabled: Record<string, string[]>;
   sessionSkillsDisabled: Record<string, string[]>;
   sessionShellDisabled: string[];
+  /** Chats held from the phone: every tool call is refused until resumed. */
+  pausedSessions: string[];
   providerSettings: ProviderRuntimeSettings;
   meshEnabled: boolean;
   /** Absolute path to the separately distributed GrantTap Engine binary. */
@@ -41,6 +43,7 @@ const DEFAULT_RUNTIME: RuntimeConfig = {
   sessionMcpDisabled: {},
   sessionSkillsDisabled: {},
   sessionShellDisabled: [],
+  pausedSessions: [],
   providerSettings: { claude: true, codex: true, cursor: true, grok: true },
   meshEnabled: true,
   enginePath: null,
@@ -97,6 +100,15 @@ function parseDisabledCapabilities(raw: unknown): Record<string, string[]> {
   return result;
 }
 
+function parseSessionList(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return [...new Set<string>(
+    (raw as unknown[])
+      .map(capabilitySessionId)
+      .filter((sessionId): sessionId is string => sessionId != null),
+  )];
+}
+
 /** Only an absolute path can be verified, so a relative one is not kept. */
 function parseEnginePath(raw: unknown): string | null {
   return typeof raw === "string" && raw.startsWith("/") && raw.length <= 1024 ? raw : null;
@@ -134,13 +146,8 @@ export function loadRuntimeConfig(): RuntimeConfig {
       autoAcceptPaused: raw.autoAcceptPaused === true,
       sessionMcpDisabled: parseDisabledCapabilities(raw.sessionMcpDisabled),
       sessionSkillsDisabled: parseDisabledCapabilities(raw.sessionSkillsDisabled),
-      sessionShellDisabled: Array.isArray(raw.sessionShellDisabled)
-        ? [...new Set<string>(
-            (raw.sessionShellDisabled as unknown[])
-              .map(capabilitySessionId)
-              .filter((sessionId): sessionId is string => sessionId != null),
-          )]
-        : [],
+      sessionShellDisabled: parseSessionList(raw.sessionShellDisabled),
+      pausedSessions: parseSessionList(raw.pausedSessions),
       providerSettings: parseProviderSettings(raw.providerSettings),
       meshEnabled: raw.meshEnabled !== false,
       enginePath: parseEnginePath(raw.enginePath),
@@ -154,6 +161,7 @@ export function loadRuntimeConfig(): RuntimeConfig {
       sessionMcpDisabled: {},
       sessionSkillsDisabled: {},
       sessionShellDisabled: [],
+      pausedSessions: [],
       providerSettings: { ...DEFAULT_RUNTIME.providerSettings },
       meshEnabled: true,
     };

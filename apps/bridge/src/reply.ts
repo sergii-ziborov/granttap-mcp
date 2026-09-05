@@ -4,9 +4,9 @@ import { join } from "node:path";
 import type { SessionInfo, UserAttachment } from "../../../packages/protocol/schema";
 import type { CodingAgent } from "../../../packages/protocol/schema";
 import { explainClaudeFailure, resolveClaudeBinary } from "./claude-bin";
-import { configDir, loadRuntimeConfig } from "./config";
+import { configDir, isSessionPaused, loadRuntimeConfig, PAUSED_SESSION_REASON } from "./config";
 import { withAttachments } from "./reply/attachments";
-import { runProcess } from "./reply/process";
+import { abortProcesses, runProcess } from "./reply/process";
 import { routingPrompt } from "./reply/routing";
 import type { DeliveryOptions, ReplyResult } from "./reply/types";
 import {
@@ -29,6 +29,11 @@ export function resolveAgentWorkspace(cwd: string | undefined, agent: CodingAgen
 
 const inFlight = new Map<string, Promise<ReplyResult>>();
 
+/** Stop whatever is running for a chat right now; how many runs stopped. */
+export function stopDeliveries(sessionId: string): number {
+  return abortProcesses(sessionId);
+}
+
 export function deliverToSession(
   session: SessionInfo,
   text: string,
@@ -36,6 +41,11 @@ export function deliverToSession(
   attachments: UserAttachment[] = [],
   options: DeliveryOptions = {},
 ): Promise<ReplyResult> {
+  // A held chat takes no new turn either: the pause is the person's, and a
+  // message from the phone would otherwise quietly restart the work.
+  if (!options.ignorePause && isSessionPaused(session.sessionId)) {
+    return Promise.resolve({ ok: false, error: PAUSED_SESSION_REASON });
+  }
   return queued(session.sessionId, () => withAttachments(attachments, text, (prepared) =>
     runDelivery(
       session,
@@ -158,7 +168,7 @@ function runClaude(
     return trimmed
       ? { ok: true, text: trimmed.slice(0, 4000) }
       : { ok: false, error: "Claude returned an empty response." };
-  });
+  }, undefined, session.sessionId);
 }
 
 function runClaudeNew(text: string, cwd: string, timeoutMs: number): Promise<ReplyResult> {
@@ -246,6 +256,7 @@ function runCodex(
     timeoutMs,
     (stdout) => parseCodexJsonl(stdout, session.sessionId),
     text,
+    session.sessionId,
   );
 }
 

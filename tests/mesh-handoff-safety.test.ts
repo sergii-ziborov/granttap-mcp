@@ -45,6 +45,8 @@ async function harness(overrides: Partial<MeshRuntimeDependencies> = {}) {
     send: async (_c, payload) => { sent.push(payload); },
     worktree: () => ({ path: "/repo-worktree", branch: "granttap/codex/task" }),
     hasCommit: () => true,
+    push: () => ({ ok: true, remote: "origin" }),
+    fetch: () => false,
     ...overrides,
   };
   return { runtime: createMeshRuntime(deps), store, sent, sessions };

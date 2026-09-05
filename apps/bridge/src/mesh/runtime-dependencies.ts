@@ -34,4 +34,8 @@ export type MeshRuntimeDependencies = {
     revision: string,
   ) => WorktreeResult | undefined | null;
   hasCommit: (repository: string, revision: string) => boolean;
+  /** Publish the branch a capsule names, when the person asked for it. */
+  push: (cwd: string, branch: string | undefined) => { ok: true; remote: string } | { ok: false; error: string };
+  /** Bring a commit the capsule names to this checkout; whether it is here now. */
+  fetch: (repository: string, revision: string, branch?: string) => boolean;
 };

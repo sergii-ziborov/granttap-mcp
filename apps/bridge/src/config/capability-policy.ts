@@ -52,10 +52,42 @@ export function setSessionShellAllowed(rawSessionId: string, allowed: boolean): 
 }
 
 export type SessionCapabilityBlock = {
-  kind: "mcp" | "skill" | "cli";
+  kind: "mcp" | "skill" | "cli" | "session";
   name: string;
   reason: string;
 };
+
+/** What the agent reads when its chat is held from the phone. */
+export const PAUSED_SESSION_REASON =
+  "GrantTap paused this chat from the phone. Do not retry the call or work around it: stop and wait until the chat is resumed.";
+
+export function setSessionPaused(rawSessionId: string, paused: boolean): void {
+  const sessionId = capabilitySessionId(rawSessionId);
+  if (!sessionId) throw new TypeError("invalid session pause toggle");
+  const runtime = loadRuntimeConfig();
+  const held = new Set(runtime.pausedSessions);
+  if (paused) held.add(sessionId);
+  else held.delete(sessionId);
+  runtime.pausedSessions = [...held].sort();
+  saveRuntimeConfig(runtime);
+}
+
+export function isSessionPaused(rawSessionId: string | null | undefined): boolean {
+  const sessionId = capabilitySessionId(rawSessionId);
+  return sessionId != null && loadRuntimeConfig().pausedSessions.includes(sessionId);
+}
+
+/**
+ * A held chat is refused every tool, whatever the tool: the hold is the
+ * person's, and no capability rule of the chat's own may outrank it.
+ */
+export function pausedSessionBlock(
+  rawSessionId: string | null | undefined,
+): SessionCapabilityBlock | null {
+  return isSessionPaused(rawSessionId)
+    ? { kind: "session", name: "paused", reason: PAUSED_SESSION_REASON }
+    : null;
+}
 
 function mcpBlock(server: string): SessionCapabilityBlock {
   return {
@@ -140,6 +172,9 @@ export function blockedSessionCapability(
   const toolName = boundedIdentifier(rawToolName, 240);
   if (!sessionId || !toolName) return null;
   const runtime = loadRuntimeConfig();
+  if (runtime.pausedSessions.includes(sessionId)) {
+    return { kind: "session", name: "paused", reason: PAUSED_SESSION_REASON };
+  }
 
   const server = mcpServerFromTool(toolName);
   if (server && (runtime.sessionMcpDisabled[sessionId] ?? []).includes(server)) {
