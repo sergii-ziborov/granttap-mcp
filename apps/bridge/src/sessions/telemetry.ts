@@ -161,17 +161,43 @@ function boundedErrorClass(value: string | undefined): string | undefined {
   return clean || undefined;
 }
 
+/**
+ * The command a shell call ran, by its first real word: `npm`, `git`, `rg` —
+ * not `Bash`. A usage screen that listed every shell call as Bash could not
+ * say which tool was slow or failing, which is the only thing it is for.
+ */
+export function commandName(preview: string | undefined | null): string | undefined {
+  if (!preview) return undefined;
+  const prefixes = new Set(["sudo", "env", "exec", "time", "nohup", "command", "builtin", "xargs"]);
+  for (const segment of preview.split(/\s*(?:&&|\|\||;|\|)\s*/)) {
+    const words = segment.trim().split(/\s+/).filter(Boolean);
+    let index = 0;
+    while (index < words.length) {
+      const word = words[index]!;
+      if (word === "cd") { index += 2; continue; }
+      if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(word) || prefixes.has(word)) { index += 1; continue; }
+      break;
+    }
+    const word = words[index];
+    if (!word) continue;
+    const leaf = word.split("/").pop() ?? word;
+    if (/^[A-Za-z0-9._+-]{1,40}$/.test(leaf) && !/^[-.]/.test(leaf)) return leaf;
+  }
+  return undefined;
+}
+
 export function toObservedCapability(
   observation: CapabilityObservation,
 ): ObservedCapability {
   const kind = observation.mcpServer ? "mcp" : observation.skill ? "skill" : "cli";
   const toolName = observation.toolName.trim().slice(0, 240);
+  const commandPreview =
+    kind === "cli" ? commandPreviewFromInput(observation.commandPreview) ?? undefined : undefined;
   return {
     kind,
-    name: (observation.mcpServer ?? observation.skill ?? toolName).trim().slice(0, 160),
+    name: (observation.mcpServer ?? observation.skill ?? commandName(commandPreview) ?? toolName).trim().slice(0, 160),
     toolName,
-    commandPreview:
-      kind === "cli" ? commandPreviewFromInput(observation.commandPreview) ?? undefined : undefined,
+    commandPreview,
     estimatedContextTokens: observation.estimatedContextTokens,
     estimatedBaselineTokens: observation.estimatedBaselineTokens,
     durationMs: observation.durationMs,
@@ -203,7 +229,9 @@ export function toRemoteCapabilityUsageEvent(
       : observation.cli
         ? "cli"
         : null;
-  const name = (observation.mcpServer ?? observation.skill ?? observation.toolName).trim();
+  const remotePreview =
+    kind === "cli" ? commandPreviewFromInput(observation.commandPreview) ?? undefined : undefined;
+  const name = (observation.mcpServer ?? observation.skill ?? commandName(remotePreview) ?? observation.toolName).trim();
   const toolName = observation.toolName.trim();
   const sessionId = observation.sessionId.trim();
   if (!kind || !name || !toolName || !sessionId || sessionId.length > 256) {
