@@ -205,6 +205,18 @@ The bounded encrypted protocol preserves:
 An optional bounded `errorClass` may describe an error category. Full tool
 error payloads are not copied into usage telemetry by default.
 
+A shell call is named by the command it ran — `npm`, `git`, `xcodebuild` —
+with the tool that ran it kept beside the name, so the usage screen can say
+which tool was slow or failing rather than listing every call as Bash.
+
+Machine load attributes to an agent everything the agent started — its
+shells, its node workers, the build a shell ran — found through the process
+tree, and names the heaviest kinds of process it runs (`node` ×19, `zsh` ×3)
+so the phone can say what an agent is doing, not only that it is. The
+executable path and the command line are read separately and joined by pid,
+because a path with a space in it (`~/Library/Application Support/Claude/…`)
+cannot be recovered from a command line split on whitespace.
+
 ### One computer, whatever the network calls it
 
 The Mesh keys a computer by an identity written down once, on first use, in
