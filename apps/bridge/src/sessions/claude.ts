@@ -390,10 +390,27 @@ export function claudeCapabilityUsage(
   const pending = new Map<string, PendingCapabilityTool>();
   const out: CapabilityObservation[] = [];
 
+  let commandOrdinal = 0;
   for (const line of lines) {
     const row = safeParse(line);
-    if (!row || !Array.isArray(row.message?.content)) continue;
+    if (!row) continue;
     const rowAt = ts(row.timestamp);
+    // A skill the person invoked as a slash command never becomes a tool call;
+    // the host writes it as a user turn. It is a skill used all the same.
+    const command = slashCommandSkill(row);
+    if (command) {
+      commandOrdinal += 1;
+      rememberCapabilityObservation(out, {
+        sourceId: `${sourceThreadId}:command:${typeof row.uuid === "string" ? row.uuid : commandOrdinal}`,
+        sessionId: session.sessionId,
+        toolName: `/${command}`,
+        skill: command,
+        createdAt: rowAt || session.lastActivityAt,
+        outcome: "success",
+      });
+      continue;
+    }
+    if (!Array.isArray(row.message?.content)) continue;
     for (const block of row.message.content as any[]) {
       if (
         block?.type === "tool_use" &&
@@ -437,6 +454,31 @@ export function claudeCapabilityUsage(
     if (observation) rememberCapabilityObservation(out, observation);
   }
   return out;
+}
+
+/**
+ * Housekeeping commands are the terminal's own, not a skill anyone wrote:
+ * counting `/clear` as a skill would put the tool's plumbing in the usage.
+ */
+const BUILTIN_COMMANDS = new Set([
+  "clear", "compact", "help", "model", "cost", "status", "config", "doctor", "login", "logout",
+  "memory", "permissions", "hooks", "mcp", "agents", "exit", "quit", "bug", "vim", "terminal-setup",
+  "resume", "continue", "init", "context", "release-notes", "upgrade", "fast", "theme",
+]);
+
+/** The skill a user turn invoked as a slash command, when it is one. */
+export function slashCommandSkill(row: any): string | undefined {
+  if (row?.type !== "user" && row?.message?.role !== "user") return undefined;
+  const content = row.message?.content;
+  const text = typeof content === "string"
+    ? content
+    : Array.isArray(content)
+      ? content.find((block: any) => block?.type === "text")?.text
+      : undefined;
+  if (typeof text !== "string" || !text.trimStart().startsWith("<command-name>")) return undefined;
+  const name = /<command-name>\s*\/?([A-Za-z0-9][A-Za-z0-9_:.-]{0,79})\s*<\/command-name>/.exec(text)?.[1];
+  if (!name || BUILTIN_COMMANDS.has(name.toLowerCase())) return undefined;
+  return name;
 }
 
 function appendClaudeActivity(
