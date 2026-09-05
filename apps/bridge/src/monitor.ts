@@ -146,7 +146,12 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
   });
   const loadLoop = startMachineLoadLoop({
     connected: () => client.isConnected,
-    publish: (status, intervalMs) => publishMachineLoad(client, status, intervalMs),
+    // Only the leader reports load. Every MCP server used to run this loop
+    // too, each with the code of the day it started, and the phone flickered
+    // between their answers.
+    publish: (status, intervalMs) => (leadership.acquire()
+      ? publishMachineLoad(client, status, intervalMs)
+      : Promise.resolve(undefined)),
     onError: (error) => {
       process.stderr.write(
         `[monitor] load report failed: ${error instanceof Error ? error.message : String(error)}\n`,
@@ -384,7 +389,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
   const stopHeartbeat = startPublishLoop({
     connected: () => client.isConnected,
     intervalMs: HEARTBEAT_INTERVAL_MS,
-    publish: () => publishHeartbeat(client).catch(() => {}),
+    publish: () => (leadership.acquire() ? publishHeartbeat(client) : Promise.resolve()).catch(() => {}),
   });
 
   return {
