@@ -205,6 +205,17 @@ The bounded encrypted protocol preserves:
 An optional bounded `errorClass` may describe an error category. Full tool
 error payloads are not copied into usage telemetry by default.
 
+### One computer, whatever the network calls it
+
+The Mesh keys a computer by an identity written down once, on first use, in
+`computer.json` in the config directory — the hostname it had then — and
+keeps it. A Mac renamed by the network it joins ("Mac.lan" at home,
+"Serhiis-MacBook-Pro.local" elsewhere) used to become a second computer with
+its own open executions and repository bindings; now every later hostname is
+remembered as a former name of the same machine, its leftover executions are
+closed and its bindings marked unavailable, and the current hostname stays
+what people see. `GRANTTAP_COMPUTER_ID` overrides the stored id.
+
 ### Run journal and prompt-time context
 
 A message from the phone is answered by a fresh `claude -p --resume` of the

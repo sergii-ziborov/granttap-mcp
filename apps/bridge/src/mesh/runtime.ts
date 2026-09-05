@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { hostname } from "node:os";
 import { join } from "node:path";
 import type { RelayClient } from "../../../../packages/core/relay-client";
 import type {
@@ -22,6 +21,7 @@ import { isProviderEnabled } from "../config/runtime";
 import { scanSessionHistory, scanSessions } from "../sessions";
 import { sendMeshPayload } from "../session-keys";
 import { linkSessionsToProjects, workingTreeState } from "./catalog";
+import { computerId } from "./computer-identity";
 import { createCheckpoint } from "./checkpoint";
 import { buildTaskCapsule } from "./capsule";
 import { handoffReadiness } from "./readiness";
@@ -43,7 +43,7 @@ function discoveredSessions(): SessionInfo[] {
 const defaultDependencies: MeshRuntimeDependencies = {
   store: localMeshStore,
   sessions: discoveredSessions,
-  computer: hostname,
+  computer: () => computerId(),
   now: Date.now,
   eventId: randomUUID,
   providerEnabled: isProviderEnabled,

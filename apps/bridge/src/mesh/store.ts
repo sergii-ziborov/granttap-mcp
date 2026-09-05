@@ -159,6 +159,31 @@ export class MeshStore {
   }
 
   /**
+   * Retire what this computer wrote under a former name: an execution still
+   * open there is over, a binding still offered there is unavailable. Nothing
+   * is deleted, so a phone that still holds the old rows learns the same.
+   */
+  retireComputerNames(computerId: string, formerNames: string[]): void {
+    const former = new Set(formerNames.filter((name) => name && name !== computerId));
+    if (former.size === 0) return;
+    const now = this.now();
+    let changed = false;
+    for (const execution of this.state.executions) {
+      if (execution.endedAt == null && former.has(execution.computerId)) {
+        execution.endedAt = now;
+        execution.updatedAt = now;
+        changed = true;
+      }
+    }
+    this.state.bindings = this.state.bindings.map((binding) => {
+      if (!binding.available || !former.has(binding.endpointId)) return binding;
+      changed = true;
+      return { ...binding, available: false };
+    });
+    if (changed) this.save();
+  }
+
+  /**
    * One chat runs on one computer. The same Mac renamed by the network it
    * joined ("Mac.lan", "Serhiis-MacBook-Pro.local") kept an open execution
    * under each name, so its Task counted two computers and the phone drew two

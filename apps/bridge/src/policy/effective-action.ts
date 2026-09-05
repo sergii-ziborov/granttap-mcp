@@ -1,5 +1,5 @@
-import { hostname } from "node:os";
 import { isAbsolute, join, normalize } from "node:path";
+import { computerId } from "../mesh/computer-identity";
 import { configDir } from "../config/paths";
 import { EngineClient } from "../engine/engine-client";
 import type {
@@ -61,7 +61,7 @@ export async function evaluateEffectiveAction(
   if (!projectPolicyFeatureEnabled(env)) return FALLBACK;
   const now = options.now ?? Date.now;
   const deadline = now() + DEFAULT_ENGINE_POLICY_TIMEOUT_MS;
-  const endpointId = options.endpointId ?? hostname();
+  const endpointId = options.endpointId ?? computerId(env);
   const ownedClient = options.client == null;
   const client = options.client ?? new EngineClient({ socketPath: join(configDir(), "engine.sock") });
   try {

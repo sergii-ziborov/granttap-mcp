@@ -14,6 +14,7 @@ import {
   sanitizedRepositoryRemote,
   taskIdentity,
 } from "./identity";
+import { formerComputerNames } from "./computer-identity";
 import { readIntegrationMap } from "./integration-map";
 import type { MeshStore } from "./store";
 import { syncProjectBinding } from "../engine/engine-projects";
@@ -120,7 +121,12 @@ export function linkSessionsToProjects(
   sessions: SessionInfo[],
   computerId: string,
   inspect: (cwd: string) => RepositoryFacts = inspectRepository,
+  formerNames: string[] = formerComputerNames(),
 ): SessionInfo[] {
+  // Records kept under a name this computer used to go by are this computer's
+  // leftovers, not a second machine: their executions are over and their
+  // bindings unavailable.
+  store.retireComputerNames(computerId, formerNames);
   // A vanished session never says it ended, so sweep first: an execution left
   // open holds the Task, keeps its old title, and keeps its last state.
   store.closeVanishedExecutions(
