@@ -285,13 +285,21 @@ test("a chat that has not done anything for an hour is idle, not live, in the ma
         ? { ...execution, activeAt: now - 2 * 60 * 60_000 }
         : execution.taskId === "task-api" ? { ...execution, activeAt: now - 5 * 60_000 } : execution),
   };
+  // A record from before activeAt existed, untouched for a day, is idle too.
+  aged.executions.push({
+    taskId: "task-idle", sessionId: "claude-old", provider: "claude", computerId: "mac-b",
+    workspace: "/repo/payments-api", startedAt: now - 24 * 60 * 60_000, updatedAt: now - 24 * 60 * 60_000,
+  });
   const map = meshMap(aged, now);
-  assert.match(map, /_3 Tasks · 1 live execution · 1 idle · /);
+  assert.match(map, /_3 Tasks · 1 live execution · 2 idle · /);
   assert.match(map, /\*\*Add refunds to the API\*\* — working; claude on mac-a in payments-api, active 5 min ago/);
   assert.match(map, /\*\*Consume refund events\*\* — working; idle since 2 h ago/);
   const brief = meshBrief(aged, "task-api", now);
-  assert.equal(brief[0], "1 other chat in this Project is open but idle for over an hour.");
+  assert.equal(brief[0], "2 other chats in this Project are open but idle for over an hour.");
   const briefForWorker = meshBrief(aged, "task-worker", now);
-  assert.match(briefForWorker[0] ?? "", /^Also active in this Project within the hour: Add refunds to the API \(payments-api, 5 min ago\)\.$/);
+  assert.equal(
+    briefForWorker[0],
+    "Also active in this Project within the hour: Add refunds to the API (payments-api, 5 min ago). 1 other chat here is open but idle.",
+  );
 });
 

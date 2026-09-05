@@ -44,7 +44,10 @@ function taskTitle(snapshot: MeshSnapshot, taskId: string): string {
 export const LIVE_WINDOW_MS = 60 * 60_000;
 
 function isLive(execution: MeshSnapshot["executions"][number], now: number): boolean {
-  return execution.endedAt == null && (execution.activeAt == null || now - execution.activeAt <= LIVE_WINDOW_MS);
+  // A computer that predates `activeAt` still says when it last observed the
+  // execution; a record nobody has touched in an hour is not live either way.
+  const reference = execution.activeAt ?? execution.updatedAt ?? execution.startedAt;
+  return execution.endedAt == null && now - reference <= LIVE_WINDOW_MS;
 }
 
 /** Where a Task is being worked right now: its live executions. */

@@ -17,7 +17,7 @@ test("a shell call is named by the command it ran, not by the tool that ran it",
 test("observed and remote CLI capabilities carry the command's name and keep the tool", () => {
   const observation = {
     sourceId: "s:1", sessionId: "chat", toolName: "Bash", createdAt: 1, cli: true as const,
-    commandPreview: { command: "cd apps && npm run build" }, outcome: "success" as const,
+    commandPreview: "cd apps && npm run build", outcome: "success" as const,
   };
   const observed = toObservedCapability(observation);
   assert.equal(observed.kind, "cli");
