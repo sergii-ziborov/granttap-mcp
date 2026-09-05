@@ -3,6 +3,7 @@ import type {
   MachineLoad,
   SessionsStatus,
 } from "../../../../packages/protocol/schema";
+import { createDiskUsageSampler, type AgentDiskUsage } from "./disk-usage";
 import type { AgentProcessLoad } from "./process-sampler";
 import { sampleAgentProcesses } from "./process-sampler";
 import { providerScanCost, type ProviderScanSample } from "./scan-cost";
@@ -44,6 +45,7 @@ export function buildMachineLoad(input: {
   processes: Record<string, AgentProcessLoad>;
   self: MonitorSelfLoad;
   scanCost?: Record<string, ProviderScanSample>;
+  disk?: Record<string, AgentDiskUsage>;
   machine?: string;
   now?: number;
 }): MachineLoad {
@@ -85,6 +87,9 @@ export function buildMachineLoad(input: {
         cpuPercent: input.processes[agent]?.cpuPercent ?? 0,
         memoryBytes: input.processes[agent]?.memoryBytes ?? 0,
         topProcesses: input.processes[agent]?.groups ?? [],
+        processList: input.processes[agent]?.rows ?? [],
+        chats: input.processes[agent]?.chats ?? [],
+        ...(input.disk?.[agent] ? { disk: input.disk[agent] } : {}),
         sessions: sessionsByAgent.get(agent) ?? 0,
         scanMs: scanCost[agent]?.durationMs ?? 0,
         tokensRecent: tokensByAgent.get(agent) ?? 0,
@@ -104,13 +109,32 @@ type LoadRelay = {
   ): Promise<void>;
 };
 
+/** One line a person can grep in the helper log: what each agent weighed. */
+export function describeLoad(load: MachineLoad): string {
+  const agents = load.agents.map((agent) => {
+    const memory = `${Math.round(agent.memoryBytes / 1_000_000)} MB`;
+    const chats = agent.chats?.length ? ` in ${agent.chats.length} chats` : "";
+    return `${agent.agent} ${agent.processes} procs ${agent.cpuPercent}% ${memory}${chats}`;
+  });
+  return `[load] ${agents.length > 0 ? agents.join(" · ") : "no agent processes"}`;
+}
+
+export const LOAD_LOG_INTERVAL_MS = 5 * 60_000;
+
 /** Create one publisher so its monitor CPU baseline survives between reports. */
 export function createMachineLoadPublisher(dependencies: {
   sampleProcesses?: typeof sampleAgentProcesses;
   sampleSelf?: () => MonitorSelfLoad;
+  sampleDisk?: (agents: readonly string[]) => Record<string, AgentDiskUsage>;
+  /** Told about a sample now and then, so the helper log says what was measured. */
+  log?: (line: string) => void;
+  now?: () => number;
 } = {}) {
   const sampleProcesses = dependencies.sampleProcesses ?? sampleAgentProcesses;
   const sampleSelf = dependencies.sampleSelf ?? monitorLoadSampler();
+  const sampleDisk = dependencies.sampleDisk ?? createDiskUsageSampler().sample;
+  const now = dependencies.now ?? Date.now;
+  let loggedAt: number | undefined;
   let active: Promise<MachineLoad> | undefined;
   return (
     client: LoadRelay,
@@ -120,7 +144,12 @@ export function createMachineLoadPublisher(dependencies: {
     if (active) return active;
     active = (async () => {
       const processes = await sampleProcesses();
-      const load = buildMachineLoad({ status, processes, self: sampleSelf() });
+      const disk = sampleDisk(Object.keys(processes));
+      const load = buildMachineLoad({ status, processes, self: sampleSelf(), disk });
+      if (dependencies.log && (loggedAt === undefined || now() - loggedAt >= LOAD_LOG_INTERVAL_MS)) {
+        loggedAt = now();
+        dependencies.log(describeLoad(load));
+      }
       await client.send(load, "phone", { ttlMs: intervalMs * 3, reliable: false });
       return load;
     })().finally(() => {

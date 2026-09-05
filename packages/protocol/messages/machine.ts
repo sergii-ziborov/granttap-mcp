@@ -14,6 +14,40 @@ export const ProcessGroupLoad = z.object({
 });
 export type ProcessGroupLoad = z.infer<typeof ProcessGroupLoad>;
 
+/** One process on its own: who, in the list a person opens, eats what. */
+export const ProcessLoadRow = z.object({
+  pid: Count,
+  name: z.string().trim().min(1).max(64),
+  cpuPercent: Amount,
+  memoryBytes: Amount,
+  detail: z.string().trim().min(1).max(160).optional(),
+  sessionId: z.string().trim().min(1).max(256).optional(),
+});
+export type ProcessLoadRow = z.infer<typeof ProcessLoadRow>;
+
+/** What one chat's processes cost together. */
+export const ChatProcessLoad = z.object({
+  sessionId: z.string().trim().min(1).max(256),
+  processes: Count,
+  cpuPercent: Amount,
+  memoryBytes: Amount,
+});
+export type ChatProcessLoad = z.infer<typeof ChatProcessLoad>;
+
+export const DiskUsageEntry = z.object({
+  path: z.string().trim().min(1).max(512),
+  bytes: Amount,
+});
+export type DiskUsageEntry = z.infer<typeof DiskUsageEntry>;
+
+/** What the agent keeps on the disk: its own folders, heaviest places first. */
+export const AgentDiskUsage = z.object({
+  measuredAt: z.number(),
+  totalBytes: Amount,
+  entries: z.array(DiskUsageEntry).max(16),
+});
+export type AgentDiskUsage = z.infer<typeof AgentDiskUsage>;
+
 export const AgentLoadSample = z.object({
   agent: AgentId,
   processes: Count,
@@ -22,6 +56,11 @@ export const AgentLoadSample = z.object({
   // The heaviest kinds of process behind the agent's number, so the phone
   // can say what "Claude" is running, not only that it is running.
   topProcesses: z.array(ProcessGroupLoad).max(8).optional(),
+  // The heaviest processes one by one, and the same load by chat, so the
+  // number can be opened rather than only read.
+  processList: z.array(ProcessLoadRow).max(48).optional(),
+  chats: z.array(ChatProcessLoad).max(64).optional(),
+  disk: AgentDiskUsage.optional(),
   sessions: Count,
   scanMs: Amount,
   tokensRecent: Amount,

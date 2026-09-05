@@ -238,3 +238,48 @@ describe("parallel lane counting", () => {
     assert.deepEqual(agentLanes([lane("claude", "a", "idle")] as never), {});
   });
 });
+
+describe("what the phone can open", () => {
+  it("carries the process list, the chats, and the disk through to the wire", async () => {
+    const { buildMachineLoad, describeLoad } = await import("../apps/bridge/src/machine-load");
+    const { MachineLoad } = await import("../packages/protocol/messages/machine");
+    const rows = [{ pid: 1, name: "node", cpuPercent: 3, memoryBytes: 10, sessionId: "s" }];
+    const load = buildMachineLoad({
+      status: { type: "sessions.status", sessions: [], generatedAt: 0 } as never,
+      processes: { claude: { processes: 1, cpuPercent: 3, memoryBytes: 10, groups: [], rows, chats: [{ sessionId: "s", processes: 1, cpuPercent: 3, memoryBytes: 10 }] } },
+      self: { cpuPercent: 0, memoryBytes: 0 },
+      scanCost: {},
+      disk: { claude: { measuredAt: 1, totalBytes: 5, entries: [{ path: "~/.claude", bytes: 5 }] } },
+      machine: "m", now: 2,
+    });
+    const claude = load.agents.find((agent) => agent.agent === "claude")!;
+    assert.deepEqual(claude.processList, rows);
+    assert.equal(claude.chats?.[0]?.sessionId, "s");
+    assert.equal(claude.disk?.totalBytes, 5);
+    assert.equal(MachineLoad.safeParse(load).success, true);
+    assert.equal(describeLoad(load), "[load] claude 1 procs 3% 0 MB in 1 chats");
+    assert.equal(describeLoad({ ...load, agents: [] }), "[load] no agent processes");
+  });
+
+  it("logs what it measured once in five minutes, not on every sample", async () => {
+    const { createMachineLoadPublisher } = await import("../apps/bridge/src/machine-load");
+    const lines: string[] = [];
+    let clock = 0;
+    const publish = createMachineLoadPublisher({
+      sampleProcesses: async () => ({ codex: { processes: 2, cpuPercent: 1, memoryBytes: 2_000_000 } }),
+      sampleSelf: () => ({ cpuPercent: 0, memoryBytes: 0 }),
+      sampleDisk: (agents) => Object.fromEntries(agents.map((agent) => [agent, { measuredAt: 0, totalBytes: 1, entries: [] }])),
+      log: (line) => lines.push(line),
+      now: () => clock,
+    });
+    const client = { send: async () => {} };
+    const status = { type: "sessions.status", sessions: [], generatedAt: 0 } as never;
+    const first = await publish(client, status, 5_000);
+    assert.equal(first.agents[0]?.disk?.totalBytes, 1);
+    clock = 1_000;
+    await publish(client, status, 5_000);
+    clock = 5 * 60_000;
+    await publish(client, status, 5_000);
+    assert.deepEqual(lines, ["[load] codex 2 procs 1% 2 MB", "[load] codex 2 procs 1% 2 MB"]);
+  });
+});

@@ -5,6 +5,7 @@ import type {
   CapabilityFingerprint,
   CapabilityKind,
 } from "../engine/engine-policy-types";
+import { commandName } from "../sessions/telemetry";
 
 export type ActionFingerprintInput = {
   provider: "claude" | "codex" | "cursor" | "grok";
@@ -90,7 +91,9 @@ function shellFingerprint(
       ...(script.pathHash ? { executable_path_hash: script.pathHash, confidence: "exact" } : {}),
     };
   }
-  return fingerprint("shell", "Shell", provider, "provider-shell");
+  // Named by the command, so a Project can say "git: allow, rm: ask" instead
+  // of only "shell: ask". A line with no command word stays plain shell.
+  return fingerprint("shell", bounded(commandName(command), 160) ?? "Shell", provider, "provider-shell");
 }
 
 function fingerprint(

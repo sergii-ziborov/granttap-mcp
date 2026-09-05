@@ -217,3 +217,11 @@ function fakeClient(
 ): EngineClientLike {
   return { request, close: () => undefined };
 }
+
+test("a shell call is fingerprinted by the command it runs, so one command can be governed alone", () => {
+  const git = capabilityFingerprint({ provider: "claude", toolName: "Bash", toolInput: { command: "cd repo && git status" } });
+  assert.equal(git.kind, "shell");
+  assert.equal(git.display_name, "git");
+  const bare = capabilityFingerprint({ provider: "claude", toolName: "Bash", toolInput: { command: "--flag" } });
+  assert.equal(bare.display_name, "Shell");
+});

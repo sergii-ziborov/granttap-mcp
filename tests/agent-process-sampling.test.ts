@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  createSessionResolver,
+  parseSessionEnvironment,
+  resetSessionResolver,
   attributeProcesses,
   parsePidListing,
   parsePsOutput,
@@ -45,7 +48,9 @@ describe("agent process sampling", () => {
       { pid: 1, cpuPercent: 10.5, rssBytes: 100, command: "/usr/local/bin/grok" },
       { pid: 2, cpuPercent: 4.5, rssBytes: 200, command: "/usr/local/bin/grok --print" },
     ]);
-    assert.deepEqual(summed.grok, {
+    const { rows: grokRows, ...totals } = summed.grok!;
+    assert.equal(grokRows?.length, 2);
+    assert.deepEqual(totals, {
       processes: 2, cpuPercent: 15, memoryBytes: 300,
       groups: [{ name: "grok", count: 2, cpuPercent: 15, memoryBytes: 300 }],
     });
@@ -145,3 +150,80 @@ describe("agent process sampling", () => {
   });
 });
 
+
+describe("who eats what", () => {
+  const tree = [
+    { pid: 10, ppid: 1, cpuPercent: 1, rssBytes: 100, command: "/usr/local/bin/claude --resume abc", executable: "/usr/local/bin/claude" },
+    { pid: 11, ppid: 10, cpuPercent: 5, rssBytes: 200, command: "/bin/zsh -c npm test", executable: "/bin/zsh" },
+    { pid: 12, ppid: 11, cpuPercent: 40, rssBytes: 900, command: "node /repo/node_modules/.bin/vitest --run", executable: "/opt/node/bin/node" },
+    { pid: 20, ppid: 1, cpuPercent: 0, rssBytes: 100, command: "/usr/local/bin/claude", executable: "/usr/local/bin/claude" },
+    { pid: 21, ppid: 20, cpuPercent: 2, rssBytes: 300, command: "node /repo/bin/granttap-mcp.mjs", executable: "/opt/node/bin/node" },
+    { pid: 30, ppid: 1, cpuPercent: 0, rssBytes: 50, command: "/bin/sleep 5", executable: "/bin/sleep" },
+  ];
+
+  it("lists processes one by one, named and detailed, and totals them by chat", () => {
+    const sessions = new Map([[10, "chat-a"], [20, "chat-b"]]);
+    const claude = attributeProcesses(tree, sessions).claude!;
+    assert.equal(claude.processes, 5);
+    assert.deepEqual(claude.rows?.map((row) => [row.pid, row.name, row.sessionId]), [
+      [12, "node", "chat-a"], [11, "zsh", "chat-a"], [21, "node", "chat-b"], [10, "claude", "chat-a"], [20, "claude", "chat-b"],
+    ]);
+    assert.equal(claude.rows?.[0]?.detail, "/repo/node_modules/.bin/vitest --run", "the executable's own path is not repeated");
+    assert.equal(claude.rows?.[4]?.detail, undefined, "a bare binary has nothing to add");
+    assert.deepEqual(claude.chats, [
+      { sessionId: "chat-a", processes: 3, cpuPercent: 46, memoryBytes: 1200 },
+      { sessionId: "chat-b", processes: 2, cpuPercent: 2, memoryBytes: 400 },
+    ]);
+    // Without a chat map the rows still come, unassigned.
+    const bare = attributeProcesses(tree).claude!;
+    assert.equal(bare.chats, undefined);
+    assert.equal(bare.rows?.every((row) => row.sessionId === undefined), true);
+  });
+
+  it("keeps only the heaviest forty rows", () => {
+    const many = Array.from({ length: 50 }, (_, i) => ({
+      pid: 100 + i, ppid: 1, cpuPercent: i, rssBytes: 1, command: "/usr/local/bin/claude", executable: "/usr/local/bin/claude",
+    }));
+    const rows = attributeProcesses(many).claude!.rows!;
+    assert.equal(rows.length, 40);
+    assert.equal(rows[0]?.cpuPercent, 49);
+  });
+
+  it("reads the one variable that names a chat and nothing else from an environment listing", () => {
+    const listing = [
+      "21 node /repo/bin/granttap-mcp.mjs PATH=/usr/bin CLAUDE_CODE_SESSION_ID=2dc608d6-3e8f-43a7-9037-32793756e7f4 SECRET=hunter2",
+      "22 /bin/zsh HOME=/Users/me",
+      "23 node x CLAUDE_CODE_SESSION_ID=short",
+      "garbage line",
+    ].join("\n");
+    assert.deepEqual([...parseSessionEnvironment(listing)], [[21, "2dc608d6-3e8f-43a7-9037-32793756e7f4"]]);
+  });
+
+  it("asks about a root's descendants once, remembers the answer, and retries the unknown after a minute", async () => {
+    const asked: number[][] = [];
+    let clock = 0;
+    const read = async (pids: readonly number[]) => {
+      asked.push([...pids]);
+      return new Map(pids.includes(21) ? [[21, "chat-b"] as [number, string]] : []);
+    };
+    const resolve = createSessionResolver(read, () => clock);
+    assert.deepEqual([...await resolve(tree)], [[20, "chat-b"]]);
+    assert.equal(asked.length, 1);
+    assert.deepEqual([...asked[0]!].sort((a, b) => a - b), [10, 11, 12, 20, 21], "only the agents' own trees are asked");
+    // Nothing new is asked while the answer is fresh; root 10 stays unknown.
+    assert.deepEqual([...await resolve(tree)], [[20, "chat-b"]]);
+    assert.equal(asked.length, 1);
+    clock = 61_000;
+    await resolve(tree);
+    assert.equal(asked.length, 2);
+    assert.deepEqual([...asked[1]!].sort((a, b) => a - b), [10, 11, 12], "a root already named is not asked again");
+    // A root that exited is forgotten.
+    const without = tree.filter((row) => ![20, 21].includes(row.pid));
+    assert.deepEqual([...await resolve(without)], []);
+  });
+
+  it("lets a test replace the live resolver and put it back", () => {
+    resetSessionResolver(async () => new Map(), () => 0);
+    resetSessionResolver();
+  });
+});

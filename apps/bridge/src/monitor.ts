@@ -141,7 +141,9 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
   let historyCache: { generatedAt: number; sessions: SessionsStatus["sessions"] } | undefined;
   let lastHistoryPublishedAt = 0;
   let lastCapabilityPublishedAt = 0;
-  const publishMachineLoad = createMachineLoadPublisher();
+  const publishMachineLoad = createMachineLoadPublisher({
+    log: (line) => process.stderr.write(`[monitor] ${line}\n`),
+  });
   const loadLoop = startMachineLoadLoop({
     connected: () => client.isConnected,
     publish: (status, intervalMs) => publishMachineLoad(client, status, intervalMs),
