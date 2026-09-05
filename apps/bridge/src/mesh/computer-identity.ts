@@ -83,8 +83,11 @@ export function computerId(env: NodeJS.ProcessEnv = process.env): string {
 }
 
 /** Names this computer used to go by, which the Mesh may still hold records under. */
-export function formerComputerNames(env: NodeJS.ProcessEnv = process.env): string[] {
-  const identity = computerIdentity(env);
+export function formerComputerNames(
+  env: NodeJS.ProcessEnv = process.env,
+  currentName: () => string = hostname,
+): string[] {
+  const identity = computerIdentity(env, currentName);
   return identity.names.filter((name) => name !== identity.computerId);
 }
 

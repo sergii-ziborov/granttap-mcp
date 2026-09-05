@@ -37,7 +37,7 @@ test("a computer keeps the identity it was first seen under, and remembers every
   const road = computerIdentity({}, () => "Mac.lan", () => at + 1);
   assert.equal(road.computerId, "Serhiis-MacBook-Pro.local");
   assert.deepEqual(road.names, ["Serhiis-MacBook-Pro.local", "Mac.lan"]);
-  assert.deepEqual(formerComputerNames({}), ["Mac.lan"], "the road name is a former name of the same machine");
+  assert.deepEqual(formerComputerNames({}, () => "Mac.lan"), ["Mac.lan"], "the road name is a former name of the same machine");
 
   // Read back from disk by a fresh process, the identity is the same.
   resetComputerIdentity();
