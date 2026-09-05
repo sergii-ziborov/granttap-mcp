@@ -213,6 +213,7 @@ export function linkSessionsToProjects(
       computerId,
       workspace: cwd,
       repositoryId: repository.canonicalRepositoryId,
+      activeAt: session.lastActivityAt,
       branch: session.branch,
       worktree: repository.worktree,
       uncommitted: hasUncommittedWork(repository.worktree ?? cwd),

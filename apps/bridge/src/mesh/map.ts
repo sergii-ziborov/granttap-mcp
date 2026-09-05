@@ -40,30 +40,56 @@ function taskTitle(snapshot: MeshSnapshot, taskId: string): string {
   return compactText(snapshot.tasks.find((task) => task.taskId === taskId)?.title ?? taskId, 80);
 }
 
+/** An open execution is live when its chat did something within the hour. */
+export const LIVE_WINDOW_MS = 60 * 60_000;
+
+function isLive(execution: MeshSnapshot["executions"][number], now: number): boolean {
+  return execution.endedAt == null && (execution.activeAt == null || now - execution.activeAt <= LIVE_WINDOW_MS);
+}
+
 /** Where a Task is being worked right now: its live executions. */
-function liveWork(snapshot: MeshSnapshot, taskId: string): MeshSnapshot["executions"] {
-  return snapshot.executions.filter((item) => item.taskId === taskId && item.endedAt == null);
+function liveWork(snapshot: MeshSnapshot, taskId: string, now = Date.now()): MeshSnapshot["executions"] {
+  return snapshot.executions.filter((item) => item.taskId === taskId && isLive(item, now));
+}
+
+/** Open but quiet: the chat exists and has not done anything for an hour. */
+function idleWork(snapshot: MeshSnapshot, taskId: string, now = Date.now()): MeshSnapshot["executions"] {
+  return snapshot.executions.filter((item) => item.taskId === taskId && item.endedAt == null && !isLive(item, now));
+}
+
+function ago(at: number, now: number): string {
+  const minutes = Math.max(0, Math.round((now - at) / 60_000));
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  return hours < 48 ? `${hours} h ago` : `${Math.round(hours / 24)} d ago`;
 }
 
 /** The whole Project as markdown. */
 export function meshMap(snapshot: MeshSnapshot, now = Date.now()): string {
   const lines: string[] = [];
-  const live = snapshot.executions.filter((item) => item.endedAt == null);
+  const live = snapshot.executions.filter((item) => isLive(item, now));
+  const idle = snapshot.executions.filter((item) => item.endedAt == null && !isLive(item, now));
   lines.push(`# Project Mesh — ${snapshot.project.name}`);
   lines.push("");
-  lines.push(`_${snapshot.tasks.length} Task${snapshot.tasks.length === 1 ? "" : "s"} · ${live.length} live execution${live.length === 1 ? "" : "s"} · ${new Date(now).toISOString()}_`);
+  lines.push(`_${snapshot.tasks.length} Task${snapshot.tasks.length === 1 ? "" : "s"} · ${live.length} live execution${live.length === 1 ? "" : "s"}${idle.length ? ` · ${idle.length} idle` : ""} · ${new Date(now).toISOString()}_`);
 
   lines.push("", "## Tasks", "");
   const tasks = [...snapshot.tasks].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, MAX_MAP_TASKS);
   if (tasks.length === 0) lines.push("- (none)");
   for (const task of tasks) {
-    const work = liveWork(snapshot, task.taskId).map((item) => {
+    const work = liveWork(snapshot, task.taskId, now).map((item) => {
       const repository = repositoryName(executionRepository(item, snapshot), snapshot);
-      return `${item.provider} on ${item.computerId}${repository ? ` in ${repository}` : ""}`;
+      const when = item.activeAt != null ? `, active ${ago(item.activeAt, now)}` : "";
+      return `${item.provider} on ${item.computerId}${repository ? ` in ${repository}` : ""}${when}`;
     });
+    const quiet = idleWork(snapshot, task.taskId, now);
+    const idleNote = work.length === 0 && quiet.length > 0
+      ? `; idle${quiet[0]?.activeAt != null ? ` since ${ago(quiet[0].activeAt, now)}` : ""}`
+      : "";
     const latest = [...snapshot.events].reverse().find((event) => event.taskId === task.taskId && eventLine(event));
     const tail = latest ? ` — ${eventLine(latest)}` : "";
-    lines.push(`- **${taskTitle(snapshot, task.taskId)}** — ${task.state}${work.length ? `; ${work.join(", ")}` : ""}${tail}`);
+    lines.push(`- **${taskTitle(snapshot, task.taskId)}** — ${task.state}${work.length ? `; ${work.join(", ")}` : idleNote}${tail}`);
   }
 
   const byModule = new Map<string, string[]>();
@@ -110,18 +136,24 @@ export function meshMap(snapshot: MeshSnapshot, now = Date.now()): string {
 }
 
 /** The lines of the map that matter to one Task right now; empty when nothing does. */
-export function meshBrief(snapshot: MeshSnapshot, taskId: string): string[] {
+export function meshBrief(snapshot: MeshSnapshot, taskId: string, now = Date.now()): string[] {
   const lines: string[] = [];
   const others = snapshot.tasks.filter((task) =>
-    task.taskId !== taskId && liveWork(snapshot, task.taskId).length > 0);
+    task.taskId !== taskId && liveWork(snapshot, task.taskId, now).length > 0);
+  const idle = snapshot.tasks.filter((task) =>
+    task.taskId !== taskId && liveWork(snapshot, task.taskId, now).length === 0 && idleWork(snapshot, task.taskId, now).length > 0);
   if (others.length > 0) {
     const named = others.slice(0, 5).map((task) => {
-      const execution = liveWork(snapshot, task.taskId)[0];
+      const execution = liveWork(snapshot, task.taskId, now)[0];
       const repository = execution ? repositoryName(executionRepository(execution, snapshot), snapshot) : undefined;
-      return `${taskTitle(snapshot, task.taskId)}${repository ? ` (${repository})` : ""}`;
+      const when = execution?.activeAt != null ? `, ${ago(execution.activeAt, now)}` : "";
+      return `${taskTitle(snapshot, task.taskId)}${repository ? ` (${repository}${when})` : when ? ` (${when.slice(2)})` : ""}`;
     });
     const more = others.length > 5 ? ` (+${others.length - 5})` : "";
-    lines.push(`Also live in this Project: ${named.join("; ")}${more}.`);
+    const quiet = idle.length > 0 ? ` ${idle.length} other chat${idle.length === 1 ? "" : "s"} here ${idle.length === 1 ? "is" : "are"} open but idle.` : "";
+    lines.push(`Also active in this Project within the hour: ${named.join("; ")}${more}.${quiet}`);
+  } else if (idle.length > 0) {
+    lines.push(`${idle.length} other chat${idle.length === 1 ? "" : "s"} in this Project ${idle.length === 1 ? "is" : "are"} open but idle for over an hour.`);
   }
   const neighbours = scopedNeighbours(snapshot, taskId).slice(0, 5);
   for (const { claim, kind } of neighbours) {

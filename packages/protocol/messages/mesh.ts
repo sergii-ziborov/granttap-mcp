@@ -70,6 +70,10 @@ export const ExecutionSessionLink = z.object({
   // When those facts were last observed, so a late snapshot cannot replace a
   // fresh reading with a stale one.
   updatedAt: z.number().nonnegative().optional(),
+  // When the chat itself last did anything. An execution stays open while its
+  // chat exists, which is not the same as the chat being alive: without this,
+  // every idle chat of the week read as live work.
+  activeAt: z.number().nonnegative().optional(),
   startedAt: z.number().nonnegative(),
   endedAt: z.number().nonnegative().optional(),
 }).strict().superRefine((value, ctx) => {

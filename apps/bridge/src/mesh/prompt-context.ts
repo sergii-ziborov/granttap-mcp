@@ -59,7 +59,7 @@ export function promptContext(
   }
   const scope = deps.scope(sessionId);
   if (scope) {
-    const brief = meshBrief(scope.snapshot, scope.taskId);
+    const brief = meshBrief(scope.snapshot, scope.taskId, now);
     if (brief.length > 0) {
       if (lines.length > 0) lines.push("");
       lines.push(`Project Mesh «${scope.snapshot.project.name}»:`, ...brief.map((line) => `- ${line}`));

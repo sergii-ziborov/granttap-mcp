@@ -120,7 +120,7 @@ test("the map reads as a page and the brief as the few lines that matter to one 
 
   const brief = meshBrief(snapshot, "task-api");
   assert.deepEqual(brief, [
-    "Also live in this Project: Consume refund events (payment-worker).",
+    "Also active in this Project within the hour: Consume refund events (payment-worker).",
     "Next to you: Consume refund events is working in the same module — apps/api/src/events.ts.",
     "Other side: Consume refund events is working in payment-worker (payments-api produces payment.completed).",
     "Still unanswered: Which topic carries refunds?",
@@ -146,7 +146,7 @@ test("a live chat gets the unread runs and the Mesh brief on its next prompt, on
   const text = promptContext("claude-api", at + 9_000, deps)!;
   assert.match(text, /^GrantTap: 2 messages from the phone were handled in this chat by background runs since your last turn\./);
   assert.match(text, /\n1\. \[\d\d:\d\d\] «Сверни агент конверзейшинс как CLI» → Folded the section; tests green\.; wrote apps\/ios\/TaskChatView\.swift; 18 tool calls\n2\. \[\d\d:\d\d\] «И ещё вот это» → Sent\.\n/);
-  assert.match(text, /Continue from what they did; check the working tree before redoing or undoing it\.\n\nProject Mesh «Payments»:\n- Also live in this Project: Consume refund events \(payment-worker\)\.\n- Next to you:/);
+  assert.match(text, /Continue from what they did; check the working tree before redoing or undoing it\.\n\nProject Mesh «Payments»:\n- Also active in this Project within the hour: Consume refund events \(payment-worker\)\.\n- Next to you:/);
   assert.match(text, /\nFull map: read the MCP resource granttap:\/\/mesh\/cap-token\/map$/);
   assert.deepEqual(delivered, [at + 9_000]);
 
@@ -273,3 +273,25 @@ test("the prompt hook binary adds the journal once, stays quiet inside a deliver
   // Without injected dependencies, an unknown chat has nothing to add.
   assert.equal(promptContext("nobody-knows-this-chat"), undefined);
 });
+
+test("a chat that has not done anything for an hour is idle, not live, in the map and the brief", async () => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-idle-"));
+  const { snapshot } = seeded(root);
+  const now = at + 3 * 60 * 60_000;
+  const aged: MeshSnapshot = {
+    ...snapshot,
+    executions: snapshot.executions.map((execution) =>
+      execution.taskId === "task-worker"
+        ? { ...execution, activeAt: now - 2 * 60 * 60_000 }
+        : execution.taskId === "task-api" ? { ...execution, activeAt: now - 5 * 60_000 } : execution),
+  };
+  const map = meshMap(aged, now);
+  assert.match(map, /_3 Tasks · 1 live execution · 1 idle · /);
+  assert.match(map, /\*\*Add refunds to the API\*\* — working; claude on mac-a in payments-api, active 5 min ago/);
+  assert.match(map, /\*\*Consume refund events\*\* — working; idle since 2 h ago/);
+  const brief = meshBrief(aged, "task-api", now);
+  assert.equal(brief[0], "1 other chat in this Project is open but idle for over an hour.");
+  const briefForWorker = meshBrief(aged, "task-worker", now);
+  assert.match(briefForWorker[0] ?? "", /^Also active in this Project within the hour: Add refunds to the API \(payments-api, 5 min ago\)\.$/);
+});
+
