@@ -141,13 +141,14 @@ test("a live chat gets the unread runs and the Mesh brief on its next prompt, on
     unread: (sessionId: string) => (sessionId === "claude-api" ? [run(), run({ at: at + 5_000, prompt: "И ещё вот это", outcome: "Sent.", files: [], tools: 0 })] : []),
     markDelivered: (_sessionId: string, when: number) => { delivered.push(when); },
     scope: (sessionId: string) => (sessionId === "claude-api" ? { snapshot, taskId: "task-api" } : undefined),
-    capability: () => "cap-token",
   };
   const text = promptContext("claude-api", at + 9_000, deps)!;
   assert.match(text, /^GrantTap: 2 messages from the phone were handled in this chat by background runs since your last turn\./);
   assert.match(text, /\n1\. \[\d\d:\d\d\] «Сверни агент конверзейшинс как CLI» → Folded the section; tests green\.; wrote apps\/ios\/TaskChatView\.swift; 18 tool calls\n2\. \[\d\d:\d\d\] «И ещё вот это» → Sent\.\n/);
   assert.match(text, /Continue from what they did; check the working tree before redoing or undoing it\.\n\nProject Mesh «Payments»:\n- Also active in this Project within the hour: Consume refund events \(payment-worker\)\.\n- Next to you:/);
-  assert.match(text, /\nFull map: read the MCP resource granttap:\/\/mesh\/cap-token\/map$/);
+  // Named, not tokened: the hook must never print a capability into a prompt.
+  assert.match(text, /\nFull map: read the granttap MCP resource granttap:\/\/mesh\/map$/);
+  assert.doesNotMatch(text, /cap-token/);
   assert.deepEqual(delivered, [at + 9_000]);
 
   // Nothing new and no Task: nothing added, nothing marked.

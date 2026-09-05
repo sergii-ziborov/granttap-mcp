@@ -7,7 +7,7 @@
  * `UserPromptSubmit` hook to add to the prompt — the unread journal first,
  * then the Mesh brief — so the model coordinates without being told to look.
  */
-import { executionCapabilityFor, liveExecutionScope } from "./capability";
+import { liveExecutionScope } from "./capability";
 import { describeRun, markRunsDelivered, unreadRuns, type RunRecord } from "./journal";
 import { meshBrief } from "./map";
 import type { MeshSnapshot } from "../../../../packages/protocol/schema";
@@ -19,7 +19,6 @@ export type PromptContextDeps = {
   unread: (sessionId: string) => RunRecord[];
   markDelivered: (sessionId: string, at: number) => void;
   scope: (sessionId: string) => { snapshot: MeshSnapshot; taskId: string } | undefined;
-  capability: (sessionId: string) => string | undefined;
 };
 
 const liveDeps: PromptContextDeps = {
@@ -29,7 +28,6 @@ const liveDeps: PromptContextDeps = {
     const scope = liveExecutionScope(sessionId);
     return scope ? { snapshot: scope.snapshot, taskId: scope.execution.taskId } : undefined;
   },
-  capability: (sessionId) => executionCapabilityFor(sessionId)?.token,
 };
 
 function clock(at: number): string {
@@ -63,8 +61,9 @@ export function promptContext(
     if (brief.length > 0) {
       if (lines.length > 0) lines.push("");
       lines.push(`Project Mesh «${scope.snapshot.project.name}»:`, ...brief.map((line) => `- ${line}`));
-      const token = deps.capability(sessionId);
-      if (token) lines.push(`Full map: read the MCP resource granttap://mesh/${token}/map`);
+      // Listed by name, not by token: Claude Code reads only listed resources,
+      // and the server finds the chat from its own environment.
+      lines.push("Full map: read the granttap MCP resource granttap://mesh/map");
     }
   }
   if (lines.length === 0) return undefined;

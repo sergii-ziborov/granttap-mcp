@@ -151,3 +151,29 @@ test("scoped Mesh reads never expose another Project", async (t) => {
   const wrongSession = await client.callTool({ name: "notify", arguments: { meshEvent: capability } });
   assert.equal(wrongSession.isError, true, "a capability never rescues an unknown caller");
 });
+
+test("a server that knows its chat from the environment serves that chat's map, and only that", async (t) => {
+  const previous = process.env.CLAUDE_CODE_SESSION_ID;
+  t.after(() => {
+    if (previous === undefined) delete process.env.CLAUDE_CODE_SESSION_ID;
+    else process.env.CLAUDE_CODE_SESSION_ID = previous;
+  });
+  process.env.CLAUDE_CODE_SESSION_ID = alpha.sessionId;
+  const client = await meshFixture(t);
+
+  const listed = await client.listResources();
+  assert.ok(listed.resources.some((resource) => resource.uri === "granttap://mesh/map"), "listed, so a client that reads only listed resources can open it");
+  const map = String(((await client.readResource({ uri: "granttap://mesh/map" })).contents[0] as { text?: string })?.text ?? "");
+  assert.match(map, /Alpha release audit/);
+  assert.doesNotMatch(map, /Beta payment secrets/, "another Project never appears");
+
+  const current = JSON.parse(String(((await client.readResource({ uri: "granttap://mesh/current" })).contents[0] as { text?: string })?.text ?? "{}"));
+  assert.equal(current.scoped, true);
+  assert.equal(current.project?.projectId ?? current.projectId, "project-alpha");
+
+  // A chat the Mesh does not know gets directions, not data.
+  process.env.CLAUDE_CODE_SESSION_ID = "nobody-knows-this-chat";
+  const unknown = String(((await client.readResource({ uri: "granttap://mesh/map" })).contents[0] as { text?: string })?.text ?? "");
+  assert.match(unknown, /^# Project Mesh\n\nProject Mesh reads are scoped to one execution\./);
+  assert.doesNotMatch(unknown, /Alpha release audit|Beta payment secrets/);
+});

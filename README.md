@@ -241,11 +241,17 @@ Mesh show it. A `UserPromptSubmit` hook, installed beside the approval hook by
 `granttap setup`, adds the unread journal to the next prompt of the live
 session together with the Mesh brief — the other live Tasks in the Project,
 who is in the same file or module, the other side of the repository, and any
-question still unanswered — and names the MCP resource
-`granttap://mesh/{capability}/map`, one page of markdown with the whole
-Project: Tasks, who edits which module, the other side of each repository,
-dependencies, and what just happened. Background runs themselves receive
-nothing from the hook; the journal is kept for the session a person is in.
+question still unanswered — and names the MCP resource `granttap://mesh/map`,
+one page of markdown with the whole Project: Tasks, who edits which module,
+the other side of each repository, dependencies, and what just happened. That
+resource is listed, because Claude Code reads only listed resources, and it is
+scoped without a token: Claude Code starts one MCP server per chat and hands
+it the chat's id in `CLAUDE_CODE_SESSION_ID`, which nothing said over the
+connection can change. `granttap://mesh/current` serves the same chat's scoped
+state there. Other providers keep the tokened `granttap://mesh/{capability}`
+and `…/map` forms from an attributed `notify`. Background runs themselves
+receive nothing from the hook; the journal is kept for the session a person
+is in.
 
 ### Tool versions and updates from the phone
 

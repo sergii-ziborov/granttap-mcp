@@ -1,14 +1,38 @@
 import { ResourceTemplate, type McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { resolveExecutionCapability } from "../../../bridge/src/mesh/capability";
+import {
+  executionCapabilityFor,
+  liveExecutionScope,
+  resolveExecutionCapability,
+} from "../../../bridge/src/mesh/capability";
 import { scopedMeshView } from "../../../bridge/src/mesh/scoped-view";
-import { liveExecutionScope } from "../../../bridge/src/mesh/capability";
 import { meshMap } from "../../../bridge/src/mesh/map";
 import { isMeshEnabled } from "../../../bridge/src/config/runtime";
 
 const MESH_URI = "granttap://mesh/current";
+export const MAP_URI = "granttap://mesh/map";
 const SCOPE_HINT =
-  "Project Mesh reads are scoped to one execution. Call notify to receive this "
-  + "session's granttap://mesh/<capability> URI, then read that URI.";
+  "Project Mesh reads are scoped to one execution. In Claude Code, read "
+  + `${MAP_URI}. Elsewhere, call notify to receive this session's `
+  + "granttap://mesh/<capability> URI, then read that URI.";
+
+/**
+ * The chat this server belongs to.
+ *
+ * Claude Code starts one MCP server per chat and hands it the chat's id in
+ * the environment. Nothing said over the connection can change that, which
+ * makes it the one identity a resource read — which no hook attributes — can
+ * trust. Other providers set nothing here and keep using minted capabilities.
+ */
+export function sessionFromEnvironment(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  const id = env.CLAUDE_CODE_SESSION_ID?.trim() ?? "";
+  return /^[A-Za-z0-9._-]{8,128}$/.test(id) ? id : undefined;
+}
+
+/** This chat's Project as a page of markdown, or how to get one. */
+function mapFor(sessionId: string | undefined): string {
+  const scope = isMeshEnabled() && sessionId ? liveExecutionScope(sessionId) : undefined;
+  return scope ? meshMap(scope.snapshot) : `# Project Mesh\n\n${SCOPE_HINT}\n`;
+}
 
 function json(uri: string, value: unknown) {
   return {
@@ -34,11 +58,34 @@ export function registerMeshResource(server: McpServer): void {
       description: "How to obtain this execution's scoped coordination state.",
       mimeType: "application/json",
     },
-    async (uri) => json(uri.href, {
-      schema: "granttap.mesh-scope-hint.v1",
-      enabled: isMeshEnabled(),
-      scoped: false,
-      hint: SCOPE_HINT,
+    async (uri) => {
+      // A server that knows its chat serves that chat's own scope here.
+      const sessionId = sessionFromEnvironment();
+      const capability = isMeshEnabled() && sessionId ? executionCapabilityFor(sessionId) : undefined;
+      const view = capability ? scopedMeshView(capability) : undefined;
+      if (view) return json(uri.href, { ...view, enabled: true, scoped: true });
+      return json(uri.href, {
+        schema: "granttap.mesh-scope-hint.v1",
+        enabled: isMeshEnabled(),
+        scoped: false,
+        hint: SCOPE_HINT,
+      });
+    },
+  );
+
+  // Listed, so a client that only reads listed resources — Claude Code's
+  // does — can open it straight from the prompt hook's one line.
+  server.registerResource(
+    "project-mesh-map",
+    MAP_URI,
+    {
+      title: "GrantTap Project Mesh map",
+      description: "This chat's Project as a readable map: Tasks, who edits what, the other side of each "
+        + "repository, what just happened. Transcripts are never included.",
+      mimeType: "text/markdown",
+    },
+    async (uri) => ({
+      contents: [{ uri: uri.href, mimeType: "text/markdown", text: mapFor(sessionFromEnvironment()) }],
     }),
   );
 
@@ -67,10 +114,10 @@ export function registerMeshResource(server: McpServer): void {
   // The same Project as one page of markdown: Tasks, who edits which module,
   // the other side of each repository, dependencies, and what just happened.
   server.registerResource(
-    "project-mesh-map",
+    "project-mesh-map-scoped",
     new ResourceTemplate("granttap://mesh/{capability}/map", { list: undefined }),
     {
-      title: "GrantTap Project Mesh map",
+      title: "GrantTap Project Mesh map (scoped)",
       description: "This execution's Project as a readable map. Transcripts are never included.",
       mimeType: "text/markdown",
     },
@@ -80,7 +127,7 @@ export function registerMeshResource(server: McpServer): void {
       const scope = resolved ? liveExecutionScope(resolved.sessionId) : undefined;
       const text = scope && scope.snapshot.projectId === resolved?.projectId
         ? meshMap(scope.snapshot)
-        : `# Project Mesh\n\n${SCOPE_HINT}\n`;
+        : mapFor(undefined);
       return { contents: [{ uri: uri.href, mimeType: "text/markdown", text }] };
     },
   );

@@ -43,11 +43,17 @@ function taskTitle(snapshot: MeshSnapshot, taskId: string): string {
 /** An open execution is live when its chat did something within the hour. */
 export const LIVE_WINDOW_MS = 60 * 60_000;
 
+/**
+ * When the chat last did anything. A computer that predates `activeAt` still
+ * says when it last observed the execution, and a record nobody has touched
+ * in an hour is not live either way.
+ */
+function lastSeen(execution: MeshSnapshot["executions"][number]): number {
+  return execution.activeAt ?? execution.updatedAt ?? execution.startedAt;
+}
+
 function isLive(execution: MeshSnapshot["executions"][number], now: number): boolean {
-  // A computer that predates `activeAt` still says when it last observed the
-  // execution; a record nobody has touched in an hour is not live either way.
-  const reference = execution.activeAt ?? execution.updatedAt ?? execution.startedAt;
-  return execution.endedAt == null && now - reference <= LIVE_WINDOW_MS;
+  return execution.endedAt == null && now - lastSeen(execution) <= LIVE_WINDOW_MS;
 }
 
 /** Where a Task is being worked right now: its live executions. */
@@ -88,7 +94,7 @@ export function meshMap(snapshot: MeshSnapshot, now = Date.now()): string {
     });
     const quiet = idleWork(snapshot, task.taskId, now);
     const idleNote = work.length === 0 && quiet.length > 0
-      ? `; idle${quiet[0]?.activeAt != null ? ` since ${ago(quiet[0].activeAt, now)}` : ""}`
+      ? `; idle${quiet[0] ? ` since ${ago(lastSeen(quiet[0]), now)}` : ""}`
       : "";
     const latest = [...snapshot.events].reverse().find((event) => event.taskId === task.taskId && eventLine(event));
     const tail = latest ? ` — ${eventLine(latest)}` : "";

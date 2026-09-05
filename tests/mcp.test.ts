@@ -87,6 +87,7 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   const resources = await client.listResources();
   assert.deepEqual(resources.resources.map((resource) => resource.uri), [
     "granttap://mesh/current",
+    "granttap://mesh/map",
   ]);
   const templates = await client.listResourceTemplates();
   assert.deepEqual(templates.resourceTemplates.map((template) => template.uriTemplate), [
@@ -95,6 +96,9 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   ]);
   // The unscoped URI must never carry Project state: it is readable by any
   // session on this computer, including one running an injected prompt.
+  // (This test may itself run inside a Claude Code chat; that chat's id
+  // must not leak into the server under test.)
+  delete process.env.CLAUDE_CODE_SESSION_ID;
   const mesh = await client.readResource({ uri: "granttap://mesh/current" });
   const meshState = JSON.parse((mesh.contents[0] as { text?: string }).text ?? "{}");
   assert.equal(meshState.scoped, false);
