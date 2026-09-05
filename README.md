@@ -217,6 +217,25 @@ executable path and the command line are read separately and joined by pid,
 because a path with a space in it (`~/Library/Application Support/Claude/…`)
 cannot be recovered from a command line split on whitespace.
 
+The number can be opened. Each agent's sample carries its heaviest forty
+processes one by one — pid, name, CPU, memory, and what the process was asked
+to do with the executable's own path and any secret removed — and the same
+load added up by chat. Claude Code hands every MCP server it starts the chat's
+id in `CLAUDE_CODE_SESSION_ID`, and `ps -E` shows a process's environment to
+its owner, so an agent's root process is named by its descendants; only that
+one variable is read, the answer is remembered for the root's lifetime, and a
+root that could not be named is asked about again after a minute. Each agent's
+own folders (`~/.claude`, `~/.codex`, `~/.cursor`, `~/.grok`, plus Claude's
+CLI cache) are measured with `du` in the background every ten minutes, top-level
+child by child, and carried on the sample; a sample never waits for `du`. The
+helper log says once in five minutes what each agent weighed, so a wrong
+number on the phone can be traced to the computer.
+
+A shell call is fingerprinted for Project policy by the command it runs —
+`git`, `rm`, `npm` — so a Project can allow one command and ask about another
+instead of deciding about the shell as a whole; a line with no command word
+is still plain `Shell`.
+
 ### One computer, whatever the network calls it
 
 The Mesh keys a computer by an identity written down once, on first use, in
