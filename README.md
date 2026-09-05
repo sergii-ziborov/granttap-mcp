@@ -328,6 +328,20 @@ capability kind, so the phone shows what is actually in force rather than what
 was sent. Revision zero is a Project with no policy yet, and it is reported so
 the first policy can be written.
 
+A refused edit is answered, not swallowed. When a computer cannot apply a
+policy — the phone built it on a revision the computer no longer holds, the
+engine is not running, the policy is invalid — it sends
+`project.policy.rejected` with the reason and the revision it actually holds,
+then the policy it holds, so the phone can say what happened, keep the edit,
+and offer it again on top of the current revision. The helper log carries the
+same line. What the engine leaves null is sent as absent: the phone reads a
+status strictly, and a `null` where a field was optional was read as a wrong
+value and the whole status dropped.
+
+A shell call is fingerprinted by the command it runs (`git`, `rm`), a deploy or
+network call by the phrase that made it one (`git push`, `curl`), so a named
+rule can forbid pushing or deleting while the rest of the shell stays allowed.
+
 Evaluation happens in the provider hook before the action runs, with a deadline
 long enough for a busy machine to answer. A missed answer falls back to the
 legacy GrantTap gate rather than to a silent allow, and content never crosses
