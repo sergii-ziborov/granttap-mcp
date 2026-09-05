@@ -94,12 +94,17 @@ function redactCommandSecrets(raw: string): string {
   return value;
 }
 
-export function commandPreviewFromInput(input: unknown): string | null {
+/** The whole command, secrets removed and whitespace collapsed, not cut. */
+export function commandTextFromInput(input: unknown): string | null {
   const raw = commandValue(input);
   if (!raw) return null;
   const collapsed = redactCommandSecrets(raw)
     .replace(/[\s\u0000-\u001f\u007f]+/g, " ")
     .trim();
-  if (!collapsed) return null;
-  return collapsed.slice(0, MAX_COMMAND_PREVIEW_LENGTH);
+  return collapsed || null;
+}
+
+export function commandPreviewFromInput(input: unknown): string | null {
+  const collapsed = commandTextFromInput(input);
+  return collapsed ? collapsed.slice(0, MAX_COMMAND_PREVIEW_LENGTH) : null;
 }

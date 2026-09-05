@@ -32,3 +32,15 @@ test("observed and remote CLI capabilities carry the command's name and keep the
   // MCP and skills are unaffected.
   assert.equal(toObservedCapability({ ...observation, cli: undefined, mcpServer: "github" } as any).name, "github");
 });
+
+test("a preview cut short at a variable name does not name the call after the variable", () => {
+  const command = "cd ~/dev/nodvox/apps/ios && LOG=/private/tmp/claude-501/-Users-serhiirihgt-dev-nodvox/2dc608d6-3e8f-43a7-9037-32793756e7f4/scratchpad/phone76.log; DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project GrantTap.xcodeproj build";
+  assert.equal(commandName(command), "xcodebuild");
+  assert.equal(commandName(command.slice(0, 160)), undefined, "the cut preview ends in DEVELOPER_DIR, which is no command");
+  const observed = toObservedCapability({
+    sourceId: "s:1", sessionId: "chat", toolName: "Bash", createdAt: 1, cli: true as const,
+    commandPreview: command, outcome: "success" as const,
+  });
+  assert.equal(observed.name, "xcodebuild", "named from the whole command, not the preview");
+  assert.equal(observed.commandPreview?.length, 160);
+});

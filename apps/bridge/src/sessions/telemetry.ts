@@ -6,7 +6,7 @@ import type {
   ObservedCapability,
   RemoteCapabilityUsageEvent,
 } from "../../../../packages/protocol/schema";
-import { commandPreviewFromInput } from "./telemetry/command-preview";
+import { commandPreviewFromInput, commandTextFromInput } from "./telemetry/command-preview";
 import {
   clampTokens,
   estimateBaselineTokens,
@@ -181,6 +181,9 @@ export function commandName(preview: string | undefined | null): string | undefi
     const word = words[index];
     if (!word) continue;
     const leaf = word.split("/").pop() ?? word;
+    // A shouting name is a variable, not a command: a preview cut short at
+    // "DEVELOPER_DIR" must not name the call DEVELOPER_DIR.
+    if (/^[A-Z_][A-Z0-9_]*$/.test(leaf)) continue;
     if (/^[A-Za-z0-9._+-]{1,40}$/.test(leaf) && !/^[-.]/.test(leaf)) return leaf;
   }
   return undefined;
@@ -195,7 +198,7 @@ export function toObservedCapability(
     kind === "cli" ? commandPreviewFromInput(observation.commandPreview) ?? undefined : undefined;
   return {
     kind,
-    name: (observation.mcpServer ?? observation.skill ?? commandName(commandPreview) ?? toolName).trim().slice(0, 160),
+    name: (observation.mcpServer ?? observation.skill ?? commandName(kind === "cli" ? commandTextFromInput(observation.commandPreview) : undefined) ?? toolName).trim().slice(0, 160),
     toolName,
     commandPreview,
     estimatedContextTokens: observation.estimatedContextTokens,
