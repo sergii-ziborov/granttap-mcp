@@ -225,3 +225,13 @@ test("a shell call is fingerprinted by the command it runs, so one command can b
   const bare = capabilityFingerprint({ provider: "claude", toolName: "Bash", toolInput: { command: "--flag" } });
   assert.equal(bare.display_name, "Shell");
 });
+
+test("a deploy or network call is fingerprinted by the phrase that made it one", () => {
+  const push = capabilityFingerprint({ provider: "claude", toolName: "Bash", toolInput: { command: "git push origin main" } });
+  assert.equal(push.kind, "deploy");
+  assert.equal(push.display_name, "git push");
+  assert.equal(capabilityFingerprint({ provider: "codex", toolName: "shell", toolInput: { command: "npm   publish --access public" } }).display_name, "npm publish");
+  const curl = capabilityFingerprint({ provider: "claude", toolName: "Bash", toolInput: { command: "curl -s https://example.com" } });
+  assert.equal(curl.kind, "network");
+  assert.equal(curl.display_name, "curl");
+});

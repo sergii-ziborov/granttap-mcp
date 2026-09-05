@@ -84,12 +84,29 @@ function ruleToEngine(rule: ProjectPolicyRule): EnginePolicyRule {
   };
 }
 
+/**
+ * An absent field is absent, not null.
+ *
+ * The engine answers with explicit nulls for every selector field it does not
+ * use. The wire schema says those fields are optional, and the phone checks
+ * the shape strictly before it reads a status — so a status with `null` in it
+ * was dropped on the phone without a word, and Governance showed "no rules"
+ * while the computer was enforcing two.
+ */
+function present<T extends Record<string, unknown>>(value: T): T {
+  const out: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (item !== null && item !== undefined) out[key] = item;
+  }
+  return out as T;
+}
+
 function ruleFromEngine(rule: EnginePolicyRule): ProjectPolicyRule {
   const fingerprint = rule.selector.fingerprint;
   return {
     ruleId: rule.rule_id,
     projectId: rule.project_id,
-    selector: {
+    selector: present({
       kind: rule.selector.kind,
       displayName: rule.selector.display_name,
       provider: optionalProvider(rule.selector.provider),
@@ -97,15 +114,15 @@ function ruleFromEngine(rule: EnginePolicyRule): ProjectPolicyRule {
       fingerprint: fingerprint && (
         fingerprint.match === "confidence"
           ? { match: "confidence", value: fingerprint.value }
-          : { match: fingerprint.match, expected: fingerprintFromEngine(fingerprint.expected) }
+          : { match: fingerprint.match, expected: present(fingerprintFromEngine(fingerprint.expected)) }
       ),
-    },
+    }),
     effect: rule.effect,
-    conditions: {
+    conditions: present({
       endpointIds: rule.conditions.endpoint_ids,
       providers: rule.conditions.providers.map(provider),
       impact: rule.conditions.impact,
-    },
+    }),
     revision: rule.revision,
     createdBy: rule.created_by,
   };

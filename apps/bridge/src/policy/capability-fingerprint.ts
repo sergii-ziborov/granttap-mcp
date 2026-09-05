@@ -83,8 +83,12 @@ function shellFingerprint(
       ...(script.pathHash ? { executable_path_hash: script.pathHash, confidence: "exact" } : {}),
     };
   }
-  if (isDeploy(command)) return fingerprint("deploy", "Deploy", provider, "shell-command");
-  if (isNetwork(command)) return fingerprint("network", "Network command", provider, "shell-command");
+  // Named by the phrase that made it a deploy or a network call — "git push",
+  // "curl" — so a Project can forbid pushing without forbidding every release.
+  const deploy = deployPhrase(command);
+  if (deploy) return fingerprint("deploy", deploy, provider, "shell-command");
+  const network = networkCommand(command);
+  if (network) return fingerprint("network", network, provider, "shell-command");
   if (script) {
     return {
       ...fingerprint("script", script.name, provider, "shell-script"),
@@ -130,12 +134,14 @@ function commandText(value: unknown): string {
   return "";
 }
 
-function isDeploy(command: string): boolean {
-  return /\b(?:git\s+push|npm\s+publish|deploy|release)\b/i.test(command);
+export function deployPhrase(command: string): string | undefined {
+  const match = /\b(git\s+push|npm\s+publish|deploy|release)\b/i.exec(command);
+  return match ? match[1]!.toLowerCase().replace(/\s+/g, " ") : undefined;
 }
 
-function isNetwork(command: string): boolean {
-  return /\b(?:curl|wget|ssh|scp|rsync)\b/i.test(command);
+export function networkCommand(command: string): string | undefined {
+  const match = /\b(curl|wget|ssh|scp|rsync)\b/i.exec(command);
+  return match ? match[1]!.toLowerCase() : undefined;
 }
 
 function scriptIdentity(

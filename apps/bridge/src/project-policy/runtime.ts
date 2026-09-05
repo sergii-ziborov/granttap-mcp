@@ -6,6 +6,8 @@ import type {
   ProjectEnforcementStatus,
   ProjectPolicyAck,
   ProjectPolicyPayload,
+  ProjectPolicyRejected,
+  ProjectPolicyRejectionReason,
   ProjectPolicySet,
   ProjectPolicyStatus,
 } from "../../../../packages/protocol/schema";
@@ -41,7 +43,20 @@ export type ProjectPolicyRuntimeDependencies = {
   providers: () => ProviderCoverageTarget[];
   now: () => number;
   send: (relay: RelayClient, payload: ProjectPolicyPayload) => Promise<void>;
+  /** A line for the helper log when a policy could not be applied or reported. */
+  log?: (line: string) => void;
 };
+
+/** What a failed apply was, from what the engine said about it. */
+export function rejectionReason(error: unknown): ProjectPolicyRejectionReason {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if (/revision|conflict|expected/i.test(message)) return "revision_mismatch";
+  if (/ECONNREFUSED|ENOENT|EPIPE|socket|timed? ?out|unavailable|not running/i.test(message)) {
+    return "engine_unavailable";
+  }
+  if (/invalid|schema|malformed|scope/i.test(message)) return "invalid_policy";
+  return "unknown";
+}
 
 export function createProjectPolicyRuntime(deps: ProjectPolicyRuntimeDependencies) {
   async function apply(relay: RelayClient, request: ProjectPolicySet): Promise<boolean> {
@@ -53,7 +68,7 @@ export function createProjectPolicyRuntime(deps: ProjectPolicyRuntimeDependencie
           policy: policyToEngine(request.policy),
         },
       }, { timeoutMs: 2_000 });
-      if (applied.operation !== "policy.applied") return false;
+      if (applied.operation !== "policy.applied") throw new Error(`engine answered ${applied.operation}`);
       const targets = new Map(deps.providers().map((item) => [item.provider, item]));
       for (const target of [...targets.values()].sort((left, right) =>
         left.provider.localeCompare(right.provider))) {
@@ -63,11 +78,13 @@ export function createProjectPolicyRuntime(deps: ProjectPolicyRuntimeDependencie
         const accepted = await deps.client.request({
           operation: "policy.ack", input: { acknowledgement },
         }, { timeoutMs: 2_000 });
-        if (accepted.operation !== "policy.acknowledged") return false;
+        if (accepted.operation !== "policy.acknowledged") throw new Error(`engine answered ${accepted.operation}`);
         if (accepted.acknowledgement.project_id !== request.projectId
           || accepted.acknowledgement.policy_revision !== applied.policy.revision
           || accepted.acknowledgement.endpoint_id !== acknowledgement.endpoint_id
-          || accepted.acknowledgement.provider !== target.provider) return false;
+          || accepted.acknowledgement.provider !== target.provider) {
+          throw new Error("engine acknowledged a different scope");
+        }
         const payload: ProjectPolicyAck = {
           type: "project.policy.ack", sessionId: request.projectId,
           projectId: request.projectId,
@@ -78,10 +95,47 @@ export function createProjectPolicyRuntime(deps: ProjectPolicyRuntimeDependencie
       const reported = await deps.client.request({
         operation: "policy.coverage", input: { project_id: request.projectId },
       }, { timeoutMs: 2_000 });
-      if (reported.operation !== "policy.coverage") return false;
-      return sendStatus(relay, applied.policy, reported.coverage);
-    } catch {
+      if (reported.operation !== "policy.coverage") throw new Error(`engine answered ${reported.operation}`);
+      const sent = await sendStatus(relay, applied.policy, reported.coverage);
+      if (!sent) deps.log?.(`applied revision ${applied.policy.revision} of ${request.projectId} but could not report it`);
+      return sent;
+    } catch (error) {
+      await reject(relay, request, error);
       return false;
+    }
+  }
+
+  /**
+   * A refused edit is answered, not swallowed: the phone learns why, and the
+   * policy the computer actually holds follows so the next edit is made on
+   * top of it rather than on a revision that no longer exists.
+   */
+  async function reject(relay: RelayClient, request: ProjectPolicySet, error: unknown): Promise<void> {
+    const reason = rejectionReason(error);
+    const detail = (error instanceof Error ? error.message : String(error ?? "")).slice(0, 240);
+    deps.log?.(`could not apply revision ${request.policy.revision} of ${request.projectId} (${reason}): ${detail}`);
+    let currentRevision: number | undefined;
+    try {
+      const found = await deps.client.request({
+        operation: "policy.get", input: { project_id: request.projectId },
+      }, { timeoutMs: 2_000 });
+      if (found.operation === "policy.found") currentRevision = found.policy.revision;
+    } catch {
+      // The engine could not say; the phone still learns the edit was refused.
+    }
+    const payload: ProjectPolicyRejected = {
+      type: "project.policy.rejected", sessionId: request.projectId, projectId: request.projectId,
+      expectedRevision: request.expectedRevision,
+      ...(currentRevision != null ? { currentRevision } : {}),
+      reason,
+      ...(detail ? { detail } : {}),
+      generatedAt: deps.now(),
+    };
+    try {
+      await deps.send(relay, payload);
+      if (currentRevision != null) await publishOne(relay, request.projectId);
+    } catch {
+      // Nothing more can be said over a relay that is not taking messages.
     }
   }
 
@@ -182,6 +236,7 @@ function defaultRuntime() {
   sharedClient ??= new EngineClient({ socketPath: join(configDir(), "engine.sock") });
   return createProjectPolicyRuntime({
     client: sharedClient,
+    log: (line) => process.stderr.write(`[monitor] rules: ${line}\n`),
     endpointId: hostname,
     providers: () => {
       const configured = loadRuntimeConfig().providerSettings;

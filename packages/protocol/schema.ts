@@ -26,6 +26,7 @@ import {
 import { MachineLoad } from "./messages/machine";
 import {
   ProjectPolicyAck,
+  ProjectPolicyRejected,
   ProjectPolicySet,
   ProjectPolicyStatus,
 } from "./messages/project-policy";
@@ -115,6 +116,7 @@ export const Payload = z.union([
   ProjectPolicySet,
   ProjectPolicyStatus,
   ProjectPolicyAck,
+  ProjectPolicyRejected,
   Hello,
   MachineHeartbeat,
   MachineLoad,

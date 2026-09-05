@@ -166,7 +166,34 @@ function validatePolicyScope(
   }
 }
 
+/**
+ * Why a computer did not apply a policy the phone sent.
+ *
+ * A refused edit used to be silent: the phone said "saved", the computer
+ * kept the old revision, and nothing told anyone. The reason and the
+ * revision the computer actually holds let the phone say what happened and
+ * offer the edit again on top of the current policy.
+ */
+export const ProjectPolicyRejectionReason = z.enum([
+  "revision_mismatch", "engine_unavailable", "invalid_policy", "unknown",
+]);
+export type ProjectPolicyRejectionReason = z.infer<typeof ProjectPolicyRejectionReason>;
+
+export const ProjectPolicyRejected = ProjectPolicyScope.extend({
+  type: z.literal("project.policy.rejected"),
+  expectedRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  currentRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
+  reason: ProjectPolicyRejectionReason,
+  detail: z.string().trim().min(1).max(240).optional(),
+  generatedAt: z.number().nonnegative(),
+}).strict().superRefine((value, ctx) => {
+  if (value.sessionId !== value.projectId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["projectId"], message: "Project scope mismatch" });
+  }
+});
+
 export type ProjectPolicySet = z.infer<typeof ProjectPolicySet>;
 export type ProjectPolicyStatus = z.infer<typeof ProjectPolicyStatus>;
 export type ProjectPolicyAck = z.infer<typeof ProjectPolicyAck>;
-export type ProjectPolicyPayload = ProjectPolicySet | ProjectPolicyStatus | ProjectPolicyAck;
+export type ProjectPolicyRejected = z.infer<typeof ProjectPolicyRejected>;
+export type ProjectPolicyPayload = ProjectPolicySet | ProjectPolicyStatus | ProjectPolicyAck | ProjectPolicyRejected;

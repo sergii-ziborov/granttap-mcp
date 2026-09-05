@@ -10,7 +10,9 @@ import {
   type ProjectPolicyPayload,
   type ProjectPolicySet as ProjectPolicySetValue,
 } from "../packages/protocol/schema";
+import { ProjectPolicy as ProjectPolicySchema } from "../packages/protocol/messages/project-policy";
 import type { EngineClientLike } from "../apps/bridge/src/engine/engine-supervisor";
+import { rejectionReason } from "../apps/bridge/src/project-policy/runtime";
 import {
   acknowledgementFromEngine,
   policyFromEngine,
@@ -259,4 +261,75 @@ test("periodic projection is ordered, deduplicated, and reports unauthored polic
     sent.map((item) => item.type === "project.policy.status" ? item.policy.revision : -1),
     [0, 2],
   );
+});
+
+test("a refused apply answers the phone with why, and with the policy the computer holds", async () => {
+  const sent: ProjectPolicyPayload[] = [];
+  const lines: string[] = [];
+  const held = policyToEngine({ ...policySet().policy, revision: 1 });
+  const client: EngineClientLike = {
+    close() {},
+    async request(operation) {
+      if (operation.operation === "policy.apply") throw new Error("policy revision conflict: expected 1, got 0");
+      if (operation.operation === "policy.get") return { operation: "policy.found", policy: held };
+      if (operation.operation === "policy.coverage") {
+        return {
+          operation: "policy.coverage",
+          coverage: {
+            project_id: "project", policy_revision: 1, enforcement: held.enforcement,
+            required_capabilities: [], endpoints: [], strict_ready: true,
+          },
+        };
+      }
+      throw new Error(`unexpected ${operation.operation}`);
+    },
+  };
+  const runtime = createProjectPolicyRuntime({
+    client, endpointId: () => "mac", providers: () => [], now: () => now,
+    send: async (_relay, payload) => { sent.push(payload); },
+    log: (line) => lines.push(line),
+  });
+  assert.equal(await runtime.apply({} as RelayClient, policySet()), false);
+  assert.equal(sent[0]?.type, "project.policy.rejected");
+  const rejected = sent[0] as Extract<ProjectPolicyPayload, { type: "project.policy.rejected" }>;
+  assert.equal(rejected.reason, "revision_mismatch");
+  assert.equal(rejected.currentRevision, 1);
+  assert.equal(rejected.expectedRevision, policySet().expectedRevision);
+  assert.equal(sent[1]?.type, "project.policy.status", "the policy the computer holds follows, so the next edit builds on it");
+  assert.match(lines[0] ?? "", /could not apply revision \d+ of project \(revision_mismatch\)/);
+
+  // An engine that is not there: the refusal still goes out, without a revision.
+  const down: EngineClientLike = {
+    close() {},
+    async request() { throw new Error("connect ECONNREFUSED engine.sock"); },
+  };
+  const offline: ProjectPolicyPayload[] = [];
+  const quiet = createProjectPolicyRuntime({
+    client: down, endpointId: () => "mac", providers: () => [], now: () => now,
+    send: async (_relay, payload) => { offline.push(payload); },
+  });
+  assert.equal(await quiet.apply({} as RelayClient, policySet()), false);
+  assert.equal(offline.length, 1);
+  const unavailable = offline[0] as Extract<ProjectPolicyPayload, { type: "project.policy.rejected" }>;
+  assert.equal(unavailable.reason, "engine_unavailable");
+  assert.equal(unavailable.currentRevision, undefined);
+  assert.equal(rejectionReason(new Error("policy is invalid: bad selector")), "invalid_policy");
+  assert.equal(rejectionReason("something else"), "unknown");
+});
+
+test("what the engine leaves null is absent on the wire, so the phone's strict shape check passes", () => {
+  const policy = policyFromEngine({
+    project_id: "project", revision: 1, enforcement: "best_available",
+    rules: [{
+      rule_id: "granttap-default-agent", project_id: "project",
+      selector: { kind: "agent", display_name: null, provider: null, origin: null, fingerprint: null },
+      effect: "allow",
+      conditions: { endpoint_ids: [], providers: [], impact: null },
+      revision: 1, created_by: "granttap-phone",
+    }],
+  } as never);
+  assert.equal(JSON.stringify(policy).includes("null"), false);
+  assert.deepEqual(policy.rules[0]?.selector, { kind: "agent" });
+  assert.deepEqual(policy.rules[0]?.conditions, { endpointIds: [], providers: [] });
+  assert.equal(ProjectPolicySchema.safeParse(policy).success, true);
 });
