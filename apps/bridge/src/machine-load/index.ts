@@ -84,6 +84,7 @@ export function buildMachineLoad(input: {
         processes: input.processes[agent]?.processes ?? 0,
         cpuPercent: input.processes[agent]?.cpuPercent ?? 0,
         memoryBytes: input.processes[agent]?.memoryBytes ?? 0,
+        topProcesses: input.processes[agent]?.groups ?? [],
         sessions: sessionsByAgent.get(agent) ?? 0,
         scanMs: scanCost[agent]?.durationMs ?? 0,
         tokensRecent: tokensByAgent.get(agent) ?? 0,

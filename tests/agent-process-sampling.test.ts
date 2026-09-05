@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   attributeProcesses,
+  parsePidListing,
   parsePsOutput,
+  withCommandLines,
 } from "../apps/bridge/src/machine-load/process-sampler";
 
 describe("agent process sampling", () => {
@@ -43,7 +45,10 @@ describe("agent process sampling", () => {
       { pid: 1, cpuPercent: 10.5, rssBytes: 100, command: "/usr/local/bin/grok" },
       { pid: 2, cpuPercent: 4.5, rssBytes: 200, command: "/usr/local/bin/grok --print" },
     ]);
-    assert.deepEqual(summed.grok, { processes: 2, cpuPercent: 15, memoryBytes: 300 });
+    assert.deepEqual(summed.grok, {
+      processes: 2, cpuPercent: 15, memoryBytes: 300,
+      groups: [{ name: "grok", count: 2, cpuPercent: 15, memoryBytes: 300 }],
+    });
 
     const rows = parsePsOutput([
       "  PID  %CPU      RSS COMMAND",
@@ -58,4 +63,85 @@ describe("agent process sampling", () => {
       command: "/usr/local/bin/claude --resume abc",
     });
   });
+
+  it("an agent's children are its load, named by executable, heaviest first and bounded", () => {
+    const rows = [
+      { pid: 100, ppid: 1, cpuPercent: 5, rssBytes: 100, command: "/Users/me/.local/bin/claude" },
+      ...Array.from({ length: 12 }, (_, i) => ({
+        pid: 200 + i, ppid: 100, cpuPercent: 2, rssBytes: 50, command: `node /Users/me/.local/share/claude/versions/2.1.260/worker.js ${i}`,
+      })),
+      { pid: 300, ppid: 100, cpuPercent: 1, rssBytes: 20, command: "/bin/zsh -lc 'npm test'" },
+      { pid: 301, ppid: 300, cpuPercent: 0.5, rssBytes: 20, command: "-zsh" },
+      { pid: 302, ppid: 301, cpuPercent: 40, rssBytes: 900, command: "/usr/bin/git status" },
+      // The shell the person launched Claude from is not Claude's.
+      { pid: 1, ppid: 0, cpuPercent: 3, rssBytes: 30, command: "/bin/zsh" },
+      // A shell nobody's agent spawned.
+      { pid: 400, ppid: 1, cpuPercent: 3, rssBytes: 30, command: "/bin/zsh" },
+    ];
+    const byAgent = attributeProcesses(rows);
+    const claude = byAgent.claude!;
+    assert.equal(claude.processes, 16, "the binary and everything under it");
+    assert.deepEqual(claude.groups?.map((group) => [group.name, group.count]), [
+      ["git", 1], ["node", 12], ["claude", 1], ["zsh", 2],
+    ], "heaviest first; the two shells are one kind");
+    assert.equal(claude.groups?.[1]?.cpuPercent, 24);
+    assert.equal(claude.groups?.[1]?.memoryBytes, 600);
+    assert.equal(Object.keys(byAgent).length, 1, "the unrelated shells belong to nobody");
+
+    const many = attributeProcesses(Array.from({ length: 12 }, (_, i) => ({
+      pid: 500 + i, ppid: i === 0 ? 1 : 500, cpuPercent: 12 - i, rssBytes: 1,
+      command: i === 0 ? "/usr/local/bin/claude" : `/opt/tool${i}`,
+    })));
+    assert.equal(many.claude?.groups?.length, 8, "the heaviest eight kinds, not every kind");
+    assert.equal(many.claude?.groups?.[0]?.name, "claude");
+  });
+
+  it("reads the parent id from ps and still parses the older four-column form", () => {
+    const rows = parsePsOutput("  12 1 4.5 2048 /usr/local/bin/claude --resume\n  13 12 0.0 100 -zsh\n  7 0.5 10 node old-form\nheader junk\n");
+    assert.deepEqual(rows[0], { pid: 12, ppid: 1, cpuPercent: 4.5, rssBytes: 2048 * 1024, command: "/usr/local/bin/claude --resume" });
+    assert.equal(rows[1]?.ppid, 12);
+    assert.deepEqual(rows[2], { pid: 7, cpuPercent: 0.5, rssBytes: 10 * 1024, command: "node old-form" });
+    assert.equal(rows.length, 3);
+  });
+
+  it("an executable path with a space in it is still the agent, and its children still its", () => {
+    const cli = "/Users/me/Library/Application Support/Claude/claude-code/2.1.260/claude.app/Contents/MacOS/claude";
+    const rows = withCommandLines(
+      parsePsOutput([
+        `1395 1 2.0 900000 /Applications/Claude.app/Contents/MacOS/Claude`,
+        `9297 1395 0.0 100 /Applications/Claude.app/Contents/Helpers/disclaimer`,
+        `9298 9297 12.5 400000 ${cli}`,
+        `5806 9298 0.3 2000 /bin/zsh`,
+        `5900 5806 55.0 300000 /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild`,
+        `2714 9298 1.0 50000 /Users/me/.nvm/versions/node/v22.13.1/bin/node`,
+      ].join("\n")),
+      parsePidListing([
+        `1395 /Applications/Claude.app/Contents/MacOS/Claude`,
+        `9297 /Applications/Claude.app/Contents/Helpers/disclaimer -- ${cli} --resume`,
+        `9298 ${cli} --output-format stream-json --verbose`,
+        `5806 /bin/zsh -c source snapshot.sh && npm test`,
+        `5900 xcodebuild test -scheme GrantTap`,
+        `2714 node /Users/me/dev/granttap-mcp/bin/granttap-mcp.mjs internal serve`,
+      ].join("\n")),
+    );
+    const byAgent = attributeProcesses(rows);
+    assert.deepEqual(Object.keys(byAgent), ["claude"], "the desktop app and its disclaimer helper are not the agent");
+    const claude = byAgent.claude!;
+    assert.equal(claude.processes, 4, "the CLI, its shell, the build the shell ran, and its node child");
+    assert.deepEqual(claude.groups?.map((group) => [group.name, group.count]), [
+      ["xcodebuild", 1], ["claude", 1], ["node", 1], ["zsh", 1],
+    ]);
+    assert.equal(claude.cpuPercent, 68.8);
+  });
+
+  it("the interpreter's script names the agent when the executable is only node", () => {
+    const rows = withCommandLines(
+      parsePsOutput("77 1 1.0 10 /opt/homebrew/bin/node\n78 77 2.0 10 /bin/zsh\n"),
+      parsePidListing("77 node /opt/homebrew/lib/node_modules/@openai/codex/bin/codex.js exec\n78 /bin/zsh -lc ls\n"),
+    );
+    const byAgent = attributeProcesses(rows);
+    assert.equal(byAgent.codex?.processes, 2);
+    assert.deepEqual(byAgent.codex?.groups?.map((group) => group.name), ["zsh", "node"]);
+  });
 });
+
