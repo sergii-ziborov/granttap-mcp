@@ -205,6 +205,31 @@ export function scanSessionActivity(session: SessionInfo): SessionActivity {
   };
 }
 
+/** One agent conversation's rows travel on their own, bounded, when asked for. */
+export const MAX_THREAD_ENTRIES = 60;
+
+/**
+ * Every row of one agent conversation, newest last. The chat's own window
+ * keeps a few of each conversation's rows for navigation; opened, the
+ * conversation is worth reading whole, and it is read from the transcript
+ * on demand rather than carried on every tick.
+ */
+export function scanThreadActivity(session: SessionInfo, threadId: string): SessionActivity {
+  const entries = activityForSession(session)
+    .filter((entry) => entry.childThreadId === threadId)
+    .sort((a, b) => a.createdAt - b.createdAt)
+    .slice(-MAX_THREAD_ENTRIES);
+  return {
+    type: "session.activity",
+    sessionId: session.sessionId,
+    agent: session.agent,
+    state: session.state,
+    threadId,
+    entries,
+    generatedAt: Date.now(),
+  };
+}
+
 /**
  * MCP/skill/CLI telemetry comes from observations cached during provider scans.
  * Calls without result rows remain explicitly input-only.

@@ -33,6 +33,8 @@ export const SessionActivity = z.object({
   sessionId: z.string(),
   agent: AgentId,
   state: SessionState,
+  /** Set when the entries are one agent conversation of the chat, not its window. */
+  threadId: z.string().max(256).optional(),
   entries: z.array(ActivityEntry),
   generatedAt: z.number(),
 });

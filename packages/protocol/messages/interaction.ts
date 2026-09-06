@@ -71,6 +71,8 @@ export type SessionSubscription = z.infer<typeof SessionSubscription>;
 export const SessionEventsRequest = z.object({
   type: z.literal("session.events"),
   sessionId: z.string(),
+  /** One agent conversation of the chat, in full, instead of the chat's window. */
+  threadId: z.string().max(256).optional(),
   createdAt: z.number(),
 });
 export type SessionEventsRequest = z.infer<typeof SessionEventsRequest>;

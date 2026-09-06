@@ -66,6 +66,7 @@ import {
   scanCapabilityUsage,
   scanSessionHistory,
   scanSessions,
+  scanThreadActivity,
   scopeCapabilityUsageToRoom,
   TOKEN_WINDOW_HOURS,
 } from "./sessions";
@@ -117,10 +118,12 @@ export async function publishSessionEvents(
   client: RelayClient,
   sessionId: string,
   status?: SessionsStatus,
+  threadId?: string,
 ): Promise<boolean> {
   const session = resolveSession(sessionId, status);
   if (!session) return false;
-  await sendSessionPayload(client, cachedSessionActivity(session), sessionId, "phone", {
+  const activity = threadId ? scanThreadActivity(session, threadId) : cachedSessionActivity(session);
+  await sendSessionPayload(client, activity, sessionId, "phone", {
     ttlMs: INTERVAL_MS * 24,
     reliable: false,
   });
@@ -331,7 +334,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       }
       return true;
     } else if (payload.type === "session.events") {
-      void publishSessionEvents(client, payload.sessionId).catch(() => false);
+      void publishSessionEvents(client, payload.sessionId, undefined, payload.threadId).catch(() => false);
       return true;
     } else if (payload.type === "sessions.refresh") {
       // Pull-to-refresh must include a newly scanned history snapshot; otherwise

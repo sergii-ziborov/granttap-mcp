@@ -1,3 +1,4 @@
+import { statsFromInput } from "./edit-stats";
 import { recordObservedWrite, writtenPaths } from "../mesh/observed-writes";
 /**
  * Codex session logs:
@@ -707,6 +708,7 @@ function appendCodexActivity(
         {
           ...childFields,
           ...classified,
+          ...(statsFromInput(toolName, args) ?? {}),
           ...(observation
             ? activityTelemetry(observation)
             : { estimatedContextTokens: estimateTokens(args) }),

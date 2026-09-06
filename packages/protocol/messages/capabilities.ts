@@ -75,6 +75,9 @@ export const ActivityEntry = z.object({
   childThreadId: z.string().max(256).optional(),
   childThreadTitle: z.string().max(160).optional(),
   childThreadDepth: z.number().int().min(1).max(16).optional(),
+  /** What a file tool changed, as git counts it. */
+  linesAdded: z.number().int().nonnegative().optional(),
+  linesRemoved: z.number().int().nonnegative().optional(),
 });
 export type ActivityEntry = z.infer<typeof ActivityEntry>;
 

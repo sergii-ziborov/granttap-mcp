@@ -186,6 +186,8 @@ export function pushEntry(
       | "childThreadId"
       | "childThreadTitle"
       | "childThreadDepth"
+      | "linesAdded"
+      | "linesRemoved"
     >
   > = {},
   idOverride?: string,
