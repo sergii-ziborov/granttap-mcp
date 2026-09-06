@@ -80,6 +80,8 @@ export const ActivityEntry = z.object({
   linesRemoved: z.number().int().nonnegative().optional(),
   /** The change itself, bounded: lines prefixed +, − or a space, secrets removed. */
   diffPreview: z.string().max(4_000).optional(),
+  /** What the agent said the call was for, when the tool takes a description. */
+  summary: z.string().max(200).optional(),
 });
 export type ActivityEntry = z.infer<typeof ActivityEntry>;
 

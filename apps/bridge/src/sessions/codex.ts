@@ -1,3 +1,4 @@
+import { toolDescription } from "./activity-helpers";
 import { diffPreviewFromInput, sensitivePath, statsFromInput } from "./edit-stats";
 import { redactSecrets } from "./telemetry/command-preview";
 import { recordObservedWrite, writtenPaths } from "../mesh/observed-writes";
@@ -710,6 +711,7 @@ function appendCodexActivity(
           ...childFields,
           ...classified,
           ...(statsFromInput(toolName, args) ?? {}),
+          ...(toolDescription(args) ? { summary: toolDescription(args) } : {}),
           ...(statsFromInput(toolName, args)
             && !sensitivePath((args as Record<string, unknown> | undefined)?.file_path ?? (args as Record<string, unknown> | undefined)?.path)
             ? { diffPreview: diffPreviewFromInput(toolName, args, redactSecrets) }

@@ -11,6 +11,30 @@ export type UserAttachment = z.infer<typeof UserAttachment>;
 /** Budget for attachments after the task and device encryption layers. */
 export const MAX_ATTACHMENT_BASE64_CHARS = 16_000_000;
 
+/**
+ * An attachment sent ahead of its message, as soon as it was picked, so the
+ * message that follows can name it instead of carrying it.
+ */
+export const UserAttachmentUpload = z.object({
+  type: z.literal("user.attachment"),
+  attachmentId: z.string().regex(/^[A-Za-z0-9_-]{1,180}$/),
+  name: z.string().min(1).max(180),
+  mimeType: z.string().min(1).max(120),
+  data: z.string().max(8_000_000),
+  createdAt: z.number(),
+});
+export type UserAttachmentUpload = z.infer<typeof UserAttachmentUpload>;
+
+export const UserAttachmentRef = z.object({
+  attachmentId: z.string().regex(/^[A-Za-z0-9_-]{1,180}$/),
+  name: z.string().min(1).max(180),
+  mimeType: z.string().min(1).max(120),
+});
+export type UserAttachmentRef = z.infer<typeof UserAttachmentRef>;
+
+/** The receipt error a phone reads as "send the attachments again, inline". */
+export const ATTACHMENT_MISSING_ERROR = "attachment-missing";
+
 export const UserMessage = z.object({
   type: z.literal("user.message"),
   messageId: z.string().min(1).max(180).optional(),
@@ -20,6 +44,8 @@ export const UserMessage = z.object({
   requestId: z.string().optional(),
   sessionId: z.string().optional(),
   attachments: z.array(UserAttachment).max(5).optional(),
+  /** Attachments that came ahead of this message, by id. */
+  attachmentRefs: z.array(UserAttachmentRef).max(5).optional(),
   preferredMcp: z.string().min(1).max(180).optional(),
   skill: z.string().min(1).max(180).optional(),
   model: z.string().min(1).max(120)

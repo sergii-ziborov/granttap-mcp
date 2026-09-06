@@ -26,6 +26,7 @@ import {
   classifyTool,
   estimateTokens,
   pushEntry,
+  toolDescription,
   toolSummary,
 } from "./activity-helpers";
 import {
@@ -577,6 +578,7 @@ function appendClaudeActivity(
             ...classified,
             ...(stats ?? {}),
             ...(diffPreview ? { diffPreview } : {}),
+            ...(toolDescription(block.input) ? { summary: toolDescription(block.input) } : {}),
             ...(observation
               ? activityTelemetry(observation)
               : { estimatedContextTokens: estimateTokens(block.input) }),

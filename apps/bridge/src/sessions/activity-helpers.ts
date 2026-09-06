@@ -109,6 +109,16 @@ export function normalizeMcpServerName(raw: string): string {
   return name;
 }
 
+/** What the agent said a call was for: the description a tool takes. */
+export function toolDescription(input: unknown): string | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  const i = input as Record<string, unknown>;
+  const value = i.description ?? i.justification ?? i.purpose;
+  if (typeof value !== "string") return undefined;
+  const clean = value.replace(/\s+/g, " ").trim();
+  return clean ? clean.slice(0, 200) : undefined;
+}
+
 export function toolSummary(name: unknown, input: unknown): string {
   const tool = compact(name || "tool", 80);
   if (typeof input === "string") return `${tool}: ${compact(input, 420)}`;
@@ -189,6 +199,7 @@ export function pushEntry(
       | "linesAdded"
       | "linesRemoved"
       | "diffPreview"
+      | "summary"
     >
   > = {},
   idOverride?: string,

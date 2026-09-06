@@ -12,8 +12,11 @@ import type {
   SessionSkillSet,
   SessionSubscription,
   SessionsStatus,
+  UserAttachment,
   UserMessage,
 } from "../../../packages/protocol/schema";
+import { ATTACHMENT_MISSING_ERROR } from "../../../packages/protocol/schema";
+import { storeAttachment, takeAttachment } from "./attachment-store";
 import {
   configDir,
   loadRuntimeConfig,
@@ -303,10 +306,16 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
         deliveryStarted = true;
       }
       try {
-        await handleUserMessage(client, payload);
+        const outcome = await handleUserMessage(client, payload);
         if (payload.messageId && deliveryStarted) {
-          completeDelivery(payload.messageId);
-          await sendDeliveryReceipt(client, payload.messageId, "accepted", undefined, payload.sessionId);
+          if (outcome === "rejected") {
+            // The phone sends the message again with what was missing; the
+            // ledger must let that second copy through.
+            abandonDelivery(payload.messageId);
+          } else {
+            completeDelivery(payload.messageId);
+            await sendDeliveryReceipt(client, payload.messageId, "accepted", undefined, payload.sessionId);
+          }
         }
         void publish().catch(() => {});
         return true;
@@ -314,6 +323,9 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
         if (payload.messageId && deliveryStarted) abandonDelivery(payload.messageId);
         return false;
       }
+    } else if (payload.type === "user.attachment") {
+      // Ahead of its message, so the message itself travels light.
+      return storeAttachment(payload);
     } else if (payload.type === "config.set") {
       handleConfigSet(payload);
       void publish().catch(() => {});
@@ -613,7 +625,28 @@ export function handleConfigSet(message: ConfigSet): void {
   );
 }
 
-export async function handleUserMessage(client: RelayClient, message: UserMessage): Promise<void> {
+/**
+ * The attachments a message carries: the ones inside it, and the ones that
+ * came ahead of it by id. One that never came is a rejection the phone reads
+ * as "send them again, inline", not a message quietly delivered without its photo.
+ */
+export function resolveMessageAttachments(
+  message: Pick<UserMessage, "attachments" | "attachmentRefs">,
+  take: (attachmentId: string) => UserAttachment | undefined = takeAttachment,
+): { ok: true; attachments: UserAttachment[] } | { ok: false; missing: string } {
+  const attachments = [...(message.attachments ?? [])];
+  for (const ref of message.attachmentRefs ?? []) {
+    const stored = take(ref.attachmentId);
+    if (!stored) return { ok: false, missing: ref.name };
+    attachments.push(stored);
+  }
+  return { ok: true, attachments: attachments.slice(0, 5) };
+}
+
+export async function handleUserMessage(
+  client: RelayClient,
+  message: UserMessage,
+): Promise<"accepted" | "rejected" | void> {
   const say = (text: string, sessionId?: string, wake = false) => {
     const payload = agentEventForUserMessage(message, text, sessionId);
     const options = { ttlMs: 15 * 60_000, wake: wake || undefined };
@@ -621,6 +654,14 @@ export async function handleUserMessage(client: RelayClient, message: UserMessag
       ? sendSessionPayload(client, payload, sessionId, "phone", options)
       : client.send(payload, "phone", options)).catch(() => {});
   };
+  const resolved = resolveMessageAttachments(message);
+  if (!resolved.ok) {
+    if (message.messageId) {
+      await sendDeliveryReceipt(client, message.messageId, "rejected", ATTACHMENT_MISSING_ERROR, message.sessionId);
+    }
+    return "rejected";
+  }
+  const attachments = resolved.attachments;
 
   if (!message.sessionId) {
     const agent = message.agent ?? "codex";
@@ -648,7 +689,7 @@ export async function handleUserMessage(client: RelayClient, message: UserMessag
       cursor: createCursorSession,
       grok: createGrokSession,
     }[agent];
-    const result = await create(message.text, requestedCwd, DELIVERY_TIMEOUT_MS, message.attachments);
+    const result = await create(message.text, requestedCwd, DELIVERY_TIMEOUT_MS, attachments);
     if (result.ok) {
       await say(result.text, result.sessionId, true);
     } else {
@@ -696,7 +737,7 @@ export async function handleUserMessage(client: RelayClient, message: UserMessag
   // No "sent, waiting" line from a middleman: the delivery receipt already
   // marks the person's bubble, and the next words in the chat are the answer.
   const startedAt = Date.now();
-  const result = await deliverToSession(target, message.text, DELIVERY_TIMEOUT_MS, message.attachments, {
+  const result = await deliverToSession(target, message.text, DELIVERY_TIMEOUT_MS, attachments, {
     preferredMcp: message.preferredMcp,
     skill: message.skill,
     model: message.model,
