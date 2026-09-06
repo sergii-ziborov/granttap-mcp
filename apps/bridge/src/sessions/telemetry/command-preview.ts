@@ -21,6 +21,11 @@ const SENSITIVE_NAME =
 const SENSITIVE_CONFIG_KEY = `[^\\s=;&|]*(?:${SENSITIVE_NAME})[^\\s=;&|]*`;
 const SHELL_ARGUMENT_VALUE = `(?:"[^"]*"|'[^']*'|[^\\s;&|]+)`;
 
+/** Secrets out of one line of anything the phone will see, breaks kept. */
+export function redactSecrets(raw: string): string {
+  return redactCommandSecrets(raw);
+}
+
 function redactCommandSecrets(raw: string): string {
   let value = raw;
   value = value.replace(

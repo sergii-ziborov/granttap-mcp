@@ -1,4 +1,5 @@
-import { statsFromInput } from "./edit-stats";
+import { diffPreviewFromInput, sensitivePath, statsFromInput } from "./edit-stats";
+import { redactSecrets } from "./telemetry/command-preview";
 import { recordObservedWrite, writtenPaths } from "../mesh/observed-writes";
 /**
  * Codex session logs:
@@ -709,6 +710,10 @@ function appendCodexActivity(
           ...childFields,
           ...classified,
           ...(statsFromInput(toolName, args) ?? {}),
+          ...(statsFromInput(toolName, args)
+            && !sensitivePath((args as Record<string, unknown> | undefined)?.file_path ?? (args as Record<string, unknown> | undefined)?.path)
+            ? { diffPreview: diffPreviewFromInput(toolName, args, redactSecrets) }
+            : {}),
           ...(observation
             ? activityTelemetry(observation)
             : { estimatedContextTokens: estimateTokens(args) }),

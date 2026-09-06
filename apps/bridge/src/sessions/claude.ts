@@ -1,4 +1,5 @@
-import { patchStatsByToolUse, statsFromInput } from "./edit-stats";
+import { diffPreviewFromInput, patchStatsByToolUse, sensitivePath, statsFromInput } from "./edit-stats";
+import { redactSecrets } from "./telemetry/command-preview";
 import { recordObservedWrite, writtenPaths } from "../mesh/observed-writes";
 /**
  * Claude Code session logs:
@@ -494,7 +495,7 @@ function appendClaudeActivity(
   const childFields = child ? childEntryFields(child) : {};
   // The size of a file change, from the patch the host wrote beside the
   // result, so a Write reads "+12 −3" and not only as a path.
-  const patches = patchStatsByToolUse(lines, safeParse);
+  const patches = patchStatsByToolUse(lines, safeParse, redactSecrets);
   lines.forEach((line, index) => {
     const d = safeParse(line);
     if (!d) return;
@@ -557,8 +558,12 @@ function appendClaudeActivity(
         };
         const observation =
           observations.get(sourceId) ?? pendingCapabilityObservation(pending);
-        const stats = (typeof block.id === "string" ? patches.get(block.id) : undefined)
-          ?? statsFromInput(String(block.name ?? ""), block.input);
+        const patch = typeof block.id === "string" ? patches.get(block.id) : undefined;
+        const toolInput = block.input as Record<string, unknown> | undefined;
+        const stats = patch?.stats ?? statsFromInput(String(block.name ?? ""), block.input);
+        const diffPreview = stats && !sensitivePath(toolInput?.file_path ?? toolInput?.path)
+          ? patch?.preview ?? diffPreviewFromInput(String(block.name ?? ""), block.input, redactSecrets)
+          : undefined;
         pushEntry(
           out,
           seen,
@@ -571,6 +576,7 @@ function appendClaudeActivity(
             ...childFields,
             ...classified,
             ...(stats ?? {}),
+            ...(diffPreview ? { diffPreview } : {}),
             ...(observation
               ? activityTelemetry(observation)
               : { estimatedContextTokens: estimateTokens(block.input) }),

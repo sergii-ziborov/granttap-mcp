@@ -6,7 +6,8 @@ import test from "node:test";
 import type { Payload } from "../packages/protocol/schema";
 import { Payload as PayloadSchema } from "../packages/protocol/schema";
 import {
-  editStats, patchStatsByToolUse, statsFromInput, statsFromPatch, statsFromPatchText,
+  diffPreviewFromInput, diffPreviewFromPatch, editStats, MAX_DIFF_PREVIEW_LINES, patchStatsByToolUse,
+  sensitivePath, statsFromInput, statsFromPatch, statsFromPatchText,
 } from "../apps/bridge/src/sessions/edit-stats";
 import { claudeActivity, scanClaude } from "../apps/bridge/src/sessions/claude";
 import { MAX_THREAD_ENTRIES, scanThreadActivity } from "../apps/bridge/src/sessions";
@@ -61,7 +62,38 @@ test("edit statistics read like git: the patch when there is one, the call other
     "not json at all structuredPatch",
     JSON.stringify({ message: { content: "text" }, toolUseResult: { structuredPatch: [{ lines: ["+b"] }] } }),
   ], (line) => { try { return JSON.parse(line); } catch { return null; } });
-  assert.deepEqual([...patches.entries()], [["t1", { linesAdded: 1, linesRemoved: 0 }]]);
+  assert.deepEqual([...patches.entries()], [["t1", { stats: { linesAdded: 1, linesRemoved: 0 }, preview: "+a" }]]);
+});
+
+test("the change itself travels bounded and never from a secret file", () => {
+  const long = Array.from({ length: 40 }, (_, index) => `+line ${index}`);
+  const preview = diffPreviewFromPatch([{ lines: long }])!;
+  const lines = preview.split("\n");
+  assert.equal(lines.length, MAX_DIFF_PREVIEW_LINES + 1);
+  assert.equal(lines.at(-1), "… 16 more lines");
+  assert.equal(diffPreviewFromPatch([{ lines: ["+" + "x".repeat(400)] }])!.length, 160);
+  assert.equal(diffPreviewFromPatch([]), undefined);
+  assert.equal(diffPreviewFromInput("Write", { file_path: "/a", content: "a\nb\n" }), "+a\n+b");
+  assert.equal(diffPreviewFromInput("Edit", { old_string: "a", new_string: "b\nc" }), "-a\n+b\n+c");
+  assert.equal(diffPreviewFromInput("MultiEdit", { edits: [{ old_string: "a", new_string: "b" }] }), "-a\n+b");
+  assert.equal(diffPreviewFromInput("apply_patch", { input: "*** Update File: a\n@@\n-old\n+new\n context\n--- x" }), "-old\n+new\n context");
+  assert.equal(diffPreviewFromInput("apply_patch", { input: 7 }), undefined);
+  assert.equal(diffPreviewFromInput("Read", { file_path: "/a" }), undefined);
+  assert.equal(diffPreviewFromInput("Write", "x"), undefined);
+  assert.equal(diffPreviewFromInput("Write", { content: "TOKEN=abc123secret\n" }, (line) => line.replace(/=.*/, "=[REDACTED]")),
+    "+TOKEN=[REDACTED]");
+  for (const path of ["/repo/.env", "/repo/.env.local", "/home/me/.ssh/id_rsa", "/etc/server.pem", "/repo/config/credentials.json", "/repo/src/token-store.ts"]) {
+    assert.equal(sensitivePath(path), true, path);
+  }
+  for (const path of ["/repo/src/session-keys.ts", "/repo/README.md", "/repo/apps/ios/Environment.swift"]) {
+    assert.equal(sensitivePath(path), false, path);
+  }
+  assert.equal(sensitivePath(undefined), false);
+  const secretPatch = patchStatsByToolUse([
+    JSON.stringify({ message: { content: [{ type: "tool_result", tool_use_id: "s" }] },
+      toolUseResult: { filePath: "/repo/.env", structuredPatch: [{ lines: ["+KEY=1"] }] } }),
+  ], (line) => JSON.parse(line));
+  assert.deepEqual(secretPatch.get("s"), { stats: { linesAdded: 1, linesRemoved: 0 }, preview: undefined });
 });
 
 test("a Write reads +3 and an Edit +2 −1, and one agent conversation is fetched whole", async (t) => {
@@ -100,6 +132,8 @@ test("a Write reads +3 and an Edit +2 −1, and one agent conversation is fetche
   assert.deepEqual([write.linesAdded, write.linesRemoved], [3, 0], "a created file is all additions");
   const edit = activity.find((entry) => entry.toolName === "Edit")!;
   assert.deepEqual([edit.linesAdded, edit.linesRemoved], [2, 1], "from the patch the host wrote");
+  assert.equal(edit.diffPreview, "-b\n+B\n+C", "the patch's own lines travel with the row");
+  assert.equal(write.diffPreview, "+a\n+b\n+c", "a created file is all additions");
   const childWrite = activity.find((entry) => entry.toolName === "Write" && entry.childThreadId === childId)!;
   assert.deepEqual([childWrite.linesAdded, childWrite.linesRemoved], [2, 0], "estimated from the call when no patch exists");
   assert.equal(activity.find((entry) => entry.kind === "user" && !entry.childThreadId)?.linesAdded, undefined);

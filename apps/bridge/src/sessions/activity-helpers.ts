@@ -188,6 +188,7 @@ export function pushEntry(
       | "childThreadDepth"
       | "linesAdded"
       | "linesRemoved"
+      | "diffPreview"
     >
   > = {},
   idOverride?: string,

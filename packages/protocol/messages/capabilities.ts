@@ -78,6 +78,8 @@ export const ActivityEntry = z.object({
   /** What a file tool changed, as git counts it. */
   linesAdded: z.number().int().nonnegative().optional(),
   linesRemoved: z.number().int().nonnegative().optional(),
+  /** The change itself, bounded: lines prefixed +, − or a space, secrets removed. */
+  diffPreview: z.string().max(4_000).optional(),
 });
 export type ActivityEntry = z.infer<typeof ActivityEntry>;
 
