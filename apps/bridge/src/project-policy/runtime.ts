@@ -132,6 +132,7 @@ export function createProjectPolicyRuntime(deps: ProjectPolicyRuntimeDependencie
       ...(currentRevision != null ? { currentRevision } : {}),
       reason,
       ...(detail ? { detail } : {}),
+      ...(request.requestId ? { requestId: request.requestId } : {}),
       generatedAt: deps.now(),
     };
     try {

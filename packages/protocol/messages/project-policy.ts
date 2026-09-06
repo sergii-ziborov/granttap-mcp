@@ -130,6 +130,12 @@ export const ProjectPolicySet = ProjectPolicyScope.extend({
   type: z.literal("project.policy.set"),
   expectedRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   policy: ProjectPolicy,
+  /**
+   * Names this one edit, so the answer to it can be told from the answer to
+   * another edit of the same revision: two people editing at once through
+   * one phone each get their own refusal.
+   */
+  requestId: Identifier.optional(),
   createdAt: z.number().nonnegative(),
 }).strict().superRefine(validatePolicyScope);
 
@@ -185,6 +191,8 @@ export const ProjectPolicyRejected = ProjectPolicyScope.extend({
   currentRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
   reason: ProjectPolicyRejectionReason,
   detail: z.string().trim().min(1).max(240).optional(),
+  /** The edit this answers, echoed from the request that carried one. */
+  requestId: Identifier.optional(),
   generatedAt: z.number().nonnegative(),
 }).strict().superRefine((value, ctx) => {
   if (value.sessionId !== value.projectId) {

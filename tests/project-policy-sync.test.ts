@@ -289,12 +289,13 @@ test("a refused apply answers the phone with why, and with the policy the comput
     send: async (_relay, payload) => { sent.push(payload); },
     log: (line) => lines.push(line),
   });
-  assert.equal(await runtime.apply({} as RelayClient, policySet()), false);
+  assert.equal(await runtime.apply({} as RelayClient, { ...policySet(), requestId: "edit-1" }), false);
   assert.equal(sent[0]?.type, "project.policy.rejected");
   const rejected = sent[0] as Extract<ProjectPolicyPayload, { type: "project.policy.rejected" }>;
   assert.equal(rejected.reason, "revision_mismatch");
   assert.equal(rejected.currentRevision, 1);
   assert.equal(rejected.expectedRevision, policySet().expectedRevision);
+  assert.equal(rejected.requestId, "edit-1", "the edit's own name comes back, so two edits of one revision get their own answers");
   assert.equal(sent[1]?.type, "project.policy.status", "the policy the computer holds follows, so the next edit builds on it");
   assert.match(lines[0] ?? "", /could not apply revision \d+ of project \(revision_mismatch\)/);
 
