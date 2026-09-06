@@ -18,7 +18,15 @@ import { localMeshStore } from "../../../bridge/src/mesh/local";
 import { handleMeshPayload } from "../../../bridge/src/mesh/runtime";
 import { sendMeshPayload } from "../../../bridge/src/session-keys";
 import { isMeshEnabled, isProviderEnabled } from "../../../bridge/src/config/runtime";
-import { askOpenQuestion, askYesNo, relay, type TaskInteractionScope } from "./relay";
+import { sessionFromEnvironment } from "./mesh-resource";
+import {
+  askOpenQuestionOutcome,
+  askYesNoOutcome,
+  openAnswerText,
+  relay,
+  yesNoText,
+  type TaskInteractionScope,
+} from "./relay";
 
 const NOT_PAIRED =
   "GrantTap is not paired on this machine. Pair the desktop bridge with the GrantTap app first.";
@@ -39,15 +47,50 @@ const UNATTRIBUTED =
   + "are published only for the execution that made the call, so its provider hook must "
   + "be installed and trusted (granttap setup).";
 
+/**
+ * What a call came to, in a form a model can branch on.
+ *
+ * The text is what it always was, for a client that reads only text. The
+ * structured result is the contract: a status that keeps "sent", "published"
+ * and "refused" apart, a decision that is null when nobody answered, and the
+ * id of a recorded event so a retry can be told from a duplicate. A call
+ * that errors changed nothing.
+ */
+const notifyOutput = {
+  status: z.enum(["sent", "published", "claim_rejected"]).describe(
+    "sent: only a status text went to the phone; published: the Mesh event was recorded on this "
+    + "computer and sent; claim_rejected: the claim conflicts with another execution's and was not recorded",
+  ),
+  messageSent: z.boolean().describe("Whether a status text was handed to the relay for the phone"),
+  meshEventId: z.string().optional().describe("The id of the Mesh event as recorded (for claim_rejected, the CONFLICT event)"),
+  conflict: z.object({
+    ownerSessionId: z.string(),
+    resource: z.string(),
+  }).optional().describe("Who holds the resource this claim collided with"),
+  scopedResource: z.string().optional().describe("This execution's scoped Mesh resource URI, when the call was attributed"),
+};
+const yesNoOutput = {
+  status: z.enum(["answered", "timed_out"]).describe("timed_out: nobody answered before the wait ended"),
+  decision: z.enum(["yes", "no"]).nullable().describe("The person's answer; null when nobody answered. A timeout is not a refusal."),
+};
+const openOutput = {
+  status: z.enum(["answered", "timed_out"]).describe("timed_out: nobody answered before the wait ended"),
+  answer: z.string().nullable().describe("The person's words; null when nobody answered"),
+};
+
 export function registerInteractionTools(server: McpServer): void {
   server.registerTool(
     "notify",
     {
-      description: "Send a non-blocking user status, or publish one bounded task-scoped Project Mesh event.",
+      description:
+        "Send a non-blocking status to the user, or publish one bounded task-scoped Project Mesh event. "
+        + "The result says whether the text was sent and whether the event was recorded; an error means nothing happened. "
+        + "A handoff is started by the person from the phone, never by an event published here.",
       inputSchema: {
         message: z.string().min(1).max(2_000).describe("Optional text to show on the user's devices").optional(),
         meshEvent: meshEventInput.describe("Optional structured coordination event; never include hidden reasoning").optional(),
       },
+      outputSchema: notifyOutput,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     },
     async ({ message, meshEvent }) => {
@@ -58,7 +101,12 @@ export function registerInteractionTools(server: McpServer): void {
       const client = await relay();
       if (!client) return notPaired();
       // The provider hook already saw this exact call inside its own session.
-      const attributed = consumeAttributedCall("notify", { message, meshEvent });
+      const attributed = consumeAttributedCall("notify", { message, meshEvent }, Date.now(), sessionFromEnvironment());
+      // The event first: its checks can refuse the whole call, and a status
+      // sent before a refusal would report work that did not happen.
+      const published = meshEvent
+        ? await publishMeshEvent(client, meshEvent, attributed?.sessionId)
+        : undefined;
       if (message) {
         await client.send(
           { type: "agent.event", text: message, kind: "status", createdAt: Date.now() },
@@ -66,27 +114,35 @@ export function registerInteractionTools(server: McpServer): void {
           { ttlMs: 15 * 60_000, wake: true },
         );
       }
-      const result = meshEvent
-        ? await publishMeshEvent(client, meshEvent, attributed?.sessionId)
-        : "sent to phone";
       const capability = isMeshEnabled() && attributed
         ? executionCapabilityFor(attributed.sessionId)
         : undefined;
+      const scopedResource = capability ? `granttap://mesh/${capability.token}` : undefined;
+      const text = published?.text ?? "sent to phone";
       return {
         content: [{
           type: "text",
-          text: capability
-            ? `${result}\nScoped Mesh state: granttap://mesh/${capability.token}`
-            : result,
+          text: scopedResource ? `${text}\nScoped Mesh state: ${scopedResource}` : text,
         }],
+        structuredContent: {
+          status: published?.status ?? "sent",
+          messageSent: Boolean(message),
+          ...(published ? { meshEventId: published.eventId } : {}),
+          ...(published?.conflict ? { conflict: published.conflict } : {}),
+          ...(scopedResource ? { scopedResource } : {}),
+        },
       };
     },
   );
   server.registerTool(
     "ask_yes_no",
     {
-      description: "Ask the user a yes/no question on their phone/watch and wait for the tap. Returns 'yes' or 'no'.",
+      description:
+        "Ask the user a yes/no question on their phone/watch and wait for the tap. Returns 'yes' or 'no' "
+        + "when they answered, or 'no-answer (timeout)' when nobody answered in time. A timeout is not a "
+        + "refusal: do not treat it as 'no', and do not treat it as permission.",
       inputSchema: { question: question.describe("A question answerable with yes/no") },
+      outputSchema: yesNoOutput,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     },
     async ({ question: text }) => answerYesNo(text, interactionScope("ask_yes_no", text)),
@@ -94,8 +150,12 @@ export function registerInteractionTools(server: McpServer): void {
   server.registerTool(
     "ask",
     {
-      description: "Ask the user an open question on their phone/watch and wait for their spoken or typed reply. Returns their answer text.",
+      description:
+        "Ask the user an open question on their phone/watch and wait for their spoken or typed reply. "
+        + "Returns their answer text, or 'no-answer (timeout)' when nobody answered in time; a timeout is "
+        + "not an answer.",
       inputSchema: { question },
+      outputSchema: openOutput,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     },
     async ({ question: text }) => answerOpenQuestion(text, interactionScope("ask", text)),
@@ -136,11 +196,18 @@ function callerScope(
   return capability;
 }
 
+type Published = {
+  status: "published" | "claim_rejected";
+  eventId: string;
+  text: string;
+  conflict?: { ownerSessionId: string; resource: string };
+};
+
 async function publishMeshEvent(
   client: NonNullable<Awaited<ReturnType<typeof relay>>>,
   input: z.infer<typeof meshEventInput>,
   attributedSessionId?: string,
-): Promise<string> {
+): Promise<Published> {
   if (!isMeshEnabled()) throw new Error("Project Mesh is disabled");
   const scope = callerScope(input, attributedSessionId);
   const source = { provider: scope.provider, sessionId: scope.sessionId };
@@ -179,13 +246,18 @@ async function publishMeshEvent(
         needsUser: false,
       },
     });
-    await handleMeshPayload(client, collision);
+    await handleMeshPayload(client, collision, "agent");
     await sendMeshPayload(client, collision, "phone", {
       ttlMs: (input.expiresInSeconds ?? 3_600) * 1_000,
     });
-    return `claim rejected: ${conflict.ownerSessionId} owns ${conflict.resource}; coordinate before editing`;
+    return {
+      status: "claim_rejected",
+      eventId: collision.eventId,
+      text: `claim rejected: ${conflict.ownerSessionId} owns ${conflict.resource}; coordinate before editing`,
+      conflict: { ownerSessionId: conflict.ownerSessionId, resource: conflict.resource },
+    };
   }
-  await handleMeshPayload(client, event);
+  await handleMeshPayload(client, event, "agent");
   const wake = classifyHumanAttention(event.eventType, event.payload);
   await sendMeshPayload(client, event, "phone", {
     ttlMs: (input.expiresInSeconds ?? 3_600) * 1_000,
@@ -194,15 +266,16 @@ async function publishMeshEvent(
   // Keep the shared singleton warm for the MCP resource even when the monitor
   // has not yet completed its first provider scan.
   localMeshStore();
-  return "mesh event published";
+  return { status: "published", eventId: event.eventId, text: "mesh event published" };
 }
 
+/** Not paired is an error, not an outcome: nothing was sent, nothing was asked. */
 function notPaired() {
-  return { content: [{ type: "text" as const, text: NOT_PAIRED }] };
+  return { isError: true, content: [{ type: "text" as const, text: NOT_PAIRED }] };
 }
 
 function interactionScope(tool: "ask" | "ask_yes_no", text: string): TaskInteractionScope | undefined {
-  const attributed = consumeAttributedCall(tool, { question: text });
+  const attributed = consumeAttributedCall(tool, { question: text }, Date.now(), sessionFromEnvironment());
   if (!attributed) return undefined;
   const live = liveExecutionScope(attributed.sessionId);
   if (!live || live.execution.provider !== attributed.provider) return undefined;
@@ -218,15 +291,19 @@ function interactionScope(tool: "ask" | "ask_yes_no", text: string): TaskInterac
 async function answerYesNo(questionText: string, scope?: TaskInteractionScope) {
   const client = await relay();
   if (!client) return notPaired();
-  return { content: [{
-    type: "text" as const, text: await askYesNo(client, questionText, undefined, scope),
-  }] };
+  const outcome = await askYesNoOutcome(client, questionText, undefined, scope);
+  return {
+    content: [{ type: "text" as const, text: yesNoText(outcome) }],
+    structuredContent: outcome,
+  };
 }
 
 async function answerOpenQuestion(questionText: string, scope?: TaskInteractionScope) {
   const client = await relay();
   if (!client) return notPaired();
-  return { content: [{
-    type: "text" as const, text: await askOpenQuestion(client, questionText, undefined, scope),
-  }] };
+  const outcome = await askOpenQuestionOutcome(client, questionText, undefined, scope);
+  return {
+    content: [{ type: "text" as const, text: openAnswerText(outcome) }],
+    structuredContent: outcome,
+  };
 }

@@ -33,6 +33,9 @@ import { fetchRevision, pushBranch } from "./remote";
 
 export type { MeshRuntimeDependencies };
 
+/** Who handed the payload in: the relay (the phone, another computer) or an agent's tool call. */
+export type MeshPayloadOrigin = "relay" | "agent";
+
 function discoveredSessions(): SessionInfo[] {
   const byId = new Map<string, SessionInfo>();
   for (const session of [...scanSessions().sessions, ...scanSessionHistory()]) {
@@ -80,7 +83,11 @@ export function createMeshRuntime(deps: MeshRuntimeDependencies) {
       const store = deps.store();
       return store.projectIds().flatMap((projectId) => store.snapshot(projectId) ?? []);
     },
-    async handle(client: RelayClient, payload: MeshEvent | MeshSnapshot): Promise<boolean> {
+    async handle(
+      client: RelayClient,
+      payload: MeshEvent | MeshSnapshot,
+      origin: MeshPayloadOrigin = "relay",
+    ): Promise<boolean> {
       const store = deps.store();
       if (payload.type === "mesh.snapshot") {
         store.mergeSnapshot(payload);
@@ -88,7 +95,10 @@ export function createMeshRuntime(deps: MeshRuntimeDependencies) {
       }
       const fresh = store.acceptEvent(payload);
       if (!fresh) return true;
-      if (payload.eventType === "HANDOFF_REQUEST") await acceptHandoff(client, payload);
+      // A handoff starts another agent, so only the person starts one: the
+      // phone's request arrives over the relay. An agent's own tool call can
+      // record a request for the record, never start work on it.
+      if (payload.eventType === "HANDOFF_REQUEST" && origin === "relay") await acceptHandoff(client, payload);
       if (payload.eventType === "AGENT_QUESTION") await answerAgentQuestion(client, payload);
       return true;
     },
@@ -102,7 +112,7 @@ export function createMeshRuntime(deps: MeshRuntimeDependencies) {
       // own first, so the Task can leave without losing it. Nothing is pushed.
       const cwd = session.worktree ?? session.cwd;
       const checkpoint = request.checkpoint && cwd && workingTreeState(cwd) === "dirty"
-        ? createCheckpoint(cwd, request.taskId, session.title ?? request.taskId)
+        ? createCheckpoint(cwd, request.taskId, session.title ?? request.taskId, deps.now())
         : undefined;
       const capsule = buildTaskCapsule(deps.store(), session, request, deps.computer(), checkpoint);
       const readiness = handoffReadiness({
@@ -167,8 +177,9 @@ export function meshSnapshots(): MeshSnapshot[] {
 export function handleMeshPayload(
   client: RelayClient,
   payload: MeshEvent | MeshSnapshot,
+  origin: MeshPayloadOrigin = "relay",
 ): Promise<boolean> {
-  return defaultRuntime.handle(client, payload);
+  return defaultRuntime.handle(client, payload, origin);
 }
 
 export function prepareMeshHandoff(

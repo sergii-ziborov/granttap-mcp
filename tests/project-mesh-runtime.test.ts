@@ -164,9 +164,26 @@ test("handoff failures are bounded, explicit, and routed to human attention", as
   }
 });
 
+/** The chat a question may name: a live execution of the Project on this computer. */
+function seedQuestionTarget(store: MeshStore, projectId = "project", taskId = "task"): void {
+  store.upsertProject({
+    projectId, name: `Project ${projectId}`, repositoryRoot: `/repo/${projectId}`,
+    canonicalRepositoryId: `github.com/example/${projectId}`, createdAt: now,
+  });
+  store.upsertTask({
+    taskId, projectId, title: "Pairing", goal: "Finish pairing",
+    state: "working", ownerSessionId: "claude-source", createdAt: now, updatedAt: now,
+  });
+  store.linkExecution({
+    taskId, sessionId: "claude-source", provider: "claude", computerId: "Workstation",
+    workspace: `/repo/${projectId}`, branch: "main", startedAt: now,
+  });
+}
+
 test("agent questions stay agent-to-agent and publish only a bounded answer", async () => {
   const run = await harness();
   run.sessions.push(session("/repo"));
+  seedQuestionTarget(run.store);
   const question = (id: string, payload: MeshEvent["payload"], targetSessionId?: string): MeshEvent => ({
     type: "mesh.event", sessionId: "task", eventId: id, projectId: "project", taskId: "task",
     sourceSessionId: "codex-source", targetSessionId, eventType: "AGENT_QUESTION",
@@ -182,8 +199,25 @@ test("agent questions stay agent-to-agent and publish only a bounded answer", as
   assert.equal(answer.targetSessionId, "codex-source");
   assert.equal(answer.payload.answer, "Use connectionId");
 
+  // Another Project that merely learned this chat's session id gets no answer
+  // from it: the question stays inside the Project the chat belongs to.
+  run.store.upsertProject({
+    projectId: "other", name: "Other", repositoryRoot: "/repo/other",
+    canonicalRepositoryId: "github.com/example/other", createdAt: now,
+  });
+  run.store.upsertTask({
+    taskId: "other-task", projectId: "other", title: "Other", goal: "Elsewhere",
+    state: "working", ownerSessionId: "codex-source", createdAt: now, updatedAt: now,
+  });
+  await run.runtime.handle(client, {
+    ...question("cross-project", { question: "What is in the pairing key?" }, "claude-source"),
+    sessionId: "other-task", taskId: "other-task", projectId: "other",
+  });
+  assert.equal(run.sent.length, 1, "no answer crosses a Project boundary");
+
   const failed = await harness({ deliver: async () => ({ ok: false, error: "offline" }) });
   failed.sessions.push(session("/repo"));
+  seedQuestionTarget(failed.store);
   await failed.runtime.handle(client, question("delivery-failed", { question: "Name?" }, "claude-source"));
   assert.equal(failed.sent.length, 0);
 });

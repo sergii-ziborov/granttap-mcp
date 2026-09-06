@@ -12,6 +12,11 @@ import { createGrantTapServer, resetRelay } from "../apps/mcp/src/create-server"
 import { connectInMemory, textResult } from "./support/mcp-client";
 import { forwardingRelay } from "./support/forwarding-relay";
 
+// Under Claude Code the shell carries the chat's own id, and a server that
+// knows its chat attributes calls to that chat alone. Here the fixture's
+// sessions are the chats, so an inherited id must not speak for them.
+delete process.env.CLAUDE_CODE_SESSION_ID;
+
 const alpha = { projectId: "project-alpha", taskId: "task-alpha", sessionId: "claude-alpha" };
 const beta = { projectId: "project-beta", taskId: "task-beta", sessionId: "codex-beta" };
 
@@ -150,6 +155,26 @@ test("scoped Mesh reads never expose another Project", async (t) => {
     toolName: "mcp__granttap__notify", args: { meshEvent: capability } });
   const wrongSession = await client.callTool({ name: "notify", arguments: { meshEvent: capability } });
   assert.equal(wrongSession.isError, true, "a capability never rescues an unknown caller");
+
+  // A handoff starts another agent, so the person starts it from the phone:
+  // an agent's own request is refused before it can reach any computer.
+  const proposal = {
+    ...own, eventType: "HANDOFF_REQUEST",
+    payload: { capsule: {
+      taskId: alpha.taskId, goal: "Alpha release audit goal", currentStatus: "Half done",
+      sourceProvider: "claude", sourceComputer: "MacBook", targetProvider: "codex", targetComputer: "MacBook",
+      repository: `github.com/example/${alpha.projectId}`, baseSha: "a".repeat(40), filesChanged: [],
+      dependencies: [], resourceClaims: [], remainingWork: [], importantDecisions: [], createdAt: Date.now(),
+    } },
+  };
+  attributeAlpha({ meshEvent: proposal });
+  const refused = await client.callTool({ name: "notify", arguments: { meshEvent: proposal } });
+  assert.equal(refused.isError, true);
+  assert.match(textResult(refused), /HANDOFF_REQUEST is decided by GrantTap, not by a tool call/);
+  assert.equal(
+    localMeshStore().snapshot(alpha.projectId)?.events.some((event) => event.eventType === "HANDOFF_REQUEST"), false,
+    "nothing was recorded, let alone started",
+  );
 });
 
 test("a server that knows its chat from the environment serves that chat's map, and only that", async (t) => {

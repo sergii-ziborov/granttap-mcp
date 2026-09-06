@@ -52,35 +52,61 @@ function parsedArray<T>(value: unknown, schema: { safeParse: (input: unknown) =>
 }
 
 
-export function loadStoreState(path: string): StoreState {
+export function emptyStoreState(): StoreState {
+  return structuredClone(EMPTY);
+}
+
+/**
+ * Why a file could not be used. A missing file is a fresh start; the rest are
+ * files that exist and say something the store cannot read, which the store
+ * keeps aside rather than writes over.
+ */
+export type StoreLoadStatus = "ok" | "missing" | "not_file" | "too_large" | "corrupt";
+export type StoreLoad = { status: StoreLoadStatus; state: StoreState };
+
+export function readStoreState(path: string): StoreLoad {
+  let metadata;
   try {
-    const metadata = lstatSync(path);
-    if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.size > MAX_STORE_BYTES) {
-      return structuredClone(EMPTY);
+    metadata = lstatSync(path);
+  } catch {
+    return { status: "missing", state: emptyStoreState() };
+  }
+  if (!metadata.isFile() || metadata.isSymbolicLink()) return { status: "not_file", state: emptyStoreState() };
+  if (metadata.size > MAX_STORE_BYTES) return { status: "too_large", state: emptyStoreState() };
+  try {
+    const value = JSON.parse(readFileSync(path, "utf8")) as Partial<StoreState> | null;
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return { status: "corrupt", state: emptyStoreState() };
     }
-    const value = JSON.parse(readFileSync(path, "utf8")) as Partial<StoreState>;
     const projects = parsedArray(value.projects, Project);
     const bindings = validBindings(
       parsedArray(value.bindings, ProjectBindingSummary),
       new Set(projects.map((project) => project.projectId)),
     );
-    return collapseSplitChats({
-      version: 1,
-      projects,
-      bindings,
-      peers: parsedArray(value.peers, IntegrationPeer)
-        .filter((peer) => projects.some((project) => project.projectId === peer.projectId))
-        .slice(-MAX_STORE_PEERS),
-      tasks: parsedArray(value.tasks, MeshTask),
-      executions: parsedArray(value.executions, ExecutionSessionLink),
-      claims: parsedArray(value.claims, ResourceClaim),
-      dependencies: parsedArray(value.dependencies, TaskDependency),
-      events: parsedArray(value.events, MeshEvent),
-      receipts: parsedArray(value.receipts, HandoffReceipt),
-    });
+    return {
+      status: "ok",
+      state: collapseSplitChats({
+        version: 1,
+        projects,
+        bindings,
+        peers: parsedArray(value.peers, IntegrationPeer)
+          .filter((peer) => projects.some((project) => project.projectId === peer.projectId))
+          .slice(-MAX_STORE_PEERS),
+        tasks: parsedArray(value.tasks, MeshTask),
+        executions: parsedArray(value.executions, ExecutionSessionLink),
+        claims: parsedArray(value.claims, ResourceClaim),
+        dependencies: parsedArray(value.dependencies, TaskDependency),
+        events: parsedArray(value.events, MeshEvent),
+        receipts: parsedArray(value.receipts, HandoffReceipt),
+      }),
+    };
   } catch {
-    return structuredClone(EMPTY);
+    return { status: "corrupt", state: emptyStoreState() };
   }
+}
+
+export function loadStoreState(path: string): StoreState {
+  return readStoreState(path).state;
 }
 
 /**
@@ -137,16 +163,47 @@ function collapseSplitChats(state: StoreState): StoreState {
     }
     return current;
   };
+  const scoped = <T extends { taskId: string }>(item: T): T => ({ ...item, taskId: target(item.taskId) });
+  // A dependency names two Tasks, and both may have moved; two that became
+  // one are no dependency at all.
+  const dependencies = new Map<string, DependencyValue>();
+  for (const item of state.dependencies) {
+    const next = { ...item, taskId: target(item.taskId), dependsOnTaskId: target(item.dependsOnTaskId) };
+    if (next.taskId === next.dependsOnTaskId) continue;
+    dependencies.set(`${next.taskId}\0${next.dependsOnTaskId}`, next);
+  }
   return {
     ...state,
     tasks: state.tasks.filter((task) => target(task.taskId) === task.taskId),
-    executions: state.executions.map((item) => ({ ...item, taskId: target(item.taskId) })),
-    claims: state.claims.map((item) => ({ ...item, taskId: target(item.taskId) })),
-    dependencies: state.dependencies.map((item) => ({ ...item, taskId: target(item.taskId) })),
-    events: state.events.map((item) => ({ ...item, taskId: target(item.taskId) })),
+    executions: state.executions.map(scoped),
+    claims: state.claims.map(scoped),
+    dependencies: [...dependencies.values()],
+    events: state.events.map((item) => rescopedEvent(item, target)),
     // A receipt decides who owns a chat, so it must name the surviving Task.
-    receipts: state.receipts.map((item) => ({ ...item, taskId: target(item.taskId) })),
+    receipts: state.receipts.map(scoped),
   };
+}
+
+/**
+ * An event names its Task more than once: as the scope it was published in,
+ * and inside what it carries — a claim, a capsule, a receipt, a dependency.
+ * Every name must move together, or the snapshot's own schema refuses the
+ * event and the whole Project stops being published.
+ */
+function rescopedEvent(event: MeshEventValue, target: (taskId: string) => string): MeshEventValue {
+  const taskId = target(event.taskId);
+  const payload = { ...event.payload };
+  if (payload.claim) payload.claim = { ...payload.claim, taskId: target(payload.claim.taskId) };
+  if (payload.receipt) payload.receipt = { ...payload.receipt, taskId: target(payload.receipt.taskId) };
+  if (payload.capsule) {
+    payload.capsule = {
+      ...payload.capsule,
+      taskId: target(payload.capsule.taskId),
+      dependencies: [...new Set(payload.capsule.dependencies.map(target))].filter((id) => id !== taskId),
+    };
+  }
+  if (payload.dependsOnTaskId) payload.dependsOnTaskId = target(payload.dependsOnTaskId);
+  return { ...event, taskId, sessionId: taskId, payload };
 }
 
 /** The Task to keep first, or nothing when either side is already gone. */

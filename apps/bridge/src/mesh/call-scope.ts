@@ -115,16 +115,28 @@ export function recordAttributedCall(input: {
 
 /**
  * Resolve the session that actually made this call, then retire the record.
- * Two live sessions claiming the same arguments are ambiguous and rejected.
+ *
+ * A server that knows its own chat from the environment takes that chat's
+ * record and leaves any other's in place, so two chats making the same call
+ * at once are each attributed to themselves; a record from another chat alone
+ * is never taken as ours. A server that does not know its chat treats two
+ * live sessions claiming the same arguments as ambiguous and rejects both.
  */
 export function consumeAttributedCall(
   tool: string,
   args: unknown,
   now = Date.now(),
+  ownSessionId?: string,
 ): AttributedCall | undefined {
   const key = meshCallKey(tool, args);
   const live = readCalls(now);
   const matches = live.filter((call) => call.key === key);
+  if (ownSessionId) {
+    const own = matches.find((call) => call.sessionId === ownSessionId);
+    if (!own) return undefined;
+    writeCalls(live.filter((call) => !(call.key === key && call.sessionId === ownSessionId)));
+    return own;
+  }
   const sessions = new Set(matches.map((call) => call.sessionId));
   if (matches.length === 0 || sessions.size !== 1) {
     if (matches.length > 0) writeCalls(live.filter((call) => call.key !== key));

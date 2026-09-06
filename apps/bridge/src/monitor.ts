@@ -16,7 +16,7 @@ import type {
   UserMessage,
 } from "../../../packages/protocol/schema";
 import { ATTACHMENT_MISSING_ERROR } from "../../../packages/protocol/schema";
-import { storeAttachment, takeAttachment } from "./attachment-store";
+import { pruneAttachments, storeAttachment, takeAttachment } from "./attachment-store";
 import {
   configDir,
   loadRuntimeConfig,
@@ -207,6 +207,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
   };
 
   const snapshot = (includeHistory: boolean, forceHistory = false): SessionsStatus => {
+    sweepAttachments();
     const { sessions, tokensRecent } = scanSessions();
     const runtime = loadRuntimeConfig();
     return {
@@ -325,7 +326,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       }
     } else if (payload.type === "user.attachment") {
       // Ahead of its message, so the message itself travels light.
-      return storeAttachment(payload);
+      return storeAttachment(payload, client.room);
     } else if (payload.type === "config.set") {
       handleConfigSet(payload);
       void publish().catch(() => {});
@@ -625,6 +626,20 @@ export function handleConfigSet(message: ConfigSet): void {
   );
 }
 
+const ATTACHMENT_SWEEP_MS = 10 * 60_000;
+let attachmentsSweptAt = 0;
+
+/**
+ * An attachment no message ever named is dropped once its time is up,
+ * whether or not another one arrives: the sweep rides on the publish loop,
+ * a few times an hour, instead of waiting for the next upload.
+ */
+export function sweepAttachments(now = Date.now()): number {
+  if (now - attachmentsSweptAt < ATTACHMENT_SWEEP_MS) return 0;
+  attachmentsSweptAt = now;
+  return pruneAttachments(now);
+}
+
 /**
  * The attachments a message carries: the ones inside it, and the ones that
  * came ahead of it by id. One that never came is a rejection the phone reads
@@ -654,7 +669,7 @@ export async function handleUserMessage(
       ? sendSessionPayload(client, payload, sessionId, "phone", options)
       : client.send(payload, "phone", options)).catch(() => {});
   };
-  const resolved = resolveMessageAttachments(message);
+  const resolved = resolveMessageAttachments(message, (attachmentId) => takeAttachment(attachmentId, client.room));
   if (!resolved.ok) {
     if (message.messageId) {
       await sendDeliveryReceipt(client, message.messageId, "rejected", ATTACHMENT_MISSING_ERROR, message.sessionId);

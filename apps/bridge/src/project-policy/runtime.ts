@@ -21,6 +21,7 @@ import type {
 } from "../engine/engine-policy-protocol";
 import { engineFeatureEnabled, type EngineClientLike } from "../engine/engine-supervisor";
 import { inspectAgentIntegrations } from "../install";
+import { rememberGovernedProject } from "../policy/governed-projects";
 import { sendProjectPayload } from "../session-keys";
 import {
   acknowledgementFromEngine,
@@ -69,6 +70,8 @@ export function createProjectPolicyRuntime(deps: ProjectPolicyRuntimeDependencie
         },
       }, { timeoutMs: 2_000 });
       if (applied.operation !== "policy.applied") throw new Error(`engine answered ${applied.operation}`);
+      // The hook keeps failing closed for this Project when the engine is silent.
+      rememberGovernedProject(request.projectId, applied.policy.revision, deps.now());
       const targets = new Map(deps.providers().map((item) => [item.provider, item]));
       for (const target of [...targets.values()].sort((left, right) =>
         left.provider.localeCompare(right.provider))) {
@@ -154,6 +157,7 @@ export function createProjectPolicyRuntime(deps: ProjectPolicyRuntimeDependencie
       // one, because the editor only unlocks once a policy has been reported.
       if (found.operation !== "policy.found"
         || reported.operation !== "policy.coverage") return false;
+      rememberGovernedProject(projectId, found.policy.revision, deps.now());
       return sendStatus(relay, found.policy, reported.coverage);
     } catch {
       return false;

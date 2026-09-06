@@ -1,5 +1,3 @@
-import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
 import {
   ExecutionSessionLink,
   HandoffReceipt,
@@ -20,7 +18,16 @@ import {
 } from "../../../../packages/protocol/schema";
 import type { IntegrationEdge } from "./integration-map";
 import { integrationPeerKey } from "./other-side";
-import { loadStoreState, MAX_STORE_PEERS, type StoreState } from "./store-state";
+import { readStoreState, MAX_STORE_PEERS, type StoreState } from "./store-state";
+import {
+  applyStoreDelta,
+  deltaIsEmpty,
+  setAsideStore,
+  storeDelta,
+  storeFingerprint,
+  withStoreLock,
+  writeStoreState,
+} from "./store-sync";
 import { preferExecution, isTerminalTaskState, mayOwnTask } from "./convergence";
 import { capsuleHash } from "./handoff";
 import { mergeBy, overlapKind, resourceOverlap } from "./store-support";
@@ -36,18 +43,63 @@ import { mergeSnapshotState } from "./snapshot-merge";
 
 export class MeshStore {
   private state: StoreState;
+  /** The state as the disk last had it, so a save can tell what this process changed. */
+  private baseline: StoreState;
+  /** The file this process last read or wrote; another file under the path is news. */
+  private synced: string | undefined;
 
   constructor(private readonly path: string, private readonly now = Date.now) {
-    this.state = loadStoreState(path);
+    const loaded = readStoreState(path);
+    this.state = loaded.state;
+    this.baseline = structuredClone(loaded.state);
+    if (loaded.status === "corrupt" || loaded.status === "too_large") {
+      // Kept beside the store for a person to look at, not written over.
+      setAsideStore(path, this.now());
+    }
+    this.synced = storeFingerprint(path);
   }
 
+  /**
+   * Take in what another process wrote since this one last looked. Called on
+   * entry to every public method, never in the middle of one, so a change
+   * made and not yet saved is never thrown away.
+   */
+  private sync(): void {
+    const current = storeFingerprint(this.path);
+    if (current === this.synced) return;
+    const loaded = readStoreState(this.path);
+    if (loaded.status === "ok" || loaded.status === "missing") {
+      this.state = loaded.state;
+      this.baseline = structuredClone(loaded.state);
+      this.synced = current;
+      return;
+    }
+    if (loaded.status !== "not_file") setAsideStore(this.path, this.now());
+    this.synced = storeFingerprint(this.path);
+  }
+
+  /** Write what changed here over what is on disk now, under the store's lock. */
   private save(): void {
-    mkdirSync(dirname(this.path), { recursive: true });
-    writeFileSync(this.path, `${JSON.stringify(this.state, null, 2)}\n`, { mode: 0o600 });
-    chmodSync(this.path, 0o600);
+    withStoreLock(this.path, () => {
+      const delta = storeDelta(this.baseline, this.state);
+      let merged = this.state;
+      if (storeFingerprint(this.path) !== this.synced) {
+        const disk = readStoreState(this.path);
+        if (disk.status === "ok") {
+          merged = deltaIsEmpty(delta) ? disk.state : applyStoreDelta(disk.state, delta);
+        } else if (disk.status === "corrupt" || disk.status === "too_large") {
+          setAsideStore(this.path, this.now());
+        }
+      }
+      writeStoreState(this.path, merged);
+      this.state = merged;
+      this.baseline = structuredClone(merged);
+      this.synced = storeFingerprint(this.path);
+    });
   }
 
   upsertProject(input: ProjectValue): void {
+    this.sync();
     const project = Project.parse(input);
     const previous = this.state.projects.find((item) => item.projectId === project.projectId);
     const next = previous ? { ...project, createdAt: Math.min(previous.createdAt, project.createdAt) } : project;
@@ -58,10 +110,12 @@ export class MeshStore {
   }
 
   project(projectId: string): ProjectValue | undefined {
+    this.sync();
     return this.state.projects.find((item) => item.projectId === projectId);
   }
 
   upsertBinding(input: BindingValue): void {
+    this.sync();
     const result = updateBinding(this.state, input);
     if (!result.changed) return;
     this.state.bindings = result.bindings;
@@ -69,19 +123,23 @@ export class MeshStore {
   }
 
   projectIdForRepository(repositoryId: string, endpointId?: string): string | undefined {
+    this.sync();
     return bindingForRepository(this.state.bindings, repositoryId, endpointId)?.projectId;
   }
 
   bindingForRepository(repositoryId: string, endpointId?: string): BindingValue | undefined {
+    this.sync();
     return bindingForRepository(this.state.bindings, repositoryId, endpointId);
   }
 
   /** This endpoint's own binding, never another computer's. */
   bindingForEndpoint(repositoryId: string, endpointId: string): BindingValue | undefined {
+    this.sync();
     return bindingForEndpoint(this.state.bindings, repositoryId, endpointId);
   }
 
   upsertTask(input: TaskValue): void {
+    this.sync();
     const task = MeshTask.parse(input);
     const previous = this.state.tasks.find((item) => item.taskId === task.taskId);
     const next = previous
@@ -104,6 +162,7 @@ export class MeshStore {
     scannedProviders: ReadonlySet<string>,
     endedAt = this.now(),
   ): number {
+    this.sync();
     const closed = closeVanished(this.state.executions, {
       computerId, liveSessionIds, scannedProviders, endedAt,
     });
@@ -125,6 +184,7 @@ export class MeshStore {
    * as two executions of a single Task, which is what they are.
    */
   taskForExecution(computerId: string, provider: string, sessionId: string): string | undefined {
+    this.sync();
     const own = this.state.executions.find((item) =>
       item.computerId === computerId && item.provider === provider && item.sessionId === sessionId);
     if (own) return own.taskId;
@@ -133,6 +193,7 @@ export class MeshStore {
   }
 
   linkExecution(input: ExecutionValue): void {
+    this.sync();
     const parsed = ExecutionSessionLink.parse({
       ...input, updatedAt: input.updatedAt ?? this.now(),
     });
@@ -164,6 +225,7 @@ export class MeshStore {
    * is deleted, so a phone that still holds the old rows learns the same.
    */
   retireComputerNames(computerId: string, formerNames: string[]): void {
+    this.sync();
     const former = new Set(formerNames.filter((name) => name && name !== computerId));
     if (former.size === 0) return;
     const now = this.now();
@@ -224,6 +286,7 @@ export class MeshStore {
   }
 
   recordReceipt(input: ReceiptValue): void {
+    this.sync();
     const receipt = HandoffReceipt.parse(input);
     this.state.receipts = this.state.receipts.filter((item) => item.capsuleHash !== receipt.capsuleHash);
     this.state.receipts.push(receipt);
@@ -232,6 +295,7 @@ export class MeshStore {
   }
 
   claim(input: ResourceClaimValue): void {
+    this.sync();
     const claim = ResourceClaim.parse(input);
     this.state.claims = this.state.claims.filter((item) => item.claimId !== claim.claimId);
     this.state.claims.push(claim);
@@ -239,6 +303,7 @@ export class MeshStore {
   }
 
   releaseClaim(claimId: string, ownerSessionId?: string): boolean {
+    this.sync();
     const before = this.state.claims.length;
     this.state.claims = this.state.claims.filter((claim) =>
       claim.claimId !== claimId || (ownerSessionId != null && claim.ownerSessionId !== ownerSessionId));
@@ -248,6 +313,7 @@ export class MeshStore {
   }
 
   releaseClaimsByOwners(ownerSessionIds: ReadonlySet<string>): number {
+    this.sync();
     const before = this.state.claims.length;
     this.state.claims = this.state.claims.filter((claim) =>
       !ownerSessionIds.has(claim.ownerSessionId));
@@ -257,6 +323,7 @@ export class MeshStore {
   }
 
   activeClaims(at = this.now()): ResourceClaimValue[] {
+    this.sync();
     const active = this.state.claims.filter((claim) => claim.expiresAt > at);
     if (active.length !== this.state.claims.length) {
       this.state.claims = active;
@@ -266,6 +333,7 @@ export class MeshStore {
   }
 
   conflicts(projectId: string, ownerSessionId: string, resource: string): ResourceClaimValue[] {
+    this.sync();
     return this.activeClaims().filter((claim) =>
       claim.projectId === projectId
       && claim.ownerSessionId !== ownerSessionId
@@ -279,6 +347,7 @@ export class MeshStore {
    * the warning that comes before the conflict, reported rather than enforced.
    */
   moduleOverlaps(projectId: string, ownerSessionId: string, resource: string): ResourceClaimValue[] {
+    this.sync();
     return this.activeClaims().filter((claim) =>
       claim.projectId === projectId
       && claim.ownerSessionId !== ownerSessionId
@@ -294,6 +363,7 @@ export class MeshStore {
    * appended: an observation is not something the agent said.
    */
   observeClaim(input: ResourceClaimValue): boolean {
+    this.sync();
     const claim = ResourceClaim.parse(input);
     const previous = this.state.claims.find((item) => item.claimId === claim.claimId);
     if (previous && previous.ownerSessionId === claim.ownerSessionId
@@ -304,6 +374,7 @@ export class MeshStore {
   }
 
   acceptEvent(input: MeshEventValue): boolean {
+    this.sync();
     const parsed = MeshEvent.safeParse(input);
     if (!parsed.success) return false;
     const event = parsed.data;
@@ -334,7 +405,14 @@ export class MeshStore {
       this.state.claims = mergeBy(this.state.claims, [event.payload.claim], (item) => item.claimId);
     }
     if (event.eventType === "RESOURCE_RELEASE" && event.payload.claimId) {
-      this.state.claims = this.state.claims.filter((item) => item.claimId !== event.payload.claimId);
+      // Only the owner releases its claim, and only from inside the claim's
+      // own Task and Project: a claim id is not a secret, and a chat that
+      // learned one must not be able to clear someone else's hold on a file.
+      this.state.claims = this.state.claims.filter((item) =>
+        item.claimId !== event.payload.claimId
+        || item.ownerSessionId !== event.sourceSessionId
+        || item.projectId !== event.projectId
+        || item.taskId !== event.taskId);
     }
     if (event.eventType === "DEPENDENCY" && event.payload.dependsOnTaskId) {
       this.state.dependencies = mergeBy(this.state.dependencies, [{
@@ -362,18 +440,22 @@ export class MeshStore {
   }
 
   eventsForProject(projectId: string): MeshEventValue[] {
+    this.sync();
     return this.state.events.filter((event) => event.projectId === projectId).slice(-128);
   }
 
   projectIds(): string[] {
+    this.sync();
     return this.state.projects.map((project) => project.projectId);
   }
 
   workspaceForRepository(canonicalRepositoryId: string, computerId?: string): string | undefined {
+    this.sync();
     return boundWorkspace(this.state, canonicalRepositoryId, computerId);
   }
 
   task(taskId: string): TaskValue | undefined {
+    this.sync();
     return this.state.tasks.find((item) => item.taskId === taskId);
   }
 
@@ -383,6 +465,7 @@ export class MeshStore {
    * here; nothing is written when the statement has not changed.
    */
   recordIntegrationPeers(projectId: string, repositoryId: string, edges: IntegrationEdge[]): void {
+    this.sync();
     if (!this.state.projects.some((item) => item.projectId === projectId)) return;
     const stated = edges.slice(0, 64).map((edge) => IntegrationPeer.parse({
       projectId, repositoryId, peer: edge.peer, via: edge.via, relation: edge.relation,
@@ -400,6 +483,7 @@ export class MeshStore {
   }
 
   snapshot(projectId: string): SnapshotValue | undefined {
+    this.sync();
     const project = this.state.projects.find((item) => item.projectId === projectId);
     if (!project) return undefined;
     const tasks = this.state.tasks.filter((task) => task.projectId === projectId).slice(-64);
@@ -424,6 +508,7 @@ export class MeshStore {
   }
 
   mergeSnapshot(input: SnapshotValue): void {
+    this.sync();
     mergeSnapshotState(this.state, input);
     this.save();
   }

@@ -25,26 +25,35 @@ function safeId(attachmentId: string): string | undefined {
   return /^[A-Za-z0-9_-]{1,180}$/.test(id) ? id : undefined;
 }
 
-/** Keep one attachment for the message that names it; drop the stale ones. */
-export function storeAttachment(upload: UserAttachmentUpload, now = Date.now()): boolean {
+/**
+ * Keep one attachment for the message that names it; drop the stale ones.
+ * The pairing room it came through is kept with it, so a message from
+ * another pairing cannot name it.
+ */
+export function storeAttachment(upload: UserAttachmentUpload, room?: string, now = Date.now()): boolean {
   const id = safeId(upload.attachmentId);
   if (!id) return false;
   const dir = directory();
   pruneAttachments(now, dir);
-  const record = { name: upload.name, mimeType: upload.mimeType, data: upload.data, receivedAt: now };
+  const record = {
+    name: upload.name, mimeType: upload.mimeType, data: upload.data, receivedAt: now,
+    ...(room ? { room } : {}),
+  };
   writeFileSync(join(dir, `${id}.json`), JSON.stringify(record), { mode: 0o600 });
   return true;
 }
 
 /** The attachment the message named, taken off disk; nothing when it never came. */
-export function takeAttachment(attachmentId: string, now = Date.now()): UserAttachment | undefined {
+export function takeAttachment(attachmentId: string, room?: string, now = Date.now()): UserAttachment | undefined {
   const id = safeId(attachmentId);
   if (!id) return undefined;
   const path = join(directory(), `${id}.json`);
   try {
     const record = JSON.parse(readFileSync(path, "utf8")) as {
-      name?: unknown; mimeType?: unknown; data?: unknown; receivedAt?: unknown;
+      name?: unknown; mimeType?: unknown; data?: unknown; receivedAt?: unknown; room?: unknown;
     };
+    // Another pairing's attachment is left where it is, for its own message.
+    if (typeof record.room === "string" && room != null && record.room !== room) return undefined;
     rmSync(path, { force: true });
     if (typeof record.receivedAt === "number" && now - record.receivedAt > ATTACHMENT_TTL_MS) return undefined;
     if (typeof record.name !== "string" || typeof record.mimeType !== "string" || typeof record.data !== "string") {

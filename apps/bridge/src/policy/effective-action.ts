@@ -12,6 +12,7 @@ import { DEFAULT_ENGINE_POLICY_TIMEOUT_MS } from "../engine/engine-protocol";
 import { engineFeatureEnabled, type EngineClientLike } from "../engine/engine-supervisor";
 import { loadStoreState } from "../mesh/store-state";
 import { capabilityFingerprint } from "./capability-fingerprint";
+import { governedRevision, rememberGovernedProject } from "./governed-projects";
 
 export type EffectiveActionInput = {
   provider: "claude" | "codex" | "cursor" | "grok";
@@ -64,8 +65,9 @@ export async function evaluateEffectiveAction(
   const endpointId = options.endpointId ?? computerId(env);
   const ownedClient = options.client == null;
   const client = options.client ?? new EngineClient({ socketPath: join(configDir(), "engine.sock") });
+  let projectId: string | undefined;
   try {
-    const projectId = options.projectId
+    projectId = options.projectId
       ?? meshProjectId(input, endpointId)
       ?? await resolveProject(client, input.cwd, endpointId, deadline, now);
     if (!projectId) return FALLBACK;
@@ -85,13 +87,34 @@ export async function evaluateEffectiveAction(
         impact_available: false,
       },
     }, { timeoutMs: remaining(deadline, now) });
-    if (result.operation !== "policy.evaluated") return FALLBACK;
+    if (result.operation !== "policy.evaluated") return unavailable(projectId);
+    if (result.decision.policy_revision != null) {
+      rememberGovernedProject(projectId, result.decision.policy_revision, now());
+    }
     return { ...result.decision, projectId, engineEvaluated: true };
   } catch {
-    return FALLBACK;
+    return projectId ? unavailable(projectId) : FALLBACK;
   } finally {
     if (ownedClient) client.close();
   }
+}
+
+/**
+ * No answer from the engine. A Project this computer has seen governed does
+ * not fall open: the action goes to the person, as ASK, until the engine
+ * answers again. A Project never seen governed keeps legacy behaviour.
+ */
+function unavailable(projectId: string): EffectiveActionDecision {
+  const revision = governedRevision(projectId);
+  if (revision == null) return { ...FALLBACK, projectId };
+  return {
+    effect: "ask",
+    source: "project",
+    reason: `Project policy (revision ${revision}) could not be evaluated; GrantTap approval is required`,
+    policy_revision: revision,
+    projectId,
+    engineEvaluated: false,
+  };
 }
 
 function meshProjectId(input: EffectiveActionInput, endpointId: string): string | undefined {

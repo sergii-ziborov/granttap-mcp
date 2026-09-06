@@ -94,7 +94,7 @@ process.stdout.write(JSON.stringify({ type: "end", sessionId: "grok-att" }) + "\
       else process.env[key] = env[key];
     }
   });
-  const { resolveMessageAttachments, startSessionMonitor } = await import(`../apps/bridge/src/monitor.ts?att=${Date.now()}`);
+  const { resolveMessageAttachments, startSessionMonitor, sweepAttachments } = await import(`../apps/bridge/src/monitor.ts?att=${Date.now()}`);
   const fake = new FakeRelay();
   const monitor = startSessionMonitor(fake as never);
   t.after(() => monitor.close());
@@ -134,4 +134,15 @@ process.stdout.write(JSON.stringify({ type: "end", sessionId: "grok-att" }) + "\
   assert.equal(receipts().at(-1)?.status, "accepted");
   assert.equal(receipts().at(-1)?.messageId, "m-missing");
   assert.match(await readFile(promptFile, "utf8"), /never\.png/);
+
+  // An attachment nobody's message names is swept on the publish loop, a few
+  // times an hour, not only when the next one is uploaded.
+  const dir = join(root, "config", "attachments");
+  await writeFile(join(dir, "att-forgotten.json"), JSON.stringify({ name: "a", mimeType: "text/plain", data: "YQ==", receivedAt: 1 }));
+  const stale = new Date(Date.now() - 3 * 60 * 60_000);
+  await utimes(join(dir, "att-forgotten.json"), stale, stale);
+  const later = Date.now() + 11 * 60_000;
+  assert.equal(sweepAttachments(later), 1);
+  assert.equal(sweepAttachments(later + 1_000), 0, "not again within the window");
+  assert.deepEqual((await readdir(dir)).filter((name) => name === "att-forgotten.json"), []);
 });

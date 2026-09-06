@@ -42,12 +42,42 @@ export function resetRelay(): void {
   client = null;
 }
 
+/**
+ * What came back from the phone, kept apart: a decision the person made, or
+ * silence. A timeout is never read as "no", and never as "yes".
+ */
+export type YesNoOutcome =
+  | { status: "answered"; decision: "yes" | "no" }
+  | { status: "timed_out"; decision: null };
+export type OpenOutcome =
+  | { status: "answered"; answer: string }
+  | { status: "timed_out"; answer: null };
+
+export const NO_ANSWER = "no-answer (timeout)";
+
+export function yesNoText(outcome: YesNoOutcome): string {
+  return outcome.status === "answered" ? outcome.decision : NO_ANSWER;
+}
+
+export function openAnswerText(outcome: OpenOutcome): string {
+  return outcome.status === "answered" ? outcome.answer : NO_ANSWER;
+}
+
 export async function askYesNo(
   client: RelayClient,
   question: string,
   timeoutMs = ASK_TIMEOUT_MS,
   scope?: TaskInteractionScope,
 ): Promise<string> {
+  return yesNoText(await askYesNoOutcome(client, question, timeoutMs, scope));
+}
+
+export async function askYesNoOutcome(
+  client: RelayClient,
+  question: string,
+  timeoutMs = ASK_TIMEOUT_MS,
+  scope?: TaskInteractionScope,
+): Promise<YesNoOutcome> {
   const requestId = randomId(6);
   const decision = await requestApproval(
     loadConfig(machineConfigPath()),
@@ -67,8 +97,8 @@ export async function askYesNo(
     },
     { client, timeoutMs },
   );
-  if (isUnanswered(decision)) return "no-answer (timeout)";
-  return decision.decision === "allow" ? "yes" : "no";
+  if (isUnanswered(decision)) return { status: "timed_out", decision: null };
+  return { status: "answered", decision: decision.decision === "allow" ? "yes" : "no" };
 }
 
 export async function askOpenQuestion(
@@ -77,14 +107,24 @@ export async function askOpenQuestion(
   timeoutMs = ASK_TIMEOUT_MS,
   scope?: TaskInteractionScope,
 ): Promise<string> {
+  return openAnswerText(await askOpenQuestionOutcome(client, question, timeoutMs, scope));
+}
+
+export async function askOpenQuestionOutcome(
+  client: RelayClient,
+  question: string,
+  timeoutMs = ASK_TIMEOUT_MS,
+  scope?: TaskInteractionScope,
+): Promise<OpenOutcome> {
   const requestId = randomId(6);
   const reply = await waitForReply(client, requestId, timeoutMs, question, scope);
   if (!reply) {
     await sendApprovalResolved(client, terminalApproval(requestId, "expired", {
       note: "No response before timeout",
     })).catch(() => {});
+    return { status: "timed_out", answer: null };
   }
-  return reply ? reply.text : "no-answer (timeout)";
+  return { status: "answered", answer: reply.text };
 }
 
 async function waitForReply(

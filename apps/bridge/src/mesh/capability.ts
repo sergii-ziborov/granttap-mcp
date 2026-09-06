@@ -22,9 +22,15 @@ import { localMeshStore } from "./local";
 const CAPABILITY_TTL_MS = 12 * 60 * 60_000;
 const MAX_CAPABILITIES = 64;
 
-/** Ownership transfer is decided by the runtime after receipt checks, never by a tool call. */
+/**
+ * Ownership transfer is decided by the runtime after receipt checks, never by
+ * a tool call — and neither is its start. A handoff request published by an
+ * agent would be taken up by the computer it names and start another agent
+ * there, so a request comes only from the person, through the phone. An
+ * agent that wants one says so in a status or a question.
+ */
 const PUBLISHABLE_EVENT_TYPES = MeshEventType.options.filter((type) =>
-  type !== "HANDOFF_ACCEPTED" && type !== "HANDOFF_REJECTED");
+  type !== "HANDOFF_REQUEST" && type !== "HANDOFF_ACCEPTED" && type !== "HANDOFF_REJECTED");
 
 const ExecutionCapability = z.object({
   token: z.string().regex(/^[A-Za-z0-9_-]{43}$/),

@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { sensitivePath } from "../sessions/edit-stats";
 
 /**
  * Commit everything uncommitted to a checkpoint branch, touching nothing else.
@@ -13,7 +14,13 @@ import { join } from "node:path";
  * publishing a branch is the person's decision, and the destination says so
  * if the commit has not reached it yet.
  */
-export type Checkpoint = { sha: string; branch: string; files: number };
+export type Checkpoint = {
+  sha: string;
+  branch: string;
+  files: number;
+  /** Paths left out because they look like secrets; never part of a checkpoint. */
+  excluded: string[];
+};
 
 export const CHECKPOINT_BRANCH_PREFIX = "granttap/checkpoint/";
 
@@ -24,11 +31,24 @@ function git(cwd: string, args: string[], env: NodeJS.ProcessEnv = process.env):
   }).trim();
 }
 
-export function checkpointBranchName(taskId: string): string {
-  return CHECKPOINT_BRANCH_PREFIX + taskId.replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 64);
+/**
+ * One branch per checkpoint, not per Task. A Task handed off twice used to
+ * force-move the same branch, and the first checkpoint's commit was left
+ * unreachable; a stamp on the name keeps each one.
+ */
+export function checkpointBranchName(taskId: string, at?: number): string {
+  const base = CHECKPOINT_BRANCH_PREFIX + taskId.replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 64);
+  if (at == null) return base;
+  const stamp = new Date(at).toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "");
+  return `${base}-${stamp}`;
 }
 
-export function createCheckpoint(cwd: string, taskId: string, title: string): Checkpoint | undefined {
+export function createCheckpoint(
+  cwd: string,
+  taskId: string,
+  title: string,
+  at = Date.now(),
+): Checkpoint | undefined {
   const scratch = mkdtempSync(join(tmpdir(), "granttap-checkpoint-"));
   try {
     const head = git(cwd, ["rev-parse", "HEAD"]);
@@ -36,14 +56,20 @@ export function createCheckpoint(cwd: string, taskId: string, title: string): Ch
     // Start the scratch index from HEAD so deletions are recorded too.
     git(cwd, ["read-tree", "HEAD"], env);
     git(cwd, ["add", "-A"], env);
+    // A checkpoint is the whole checkout's uncommitted work, so an .env or a
+    // key that happened to change in it would be committed and, when the
+    // person pushes, published. Those stay as HEAD has them.
+    const excluded = git(cwd, ["diff", "--cached", "--name-only"], env)
+      .split("\n").filter(Boolean).filter(sensitivePath);
+    if (excluded.length > 0) git(cwd, ["reset", "-q", "--", ...excluded], env);
     const tree = git(cwd, ["write-tree"], env);
     if (tree === git(cwd, ["rev-parse", "HEAD^{tree}"])) return undefined; // nothing to keep
     const message = `GrantTap checkpoint: ${title.replace(/\s+/g, " ").slice(0, 120)}`;
     const sha = git(cwd, ["commit-tree", tree, "-p", head, "-m", message], env);
-    const branch = checkpointBranchName(taskId);
+    const branch = checkpointBranchName(taskId, at);
     git(cwd, ["branch", "-f", branch, sha]);
     const files = git(cwd, ["diff", "--name-only", `${head}..${sha}`]).split("\n").filter(Boolean).length;
-    return { sha, branch, files };
+    return { sha, branch, files, excluded };
   } catch {
     return undefined;
   } finally {

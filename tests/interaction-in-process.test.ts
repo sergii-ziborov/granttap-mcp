@@ -14,6 +14,11 @@ import { createGrantTapServer, resetRelay } from "../apps/mcp/src/create-server"
 import { connectInMemory, textResult } from "./support/mcp-client";
 import { forwardingRelay, waitFor } from "./support/forwarding-relay";
 
+// Under Claude Code the shell carries the chat's own id, and a server that
+// knows its chat attributes calls to that chat alone. Here the fixture's
+// sessions are the chats, so an inherited id must not speak for them.
+delete process.env.CLAUDE_CODE_SESSION_ID;
+
 const projectId = "project";
 const taskId = "task";
 
@@ -46,12 +51,16 @@ test("in-process MCP covers unpaired interaction behavior", async (t) => {
   });
   const client = await connectInMemory(createGrantTapServer());
   t.after(() => client.close());
+  // Not paired is an error, not an outcome: nothing was sent, nothing was asked.
   const notify = await client.callTool({ name: "notify", arguments: { message: "hello" } });
   assert.match(textResult(notify), /not paired/i);
+  assert.equal(notify.isError, true);
   const yesNo = await client.callTool({ name: "ask_yes_no", arguments: { question: "Ready?" } });
   assert.match(textResult(yesNo), /not paired/i);
+  assert.equal(yesNo.isError, true);
   const open = await client.callTool({ name: "ask", arguments: { question: "Status?" } });
   assert.match(textResult(open), /not paired/i);
+  assert.equal(open.isError, true);
   const resource = await client.readResource({ uri: "granttap://mesh/current" });
   const value = JSON.parse((resource.contents[0] as { text: string }).text);
   assert.equal(value.enabled, true);
@@ -101,17 +110,25 @@ test("paired MCP delivers decisions, replies, and bounded Mesh events", async (t
   t.after(() => client.close());
   const call = (name: string, args: Record<string, unknown>) => client.callTool({ name, arguments: args });
 
-  assert.equal(textResult(await call("notify", { message: "Build started" })), "sent to phone");
+  // Every outcome is also structured, so a model can branch on it without
+  // parsing prose: what was sent, what was decided, and whether anyone answered.
+  const status = await call("notify", { message: "Build started" });
+  assert.equal(textResult(status), "sent to phone");
+  assert.deepEqual(status.structuredContent, { status: "sent", messageSent: true });
   recordAttributedCall({
     provider: "claude", sessionId: "claude-session",
     toolName: "mcp__granttap__ask_yes_no", args: { question: "Continue?" },
   });
-  assert.equal(textResult(await call("ask_yes_no", { question: "Continue?" })), "yes");
+  const decided = await call("ask_yes_no", { question: "Continue?" });
+  assert.equal(textResult(decided), "yes");
+  assert.deepEqual(decided.structuredContent, { status: "answered", decision: "yes" });
   recordAttributedCall({
     provider: "claude", sessionId: "claude-session",
     toolName: "mcp__granttap__ask", args: { question: "Field name?" },
   });
-  assert.equal(textResult(await call("ask", { question: "Field name?" })), "connectionId");
+  const answered = await call("ask", { question: "Field name?" });
+  assert.equal(textResult(answered), "connectionId");
+  assert.deepEqual(answered.structuredContent, { status: "answered", answer: "connectionId" });
   const yesNoRequest = received.find((item) => item.type === "approval.request") as
     Extract<Payload, { type: "approval.request" }> | undefined;
   const openQuestion = received.find((item) =>
@@ -137,9 +154,15 @@ test("paired MCP delivers decisions, replies, and bounded Mesh events", async (t
   assert.equal((await call("notify", { meshEvent: meshInput })).isError, true,
     "an unattributed Mesh event publishes nothing");
   attribute({ meshEvent: meshInput });
-  const published = textResult(await call("notify", { meshEvent: meshInput }));
+  const publishedResult = await call("notify", { meshEvent: meshInput });
+  const published = textResult(publishedResult);
   assert.match(published, /mesh event published/);
   assert.match(published, /granttap:\/\/mesh\/[A-Za-z0-9_-]{43}/);
+  const publishedOutcome = publishedResult.structuredContent as Record<string, unknown>;
+  assert.equal(publishedOutcome.status, "published");
+  assert.equal(publishedOutcome.messageSent, false);
+  assert.match(String(publishedOutcome.meshEventId), /^[0-9a-f-]{36}$/, "the recorded event's id, so a retry is not a duplicate");
+  assert.match(String(publishedOutcome.scopedResource), /^granttap:\/\/mesh\/[A-Za-z0-9_-]{43}$/);
   saveRuntimeConfig({ meshEnabled: false });
   attribute({ meshEvent: meshInput });
   assert.equal((await call("notify", { meshEvent: meshInput })).isError, true);
@@ -167,5 +190,8 @@ test("paired MCP delivers decisions, replies, and bounded Mesh events", async (t
   attribute({ meshEvent: claimEvent });
   const conflict = await call("notify", { meshEvent: claimEvent });
   assert.match(textResult(conflict), /claim rejected/);
+  const conflictOutcome = conflict.structuredContent as Record<string, unknown>;
+  assert.equal(conflictOutcome.status, "claim_rejected");
+  assert.deepEqual(conflictOutcome.conflict, { ownerSessionId: "codex-session", resource: "src/auth/**" });
   await waitFor(() => received.some((item) => item.type === "mesh.event"));
 });

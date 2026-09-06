@@ -148,6 +148,14 @@ export function createHandoffFlow(deps: MeshRuntimeDependencies) {
   async function answerAgentQuestion(client: RelayClient, event: MeshEvent): Promise<void> {
     const question = event.payload.question;
     if (!question || !event.targetSessionId) return;
+    // The question stays inside its Project: the chat it names must be a live
+    // execution of that Project on this computer, or a chat that merely
+    // learned another Project's session id could be made to answer for it.
+    const inProject = deps.store().snapshot(event.projectId)?.executions.some((execution) =>
+      execution.sessionId === event.targetSessionId
+      && execution.computerId === deps.computer()
+      && execution.endedAt == null);
+    if (!inProject) return;
     const target = deps.sessions().find((session) => session.sessionId === event.targetSessionId);
     if (!target) return;
     const result = await deps.deliver(

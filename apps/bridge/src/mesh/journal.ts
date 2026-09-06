@@ -93,12 +93,19 @@ export function unreadRuns(sessionId: string): RunRecord[] {
   return runJournal(sessionId).filter((record) => record.deliveredAt == null);
 }
 
-export function markRunsDelivered(sessionId: string, at: number): void {
+/**
+ * Mark runs as told. Given `only`, the runs with those start times and no
+ * other: a run that did not fit into one prompt stays unread for the next.
+ */
+export function markRunsDelivered(sessionId: string, at: number, only?: readonly number[]): void {
   try {
+    const chosen = only == null ? undefined : new Set(only);
+    const pending = (record: RunRecord) =>
+      record.deliveredAt == null && (chosen == null || chosen.has(record.at));
     const records = runJournal(sessionId);
-    if (!records.some((record) => record.deliveredAt == null)) return;
+    if (!records.some(pending)) return;
     write(journalPath(sessionId), records.map((record) =>
-      record.deliveredAt == null ? { ...record, deliveredAt: at } : record));
+      pending(record) ? { ...record, deliveredAt: at } : record));
   } catch {
     // Left unread, it is shown again next time; never worse than that.
   }

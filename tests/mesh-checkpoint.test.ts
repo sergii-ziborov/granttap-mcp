@@ -30,10 +30,25 @@ test("a checkpoint keeps uncommitted work on its own branch and touches nothing 
   await writeFile(join(root, "new.txt"), "new\n");
   const head = git(root, ["rev-parse", "HEAD"]);
 
-  const checkpoint = createCheckpoint(root, "task-1", "Pairing refactor");
+  // A secret that changed in the same checkout never rides along.
+  await writeFile(join(root, ".env"), "API_KEY=must-not-be-committed\n");
+  await writeFile(join(root, "deploy.pem"), "-----BEGIN KEY-----\n");
+  const at = Date.UTC(2026, 8, 6, 10, 15, 0);
+  const checkpoint = createCheckpoint(root, "task-1", "Pairing refactor", at);
   assert.ok(checkpoint, "a dirty tree yields a checkpoint");
-  assert.equal(checkpoint.branch, checkpointBranchName("task-1"));
+  assert.deepEqual(checkpoint.excluded.sort(), [".env", "deploy.pem"]);
+  assert.throws(() => git(root, ["show", `${checkpoint.sha}:.env`]), "the secret is not in the commit");
+  assert.equal(git(root, ["ls-tree", "--name-only", checkpoint.sha]).includes("deploy.pem"), false);
+  assert.equal(checkpoint.branch, checkpointBranchName("task-1", at));
+  assert.equal(checkpoint.branch, "granttap/checkpoint/task-1-20260906T101500");
+  assert.ok(checkpoint.branch.startsWith(checkpointBranchName("task-1")), "the Task's name is still the prefix");
   assert.equal(checkpoint.files, 2);
+  // A second checkpoint of the same Task keeps the first one reachable.
+  await writeFile(join(root, "new.txt"), "newer\n");
+  const again = createCheckpoint(root, "task-1", "Pairing refactor", at + 60_000);
+  assert.ok(again);
+  assert.notEqual(again.branch, checkpoint.branch);
+  assert.equal(git(root, ["rev-parse", checkpoint.branch]), checkpoint.sha, "the first branch still points at its commit");
   // The branch holds the work; HEAD, the current branch, and the tree do not move.
   assert.equal(git(root, ["rev-parse", checkpoint.branch]), checkpoint.sha);
   assert.equal(git(root, ["rev-parse", "HEAD"]), head);

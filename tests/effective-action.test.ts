@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import {
   capabilityFingerprint,
@@ -14,6 +17,10 @@ import type { EngineClientLike } from "../apps/bridge/src/engine/engine-supervis
 import type {
   EngineOperation,
 } from "../apps/bridge/src/engine/engine-protocol";
+
+// What the hook remembers about governed Projects lives in the config dir;
+// these evaluations must not teach the person's own computer anything.
+process.env.GRANTTAP_CONFIG_DIR = mkdtempSync(join(tmpdir(), "granttap-effective-action-"));
 
 const flags = {
   GRANTTAP_ENGINE_ENABLED: "1",
@@ -117,14 +124,24 @@ test("Project ASK and DENY cannot enter bypass, auto-accept, or skipped gating",
   assert.equal(legacyGrantTapFlowAllowed(allow), true);
 });
 
-test("engine failure is explicit fallback and never becomes an invented deny", async () => {
+test("engine failure is explicit fallback for a Project never seen governed, and never an invented deny", async () => {
+  const offline = fakeClient(async () => { throw new Error("offline"); });
   const decision = await evaluateEffectiveAction({ provider: "claude", toolName: "Write" }, {
     env: flags,
-    projectId: "project",
-    client: fakeClient(async () => { throw new Error("offline"); }),
+    projectId: "never-governed",
+    client: offline,
   });
   assert.equal(decision.effect, "inherit");
   assert.equal(decision.engineEvaluated, false);
+  // The Project the engine answered for above, with a policy revision, is
+  // remembered as governed: the same failure there asks the person instead.
+  const governed = await evaluateEffectiveAction({ provider: "claude", toolName: "Write" }, {
+    env: flags,
+    projectId: "project",
+    client: offline,
+  });
+  assert.equal(governed.effect, "ask");
+  assert.equal(governed.engineEvaluated, false);
 });
 
 test("a Project deny survives an engine that answers slowly", async () => {
