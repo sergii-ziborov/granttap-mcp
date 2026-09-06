@@ -55,6 +55,15 @@ Mesh resource. Full transcripts and hidden reasoning are never mesh payloads.
 Claims have TTLs; a colliding claim is rejected before it is recorded so agents
 can choose different work or contact the owner before escalating to Needs You.
 
+<p align="center">
+  <img src="docs/images/iphone-projects-shared.png" width="200" alt="Projects: one owned by this phone, one shared by another">
+  <img src="docs/images/iphone-project-mesh.png" width="200" alt="A Project: Governance, members and computers, Mesh status, repositories, Tasks">
+  <img src="docs/images/iphone-task-route.png" width="200" alt="A Task: its executions, its claims, and who else is in its files">
+  <img src="docs/images/iphone-handoff.png" width="200" alt="Task handoff: destination, push, and readiness checks">
+</p>
+
+<p align="center"><em>Projects, one of them shared by another phone · a Project with its Governance, members, computers, repositories, and Tasks · a Task with its executions and claims · a handoff with its readiness checks</em></p>
+
 For Claude Code, Codex, and Cursor, the provider hook runs inside the agent's
 own session and sees the exact call. GrantTap attributes every `notify` to the
 session that really made it and publishes the event only for that execution —
@@ -123,6 +132,59 @@ that is working on the other side of a contract this Task touches (the consumer
 of a topic it produces, the caller of an API it changes), and the scoped
 `granttap://mesh/{capability}` resource gives the agent the same `peers`,
 `otherSide`, and `neighbours` so it can coordinate before it commits.
+
+### Members, roles, and computers of their own
+
+A Project is shared from the phone that owns it, and that phone stays the
+hub: nothing a member does reaches a computer without passing through it.
+*Invite a person* makes a one-time code, good for fifteen minutes; the other
+phone scans it under *Projects → Join a Project*, and the Project arrives
+there with the role the owner chose — Viewer, Member, or Admin — and the four
+answers under it: see the Project's chats, write to them, post to the
+Project, edit Governance. Each answer is checked on the owner's phone before
+a message, a pause, a handoff, or a release is forwarded, and a refusal comes
+back to the member's phone as a message of its own, naming the rule. Changing
+a role takes effect at once; removing a member stops the forwarding at once,
+though nothing already seen can be recalled.
+
+<p align="center">
+  <img src="docs/images/iphone-members.png" width="200" alt="Members and computers of a Project, seen by its owner">
+  <img src="docs/images/iphone-invite.png" width="200" alt="Invite a person: name, role, and the four answers under it">
+  <img src="docs/images/iphone-join-project.png" width="200" alt="Join a Project from another phone: scan the invite or paste it">
+  <img src="docs/images/iphone-members-shared.png" width="200" alt="A shared Project on the member's phone, with a computer of their own to add">
+</p>
+
+<p align="center"><em>The owner's members and computers · an invite with its role · joining from another phone · the shared Project as the member sees it, with a computer of their own to add</em></p>
+
+A member works in the Project with computers of their own. Adding one hands
+it the Project's mesh key over the pairing the member's phone already trusts,
+and from then on that computer takes part in the mesh like any other: its
+chats are the Project's, its claims are seen by every other computer, and a
+Task can be handed to it.
+
+### A claim released by the person
+
+A claim outlives an agent that crashed or was closed, and the files it names
+stay fenced off until it expires. Touch and hold a claim on the Task screen
+to release it yourself. The phone tells the computer that holds the claim,
+and the computer answers with a result of its own: released, or refused with
+the reason — no such claim on this computer, a claim that belongs to another
+Project, a role that does not allow it, or no computer to ask. A refusal puts
+the claim back on the phone with that reason beside it, so what the phone
+shows is what the mesh holds. A release is written to the store as a
+tombstone, so a snapshot or a late event from a computer that was away cannot
+bring the claim back.
+
+### Task reports
+
+<p align="center">
+  <img src="docs/images/iphone-report.png" width="200" alt="A Task report: figures first, then every table, as PDF or CSV">
+</p>
+
+A Task is reported from the phone as a PDF to read and forward, or a CSV with
+every table: tokens, tool calls, wrong turns, CPU time, peak memory, and wall
+time, by tool and by execution. Nothing leaves the phone until you choose
+where it goes.
 
 ### Grok Bot as a scoped Mesh participant
 
@@ -204,6 +266,14 @@ available to a model through prompt injection.
 `notify` may alternatively carry one bounded task-scoped Mesh event. This does
 not add a fifth MCP tool or grant any global setup capability, and it publishes
 only for the execution whose provider hook attributed the call.
+
+`notify`, `ask_yes_no`, and `ask` accept an `operationId`. A named call is
+remembered for fifteen minutes under the chat that made it, the tool, and the
+arguments: a retry returns the answer already given instead of asking again,
+a retry that arrives while the first call is still waiting waits for the same
+answer, and the same name used for other arguments is refused. One chat's
+name is never another's — the ledger is keyed by the execution the provider
+hook attributed, and the hook carries the `operationId` with the call.
 
 Provider-native approvals and mobile continuation require the matching local
 adapter. MCP registration alone is never reported as proof that an integration
@@ -330,6 +400,13 @@ The user-facing approval modes map to the existing runtime policy:
 Legacy custom levels remain compatible but are not part of the primary flow.
 
 ## Project Governance
+
+<p align="center">
+  <img src="docs/images/iphone-governance.png" width="200" alt="Project Governance: one answer per kind of capability, and the enforcement it reached">
+  <img src="docs/images/iphone-member-detail.png" width="200" alt="A member: role, answers, and removal">
+</p>
+
+<p align="center"><em>Governance for the whole Project · a member's answers, changed at once</em></p>
 
 Capabilities are decided per Project, not per task. A policy names an effect —
 `allow`, `ask`, or `deny` — for each kind (skills, MCP servers, shell and
