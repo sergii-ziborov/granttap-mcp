@@ -19,7 +19,7 @@ import { handleMeshPayload } from "../../../bridge/src/mesh/runtime";
 import { sendMeshPayload } from "../../../bridge/src/session-keys";
 import { isMeshEnabled, isProviderEnabled } from "../../../bridge/src/config/runtime";
 import { sessionFromEnvironment } from "./mesh-resource";
-import { OperationLedger, type OperationRecord } from "./operation-ledger";
+import { argumentsDigest, OperationLedger, type OperationRecord } from "./operation-ledger";
 import {
   askOpenQuestionOutcome,
   askYesNoOutcome,
@@ -35,7 +35,8 @@ const question = z.string().min(1).max(8_000).describe("The question to ask");
 const operationId = z.string().trim().min(1).max(128).optional().describe(
   "A name of your own for this call. Retrying with the same operationId repeats nothing that "
   + "already happened: an event is not published twice, a person is not asked twice, and only "
-  + "the part that failed is done again.",
+  + "the part that failed is done again. The name is yours for a quarter of an hour, for this "
+  + "call's own arguments; the same name with other arguments is refused.",
 );
 const meshEventInput = z.object({
   capability: z.string().trim().min(1).max(128).optional(),
@@ -52,9 +53,11 @@ const UNATTRIBUTED =
   "GrantTap could not attribute this call to a live agent session. Project Mesh events "
   + "are published only for the execution that made the call, so its provider hook must "
   + "be installed and trusted (granttap setup).";
-
-/** One ledger per server, which is one per chat: a retry from the same chat finds its record. */
-const ledger = new OperationLedger();
+const OPERATION_CONFLICT =
+  "This operationId was already used for a different call. A name means one call's arguments; "
+  + "use a new operationId for a new call.";
+const STORE_BUSY =
+  "The Mesh store is busy on this computer; nothing was recorded. Retry with the same operationId.";
 
 /**
  * What a call came to, in a form a model can branch on.
@@ -92,15 +95,56 @@ const openOutput = {
   replayed: z.boolean().optional().describe("This answer repeats an earlier call with the same operationId"),
 };
 
-function answered(text: string, outcome: Record<string, unknown>) {
-  return { content: [{ type: "text" as const, text }], structuredContent: outcome };
+type ToolAnswer = {
+  isError?: boolean;
+  content: Array<{ type: "text"; text: string }>;
+  structuredContent?: Record<string, unknown>;
+};
+
+function answered(text: string, outcome: Record<string, unknown>): ToolAnswer {
+  return { content: [{ type: "text", text }], structuredContent: outcome };
 }
 
-function replayed(record: OperationRecord) {
+function refused(text: string): ToolAnswer {
+  return { isError: true, content: [{ type: "text", text }] };
+}
+
+function replayed(record: OperationRecord): ToolAnswer {
   return answered(`${record.text}\n(replayed: this operationId was already handled)`, { ...record.outcome, replayed: true });
 }
 
+/** A record's answer, whether it was made now or earlier. */
+function fromRecord(record: OperationRecord, isReplay: boolean): ToolAnswer {
+  return isReplay ? replayed(record) : answered(record.text, record.outcome);
+}
+
 export function registerInteractionTools(server: McpServer): void {
+  // One ledger per server: a chat's names are that chat's, and a server that
+  // hosts several chats keeps each one's apart by the execution it resolved.
+  const ledger = new OperationLedger();
+
+  /**
+   * Answer a named call once. The name is looked up only after the caller is
+   * known, under that caller; a name reused for other arguments is refused;
+   * a retry that arrives while the first call runs waits for its answer.
+   */
+  async function once(
+    principal: string,
+    tool: string,
+    operation: string | undefined,
+    digest: string,
+    work: (previous: OperationRecord | undefined) => Promise<OperationRecord>,
+  ): Promise<ToolAnswer> {
+    if (!operation) return fromRecord(await work(undefined), false);
+    const recalled = ledger.recall(principal, tool, operation, digest);
+    if (recalled.kind === "conflict") return refused(OPERATION_CONFLICT);
+    if (recalled.kind === "in_flight") return fromRecord(await recalled.result, true);
+    if (recalled.kind === "replay" && recalled.record.pending !== "message") return fromRecord(recalled.record, true);
+    const previous = recalled.kind === "replay" ? recalled.record : undefined;
+    const record = await ledger.run(principal, tool, operation, () => work(previous));
+    return fromRecord(record, previous != null);
+  }
+
   server.registerTool(
     "notify",
     {
@@ -118,67 +162,67 @@ export function registerInteractionTools(server: McpServer): void {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     },
     async ({ message, meshEvent, operationId: operation }) => {
-      if (!message && !meshEvent) return {
-        isError: true,
-        content: [{ type: "text" as const, text: "Provide message or meshEvent." }],
-      };
+      if (!message && !meshEvent) return refused("Provide message or meshEvent.");
       const client = await relay();
       if (!client) return notPaired();
-      const previous = operation ? ledger.recall("notify", operation) : undefined;
-      if (previous && (previous.pending !== "message" || !message)) return replayed(previous);
-      let outcome: Record<string, unknown>;
-      let text: string;
-      let changedSomething = Boolean(previous);
-      if (previous) {
-        // The event went out last time; only the status text is still owed.
-        outcome = { ...previous.outcome };
-        text = previous.text;
-      } else {
-        // The provider hook already saw this exact call inside its own session.
-        const attributed = consumeAttributedCall("notify", { message, meshEvent }, Date.now(), sessionFromEnvironment());
-        // The event first: its checks can refuse the whole call, and a status
-        // sent before a refusal would report work that did not happen.
-        const published = meshEvent
-          ? await publishMeshEvent(client, meshEvent, attributed?.sessionId)
-          : undefined;
-        changedSomething = published != null;
-        const capability = isMeshEnabled() && attributed
-          ? executionCapabilityFor(attributed.sessionId)
-          : undefined;
-        const scopedResource = capability ? `granttap://mesh/${capability.token}` : undefined;
-        text = published?.text ?? "sent to phone";
-        if (scopedResource) text = `${text}\nScoped Mesh state: ${scopedResource}`;
-        outcome = {
-          status: published?.status ?? "sent",
-          messageSent: false,
-          ...(published ? { meshEventId: published.eventId } : {}),
-          ...(published?.conflict ? { conflict: published.conflict } : {}),
-          ...(scopedResource ? { scopedResource } : {}),
-        };
-      }
-      if (message) {
-        try {
-          await client.send(
-            { type: "agent.event", text: message, kind: "status", createdAt: Date.now() },
-            "phone",
-            { ttlMs: 15 * 60_000, wake: true },
-          );
-          outcome.messageSent = true;
-          delete outcome.error;
-        } catch (error) {
-          // Nothing else happened: the whole call failed, and says so.
-          if (!changedSomething) throw error;
-          const detail = error instanceof Error ? error.message : String(error);
-          outcome.messageSent = false;
-          outcome.error = `status text not sent: ${detail}`;
-          const partial = `${text}\nStatus text not sent (${detail}). The Mesh event is recorded; `
-            + "retry with the same operationId to send only the text.";
-          if (operation) ledger.remember("notify", operation, { text, outcome, pending: "message" });
-          return answered(partial, { ...outcome, ...(previous ? { replayed: true } : {}) });
+      // The provider hook already saw this exact call — every argument of it,
+      // the operationId included — inside its own session.
+      const attributed = consumeAttributedCall(
+        "notify", { message, meshEvent, operationId: operation }, Date.now(), sessionFromEnvironment(),
+      );
+      const principal = attributed?.sessionId ?? "unattributed";
+      const digest = argumentsDigest({ message, meshEvent });
+      return once(principal, "notify", operation, digest, async (previous) => {
+        let outcome: Record<string, unknown>;
+        let text: string;
+        let changedSomething = previous != null;
+        if (previous) {
+          // The event went out last time; only the status text is still owed.
+          outcome = { ...previous.outcome };
+          text = previous.text;
+        } else {
+          // The event first: its checks can refuse the whole call, and a status
+          // sent before a refusal would report work that did not happen.
+          const published = meshEvent
+            ? await publishMeshEvent(client, meshEvent, attributed?.sessionId)
+            : undefined;
+          changedSomething = published != null;
+          const capability = isMeshEnabled() && attributed
+            ? executionCapabilityFor(attributed.sessionId)
+            : undefined;
+          const scopedResource = capability ? `granttap://mesh/${capability.token}` : undefined;
+          text = published?.text ?? "sent to phone";
+          if (scopedResource) text = `${text}\nScoped Mesh state: ${scopedResource}`;
+          outcome = {
+            status: published?.status ?? "sent",
+            messageSent: false,
+            ...(published ? { meshEventId: published.eventId } : {}),
+            ...(published?.conflict ? { conflict: published.conflict } : {}),
+            ...(scopedResource ? { scopedResource } : {}),
+          };
         }
-      }
-      if (operation) ledger.remember("notify", operation, { text, outcome });
-      return answered(text, { ...outcome, ...(previous ? { replayed: true } : {}) });
+        if (message) {
+          try {
+            await client.send(
+              { type: "agent.event", text: message, kind: "status", createdAt: Date.now() },
+              "phone",
+              { ttlMs: 15 * 60_000, wake: true },
+            );
+            outcome.messageSent = true;
+            delete outcome.error;
+          } catch (error) {
+            // Nothing else happened: the whole call failed, and says so.
+            if (!changedSomething) throw error;
+            const detail = error instanceof Error ? error.message : String(error);
+            outcome.messageSent = false;
+            outcome.error = `status text not sent: ${detail}`;
+            const partial = `${text}\nStatus text not sent (${detail}). The Mesh event is recorded; `
+              + "retry with the same operationId to send only the text.";
+            return { at: Date.now(), tool: "notify", digest, text: partial, outcome, pending: "message" };
+          }
+        }
+        return { at: Date.now(), tool: "notify", digest, text, outcome };
+      });
     },
   );
   server.registerTool(
@@ -194,13 +238,14 @@ export function registerInteractionTools(server: McpServer): void {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     },
     async ({ question: text, operationId: operation }) => {
-      const previous = operation ? ledger.recall("ask_yes_no", operation) : undefined;
-      if (previous) return replayed(previous);
-      const result = await answerYesNo(text, interactionScope("ask_yes_no", text));
-      if (operation && !result.isError && result.structuredContent) {
-        ledger.remember("ask_yes_no", operation, { text: result.content[0]!.text, outcome: result.structuredContent });
-      }
-      return result;
+      const client = await relay();
+      if (!client) return notPaired();
+      const scope = interactionScope("ask_yes_no", text, operation);
+      const digest = argumentsDigest({ question: text });
+      return once(scope?.sessionId ?? "unattributed", "ask_yes_no", operation, digest, async () => {
+        const outcome = await askYesNoOutcome(client, text, undefined, scope);
+        return { at: Date.now(), tool: "ask_yes_no", digest, text: yesNoText(outcome), outcome };
+      });
     },
   );
   server.registerTool(
@@ -215,13 +260,14 @@ export function registerInteractionTools(server: McpServer): void {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     },
     async ({ question: text, operationId: operation }) => {
-      const previous = operation ? ledger.recall("ask", operation) : undefined;
-      if (previous) return replayed(previous);
-      const result = await answerOpenQuestion(text, interactionScope("ask", text));
-      if (operation && !result.isError && result.structuredContent) {
-        ledger.remember("ask", operation, { text: result.content[0]!.text, outcome: result.structuredContent });
-      }
-      return result;
+      const client = await relay();
+      if (!client) return notPaired();
+      const scope = interactionScope("ask", text, operation);
+      const digest = argumentsDigest({ question: text });
+      return once(scope?.sessionId ?? "unattributed", "ask", operation, digest, async () => {
+        const outcome = await askOpenQuestionOutcome(client, text, undefined, scope);
+        return { at: Date.now(), tool: "ask", digest, text: openAnswerText(outcome), outcome };
+      });
     },
   );
 }
@@ -292,41 +338,43 @@ async function publishMeshEvent(
     expiresAt: now + (input.expiresInSeconds ?? 3_600) * 1_000,
     payload: input.payload,
   });
-  const claim = event.eventType === "RESOURCE_CLAIM" ? event.payload.claim : undefined;
-  const conflict = claim
-    ? localMeshStore().conflicts(event.projectId, event.sourceSessionId, claim.resource).at(0)
-    : undefined;
-  if (claim && conflict) {
-    const collision = MeshEvent.parse({
-      ...event,
-      eventId: randomUUID(),
-      targetSessionId: conflict.ownerSessionId,
-      eventType: "CONFLICT",
-      payload: {
-        resource: claim.resource,
-        otherOwnerSessionId: conflict.ownerSessionId,
-        reason: `${conflict.ownerSessionId} currently claims ${conflict.resource}`,
-        resolved: false,
-        needsUser: false,
-      },
-    });
-    await handleMeshPayload(client, collision, "agent");
-    await sendMeshPayload(client, collision, "phone", {
-      ttlMs: (input.expiresInSeconds ?? 3_600) * 1_000,
-    });
-    return {
-      status: "claim_rejected",
-      eventId: collision.eventId,
-      text: `claim rejected: ${conflict.ownerSessionId} owns ${conflict.resource}; coordinate before editing`,
-      conflict: { ownerSessionId: conflict.ownerSessionId, resource: conflict.resource },
-    };
+  const ttlMs = (input.expiresInSeconds ?? 3_600) * 1_000;
+  if (event.eventType === "RESOURCE_CLAIM" && event.payload.claim) {
+    // Checked and recorded as one step under the store's lock: the conflict
+    // the claim is checked against is the state it is written into.
+    const claim = event.payload.claim;
+    const result = localMeshStore().acceptClaimEvent(event);
+    if (!result.applied) throw new Error(STORE_BUSY);
+    if (result.conflict) {
+      const conflict = result.conflict;
+      const collision = MeshEvent.parse({
+        ...event,
+        eventId: randomUUID(),
+        targetSessionId: conflict.ownerSessionId,
+        eventType: "CONFLICT",
+        payload: {
+          resource: claim.resource,
+          otherOwnerSessionId: conflict.ownerSessionId,
+          reason: `${conflict.ownerSessionId} currently claims ${conflict.resource}`,
+          resolved: false,
+          needsUser: false,
+        },
+      });
+      await handleMeshPayload(client, collision, "agent");
+      await sendMeshPayload(client, collision, "phone", { ttlMs });
+      return {
+        status: "claim_rejected",
+        eventId: collision.eventId,
+        text: `claim rejected: ${conflict.ownerSessionId} owns ${conflict.resource}; coordinate before editing`,
+        conflict: { ownerSessionId: conflict.ownerSessionId, resource: conflict.resource },
+      };
+    }
+    await sendMeshPayload(client, event, "phone", { ttlMs });
+    return { status: "published", eventId: event.eventId, text: "mesh event published" };
   }
   await handleMeshPayload(client, event, "agent");
   const wake = classifyHumanAttention(event.eventType, event.payload);
-  await sendMeshPayload(client, event, "phone", {
-    ttlMs: (input.expiresInSeconds ?? 3_600) * 1_000,
-    wake: wake || undefined,
-  });
+  await sendMeshPayload(client, event, "phone", { ttlMs, wake: wake || undefined });
   // Keep the shared singleton warm for the MCP resource even when the monitor
   // has not yet completed its first provider scan.
   localMeshStore();
@@ -334,12 +382,18 @@ async function publishMeshEvent(
 }
 
 /** Not paired is an error, not an outcome: nothing was sent, nothing was asked. */
-function notPaired() {
-  return { isError: true as const, content: [{ type: "text" as const, text: NOT_PAIRED }] };
+function notPaired(): ToolAnswer {
+  return { isError: true, content: [{ type: "text", text: NOT_PAIRED }] };
 }
 
-function interactionScope(tool: "ask" | "ask_yes_no", text: string): TaskInteractionScope | undefined {
-  const attributed = consumeAttributedCall(tool, { question: text }, Date.now(), sessionFromEnvironment());
+/**
+ * The execution a question belongs to, from the provider hook's record of
+ * this exact call — operationId included, because the hook saw it too.
+ */
+function interactionScope(tool: "ask" | "ask_yes_no", text: string, operation?: string): TaskInteractionScope | undefined {
+  const attributed = consumeAttributedCall(
+    tool, { question: text, operationId: operation }, Date.now(), sessionFromEnvironment(),
+  );
   if (!attributed) return undefined;
   const live = liveExecutionScope(attributed.sessionId);
   if (!live || live.execution.provider !== attributed.provider) return undefined;
@@ -350,24 +404,4 @@ function interactionScope(tool: "ask" | "ask_yes_no", text: string): TaskInterac
     taskId: live.execution.taskId,
     computerId: live.execution.computerId,
   };
-}
-
-type ToolAnswer = {
-  isError?: boolean;
-  content: Array<{ type: "text"; text: string }>;
-  structuredContent?: Record<string, unknown>;
-};
-
-async function answerYesNo(questionText: string, scope?: TaskInteractionScope): Promise<ToolAnswer> {
-  const client = await relay();
-  if (!client) return notPaired();
-  const outcome = await askYesNoOutcome(client, questionText, undefined, scope);
-  return answered(yesNoText(outcome), outcome);
-}
-
-async function answerOpenQuestion(questionText: string, scope?: TaskInteractionScope): Promise<ToolAnswer> {
-  const client = await relay();
-  if (!client) return notPaired();
-  const outcome = await askOpenQuestionOutcome(client, questionText, undefined, scope);
-  return answered(openAnswerText(outcome), outcome);
 }

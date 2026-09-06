@@ -90,6 +90,8 @@ test("paired MCP delivers decisions, replies, and bounded Mesh events", async (t
   phone.onMessage(async (payload) => {
     received.push(payload);
     if (payload.type === "approval.request") {
+      // One question is answered slowly, so that a retry can arrive while it waits.
+      if (payload.title.includes("Ship it?")) await new Promise((resolve) => setTimeout(resolve, 300));
       await phone.send({
         type: "approval.decision", requestId: payload.requestId,
         decision: "allow", sessionId: payload.sessionId,
@@ -122,17 +124,43 @@ test("paired MCP delivers decisions, replies, and bounded Mesh events", async (t
   const decided = await call("ask_yes_no", { question: "Continue?" });
   assert.equal(textResult(decided), "yes");
   assert.deepEqual(decided.structuredContent, { status: "answered", decision: "yes" });
-  // Named, a call asked again is answered from memory: the person is not asked twice.
-  const asked = () => received.filter((item) => item.type === "approval.request").length;
+  // Named, a call asked again is answered from memory: the person is not asked
+  // twice. The hook saw the name too, so attribution still finds the chat.
+  const approvals = () => received.filter((item) => item.type === "approval.request") as Array<
+    Extract<Payload, { type: "approval.request" }>
+  >;
+  const asked = () => approvals().length;
   const before = asked();
-  recordAttributedCall({ provider: "claude", sessionId: "claude-session", toolName: "mcp__granttap__ask_yes_no", args: { question: "Deploy?" } });
-  const first = await call("ask_yes_no", { question: "Deploy?", operationId: "deploy-1" });
+  const named = { question: "Deploy?", operationId: "deploy-1" };
+  recordAttributedCall({ provider: "claude", sessionId: "claude-session", toolName: "mcp__granttap__ask_yes_no", args: named });
+  const first = await call("ask_yes_no", named);
   assert.deepEqual(first.structuredContent, { status: "answered", decision: "yes" });
   assert.equal(asked(), before + 1);
-  const again = await call("ask_yes_no", { question: "Deploy?", operationId: "deploy-1" });
+  assert.equal(approvals().at(-1)?.sessionId, "claude-session", "attributed with the operationId in the call");
+  recordAttributedCall({ provider: "claude", sessionId: "claude-session", toolName: "mcp__granttap__ask_yes_no", args: named });
+  const again = await call("ask_yes_no", named);
   assert.deepEqual(again.structuredContent, { status: "answered", decision: "yes", replayed: true });
   assert.match(textResult(again), /replayed/);
   assert.equal(asked(), before + 1, "asked once");
+  // The same name for another question is refused, not answered from memory.
+  recordAttributedCall({ provider: "claude", sessionId: "claude-session", toolName: "mcp__granttap__ask_yes_no", args: { question: "Delete the database?", operationId: "deploy-1" } });
+  const reused = await call("ask_yes_no", { question: "Delete the database?", operationId: "deploy-1" });
+  assert.equal(reused.isError, true);
+  assert.match(textResult(reused), /already used for a different call/);
+  assert.equal(asked(), before + 1, "and nobody was asked");
+  // A retry that arrives while the first call still waits is the same question:
+  // the hook sees the retry too, and the second call waits for the first's answer.
+  const race = { question: "Ship it?", operationId: "ship-1" };
+  recordAttributedCall({ provider: "claude", sessionId: "claude-session", toolName: "mcp__granttap__ask_yes_no", args: race });
+  const one = call("ask_yes_no", race);
+  await waitFor(() => asked() === before + 2);
+  recordAttributedCall({ provider: "claude", sessionId: "claude-session", toolName: "mcp__granttap__ask_yes_no", args: race });
+  const two = call("ask_yes_no", race);
+  const decision = (result: unknown) => (result as { structuredContent?: Record<string, unknown> }).structuredContent?.decision;
+  assert.equal(decision(await one), "yes");
+  assert.equal(decision(await two), "yes");
+  assert.match(textResult(await two), /replayed/);
+  assert.equal(asked(), before + 2, "one question for two calls");
   const statuses = () => received.filter((item) => item.type === "agent.event" && item.kind === "status").length;
   const sentBefore = statuses();
   const noted = await call("notify", { message: "Deploying", operationId: "note-1" });

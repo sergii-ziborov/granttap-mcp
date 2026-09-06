@@ -47,8 +47,9 @@ export function storeAttachment(upload: UserAttachmentUpload, room?: string, now
   // (the message that names it is rejected and the phone sends it inline);
   // otherwise the oldest waiting ones make room, since a message that never
   // came is the likeliest reason they are still here.
-  if (body.length > MAX_STAGED_BYTES) return false;
-  makeRoom(dir, body.length, id);
+  const bytes = Buffer.byteLength(body, "utf8");
+  if (bytes > MAX_STAGED_BYTES) return false;
+  makeRoom(dir, bytes, id);
   writeFileSync(join(dir, `${id}.json`), body, { mode: 0o600 });
   return true;
 }

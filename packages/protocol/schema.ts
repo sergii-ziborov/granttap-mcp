@@ -22,6 +22,7 @@ import {
   MeshEndpointPolicy,
   MeshEvent,
   MeshClaimRelease,
+  MeshClaimReleaseResult,
   MeshHandoffPrepare,
   MeshSnapshot,
 } from "./messages/mesh";
@@ -118,6 +119,7 @@ export const Payload = z.union([
   ToolUpdateResult,
   MeshEvent,
   MeshClaimRelease,
+  MeshClaimReleaseResult,
   MeshHandoffPrepare,
   MeshSnapshot,
   MeshEndpointPolicy,

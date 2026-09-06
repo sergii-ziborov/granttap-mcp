@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { generateTransferKey } from "../../../packages/core/crypto";
 import { RelayClient, type SendOptions } from "../../../packages/core/relay-client";
 import type {
+  MeshClaimReleaseResult,
   MeshEvent,
   MeshSnapshot,
   Payload,
@@ -74,7 +75,7 @@ export async function sendMeshPayload(
 
 export async function sendProjectPayload(
   client: RelayClient,
-  payload: ProjectPolicyPayload,
+  payload: ProjectPolicyPayload | MeshClaimReleaseResult,
   to: Role | "all" = "phone",
   options: SendOptions = {},
 ): Promise<void> {

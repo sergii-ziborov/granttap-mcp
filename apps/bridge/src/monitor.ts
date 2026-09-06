@@ -50,10 +50,10 @@ import { noteDeliveredRun } from "./mesh/run-digest";
 const DELIVERY_TIMEOUT_MS = 10 * 60_000;
 import { refreshMcpLoad } from "./machine-load/mcp-load-refresh";
 import { approvalsStatus } from "./approval-state";
-import { primeSessionKeys, sendSessionPayload } from "./session-keys";
+import { primeSessionKeys, sendProjectPayload, sendSessionPayload } from "./session-keys";
 import { sendMeshPayload } from "./session-keys";
 import { handleMeshPayload, meshCatalog, meshSnapshots, prepareMeshHandoff } from "./mesh/runtime";
-import { releaseClaimByPerson } from "./mesh/admin";
+import { releaseClaimByPerson, releaseResult } from "./mesh/admin";
 import { deriveObservedClaims } from "./mesh/observed-claims";
 import { localMeshStore } from "./mesh/local";
 import { cachedSessionActivity } from "./monitor-session-activity";
@@ -209,6 +209,8 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
 
   const snapshot = (includeHistory: boolean, forceHistory = false): SessionsStatus => {
     sweepAttachments();
+    // A change the store's lock held back is written on the next tick.
+    if (loadRuntimeConfig().meshEnabled) localMeshStore().flush();
     const { sessions, tokensRecent } = scanSessions();
     const runtime = loadRuntimeConfig();
     return {
@@ -400,8 +402,11 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       if (prepared) void publish().catch(() => {});
       return prepared;
     } else if (payload.type === "mesh.claim.release" && loadRuntimeConfig().meshEnabled) {
-      // The person's own authority, not an owner's event: written down, then applied.
+      // The person's own authority, not an owner's event: written down, then
+      // applied, and answered either way, so a refusal is seen where it was asked.
       const outcome = releaseClaimByPerson(localMeshStore(), payload);
+      await sendProjectPayload(client, releaseResult(payload, outcome), "phone", { ttlMs: 15 * 60_000 })
+        .catch(() => {});
       if (outcome.released) void publish().catch(() => {});
       return true;
     }

@@ -658,3 +658,54 @@ test("the runtime rejoins a split chat exactly as the shared fixture says the ph
   assert.equal(receipt.capsuleHash, expected.capsuleHash, "the receipt names the capsule as it is now");
   assert.equal(receipt.taskId, expected.taskId);
 });
+
+test("a released claim does not come back with a snapshot that still has it", async () => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-audit-tombstone-"));
+  const store = new MeshStore(join(root, "mesh.json"), () => now);
+  store.upsertProject(project());
+  store.upsertTask(task());
+  store.claim(claim("held"));
+  assert.equal(store.releaseClaim("held"), true);
+  // A computer that was away publishes what it last knew, the claim included.
+  const stale = store.snapshot("project")!;
+  store.mergeSnapshot({ ...stale, claims: [claim("held")], generatedAt: now + 1 });
+  assert.deepEqual(store.snapshot("project")?.claims, [], "released is released");
+  assert.equal(store.acceptEvent(event("late-claim", "RESOURCE_CLAIM", { claim: claim("held") })), true);
+  assert.deepEqual(store.snapshot("project")?.claims, [], "and a late claim event neither");
+  assert.equal(store.observeClaim(claim("held")), false);
+  // The release is on disk, so a fresh store keeps it too; a new claim is its own.
+  const reopened = new MeshStore(join(root, "mesh.json"), () => now);
+  reopened.mergeSnapshot({ ...stale, claims: [claim("held"), claim("fresh")], generatedAt: now + 2 });
+  assert.deepEqual(reopened.snapshot("project")?.claims.map((item) => item.claimId), ["fresh"]);
+  // Once the claim itself would have expired, the release is forgotten with it.
+  const later = new MeshStore(join(root, "mesh.json"), () => now + 120_000);
+  later.activeClaims();
+  assert.equal(JSON.parse(await readFile(join(root, "mesh.json"), "utf8")).releasedClaims.length, 0);
+});
+
+test("a claim is checked and recorded as one step, and not at all when the lock is held", async () => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-audit-claim-"));
+  const path = join(root, "mesh.json");
+  const store = new MeshStore(path, () => now, { lockWaitMs: 60 });
+  store.upsertProject(project());
+  store.upsertTask(task());
+  store.upsertTask(task("task-2", { ownerSessionId: "codex" }));
+  const mine = claim("mine");
+  const first = store.acceptClaimEvent(event("c1", "RESOURCE_CLAIM", { claim: mine }));
+  assert.deepEqual(first, { applied: true, accepted: true });
+  const theirs = { ...claim("theirs"), taskId: "task-2", ownerSessionId: "codex", resource: "src/auth/login.ts" };
+  const second = store.acceptClaimEvent(event("c2", "RESOURCE_CLAIM", { claim: theirs }, { sessionId: "task-2", taskId: "task-2", sourceSessionId: "codex" }));
+  assert.equal(second.applied && second.accepted, false);
+  assert.equal(second.applied ? second.conflict?.claimId : undefined, "mine", "the conflict is the state it would have been written into");
+  assert.deepEqual(JSON.parse(await readFile(path, "utf8")).claims.map((item: { claimId: string }) => item.claimId), ["mine"], "on disk before anyone is told");
+  // The lock held by a living process: nothing is recorded, and the caller is told so.
+  const lock = `${path}.lock`;
+  await mkdir(lock, { recursive: true });
+  await writeFile(join(lock, "owner"), `${process.pid}:busy`);
+  const held = store.acceptClaimEvent(event("c3", "RESOURCE_CLAIM", { claim: claim("later") }));
+  assert.deepEqual(held, { applied: false });
+  await rm(lock, { recursive: true, force: true });
+  assert.equal(store.snapshot("project")?.claims.some((item) => item.claimId === "later"), false);
+  assert.equal(store.acceptClaimEvent(event("c3", "RESOURCE_CLAIM", { claim: claim("later") })).applied, true);
+  assert.equal(store.acceptClaimEvent(event("nope", "TASK_PROGRESS", { summary: "x" })).applied && false, false);
+});

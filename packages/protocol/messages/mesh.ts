@@ -269,6 +269,34 @@ export const MeshClaimRelease = z.object({
 });
 export type MeshClaimRelease = z.infer<typeof MeshClaimRelease>;
 
+/**
+ * What became of a release: done, or refused and why. A computer answers
+ * the phone that asked; the phone that shares a Project answers the member
+ * who asked through it, so a refusal is seen where the release was made.
+ */
+export const MeshClaimReleaseReason = z.enum(["unknown_claim", "other_project", "not_allowed", "no_computer"]);
+export type MeshClaimReleaseReason = z.infer<typeof MeshClaimReleaseReason>;
+
+export const MeshClaimReleaseResult = z.object({
+  type: z.literal("mesh.claim.release.result"),
+  sessionId: Identifier,
+  projectId: Identifier,
+  claimId: Identifier,
+  ok: z.boolean(),
+  reason: MeshClaimReleaseReason.optional(),
+  detail: Detail.optional(),
+  requestId: Identifier.optional(),
+  generatedAt: z.number().nonnegative(),
+}).strict().superRefine((value, ctx) => {
+  if (value.sessionId !== value.projectId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["sessionId"], message: "project scope mismatch" });
+  }
+  if (!value.ok && value.reason == null) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["reason"], message: "a refusal says why" });
+  }
+});
+export type MeshClaimReleaseResult = z.infer<typeof MeshClaimReleaseResult>;
+
 export const MeshHandoffPrepare = z.object({
   type: z.literal("mesh.handoff.prepare"),
   sessionId: Identifier,

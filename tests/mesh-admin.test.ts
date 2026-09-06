@@ -14,7 +14,7 @@ import { saveRuntimeConfig } from "../apps/bridge/src/config";
 import { releaseClaimByPerson } from "../apps/bridge/src/mesh/admin";
 import { localMeshStore, resetLocalMeshStore } from "../apps/bridge/src/mesh/local";
 import { MeshStore } from "../apps/bridge/src/mesh/store";
-import { OperationLedger } from "../apps/mcp/src/mcp-tools/operation-ledger";
+import { argumentsDigest, OperationLedger, type OperationRecord } from "../apps/mcp/src/mcp-tools/operation-ledger";
 
 const now = 1_800_000_000_000;
 
@@ -111,7 +111,20 @@ test("the release is a message of its own on the wire, and the monitor applies i
   t.after(() => monitor.close());
   assert.equal(await fake.emit(parsed), true);
   assert.equal(localMeshStore().snapshot("alpha")?.claims.length, 0, "the claim is gone on this computer");
-  assert.equal(await fake.emit(PayloadSchema.parse(release("alpha", "c-1"))), true, "handled, though there was nothing left to release");
+  const results = () => fake.sent.filter((item) => item.type === "mesh.claim.release.result") as Array<
+    Extract<Payload, { type: "mesh.claim.release.result" }>
+  >;
+  assert.equal(results().length, 1, "the phone that asked is answered");
+  assert.deepEqual(
+    { ok: results()[0]!.ok, claimId: results()[0]!.claimId, projectId: results()[0]!.projectId, reason: results()[0]!.reason },
+    { ok: true, claimId: "c-1", projectId: "alpha", reason: undefined },
+  );
+  assert.equal(await fake.emit(PayloadSchema.parse(release("alpha", "c-1", "again"))), true, "handled, though there was nothing left to release");
+  assert.equal(results().length, 2);
+  assert.equal(results()[1]!.ok, false);
+  assert.equal(results()[1]!.reason, "unknown_claim");
+  assert.match(results()[1]!.detail ?? "", /already be gone/);
+  assert.equal(PayloadSchema.safeParse({ ...results()[1]!, ok: false, reason: undefined }).success, false, "a refusal says why");
   saveRuntimeConfig({ meshEnabled: false });
   assert.equal(await fake.emit(PayloadSchema.parse(release("alpha", "c-1"))), false, "with the Mesh off, the message is not this computer's to handle");
 });
@@ -145,16 +158,37 @@ test("the staging area for attachments holds only so many, and the oldest make r
   assert.equal((await readdir(dir)).length, MAX_STAGED_ATTACHMENTS - 1);
 });
 
-test("a ledger recalls what a named call did, for a while, and only so many", () => {
+test("a ledger recalls what a named call did, for its caller and its arguments, one call at a time", async () => {
   const ledger = new OperationLedger(1_000);
-  assert.equal(ledger.recall("notify", "op-1", now), undefined);
-  ledger.remember("notify", "op-1", { text: "sent", outcome: { status: "sent" } }, now);
-  assert.equal(ledger.recall("notify", "op-1", now + 500)?.text, "sent");
-  assert.equal(ledger.recall("ask", "op-1", now + 500), undefined, "one tool's name is not another's");
-  assert.equal(ledger.recall("notify", "op-1", now + 1_001), undefined, "forgotten after its time");
-  for (let index = 0; index < 70; index += 1) ledger.remember("notify", `op-${index}`, { text: "", outcome: {} }, now + 2_000);
-  assert.equal(ledger.recall("notify", "op-0", now + 2_000), undefined, "the oldest gave way");
-  assert.equal(ledger.recall("notify", "op-69", now + 2_000)?.tool, "notify");
-  ledger.remember("notify", "op-p", { text: "half", outcome: { messageSent: false }, pending: "message" }, now + 2_000);
-  assert.equal(ledger.recall("notify", "op-p", now + 2_000)?.pending, "message");
+  const digest = argumentsDigest({ question: "Deploy?" });
+  assert.equal(ledger.recall("chat-a", "ask", "op-1", digest, now).kind, "new");
+  ledger.remember("chat-a", "ask", "op-1", { tool: "ask", digest, text: "yes", outcome: { decision: "yes" } }, now);
+  const recalled = ledger.recall("chat-a", "ask", "op-1", digest, now + 500);
+  assert.equal(recalled.kind, "replay");
+  assert.equal(recalled.kind === "replay" ? recalled.record.text : "", "yes");
+  // Another caller's name is another name; another question under the same name is a conflict.
+  assert.equal(ledger.recall("chat-b", "ask", "op-1", digest, now + 500).kind, "new", "one chat's answer is never another's");
+  assert.equal(ledger.recall("chat-a", "ask_yes_no", "op-1", digest, now + 500).kind, "new", "one tool's name is not another's");
+  assert.equal(ledger.recall("chat-a", "ask", "op-1", argumentsDigest({ question: "Publish?" }), now + 500).kind, "conflict");
+  assert.equal(ledger.recall("chat-a", "ask", "op-1", digest, now + 1_001).kind, "new", "forgotten after its time");
+  assert.equal(argumentsDigest({ question: " Deploy? " }), digest, "whitespace is not an argument");
+  assert.equal(argumentsDigest({ question: "Deploy?", operationId: undefined }), digest, "an absent field is no field");
+  // Two retries at once are one call: the second waits for the first's answer.
+  let asked = 0;
+  let release: (record: OperationRecord) => void = () => {};
+  const first = ledger.run("chat-a", "ask", "op-2", () => new Promise<OperationRecord>((resolve) => {
+    asked += 1;
+    release = resolve;
+  }), () => now + 2_000);
+  const waiting = ledger.recall("chat-a", "ask", "op-2", digest, now + 2_000);
+  assert.equal(waiting.kind, "in_flight");
+  release({ at: now + 2_000, tool: "ask", digest, text: "no", outcome: { decision: "no" } });
+  assert.equal((await first).text, "no");
+  assert.equal(asked, 1);
+  assert.equal(ledger.recall("chat-a", "ask", "op-2", digest, now + 2_000).kind, "replay", "kept once it settled");
+  for (let index = 0; index < 70; index += 1) {
+    ledger.remember("chat-a", "notify", `op-${index}`, { tool: "notify", digest, text: "", outcome: {} }, now + 3_000);
+  }
+  assert.equal(ledger.recall("chat-a", "notify", "op-0", digest, now + 3_000).kind, "new", "the oldest gave way");
+  assert.equal(ledger.recall("chat-a", "notify", "op-69", digest, now + 3_000).kind, "replay");
 });

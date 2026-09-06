@@ -96,27 +96,63 @@ export class MeshStore {
    */
   private save(): boolean {
     try {
-      withStoreLock(this.path, () => {
-        const delta = storeDelta(this.baseline, this.state);
-        let merged = this.state;
-        if (storeFingerprint(this.path) !== this.synced) {
-          const disk = readStoreState(this.path);
-          if (disk.status === "ok") {
-            merged = deltaIsEmpty(delta) ? disk.state : applyStoreDelta(disk.state, delta);
-          } else if (disk.status === "corrupt" || disk.status === "too_large") {
-            setAsideStore(this.path, this.now());
-          }
-        }
-        writeStoreState(this.path, merged);
-        this.state = merged;
-        this.baseline = structuredClone(merged);
-        this.synced = storeFingerprint(this.path);
-      }, { waitMs: this.lockWaitMs });
+      withStoreLock(this.path, () => this.syncAndWriteUnderLock(), { waitMs: this.lockWaitMs });
       return true;
     } catch (error) {
       if (!(error instanceof StoreLockError)) throw error;
       this.unsaved = true;
       return false;
+    }
+  }
+
+  /**
+   * Lay what this process changed over what is on disk, under the lock the
+   * caller already holds, and write the result.
+   */
+  private syncAndWriteUnderLock(): void {
+    const delta = storeDelta(this.baseline, this.state);
+    let merged = this.state;
+    if (storeFingerprint(this.path) !== this.synced) {
+      const disk = readStoreState(this.path);
+      if (disk.status === "ok") {
+        merged = deltaIsEmpty(delta) ? disk.state : applyStoreDelta(disk.state, delta);
+      } else if (disk.status === "corrupt" || disk.status === "too_large") {
+        setAsideStore(this.path, this.now());
+      }
+    }
+    writeStoreState(this.path, merged);
+    this.state = merged;
+    this.baseline = structuredClone(merged);
+    this.synced = storeFingerprint(this.path);
+  }
+
+  /**
+   * Check and change as one: what `run` reads is what it changes, and the
+   * change is on disk before anyone is told. Under the lock the file is
+   * read again first, so another process's write between this process's
+   * last look and now is seen. When the lock cannot be taken in time nothing
+   * is changed, and the caller says so instead of answering as if it were.
+   */
+  transact<T>(run: () => T): { applied: true; value: T } | { applied: false } {
+    try {
+      return withStoreLock(this.path, () => {
+        // Take in the disk as it is now, with what this process still owes laid over.
+        if (storeFingerprint(this.path) !== this.synced) {
+          const loaded = readStoreState(this.path);
+          if (loaded.status === "ok" || loaded.status === "missing") {
+            const pending = storeDelta(this.baseline, this.state);
+            this.state = deltaIsEmpty(pending) ? loaded.state : applyStoreDelta(loaded.state, pending);
+            this.baseline = structuredClone(loaded.state);
+            this.synced = storeFingerprint(this.path);
+          }
+        }
+        const value = run();
+        this.syncAndWriteUnderLock();
+        return { applied: true as const, value };
+      }, { waitMs: this.lockWaitMs });
+    } catch (error) {
+      if (!(error instanceof StoreLockError)) throw error;
+      return { applied: false };
     }
   }
 
@@ -339,39 +375,97 @@ export class MeshStore {
   claim(input: ResourceClaimValue): void {
     this.sync();
     const claim = ResourceClaim.parse(input);
+    if (this.isReleased(claim.claimId)) return;
     this.state.claims = this.state.claims.filter((item) => item.claimId !== claim.claimId);
     this.state.claims.push(claim);
     this.save();
   }
 
+  /**
+   * Whether a claim was released and is still remembered as such: a copy of
+   * it arriving late, from a computer that was away or a phone that carried
+   * it round, is not the claim coming back.
+   */
+  private isReleased(claimId: string, at = this.now()): boolean {
+    return this.state.releasedClaims.some((item) => item.claimId === claimId && item.expiresAt > at);
+  }
+
+  /** Write a release down, for as long as the claim itself would have lasted. */
+  private remember(released: ResourceClaimValue[]): void {
+    const at = this.now();
+    const kept = this.state.releasedClaims.filter((item) =>
+      item.expiresAt > at && !released.some((claim) => claim.claimId === item.claimId));
+    this.state.releasedClaims = [
+      ...kept,
+      ...released.map((claim) => ({ claimId: claim.claimId, releasedAt: at, expiresAt: Math.max(claim.expiresAt, at + 1) })),
+    ].slice(-256);
+  }
+
   releaseClaim(claimId: string, ownerSessionId?: string): boolean {
     this.sync();
-    const before = this.state.claims.length;
-    this.state.claims = this.state.claims.filter((claim) =>
-      claim.claimId !== claimId || (ownerSessionId != null && claim.ownerSessionId !== ownerSessionId));
-    if (this.state.claims.length === before) return false;
+    const released = this.state.claims.filter((claim) =>
+      claim.claimId === claimId && (ownerSessionId == null || claim.ownerSessionId === ownerSessionId));
+    if (released.length === 0) return false;
+    this.state.claims = this.state.claims.filter((claim) => !released.includes(claim));
+    this.remember(released);
     this.save();
     return true;
   }
 
   releaseClaimsByOwners(ownerSessionIds: ReadonlySet<string>): number {
     this.sync();
-    const before = this.state.claims.length;
-    this.state.claims = this.state.claims.filter((claim) =>
-      !ownerSessionIds.has(claim.ownerSessionId));
-    const removed = before - this.state.claims.length;
-    if (removed > 0) this.save();
-    return removed;
+    const released = this.state.claims.filter((claim) => ownerSessionIds.has(claim.ownerSessionId));
+    if (released.length === 0) return 0;
+    this.state.claims = this.state.claims.filter((claim) => !released.includes(claim));
+    this.remember(released);
+    this.save();
+    return released.length;
   }
 
   activeClaims(at = this.now()): ResourceClaimValue[] {
     this.sync();
-    const active = this.state.claims.filter((claim) => claim.expiresAt > at);
-    if (active.length !== this.state.claims.length) {
+    const active = this.liveClaims(at);
+    const tombstones = this.state.releasedClaims.filter((item) => item.expiresAt > at);
+    if (active.length !== this.state.claims.length || tombstones.length !== this.state.releasedClaims.length) {
       this.state.claims = active;
+      this.state.releasedClaims = tombstones;
       this.save();
     }
     return [...active];
+  }
+
+  /** The claims that hold at `at`, read without writing anything. */
+  private liveClaims(at: number): ResourceClaimValue[] {
+    return this.state.claims.filter((claim) => claim.expiresAt > at);
+  }
+
+  /**
+   * A claim event from an agent, checked and recorded as one step under the
+   * store's lock: the conflict it is checked against is the state it is
+   * written into, so two agents claiming one file at once cannot both be
+   * told the file was free. Not applied at all when the lock is not taken
+   * in time, and the caller says so.
+   */
+  acceptClaimEvent(input: MeshEventValue): { applied: false } | { applied: true; accepted: boolean; conflict?: ResourceClaimValue } {
+    const parsed = MeshEvent.safeParse(input);
+    if (!parsed.success || parsed.data.eventType !== "RESOURCE_CLAIM" || !parsed.data.payload.claim) {
+      return { applied: true, accepted: false };
+    }
+    const event = parsed.data;
+    const claim = event.payload.claim!;
+    const result = this.transact((): { accepted: boolean; conflict?: ResourceClaimValue } => {
+      const conflict = this.liveClaims(this.now()).find((item) =>
+        item.projectId === event.projectId
+        && item.ownerSessionId !== event.sourceSessionId
+        && resourceOverlap(item.resource, claim.resource));
+      if (conflict) return { accepted: false, conflict };
+      if (this.state.events.some((item) => item.eventId === event.eventId)) return { accepted: false };
+      this.state.events.push(event);
+      this.state.events = this.state.events.slice(-512);
+      this.applyEvent(event);
+      return { accepted: true };
+    });
+    return result.applied ? { applied: true, ...result.value } : { applied: false };
   }
 
   conflicts(projectId: string, ownerSessionId: string, resource: string): ResourceClaimValue[] {
@@ -407,6 +501,7 @@ export class MeshStore {
   observeClaim(input: ResourceClaimValue): boolean {
     this.sync();
     const claim = ResourceClaim.parse(input);
+    if (this.isReleased(claim.claimId)) return false;
     const previous = this.state.claims.find((item) => item.claimId === claim.claimId);
     if (previous && previous.ownerSessionId === claim.ownerSessionId
       && previous.expiresAt >= claim.expiresAt) return false;
@@ -450,18 +545,22 @@ export class MeshStore {
   }
 
   private applyEvent(event: MeshEventValue): void {
-    if (event.eventType === "RESOURCE_CLAIM" && event.payload.claim) {
+    if (event.eventType === "RESOURCE_CLAIM" && event.payload.claim && !this.isReleased(event.payload.claim.claimId)) {
       this.state.claims = mergeBy(this.state.claims, [event.payload.claim], (item) => item.claimId);
     }
     if (event.eventType === "RESOURCE_RELEASE" && event.payload.claimId) {
       // Only the owner releases its claim, and only from inside the claim's
       // own Task and Project: a claim id is not a secret, and a chat that
       // learned one must not be able to clear someone else's hold on a file.
-      this.state.claims = this.state.claims.filter((item) =>
-        item.claimId !== event.payload.claimId
-        || item.ownerSessionId !== event.sourceSessionId
-        || item.projectId !== event.projectId
-        || item.taskId !== event.taskId);
+      const released = this.state.claims.filter((item) =>
+        item.claimId === event.payload.claimId
+        && item.ownerSessionId === event.sourceSessionId
+        && item.projectId === event.projectId
+        && item.taskId === event.taskId);
+      if (released.length > 0) {
+        this.state.claims = this.state.claims.filter((item) => !released.includes(item));
+        this.remember(released);
+      }
     }
     if (event.eventType === "DEPENDENCY" && event.payload.dependsOnTaskId) {
       this.state.dependencies = mergeBy(this.state.dependencies, [{
@@ -559,6 +658,9 @@ export class MeshStore {
   mergeSnapshot(input: SnapshotValue): void {
     this.sync();
     mergeSnapshotState(this.state, input);
+    // A released claim does not come back with a snapshot that still has it.
+    const at = this.now();
+    this.state.claims = this.state.claims.filter((claim) => !this.isReleased(claim.claimId, at));
     this.save();
   }
 }

@@ -3,6 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerConnectTool } from "./mcp-tools/connect";
 import { registerInteractionTools } from "./mcp-tools/interaction";
 import { registerMeshResource } from "./mcp-tools/mesh-resource";
+import { packageVersion } from "./package-version";
 
 export { askOpenQuestion, askYesNo, relay, resetRelay } from "./mcp-tools/relay";
 
@@ -10,7 +11,7 @@ export function createGrantTapServer(): McpServer {
   const server = new McpServer({
     name: "granttap",
     title: "GrantTap",
-    version: "0.7.6",
+    version: packageVersion(),
     websiteUrl: "https://granttap.com",
     icons: [{ src: "https://granttap.com/favicon.png", mimeType: "image/png", sizes: ["64x64"] }],
   });

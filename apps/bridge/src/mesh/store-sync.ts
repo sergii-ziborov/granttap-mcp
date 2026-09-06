@@ -21,18 +21,25 @@ import type {
 } from "../../../../packages/protocol/schema";
 import { preferExecution, preferTask } from "./convergence";
 import { integrationPeerKey } from "./other-side";
-import { MAX_STORE_MIGRATIONS, MAX_STORE_PEERS, type StoreState } from "./store-state";
+import {
+  MAX_RELEASED_CLAIMS, MAX_STORE_MIGRATIONS, MAX_STORE_PEERS, type StoreState,
+} from "./store-state";
 
 type Collection = Exclude<keyof StoreState, "version">;
 
 const COLLECTIONS: Collection[] = [
   "projects", "bindings", "peers", "tasks", "executions", "claims", "dependencies", "events",
-  "receipts", "migrations",
+  "receipts", "migrations", "releasedClaims",
 ];
 const BOUNDS: Partial<Record<Collection, number>> = {
   peers: MAX_STORE_PEERS, events: 512, receipts: 256, migrations: MAX_STORE_MIGRATIONS,
+  releasedClaims: MAX_RELEASED_CLAIMS,
 };
-export const LOCK_WAIT_MS = 8_000;
+/**
+ * A write takes milliseconds, so a lock held for seconds belongs to a
+ * process that is stuck; waiting longer than this only stalls this one.
+ */
+export const LOCK_WAIT_MS = 2_000;
 const LOCK_POLL_MS = 5;
 
 function rowKey(name: Collection, item: unknown): string {
@@ -48,6 +55,7 @@ function rowKey(name: Collection, item: unknown): string {
     case "events": return row.eventId ?? "";
     case "receipts": return row.capsuleHash ?? "";
     case "migrations": return row.capsuleHashFrom ?? "";
+    case "releasedClaims": return row.claimId ?? "";
   }
 }
 

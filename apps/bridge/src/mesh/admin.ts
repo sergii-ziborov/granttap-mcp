@@ -8,12 +8,40 @@
  * rule protects. A release from the phone is therefore a command of its
  * own, checked against the Project it names, and written down.
  */
-import type { MeshClaimRelease, ResourceClaim } from "../../../../packages/protocol/schema";
+import type {
+  MeshClaimRelease,
+  MeshClaimReleaseResult,
+  ResourceClaim,
+} from "../../../../packages/protocol/schema";
 import type { MeshStore } from "./store";
 
 export type PersonRelease =
   | { released: true; claim: ResourceClaim }
   | { released: false; reason: "unknown_claim" | "other_project" };
+
+/** The answer the phone that asked is given, done or refused and why. */
+export function releaseResult(
+  request: MeshClaimRelease,
+  outcome: PersonRelease,
+  now = Date.now(),
+): MeshClaimReleaseResult {
+  return {
+    type: "mesh.claim.release.result",
+    sessionId: request.projectId,
+    projectId: request.projectId,
+    claimId: request.claimId,
+    ok: outcome.released,
+    ...(outcome.released ? {} : { reason: outcome.reason, detail: describe(outcome.reason) }),
+    ...(request.requestId ? { requestId: request.requestId } : {}),
+    generatedAt: now,
+  };
+}
+
+function describe(reason: "unknown_claim" | "other_project"): string {
+  return reason === "unknown_claim"
+    ? "No such claim on this computer; it may already be gone."
+    : "That claim belongs to another Project.";
+}
 
 export function releaseClaimByPerson(
   store: MeshStore,

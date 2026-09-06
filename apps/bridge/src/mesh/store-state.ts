@@ -39,6 +39,19 @@ export const CapsuleMigration = z.object({
 }).strict();
 export type CapsuleMigration = z.infer<typeof CapsuleMigration>;
 
+/**
+ * A claim that was released, on record until the claim itself would have
+ * expired. Snapshots merge claims by id, so a computer that was away, or a
+ * copy that came round through another phone, would otherwise bring a
+ * released claim back as if nothing had happened.
+ */
+export const ReleasedClaim = z.object({
+  claimId: z.string().min(1).max(128),
+  releasedAt: z.number().nonnegative(),
+  expiresAt: z.number().positive(),
+}).strict();
+export type ReleasedClaim = z.infer<typeof ReleasedClaim>;
+
 export type StoreState = {
   version: 1;
   projects: ProjectValue[];
@@ -51,15 +64,17 @@ export type StoreState = {
   events: MeshEventValue[];
   receipts: ReceiptValue[];
   migrations: CapsuleMigration[];
+  releasedClaims: ReleasedClaim[];
 };
 
 const EMPTY: StoreState = {
   version: 1, projects: [], bindings: [], peers: [], tasks: [], executions: [], claims: [],
-  dependencies: [], events: [], receipts: [], migrations: [],
+  dependencies: [], events: [], receipts: [], migrations: [], releasedClaims: [],
 };
 
 export const MAX_STORE_PEERS = 256;
 export const MAX_STORE_MIGRATIONS = 64;
+export const MAX_RELEASED_CLAIMS = 256;
 
 function parsedArray<T>(value: unknown, schema: { safeParse: (input: unknown) => { success: boolean; data?: T } }): T[] {
   if (!Array.isArray(value)) return [];
@@ -117,6 +132,7 @@ export function readStoreState(path: string): StoreLoad {
         events: parsedArray(value.events, MeshEvent),
         receipts: parsedArray(value.receipts, HandoffReceipt),
         migrations: parsedArray(value.migrations, CapsuleMigration).slice(-MAX_STORE_MIGRATIONS),
+        releasedClaims: parsedArray(value.releasedClaims, ReleasedClaim).slice(-MAX_RELEASED_CLAIMS),
       }),
     };
   } catch {
@@ -224,6 +240,7 @@ function collapseSplitChats(state: StoreState): StoreState {
     // A receipt decides who owns a chat, so it must name the surviving Task and its capsule.
     receipts: state.receipts.map((item) => ({ ...scoped(item), capsuleHash: rehash(item.capsuleHash) })),
     migrations: [...migrations.values()].slice(-MAX_STORE_MIGRATIONS),
+    releasedClaims: state.releasedClaims,
   };
 }
 
