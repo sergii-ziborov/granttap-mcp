@@ -122,6 +122,25 @@ test("paired MCP delivers decisions, replies, and bounded Mesh events", async (t
   const decided = await call("ask_yes_no", { question: "Continue?" });
   assert.equal(textResult(decided), "yes");
   assert.deepEqual(decided.structuredContent, { status: "answered", decision: "yes" });
+  // Named, a call asked again is answered from memory: the person is not asked twice.
+  const asked = () => received.filter((item) => item.type === "approval.request").length;
+  const before = asked();
+  recordAttributedCall({ provider: "claude", sessionId: "claude-session", toolName: "mcp__granttap__ask_yes_no", args: { question: "Deploy?" } });
+  const first = await call("ask_yes_no", { question: "Deploy?", operationId: "deploy-1" });
+  assert.deepEqual(first.structuredContent, { status: "answered", decision: "yes" });
+  assert.equal(asked(), before + 1);
+  const again = await call("ask_yes_no", { question: "Deploy?", operationId: "deploy-1" });
+  assert.deepEqual(again.structuredContent, { status: "answered", decision: "yes", replayed: true });
+  assert.match(textResult(again), /replayed/);
+  assert.equal(asked(), before + 1, "asked once");
+  const statuses = () => received.filter((item) => item.type === "agent.event" && item.kind === "status").length;
+  const sentBefore = statuses();
+  const noted = await call("notify", { message: "Deploying", operationId: "note-1" });
+  assert.deepEqual(noted.structuredContent, { status: "sent", messageSent: true });
+  const notedAgain = await call("notify", { message: "Deploying", operationId: "note-1" });
+  assert.deepEqual(notedAgain.structuredContent, { status: "sent", messageSent: true, replayed: true });
+  await waitFor(() => statuses() >= sentBefore + 1);
+  assert.equal(statuses(), sentBefore + 1, "one status text reached the phone");
   recordAttributedCall({
     provider: "claude", sessionId: "claude-session",
     toolName: "mcp__granttap__ask", args: { question: "Field name?" },

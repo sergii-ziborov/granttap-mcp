@@ -13,6 +13,9 @@ import type { UserAttachment, UserAttachmentUpload } from "../../../packages/pro
 import { configDir } from "./config";
 
 export const ATTACHMENT_TTL_MS = 2 * 60 * 60_000;
+/** How many attachments may wait for their messages at once, and how much disk they may take. */
+export const MAX_STAGED_ATTACHMENTS = 32;
+export const MAX_STAGED_BYTES = 48 * 1_024 * 1_024;
 
 function directory(): string {
   const dir = join(configDir(), "attachments");
@@ -39,8 +42,42 @@ export function storeAttachment(upload: UserAttachmentUpload, room?: string, now
     name: upload.name, mimeType: upload.mimeType, data: upload.data, receivedAt: now,
     ...(room ? { room } : {}),
   };
-  writeFileSync(join(dir, `${id}.json`), JSON.stringify(record), { mode: 0o600 });
+  const body = JSON.stringify(record);
+  // The staging area is bounded. One attachment too large for it is refused
+  // (the message that names it is rejected and the phone sends it inline);
+  // otherwise the oldest waiting ones make room, since a message that never
+  // came is the likeliest reason they are still here.
+  if (body.length > MAX_STAGED_BYTES) return false;
+  makeRoom(dir, body.length, id);
+  writeFileSync(join(dir, `${id}.json`), body, { mode: 0o600 });
   return true;
+}
+
+function makeRoom(dir: string, incoming: number, incomingId: string): void {
+  let staged: Array<{ path: string; size: number; mtimeMs: number }> = [];
+  try {
+    staged = readdirSync(dir)
+      .filter((name) => name.endsWith(".json") && name !== `${incomingId}.json`)
+      .flatMap((name) => {
+        try {
+          const stat = statSync(join(dir, name));
+          return [{ path: join(dir, name), size: stat.size, mtimeMs: stat.mtimeMs }];
+        } catch {
+          return [];
+        }
+      })
+      .sort((left, right) => left.mtimeMs - right.mtimeMs);
+  } catch {
+    return;
+  }
+  let count = staged.length;
+  let bytes = staged.reduce((total, item) => total + item.size, 0);
+  for (const item of staged) {
+    if (count < MAX_STAGED_ATTACHMENTS && bytes + incoming <= MAX_STAGED_BYTES) break;
+    rmSync(item.path, { force: true });
+    count -= 1;
+    bytes -= item.size;
+  }
 }
 
 /** The attachment the message named, taken off disk; nothing when it never came. */

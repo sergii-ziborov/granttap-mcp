@@ -21,6 +21,7 @@ import { AgentId, Role } from "./messages/primitives";
 import {
   MeshEndpointPolicy,
   MeshEvent,
+  MeshClaimRelease,
   MeshHandoffPrepare,
   MeshSnapshot,
 } from "./messages/mesh";
@@ -116,6 +117,7 @@ export const Payload = z.union([
   ToolUpdate,
   ToolUpdateResult,
   MeshEvent,
+  MeshClaimRelease,
   MeshHandoffPrepare,
   MeshSnapshot,
   MeshEndpointPolicy,

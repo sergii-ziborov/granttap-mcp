@@ -53,6 +53,7 @@ import { approvalsStatus } from "./approval-state";
 import { primeSessionKeys, sendSessionPayload } from "./session-keys";
 import { sendMeshPayload } from "./session-keys";
 import { handleMeshPayload, meshCatalog, meshSnapshots, prepareMeshHandoff } from "./mesh/runtime";
+import { releaseClaimByPerson } from "./mesh/admin";
 import { deriveObservedClaims } from "./mesh/observed-claims";
 import { localMeshStore } from "./mesh/local";
 import { cachedSessionActivity } from "./monitor-session-activity";
@@ -398,6 +399,11 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       const prepared = await prepareMeshHandoff(client, payload);
       if (prepared) void publish().catch(() => {});
       return prepared;
+    } else if (payload.type === "mesh.claim.release" && loadRuntimeConfig().meshEnabled) {
+      // The person's own authority, not an owner's event: written down, then applied.
+      const outcome = releaseClaimByPerson(localMeshStore(), payload);
+      if (outcome.released) void publish().catch(() => {});
+      return true;
     }
     return false;
   });

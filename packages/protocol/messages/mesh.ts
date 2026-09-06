@@ -247,6 +247,28 @@ export const MeshEvent = z.object({
 });
 export type MeshEvent = z.infer<typeof MeshEvent>;
 
+/**
+ * The person releases a claim that is nobody's to release by ownership: an
+ * agent that died holding a file, or one that will not let go. The phone
+ * sends it to each computer of the Project under the Project's key. It is
+ * not a RESOURCE_RELEASE event, which only an owner may make; it is the
+ * person's own authority, and the computer writes down that it was used.
+ */
+export const MeshClaimRelease = z.object({
+  type: z.literal("mesh.claim.release"),
+  sessionId: Identifier,
+  projectId: Identifier,
+  claimId: Identifier,
+  reason: Detail.optional(),
+  requestId: Identifier.optional(),
+  createdAt: z.number().nonnegative(),
+}).strict().superRefine((value, ctx) => {
+  if (value.sessionId !== value.projectId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["sessionId"], message: "project scope mismatch" });
+  }
+});
+export type MeshClaimRelease = z.infer<typeof MeshClaimRelease>;
+
 export const MeshHandoffPrepare = z.object({
   type: z.literal("mesh.handoff.prepare"),
   sessionId: Identifier,
