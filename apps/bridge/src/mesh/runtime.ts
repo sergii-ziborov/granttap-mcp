@@ -110,10 +110,21 @@ export function createMeshRuntime(deps: MeshRuntimeDependencies) {
       }
       // Asked to checkpoint, uncommitted work is committed to a branch of its
       // own first, so the Task can leave without losing it. Nothing is pushed.
+      // The branch is named by the request's own moment, so the same request
+      // tried again lands on the same branch and two requests never do.
       const cwd = session.worktree ?? session.cwd;
-      const checkpoint = request.checkpoint && cwd && workingTreeState(cwd) === "dirty"
-        ? createCheckpoint(cwd, request.taskId, session.title ?? request.taskId, deps.now())
+      const made = request.checkpoint && cwd && workingTreeState(cwd) === "dirty"
+        ? createCheckpoint(cwd, request.taskId, session.title ?? request.taskId, request.createdAt)
         : undefined;
+      // A checkout other Tasks are working in at the same time holds their
+      // changes too; the commit cannot tell them apart, so it says so.
+      const shared = made && cwd
+        ? sessions.some((other) =>
+          other.sessionId !== session.sessionId
+          && other.taskId != null && other.taskId !== request.taskId
+          && (other.worktree ?? other.cwd) === cwd)
+        : false;
+      const checkpoint = made && shared ? { ...made, status: "requires_review" as const } : made;
       const capsule = buildTaskCapsule(deps.store(), session, request, deps.computer(), checkpoint);
       const readiness = handoffReadiness({
         capsule,

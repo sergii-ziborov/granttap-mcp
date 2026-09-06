@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import type { RelayClient } from "../packages/core/relay-client";
+import { governedRevision } from "../apps/bridge/src/policy/governed-projects";
+
+// An applied or refused edit teaches the computer that the Project is
+// governed; that memory lives in the config dir, which stays the test's own.
+process.env.GRANTTAP_CONFIG_DIR = mkdtempSync(join(tmpdir(), "granttap-policy-sync-"));
 import {
   Payload,
   ProjectPolicyAck,
@@ -296,6 +304,8 @@ test("a refused apply answers the phone with why, and with the policy the comput
   assert.equal(rejected.currentRevision, 1);
   assert.equal(rejected.expectedRevision, policySet().expectedRevision);
   assert.equal(rejected.requestId, "edit-1", "the edit's own name comes back, so two edits of one revision get their own answers");
+  assert.equal(governedRevision("project"), policySet().policy.revision,
+    "the phone's edit is the enrollment: refused or not, the Project is governed here from now on");
   assert.equal(sent[1]?.type, "project.policy.status", "the policy the computer holds follows, so the next edit builds on it");
   assert.match(lines[0] ?? "", /could not apply revision \d+ of project \(revision_mismatch\)/);
 

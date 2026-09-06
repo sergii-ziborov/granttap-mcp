@@ -111,13 +111,20 @@ export function markRunsDelivered(sessionId: string, at: number, only?: readonly
   }
 }
 
+/** How much of a run one line may carry: fewer files, a shorter outcome, when room is short. */
+export type RunDescriptionLimits = { files?: number; outcome?: number };
+
 /** One line a person or a model can read: what was asked, what happened, what it touched. */
-export function describeRun(record: RunRecord): string {
-  const parts = [`«${record.prompt}» → ${record.ok ? "" : "failed: "}${record.outcome}`];
-  if (record.files.length > 0) {
-    const shown = record.files.slice(0, 6).join(", ");
-    const more = record.files.length > 6 ? ` (+${record.files.length - 6})` : "";
+export function describeRun(record: RunRecord, limits: RunDescriptionLimits = {}): string {
+  const outcome = limits.outcome == null ? record.outcome : compactText(record.outcome, limits.outcome);
+  const parts = [`«${record.prompt}» → ${record.ok ? "" : "failed: "}${outcome}`];
+  const files = limits.files ?? 6;
+  if (record.files.length > 0 && files > 0) {
+    const shown = record.files.slice(0, files).join(", ");
+    const more = record.files.length > files ? ` (+${record.files.length - files})` : "";
     parts.push(`wrote ${shown}${more}`);
+  } else if (record.files.length > 0) {
+    parts.push(`wrote ${record.files.length} file${record.files.length === 1 ? "" : "s"} (see the transcript)`);
   }
   if (record.tools > 0) parts.push(`${record.tools} tool call${record.tools === 1 ? "" : "s"}`);
   if (record.cutOff) {

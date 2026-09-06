@@ -6,11 +6,14 @@
  * the last writer replaced whatever the other had written since: a Task
  * linked by one process vanished when the other saved a claim. A store now
  * reloads the file whenever it has changed under it, and saves by merging
- * what it changed since the last sync into what is on disk, under a short
- * lock beside the file.
+ * what it changed since the last sync into what is on disk, under a lock
+ * beside the file that is held by a named, living process.
  */
-import { chmodSync, existsSync, mkdirSync, renameSync, rmdirSync, statSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { randomBytes } from "node:crypto";
+import {
+  chmodSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync,
+} from "node:fs";
+import { dirname, join } from "node:path";
 import type {
   ExecutionSessionLink as ExecutionValue,
   IntegrationPeer as IntegrationPeerValue,
@@ -18,16 +21,18 @@ import type {
 } from "../../../../packages/protocol/schema";
 import { preferExecution, preferTask } from "./convergence";
 import { integrationPeerKey } from "./other-side";
-import { MAX_STORE_PEERS, type StoreState } from "./store-state";
+import { MAX_STORE_MIGRATIONS, MAX_STORE_PEERS, type StoreState } from "./store-state";
 
 type Collection = Exclude<keyof StoreState, "version">;
 
 const COLLECTIONS: Collection[] = [
-  "projects", "bindings", "peers", "tasks", "executions", "claims", "dependencies", "events", "receipts",
+  "projects", "bindings", "peers", "tasks", "executions", "claims", "dependencies", "events",
+  "receipts", "migrations",
 ];
-const BOUNDS: Partial<Record<Collection, number>> = { peers: MAX_STORE_PEERS, events: 512, receipts: 256 };
-const LOCK_STALE_MS = 5_000;
-const LOCK_WAIT_MS = 2_000;
+const BOUNDS: Partial<Record<Collection, number>> = {
+  peers: MAX_STORE_PEERS, events: 512, receipts: 256, migrations: MAX_STORE_MIGRATIONS,
+};
+export const LOCK_WAIT_MS = 8_000;
 const LOCK_POLL_MS = 5;
 
 function rowKey(name: Collection, item: unknown): string {
@@ -42,27 +47,34 @@ function rowKey(name: Collection, item: unknown): string {
     case "dependencies": return [row.taskId, row.dependsOnTaskId].join("\0");
     case "events": return row.eventId ?? "";
     case "receipts": return row.capsuleHash ?? "";
+    case "migrations": return row.capsuleHashFrom ?? "";
   }
 }
 
 type Upsert = { item: unknown; before?: string };
-export type StoreDelta = Record<Collection, { upserts: Upsert[]; removed: string[] }>;
+/** A removal names the row as it was read, so a row changed meanwhile is kept. */
+type Removal = { key: string; before: string };
+export type StoreDelta = Record<Collection, { upserts: Upsert[]; removed: Removal[] }>;
 
 /** What this process changed since it last agreed with the disk. */
 export function storeDelta(baseline: StoreState, current: StoreState): StoreDelta {
   const delta = {} as StoreDelta;
   for (const name of COLLECTIONS) {
     const before = new Map<string, string>();
-    for (const item of baseline[name]) before.set(rowKey(name, item), JSON.stringify(item));
+    for (const item of baseline[name] ?? []) before.set(rowKey(name, item), JSON.stringify(item));
     const after = new Set<string>();
     const upserts: Upsert[] = [];
-    for (const item of current[name]) {
+    for (const item of current[name] ?? []) {
       const key = rowKey(name, item);
       after.add(key);
       const previous = before.get(key);
       if (previous !== JSON.stringify(item)) upserts.push({ item, before: previous });
     }
-    delta[name] = { upserts, removed: [...before.keys()].filter((key) => !after.has(key)) };
+    const removed: Removal[] = [];
+    for (const [key, previous] of before) {
+      if (!after.has(key)) removed.push({ key, before: previous });
+    }
+    delta[name] = { upserts, removed };
   }
   return delta;
 }
@@ -75,18 +87,22 @@ export function deltaIsEmpty(delta: StoreDelta): boolean {
 /**
  * This process's changes laid over what another process wrote meanwhile. A
  * row only we changed is ours; a row both changed is settled the way two
- * computers settle it, so every process converges on the same file.
+ * computers settle it, so every process converges on the same file. A row
+ * we removed is removed only as we read it: a claim renewed by another
+ * process since is not the claim we decided had expired.
  */
 export function applyStoreDelta(disk: StoreState, delta: StoreDelta): StoreState {
   const merged: Record<string, unknown> = { ...disk };
   for (const name of COLLECTIONS) {
     const { upserts, removed } = delta[name];
     if (upserts.length === 0 && removed.length === 0) continue;
-    const gone = new Set(removed);
+    const gone = new Map(removed.map((removal) => [removal.key, removal.before]));
     const rows = new Map<string, unknown>();
-    for (const item of disk[name]) {
+    for (const item of disk[name] ?? []) {
       const key = rowKey(name, item);
-      if (!gone.has(key)) rows.set(key, item);
+      const asRead = gone.get(key);
+      if (asRead != null && asRead === JSON.stringify(item)) continue;
+      rows.set(key, item);
     }
     for (const { item, before } of upserts) {
       const key = rowKey(name, item);
@@ -131,10 +147,19 @@ export function writeStoreState(path: string, state: StoreState): void {
 export function setAsideStore(path: string, now = Date.now()): boolean {
   try {
     let target = `${path}.unreadable-${now}`;
-    for (let attempt = 2; existsSync(target) && attempt < 100; attempt += 1) {
+    for (let attempt = 2; exists(target) && attempt < 100; attempt += 1) {
       target = `${path}.unreadable-${now}-${attempt}`;
     }
     renameSync(path, target);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function exists(path: string): boolean {
+  try {
+    statSync(path);
     return true;
   } catch {
     return false;
@@ -145,32 +170,77 @@ function pause(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
+/** The lock could not be taken in time. The write is kept in memory and tried again later. */
+export class StoreLockError extends Error {}
+
+type LockOwner = { pid: number; token: string };
+
+function lockOwner(lock: string): LockOwner | undefined {
+  try {
+    const [pid, token] = readFileSync(join(lock, "owner"), "utf8").trim().split(":");
+    const parsed = Number(pid);
+    return Number.isInteger(parsed) && parsed > 0 && token ? { pid: parsed, token } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function processAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+/** Take a lock whose owner is gone: moved aside first, so two waiters cannot both take it. */
+function takeOverStale(lock: string): void {
+  const aside = `${lock}.stale-${process.pid}-${Date.now()}`;
+  try {
+    renameSync(lock, aside);
+  } catch {
+    return; // Someone else took it over first.
+  }
+  rmSync(aside, { recursive: true, force: true });
+}
+
 /**
  * Run under the store's lock: a directory beside the file, the one thing a
- * file system creates atomically. A lock left by a process that died is
- * taken over after a few seconds; a lock that is merely slow is waited for,
- * briefly, and then the write goes ahead merged, which is still better than
- * a write that is lost.
+ * file system creates atomically, naming the process that holds it.
+ *
+ * A lock whose owner is no longer running is taken over at once; a lock whose
+ * owner is alive is waited for, and when the wait runs out the caller gets a
+ * StoreLockError instead of the critical section. A lock is released only by
+ * the process and token that took it, so an owner that finishes late never
+ * removes a lock taken over meanwhile.
  */
-export function withStoreLock<T>(path: string, run: () => T): T {
+export function withStoreLock<T>(path: string, run: () => T, options: { waitMs?: number } = {}): T {
   mkdirSync(dirname(path), { recursive: true });
   const lock = `${path}.lock`;
+  const token = randomBytes(8).toString("hex");
+  const waitMs = options.waitMs ?? LOCK_WAIT_MS;
   const started = Date.now();
-  let held = false;
-  while (!held) {
+  for (;;) {
     try {
       mkdirSync(lock);
-      held = true;
+      writeFileSync(join(lock, "owner"), `${process.pid}:${token}`, { mode: 0o600 });
+      break;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") break;
-      if (Date.now() - started > LOCK_WAIT_MS) break;
-      try {
-        if (Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS) {
-          rmdirSync(lock);
-          continue;
-        }
-      } catch {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "EEXIST") throw new StoreLockError(`the store lock could not be taken (${code ?? String(error)})`);
+      const owner = lockOwner(lock);
+      if (owner && !processAlive(owner.pid)) {
+        takeOverStale(lock);
         continue;
+      }
+      if (!owner && lockAge(lock) > waitMs) {
+        // A lock without an owner file for this long was never finished being taken.
+        takeOverStale(lock);
+        continue;
+      }
+      if (Date.now() - started > waitMs) {
+        throw new StoreLockError("the store lock is held by another running process");
       }
       pause(LOCK_POLL_MS);
     }
@@ -178,12 +248,17 @@ export function withStoreLock<T>(path: string, run: () => T): T {
   try {
     return run();
   } finally {
-    if (held) {
-      try {
-        rmdirSync(lock);
-      } catch {
-        // Taken over as stale by a process that waited longer than we ran.
-      }
+    const owner = lockOwner(lock);
+    if (owner && owner.pid === process.pid && owner.token === token) {
+      rmSync(lock, { recursive: true, force: true });
     }
+  }
+}
+
+function lockAge(lock: string): number {
+  try {
+    return Date.now() - statSync(lock).mtimeMs;
+  } catch {
+    return 0;
   }
 }

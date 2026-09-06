@@ -20,6 +20,15 @@ export function createHandoffFlow(deps: MeshRuntimeDependencies) {
       `Base SHA: ${capsule.baseSha}`,
     ];
     if (capsule.latestCommit) lines.push(`Latest commit: ${capsule.latestCommit}`);
+    if (capsule.checkpoint) {
+      const { status, files, excluded } = capsule.checkpoint;
+      const line = status === "complete"
+        ? `Checkpoint: complete (${files} file${files === 1 ? "" : "s"}).`
+        : status === "partial"
+          ? `Checkpoint: partial (${files} file${files === 1 ? "" : "s"}); left on the source computer as secrets: ${excluded.join(", ")}.`
+          : `Checkpoint: needs review (${files} file${files === 1 ? "" : "s"}); the checkout was shared with other work, so some changes may not be this task's.`;
+      lines.push(line);
+    }
     if (capsule.testsStatus) lines.push(`Tests: ${capsule.testsStatus}`);
     if (capsule.importantDecisions.length) {
       lines.push(`Important decisions:\n- ${capsule.importantDecisions.join("\n- ")}`);

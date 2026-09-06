@@ -20,8 +20,24 @@ import {
   type TaskDependency as DependencyValue,
 } from "../../../../packages/protocol/schema";
 import { lstatSync, readFileSync } from "node:fs";
+import { z } from "zod";
+import { capsuleHash } from "./handoff";
 
 const MAX_STORE_BYTES = 4 * 1_024 * 1_024;
+
+/**
+ * A capsule rewritten when two Tasks were rejoined, on record: its hash
+ * changed with its Task id, and a receipt that names the old hash is still a
+ * receipt for it. Kept locally only; nothing on the wire carries it.
+ */
+export const CapsuleMigration = z.object({
+  at: z.number().nonnegative(),
+  taskIdFrom: z.string().min(1).max(128),
+  taskIdTo: z.string().min(1).max(128),
+  capsuleHashFrom: z.string().regex(/^[0-9a-f]{64}$/),
+  capsuleHashTo: z.string().regex(/^[0-9a-f]{64}$/),
+}).strict();
+export type CapsuleMigration = z.infer<typeof CapsuleMigration>;
 
 export type StoreState = {
   version: 1;
@@ -34,14 +50,16 @@ export type StoreState = {
   dependencies: DependencyValue[];
   events: MeshEventValue[];
   receipts: ReceiptValue[];
+  migrations: CapsuleMigration[];
 };
 
 const EMPTY: StoreState = {
   version: 1, projects: [], bindings: [], peers: [], tasks: [], executions: [], claims: [],
-  dependencies: [], events: [], receipts: [],
+  dependencies: [], events: [], receipts: [], migrations: [],
 };
 
 export const MAX_STORE_PEERS = 256;
+export const MAX_STORE_MIGRATIONS = 64;
 
 function parsedArray<T>(value: unknown, schema: { safeParse: (input: unknown) => { success: boolean; data?: T } }): T[] {
   if (!Array.isArray(value)) return [];
@@ -98,6 +116,7 @@ export function readStoreState(path: string): StoreLoad {
         dependencies: parsedArray(value.dependencies, TaskDependency),
         events: parsedArray(value.events, MeshEvent),
         receipts: parsedArray(value.receipts, HandoffReceipt),
+        migrations: parsedArray(value.migrations, CapsuleMigration).slice(-MAX_STORE_MIGRATIONS),
       }),
     };
   } catch {
@@ -172,15 +191,39 @@ function collapseSplitChats(state: StoreState): StoreState {
     if (next.taskId === next.dependsOnTaskId) continue;
     dependencies.set(`${next.taskId}\0${next.dependsOnTaskId}`, next);
   }
+  // A capsule carries its Task id and is named by its hash; moving the id
+  // changes the hash, so every receipt that named the old hash names the new
+  // one, and the move itself is written down for a receipt still on its way.
+  const now = Date.now();
+  const migrations = new Map(state.migrations.map((item) => [item.capsuleHashFrom, item]));
+  const rehashed = new Map<string, string>();
+  const events = state.events.map((event) => {
+    const next = rescopedEvent(event, target);
+    const before = event.payload.capsule;
+    const after = next.payload.capsule;
+    if (before && after && event.taskId !== next.taskId) {
+      const from = capsuleHash(before);
+      const to = capsuleHash(after);
+      rehashed.set(from, to);
+      migrations.set(from, {
+        at: now, taskIdFrom: event.taskId, taskIdTo: next.taskId, capsuleHashFrom: from, capsuleHashTo: to,
+      });
+    }
+    return next;
+  });
+  const rehash = (hash: string): string => rehashed.get(hash) ?? hash;
   return {
     ...state,
     tasks: state.tasks.filter((task) => target(task.taskId) === task.taskId),
     executions: state.executions.map(scoped),
     claims: state.claims.map(scoped),
     dependencies: [...dependencies.values()],
-    events: state.events.map((item) => rescopedEvent(item, target)),
-    // A receipt decides who owns a chat, so it must name the surviving Task.
-    receipts: state.receipts.map(scoped),
+    events: events.map((event) => event.payload.receipt
+      ? { ...event, payload: { ...event.payload, receipt: { ...event.payload.receipt, capsuleHash: rehash(event.payload.receipt.capsuleHash) } } }
+      : event),
+    // A receipt decides who owns a chat, so it must name the surviving Task and its capsule.
+    receipts: state.receipts.map((item) => ({ ...scoped(item), capsuleHash: rehash(item.capsuleHash) })),
+    migrations: [...migrations.values()].slice(-MAX_STORE_MIGRATIONS),
   };
 }
 

@@ -1,0 +1,45 @@
+{
+  "description": "One chat published as two Tasks by a computer renamed by its network. Both the runtime and the phone must rejoin it the same way: the older Task survives, every reference inside every event moves with it, a dependency between the two halves disappears, and a receipt that named the old capsule hash names the new one.",
+  "input": {
+    "type": "mesh.snapshot",
+    "sessionId": "project",
+    "projectId": "project",
+    "project": { "projectId": "project", "name": "GrantTap", "repositoryRoot": "/repo", "canonicalRepositoryId": "github.com/example/granttap", "createdAt": 1800000000000 },
+    "tasks": [
+      { "taskId": "task-old", "projectId": "project", "title": "Pairing", "goal": "Finish pairing", "state": "working", "ownerSessionId": "chat", "createdAt": 1800000000000, "updatedAt": 1800000000000 },
+      { "taskId": "task-new", "projectId": "project", "title": "Pairing", "goal": "Finish pairing", "state": "working", "ownerSessionId": "chat", "createdAt": 1800000005000, "updatedAt": 1800000005000 },
+      { "taskId": "task-x", "projectId": "project", "title": "Billing", "goal": "Bill", "state": "working", "ownerSessionId": "other-chat", "createdAt": 1800000000000, "updatedAt": 1800000000000 }
+    ],
+    "executions": [
+      { "taskId": "task-old", "sessionId": "chat", "provider": "claude", "computerId": "Mac.lan", "workspace": "/repo", "startedAt": 1800000000000 },
+      { "taskId": "task-new", "sessionId": "chat", "provider": "claude", "computerId": "Serhiis-MacBook-Pro.local", "workspace": "/repo", "startedAt": 1800000005000 }
+    ],
+    "claims": [
+      { "claimId": "c-new", "projectId": "project", "taskId": "task-new", "ownerSessionId": "chat", "resource": "src/auth/**", "mode": "claim", "createdAt": 1800000000000, "expiresAt": 1900000000000 }
+    ],
+    "dependencies": [
+      { "taskId": "task-new", "dependsOnTaskId": "task-old", "createdAt": 1800000000000 },
+      { "taskId": "task-new", "dependsOnTaskId": "task-x", "createdAt": 1800000000000 }
+    ],
+    "events": [
+      { "type": "mesh.event", "sessionId": "task-new", "eventId": "e-claim", "projectId": "project", "taskId": "task-new", "sourceSessionId": "chat", "eventType": "RESOURCE_CLAIM", "createdAt": 1800000000001, "expiresAt": 1900000000000,
+        "payload": { "claim": { "claimId": "c-new", "projectId": "project", "taskId": "task-new", "ownerSessionId": "chat", "resource": "src/auth/**", "mode": "claim", "createdAt": 1800000000000, "expiresAt": 1900000000000 } } },
+      { "type": "mesh.event", "sessionId": "task-new", "eventId": "e-dep", "projectId": "project", "taskId": "task-new", "sourceSessionId": "chat", "eventType": "DEPENDENCY", "createdAt": 1800000000002, "expiresAt": 1900000000000,
+        "payload": { "dependsOnTaskId": "task-x" } },
+      { "type": "mesh.event", "sessionId": "task-new", "eventId": "e-handoff", "projectId": "project", "taskId": "task-new", "sourceSessionId": "chat", "eventType": "HANDOFF_REQUEST", "createdAt": 1800000000003, "expiresAt": 1900000000000,
+        "payload": { "capsule": { "taskId": "task-new", "goal": "Finish pairing", "currentStatus": "Crypto complete", "sourceProvider": "claude", "sourceComputer": "MacBook", "targetProvider": "codex", "targetComputer": "Workstation", "repository": "github.com/example/granttap", "baseSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "latestCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "filesChanged": ["src/auth/login.ts"], "dependencies": ["task-old", "task-x"], "resourceClaims": [], "remainingWork": [], "importantDecisions": [], "createdAt": 1800000000000 } } },
+      { "type": "mesh.event", "sessionId": "task-new", "eventId": "e-accepted", "projectId": "project", "taskId": "task-new", "sourceSessionId": "codex-target", "targetSessionId": "chat", "eventType": "HANDOFF_ACCEPTED", "createdAt": 1800000000004, "expiresAt": 1900000000000,
+        "payload": { "receipt": { "sourceSessionId": "chat", "targetSessionId": "codex-target", "taskId": "task-new", "capsuleHash": "ee8046e9baf3f3622ad8ab18db9eb5809b2ec1217c71489f853ef0d8ad4e59bc", "acceptedAt": 1800000000004 } } }
+    ],
+    "generatedAt": 1800000006000
+  },
+  "expected": {
+    "tasks": ["task-old", "task-x"],
+    "taskId": "task-old",
+    "claimTaskIds": ["task-old"],
+    "dependencies": ["task-old->task-x"],
+    "capsuleDependencies": ["task-x"],
+    "originalCapsuleHash": "ee8046e9baf3f3622ad8ab18db9eb5809b2ec1217c71489f853ef0d8ad4e59bc",
+    "capsuleHash": "34e639880bd4005b15ea7b23a06f4a0237925a992f04141961d568ab3dcbf0b6"
+  }
+}

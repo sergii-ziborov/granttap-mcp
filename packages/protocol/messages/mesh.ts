@@ -131,6 +131,17 @@ export const TaskCapsule = z.object({
   resourceClaims: z.array(Path).max(64),
   remainingWork: z.array(Detail).max(32),
   importantDecisions: z.array(Detail).max(16),
+  /**
+   * What the checkpoint commit holds, when the capsule rides on one:
+   * complete, partial (secrets stayed on the source computer, named in
+   * `excluded`), or requires_review (the checkout was shared with other
+   * work, so the commit may carry changes that are not this Task's).
+   */
+  checkpoint: z.object({
+    status: z.enum(["complete", "partial", "requires_review"]),
+    files: z.number().int().nonnegative(),
+    excluded: z.array(Path).max(32),
+  }).strict().optional(),
   createdAt: z.number().nonnegative(),
 }).strict().superRefine((value, ctx) => {
   if ((value.sourceProvider === "grok_bot") !== (value.sourceActorId != null)) {

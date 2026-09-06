@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { sensitivePath } from "../sessions/edit-stats";
+import { secretFilePath } from "../sessions/edit-stats";
 
 /**
  * Commit everything uncommitted to a checkpoint branch, touching nothing else.
@@ -14,12 +14,21 @@ import { sensitivePath } from "../sessions/edit-stats";
  * publishing a branch is the person's decision, and the destination says so
  * if the commit has not reached it yet.
  */
+export type CheckpointStatus = "complete" | "partial" | "requires_review";
+
 export type Checkpoint = {
   sha: string;
   branch: string;
   files: number;
-  /** Paths left out because they look like secrets; never part of a checkpoint. */
+  /** Paths left out because they are secrets by name; never part of a checkpoint. */
   excluded: string[];
+  /**
+   * complete: every uncommitted change is in the commit. partial: secrets
+   * stayed behind, named in `excluded`. requires_review: the checkout was
+   * shared with other work, so the commit may carry changes that are not
+   * this Task's; the person decides.
+   */
+  status: CheckpointStatus;
 };
 
 export const CHECKPOINT_BRANCH_PREFIX = "granttap/checkpoint/";
@@ -34,13 +43,16 @@ function git(cwd: string, args: string[], env: NodeJS.ProcessEnv = process.env):
 /**
  * One branch per checkpoint, not per Task. A Task handed off twice used to
  * force-move the same branch, and the first checkpoint's commit was left
- * unreachable; a stamp on the name keeps each one.
+ * unreachable. The name carries the moment to the millisecond: the same
+ * request tried again lands on the same branch, two requests never do.
  */
 export function checkpointBranchName(taskId: string, at?: number): string {
   const base = CHECKPOINT_BRANCH_PREFIX + taskId.replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 64);
   if (at == null) return base;
-  const stamp = new Date(at).toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "");
-  return `${base}-${stamp}`;
+  const iso = new Date(at).toISOString();
+  const stamp = iso.slice(0, 19).replace(/[-:]/g, "");
+  const millis = iso.slice(20, 23);
+  return `${base}-${stamp}-${millis}`;
 }
 
 export function createCheckpoint(
@@ -58,9 +70,9 @@ export function createCheckpoint(
     git(cwd, ["add", "-A"], env);
     // A checkpoint is the whole checkout's uncommitted work, so an .env or a
     // key that happened to change in it would be committed and, when the
-    // person pushes, published. Those stay as HEAD has them.
+    // person pushes, published. Those stay as HEAD has them, and are named.
     const excluded = git(cwd, ["diff", "--cached", "--name-only"], env)
-      .split("\n").filter(Boolean).filter(sensitivePath);
+      .split("\n").filter(Boolean).filter(secretFilePath);
     if (excluded.length > 0) git(cwd, ["reset", "-q", "--", ...excluded], env);
     const tree = git(cwd, ["write-tree"], env);
     if (tree === git(cwd, ["rev-parse", "HEAD^{tree}"])) return undefined; // nothing to keep
@@ -69,7 +81,7 @@ export function createCheckpoint(
     const branch = checkpointBranchName(taskId, at);
     git(cwd, ["branch", "-f", branch, sha]);
     const files = git(cwd, ["diff", "--name-only", `${head}..${sha}`]).split("\n").filter(Boolean).length;
-    return { sha, branch, files, excluded };
+    return { sha, branch, files, excluded, status: excluded.length > 0 ? "partial" : "complete" };
   } catch {
     return undefined;
   } finally {

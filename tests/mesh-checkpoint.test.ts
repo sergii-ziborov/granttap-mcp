@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -30,27 +30,38 @@ test("a checkpoint keeps uncommitted work on its own branch and touches nothing 
   await writeFile(join(root, "new.txt"), "new\n");
   const head = git(root, ["rev-parse", "HEAD"]);
 
-  // A secret that changed in the same checkout never rides along.
+  // A secret that changed in the same checkout never rides along; a source
+  // file that merely sounds like one is code, and code is what a checkpoint is for.
   await writeFile(join(root, ".env"), "API_KEY=must-not-be-committed\n");
   await writeFile(join(root, "deploy.pem"), "-----BEGIN KEY-----\n");
+  await mkdir(join(root, "src"), { recursive: true });
+  await writeFile(join(root, "src", "tokenizer.ts"), "export const split = (s: string) => s.split(' ');\n");
+  await writeFile(join(root, "src", "password-strength.ts"), "export const strong = (p: string) => p.length > 12;\n");
   const at = Date.UTC(2026, 8, 6, 10, 15, 0);
   const checkpoint = createCheckpoint(root, "task-1", "Pairing refactor", at);
   assert.ok(checkpoint, "a dirty tree yields a checkpoint");
   assert.deepEqual(checkpoint.excluded.sort(), [".env", "deploy.pem"]);
+  assert.equal(checkpoint.status, "partial", "secrets stayed behind, and the checkpoint says so");
   assert.throws(() => git(root, ["show", `${checkpoint.sha}:.env`]), "the secret is not in the commit");
   assert.equal(git(root, ["ls-tree", "--name-only", checkpoint.sha]).includes("deploy.pem"), false);
+  assert.equal(git(root, ["show", `${checkpoint.sha}:src/tokenizer.ts`]).includes("split"), true, "tokenizer.ts is code, not a token");
+  assert.equal(git(root, ["show", `${checkpoint.sha}:src/password-strength.ts`]).includes("strong"), true);
   assert.equal(checkpoint.branch, checkpointBranchName("task-1", at));
-  assert.equal(checkpoint.branch, "granttap/checkpoint/task-1-20260906T101500");
+  assert.equal(checkpoint.branch, "granttap/checkpoint/task-1-20260906T101500-000");
   assert.ok(checkpoint.branch.startsWith(checkpointBranchName("task-1")), "the Task's name is still the prefix");
-  assert.equal(checkpoint.files, 2);
-  // A second checkpoint of the same Task keeps the first one reachable.
+  assert.equal(checkpoint.files, 4);
+  // The same request tried again lands on the same branch; another request
+  // two hundred milliseconds later never does, and the first stays reachable.
   await writeFile(join(root, "new.txt"), "newer\n");
-  const again = createCheckpoint(root, "task-1", "Pairing refactor", at + 60_000);
+  const retried = createCheckpoint(root, "task-1", "Pairing refactor", at);
+  assert.equal(retried?.branch, checkpoint.branch, "one request, one branch");
+  const again = createCheckpoint(root, "task-1", "Pairing refactor", at + 200);
   assert.ok(again);
   assert.notEqual(again.branch, checkpoint.branch);
-  assert.equal(git(root, ["rev-parse", checkpoint.branch]), checkpoint.sha, "the first branch still points at its commit");
+  assert.equal(again.branch, "granttap/checkpoint/task-1-20260906T101500-200");
+  assert.equal(git(root, ["rev-parse", again.branch]), again.sha);
+  assert.equal(git(root, ["rev-parse", checkpoint.branch]), retried?.sha, "the retry moved its own branch and no other");
   // The branch holds the work; HEAD, the current branch, and the tree do not move.
-  assert.equal(git(root, ["rev-parse", checkpoint.branch]), checkpoint.sha);
   assert.equal(git(root, ["rev-parse", "HEAD"]), head);
   assert.equal(git(root, ["branch", "--show-current"]), "main");
   assert.equal(git(root, ["show", `${checkpoint.sha}:new.txt`]), "new");
@@ -59,7 +70,11 @@ test("a checkpoint keeps uncommitted work on its own branch and touches nothing 
   assert.equal(git(root, ["diff", "--cached", "--name-only"]), "");
 
   // A clean tree has nothing to keep, and says so rather than making an empty commit.
-  git(root, ["checkout", "-q", "--", "README.md"]); execFileSync("rm", [join(root, "new.txt")]);
+  git(root, ["checkout", "-q", "--", "README.md"]);
+  execFileSync("rm", ["-rf", join(root, "new.txt"), join(root, "src")]);
+  // Only secrets left dirty is nothing to keep either.
+  assert.equal(createCheckpoint(root, "task-1", "x"), undefined);
+  execFileSync("rm", ["-f", join(root, ".env"), join(root, "deploy.pem")]);
   assert.equal(createCheckpoint(root, "task-1", "x"), undefined);
 });
 
@@ -89,6 +104,22 @@ test("with a checkpoint the capsule is clean, names the commit, and the handoff 
   assert.equal(capsule?.branch, checkpoint.branch);
   assert.deepEqual(capsule?.filesChanged, ["README.md"]);
   assert.match(capsule?.remainingWork.join(" ") ?? "", /Push granttap\/checkpoint/);
+  assert.deepEqual(capsule?.checkpoint, { status: "complete", files: 1, excluded: [] }, "the capsule says what the commit holds");
+  assert.deepEqual(capsule?.importantDecisions, []);
   const readiness = handoffReadiness({ capsule, targetProviderEnabled: true, conflicts: [] });
   assert.equal(readiness.ready, true, readiness.blockedReason);
+
+  // A partial checkpoint names what stayed behind, in the capsule and in
+  // the words the destination's agent reads, so nobody takes it for the whole.
+  await writeFile(join(root, ".env"), "TOKEN=x\n");
+  const partial = createCheckpoint(root, linked.taskId!, "Pairing refactor", now + 1)!;
+  assert.equal(partial.status, "partial");
+  const partialCapsule = buildTaskCapsule(store, linked, request, "MacBook", partial)!;
+  assert.deepEqual(partialCapsule.checkpoint, { status: "partial", files: 1, excluded: [".env"] });
+  assert.match(partialCapsule.importantDecisions.join(" "), /Checkpoint is partial/);
+  assert.match(partialCapsule.remainingWork.join(" "), /Left on MacBook, not in the checkpoint: \.env/);
+  // A checkout shared with other work is the runtime's call; the capsule carries its verdict.
+  const reviewed = buildTaskCapsule(store, linked, request, "MacBook", { ...partial, status: "requires_review" })!;
+  assert.equal(reviewed.checkpoint?.status, "requires_review");
+  assert.match(reviewed.importantDecisions.join(" "), /needs review/);
 });

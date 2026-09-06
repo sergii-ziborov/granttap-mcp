@@ -112,6 +112,29 @@ export function sensitivePath(path: unknown): boolean {
   return typeof path === "string" && SENSITIVE_PATH.test(path.trim());
 }
 
+/**
+ * A file that is a secret by its name alone: an env file, a key, a
+ * credentials store. Narrower than `sensitivePath`, on purpose. Hiding a
+ * preview of `tokenizer.ts` costs a glance; leaving it out of a checkpoint
+ * loses the code, so a checkpoint excludes only what is a secret, not what
+ * merely sounds like one.
+ */
+const SECRET_FILE = new RegExp(
+  "(^|[\\/])("
+  + "\\.env([.-][^\\/]*)?|[^\\/]+\\.env"
+  + "|[^\\/]*\\.(pem|key|p12|pfx|jks|keystore|der|gpg|asc|kdbx|ovpn|tfstate|tfstate\\.backup)"
+  + "|id_(rsa|ed25519|ecdsa|dsa)(\\.pub)?"
+  + "|credentials(\\.json|\\.ya?ml)?|secrets?(\\.json|\\.ya?ml|\\.toml)|[^\\/]*\\.secrets?"
+  + "|service[-_]account[^\\/]*\\.json"
+  + "|\\.npmrc|\\.netrc|\\.pypirc|\\.htpasswd|\\.git-credentials|\\.docker[\\/]config\\.json"
+  + ")$",
+  "i",
+);
+
+export function secretFilePath(path: unknown): boolean {
+  return typeof path === "string" && SECRET_FILE.test(path.trim());
+}
+
 /** Bound the lines and their length, and say how many were left out. */
 function boundPreview(lines: string[], redact: (line: string) => string): string | undefined {
   const kept: string[] = [];

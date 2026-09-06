@@ -61,6 +61,11 @@ export function rejectionReason(error: unknown): ProjectPolicyRejectionReason {
 
 export function createProjectPolicyRuntime(deps: ProjectPolicyRuntimeDependencies) {
   async function apply(relay: RelayClient, request: ProjectPolicySet): Promise<boolean> {
+    // The phone's edit is itself the enrollment: from this moment the Project
+    // is governed on this computer, whether or not the engine can take the
+    // policy right now, so a hook that finds the engine silent asks the
+    // person instead of falling open.
+    rememberGovernedProject(request.projectId, request.policy.revision, deps.now());
     try {
       const applied = await deps.client.request({
         operation: "policy.apply",

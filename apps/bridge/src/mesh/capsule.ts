@@ -87,7 +87,9 @@ export function buildTaskCapsule(
   };
   // A checkpoint commit is the fact the capsule carries instead of the dirty
   // tree: it holds every change the tree had, so relative to it the tree is
-  // clean. Whether the destination has that commit is its own check.
+  // clean. Whether the destination has that commit is its own check. What
+  // the commit does not hold is said too, so the destination never takes a
+  // partial checkpoint for the whole of the work.
   const described = checkpoint
     ? {
       ...capsule,
@@ -99,11 +101,36 @@ export function buildTaskCapsule(
       remainingWork: [
         `Continue from checkpoint ${checkpoint.sha.slice(0, 12)} on ${checkpoint.branch}.`,
         `Push ${checkpoint.branch} from ${computerId} if the destination does not have it.`,
+        ...checkpointRemainingWork(checkpoint, computerId),
       ],
+      importantDecisions: checkpointDecisions(checkpoint),
+      checkpoint: {
+        status: checkpoint.status,
+        files: checkpoint.files,
+        excluded: checkpoint.excluded.slice(0, 32),
+      },
     }
     : capsule;
   const parsed = TaskCapsule.safeParse(described);
   return parsed.success ? parsed.data : undefined;
+}
+
+function checkpointRemainingWork(checkpoint: Checkpoint, computerId: string): string[] {
+  if (checkpoint.excluded.length === 0) return [];
+  return [
+    `Left on ${computerId}, not in the checkpoint: ${checkpoint.excluded.slice(0, 8).join(", ")}`
+    + `${checkpoint.excluded.length > 8 ? ` (+${checkpoint.excluded.length - 8})` : ""}. `
+    + "They look like secrets; recreate them there if the work needs them.",
+  ].map((line) => line.slice(0, 1_000));
+}
+
+function checkpointDecisions(checkpoint: Checkpoint): string[] {
+  switch (checkpoint.status) {
+    case "complete": return [];
+    case "partial": return ["Checkpoint is partial: files that look like secrets stayed on the source computer."];
+    case "requires_review":
+      return ["Checkpoint needs review: the checkout was shared with other work, so the commit may carry changes that are not this Task's."];
+  }
 }
 
 function changedFilesBetween(cwd: string, from: string, to: string): string[] {

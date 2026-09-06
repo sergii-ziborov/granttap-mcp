@@ -25,6 +25,7 @@ import {
   setAsideStore,
   storeDelta,
   storeFingerprint,
+  StoreLockError,
   withStoreLock,
   writeStoreState,
 } from "./store-sync";
@@ -48,7 +49,15 @@ export class MeshStore {
   /** The file this process last read or wrote; another file under the path is news. */
   private synced: string | undefined;
 
-  constructor(private readonly path: string, private readonly now = Date.now) {
+  /** How long a write waits for the store's lock before it is kept for later. */
+  private readonly lockWaitMs: number | undefined;
+
+  constructor(
+    private readonly path: string,
+    private readonly now = Date.now,
+    options: { lockWaitMs?: number } = {},
+  ) {
+    this.lockWaitMs = options.lockWaitMs;
     const loaded = readStoreState(path);
     this.state = loaded.state;
     this.baseline = structuredClone(loaded.state);
@@ -62,14 +71,16 @@ export class MeshStore {
   /**
    * Take in what another process wrote since this one last looked. Called on
    * entry to every public method, never in the middle of one, so a change
-   * made and not yet saved is never thrown away.
+   * made and not yet saved is never thrown away: what this process changed
+   * and could not yet write is laid over what arrived.
    */
   private sync(): void {
     const current = storeFingerprint(this.path);
     if (current === this.synced) return;
     const loaded = readStoreState(this.path);
     if (loaded.status === "ok" || loaded.status === "missing") {
-      this.state = loaded.state;
+      const pending = storeDelta(this.baseline, this.state);
+      this.state = deltaIsEmpty(pending) ? loaded.state : applyStoreDelta(loaded.state, pending);
       this.baseline = structuredClone(loaded.state);
       this.synced = current;
       return;
@@ -78,24 +89,55 @@ export class MeshStore {
     this.synced = storeFingerprint(this.path);
   }
 
-  /** Write what changed here over what is on disk now, under the store's lock. */
-  private save(): void {
-    withStoreLock(this.path, () => {
-      const delta = storeDelta(this.baseline, this.state);
-      let merged = this.state;
-      if (storeFingerprint(this.path) !== this.synced) {
-        const disk = readStoreState(this.path);
-        if (disk.status === "ok") {
-          merged = deltaIsEmpty(delta) ? disk.state : applyStoreDelta(disk.state, delta);
-        } else if (disk.status === "corrupt" || disk.status === "too_large") {
-          setAsideStore(this.path, this.now());
+  /**
+   * Write what changed here over what is on disk now, under the store's lock.
+   * A lock that cannot be taken in time is not a reason to write anyway: the
+   * change stays in memory, ahead of the baseline, and the next save carries it.
+   */
+  private save(): boolean {
+    try {
+      withStoreLock(this.path, () => {
+        const delta = storeDelta(this.baseline, this.state);
+        let merged = this.state;
+        if (storeFingerprint(this.path) !== this.synced) {
+          const disk = readStoreState(this.path);
+          if (disk.status === "ok") {
+            merged = deltaIsEmpty(delta) ? disk.state : applyStoreDelta(disk.state, delta);
+          } else if (disk.status === "corrupt" || disk.status === "too_large") {
+            setAsideStore(this.path, this.now());
+          }
         }
-      }
-      writeStoreState(this.path, merged);
-      this.state = merged;
-      this.baseline = structuredClone(merged);
-      this.synced = storeFingerprint(this.path);
-    });
+        writeStoreState(this.path, merged);
+        this.state = merged;
+        this.baseline = structuredClone(merged);
+        this.synced = storeFingerprint(this.path);
+      }, { waitMs: this.lockWaitMs });
+      return true;
+    } catch (error) {
+      if (!(error instanceof StoreLockError)) throw error;
+      this.unsaved = true;
+      return false;
+    }
+  }
+
+  /** Whether the last write was held back by the lock; cleared by the next successful write. */
+  private unsaved = false;
+
+  /** Whether a change made here is still waiting for the lock to be written. */
+  get hasUnsavedChanges(): boolean {
+    return this.unsaved && !deltaIsEmpty(storeDelta(this.baseline, this.state));
+  }
+
+  /** Try again to write what the lock held back. */
+  flush(): boolean {
+    this.sync();
+    if (deltaIsEmpty(storeDelta(this.baseline, this.state))) {
+      this.unsaved = false;
+      return true;
+    }
+    const written = this.save();
+    if (written) this.unsaved = false;
+    return written;
   }
 
   upsertProject(input: ProjectValue): void {
@@ -396,8 +438,15 @@ export class MeshStore {
       && item.taskId === event.taskId
       && item.sourceSessionId === receipt.sourceSessionId
       && item.payload.capsule != null);
-    return request?.payload.capsule != null
-      && capsuleHash(request.payload.capsule) === receipt.capsuleHash;
+    if (request?.payload.capsule == null) return false;
+    const digest = capsuleHash(request.payload.capsule);
+    if (digest === receipt.capsuleHash) return true;
+    // A receipt written before this Task was rejoined names the capsule by
+    // the hash it had then; the move is on record, so the receipt still holds.
+    return this.state.migrations.some((item) =>
+      item.taskIdTo === event.taskId
+      && item.capsuleHashTo === digest
+      && item.capsuleHashFrom === receipt.capsuleHash);
   }
 
   private applyEvent(event: MeshEventValue): void {
