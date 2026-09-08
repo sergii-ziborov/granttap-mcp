@@ -159,7 +159,7 @@ export function registerInteractionTools(server: McpServer): void {
         operationId,
       },
       outputSchema: notifyOutput,
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
     async ({ message, meshEvent, operationId: operation }) => {
       if (!message && !meshEvent) return refused("Provide message or meshEvent.");
@@ -235,7 +235,7 @@ export function registerInteractionTools(server: McpServer): void {
         + "returns the answer already given instead of asking again.",
       inputSchema: { question: question.describe("A question answerable with yes/no"), operationId },
       outputSchema: yesNoOutput,
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
     async ({ question: text, operationId: operation }) => {
       const client = await relay();
@@ -257,7 +257,7 @@ export function registerInteractionTools(server: McpServer): void {
         + "not an answer. With an operationId, a retry returns the answer already given instead of asking again.",
       inputSchema: { question, operationId },
       outputSchema: openOutput,
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
     async ({ question: text, operationId: operation }) => {
       const client = await relay();

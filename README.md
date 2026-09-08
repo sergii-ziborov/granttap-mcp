@@ -219,9 +219,11 @@ claude plugin marketplace add sergii-ziborov/granttap-mcp
 claude plugin install granttap@granttap
 ```
 
-Ask the agent `Show my GrantTap pairing QR.` The plugin calls the bundled
-`connect` MCP tool, which reuses a healthy pairing or returns a one-time QR
-image when pairing is required. Detailed plugin instructions are in
+Open GrantTap from the plugin page or ask `Show my GrantTap pairing QR.` Codex
+renders an interactive connection card with pairing status, a one-time QR,
+copy-link fallback, and confirmed reconnect controls. The same tools still
+return readable MCP content in clients that do not render app UI. Detailed
+plugin instructions are in
 [`plugins/granttap/README.md`](plugins/granttap/README.md).
 
 For the full background helper and provider hooks, install the CLI and run
@@ -270,16 +272,19 @@ trust.
 
 ## MCP contract
 
-`tools/list` returns exactly four public tools:
+`tools/list` returns exactly five public tools:
 
 | Tool | Contract |
 | --- | --- |
 | `connect` | Reuse the existing production pairing or return a one-time QR |
+| `reconnect` | Replace the pairing after explicit confirmation and return a fresh one-time QR |
 | `notify` | Send a non-blocking status update of at most 2,000 characters |
 | `ask_yes_no` | Ask a yes/no question and wait for the explicit answer |
 | `ask` | Ask an open question and wait for typed or spoken text |
 
 MCP `connect` accepts no custom routing, replacement, or key-rotation input.
+`reconnect` is declared destructive and requires `confirmed: true`; relay
+acceptance happens before the working local pairing is replaced.
 Setup is CLI-only because it changes provider configuration and must not be
 available to a model through prompt injection.
 

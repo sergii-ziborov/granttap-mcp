@@ -3,7 +3,9 @@
 The Personal MCP surface is an exact allowlist: `connect`, `notify`,
 `ask_yes_no`, and `ask`. `relay.ts` owns one shared encrypted relay connection
 and the durable question lifecycle. Machine setup, custom relay selection, and
-pairing reset are explicit CLI operations and cannot be invoked by the model.
+pairing reset remains an explicit CLI operation. The narrower `reconnect` MCP
+tool can replace only the current pairing, is declared destructive, and requires
+explicit confirmation before it creates a new one-time QR.
 
 `mesh-resource.ts` publishes the Mesh resources for that same surface, and
 `notify` may alternatively carry one bounded task-scoped Mesh event. Neither

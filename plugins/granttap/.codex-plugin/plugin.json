@@ -1,6 +1,6 @@
 {
   "name": "granttap",
-  "version": "0.1.0+codex.20260908195901",
+  "version": "0.1.0+codex.20260908211758",
   "description": "Pair local coding agents with GrantTap and approve, answer, or steer their work from iPhone and Apple Watch.",
   "author": {
     "name": "GrantTap",
@@ -22,7 +22,7 @@
   "interface": {
     "displayName": "GrantTap",
     "shortDescription": "Control coding agents from iPhone and Apple Watch.",
-    "longDescription": "Pair this computer with GrantTap, then approve requests, answer questions, inspect work, and steer local Claude Code and Codex tasks from iPhone or Apple Watch. The bundled MCP reuses one encrypted machine pairing and shows a one-time QR when pairing is needed.",
+    "longDescription": "Pair this computer with GrantTap, then approve requests, answer questions, inspect work, and steer local Claude Code and Codex tasks from iPhone or Apple Watch. The bundled MCP renders connection status, a one-time QR, and confirmed reconnect controls directly in Codex.",
     "developerName": "GrantTap",
     "category": "Developer Tools",
     "capabilities": [

@@ -69,15 +69,20 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
 
   const tools = await client.listTools();
   assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
-    "ask", "ask_yes_no", "connect", "notify",
+    "ask", "ask_yes_no", "connect", "notify", "reconnect",
   ]);
   for (const tool of tools.tools) {
     assert.equal(tool.annotations?.readOnlyHint, false);
-    assert.equal(tool.annotations?.destructiveHint, false);
-    if (tool.name !== "connect") assert.equal(tool.annotations?.idempotentHint, false);
+    assert.equal(tool.annotations?.openWorldHint, false);
+    assert.equal(tool.annotations?.destructiveHint, tool.name === "reconnect");
+    assert.equal(tool.annotations?.idempotentHint, false);
   }
   const connectTool = tools.tools.find((tool) => tool.name === "connect");
   assert.deepEqual(Object.keys(connectTool?.inputSchema.properties ?? {}), []);
+  const connectMeta = connectTool?._meta as { ui?: { resourceUri?: string } } | undefined;
+  assert.equal(connectMeta?.ui?.resourceUri, "ui://granttap/connection/v1.html");
+  const reconnectTool = tools.tools.find((tool) => tool.name === "reconnect");
+  assert.deepEqual(Object.keys(reconnectTool?.inputSchema.properties ?? {}), ["confirmed"]);
   const notifyTool = tools.tools.find((tool) => tool.name === "notify");
   assert.equal(
     (notifyTool?.inputSchema.properties?.message as { maxLength?: number })?.maxLength,
@@ -88,7 +93,19 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   assert.deepEqual(resources.resources.map((resource) => resource.uri), [
     "granttap://mesh/current",
     "granttap://mesh/map",
+    "ui://granttap/connection/v1.html",
   ]);
+  const widget = await client.readResource({ uri: "ui://granttap/connection/v1.html" });
+  const widgetResource = widget.contents[0] as {
+    mimeType?: string;
+    text?: string;
+    _meta?: { ui?: { prefersBorder?: boolean } };
+  };
+  assert.equal(widgetResource.mimeType, "text/html;profile=mcp-app");
+  assert.equal(widgetResource._meta?.ui?.prefersBorder, true);
+  assert.match(widgetResource.text ?? "", /Connect/);
+  assert.match(widgetResource.text ?? "", /Reconnect/);
+  assert.match(widgetResource.text ?? "", /GrantTap pairing QR/);
   const templates = await client.listResourceTemplates();
   assert.deepEqual(templates.resourceTemplates.map((template) => template.uriTemplate), [
     "granttap://mesh/{capability}",
@@ -139,6 +156,16 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   );
   assert.match(parkedPath, /^\/pair\/[a-f0-9]{32}$/);
   assert.doesNotThrow(() => JSON.parse(parkedBody));
+  assert.deepEqual(pairingResult.structuredContent, {
+    status: "pairing",
+    relay: `127.0.0.1:${address.port}`,
+    expiresInMinutes: 15,
+  });
+  const pairingMeta = pairingResult._meta as {
+    granttap?: { qrDataUrl?: string; pairingUri?: string };
+  };
+  assert.match(pairingMeta.granttap?.qrDataUrl ?? "", /^data:image\/png;base64,/);
+  assert.match(pairingMeta.granttap?.pairingUri ?? "", /^granttap:\/\/pair-v2\?/);
 
   const phoneConfig = await readFile(join(configDir, "phone.pairing.json"), "utf8");
   const machineConfig = await readFile(join(configDir, "machine.json"), "utf8");
@@ -161,6 +188,14 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   assert.equal(pairingWrites, 1);
   assert.equal(await readFile(join(configDir, "machine.json"), "utf8"), machineConfig);
   assert.equal(await readFile(join(configDir, "phone.pairing.json"), "utf8"), phoneConfig);
+
+  const refusedReconnect = await client.callTool({ name: "reconnect", arguments: { confirmed: false } });
+  assert.equal(refusedReconnect.isError, true);
+  assert.equal(pairingWrites, 1);
+  const reconnected = await client.callTool({ name: "reconnect", arguments: { confirmed: true } });
+  assert.notEqual(reconnected.isError, true);
+  assert.equal(pairingWrites, 2);
+  assert.equal((reconnected.structuredContent as { status?: string }).status, "pairing");
 
   const cursorHooks = JSON.parse(await readFile(join(cursorDir, "hooks.json"), "utf8")) as {
     hooks: Record<string, Array<{ command: string; failClosed?: boolean }>>;

@@ -101,4 +101,9 @@ test("connect MCP returns a one-time QR and then reuses the pairing", async (t) 
   assert.equal(reused.isError, undefined);
   assert.match(textResult(reused), /existing secure pairing reused/i);
   assert.equal((reused.content as Array<{ type: string }>).some((item) => item.type === "image"), false);
+  assert.deepEqual(reused.structuredContent, {
+    status: "connected",
+    relay: `127.0.0.1:${new URL(relay.url).port}`,
+    expiresInMinutes: null,
+  });
 });

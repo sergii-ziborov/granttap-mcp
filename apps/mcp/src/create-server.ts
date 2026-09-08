@@ -1,6 +1,7 @@
 /** Shared GrantTap MCP tool registration for stdio and HTTP transports. */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerConnectTool } from "./mcp-tools/connect";
+import { registerConnectionWidget } from "./mcp-tools/connection-widget";
 import { registerInteractionTools } from "./mcp-tools/interaction";
 import { registerMeshResource } from "./mcp-tools/mesh-resource";
 import { packageVersion } from "./package-version";
@@ -18,5 +19,6 @@ export function createGrantTapServer(): McpServer {
   registerConnectTool(server);
   registerInteractionTools(server);
   registerMeshResource(server);
+  registerConnectionWidget(server);
   return server;
 }

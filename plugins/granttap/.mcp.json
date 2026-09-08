@@ -4,7 +4,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "granttap-mcp@0.8.6"
+        "granttap-mcp@0.8.7"
       ]
     }
   }
