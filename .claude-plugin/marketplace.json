@@ -9,6 +9,8 @@
   "plugins": [
     {
       "name": "granttap",
+      "displayName": "GrantTap",
+      "version": "0.1.1",
       "description": "Pair Claude Code with GrantTap and approve, answer, or steer local agent work from iPhone and Apple Watch.",
       "author": {
         "name": "GrantTap",
@@ -16,6 +18,7 @@
       },
       "source": "./plugins/granttap",
       "category": "development",
+      "tags": ["mcp", "iphone", "apple-watch", "approvals"],
       "homepage": "https://granttap.com"
     }
   ]
