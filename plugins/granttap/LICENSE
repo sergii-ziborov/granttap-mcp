@@ -1,0 +1,86 @@
+GrantTap Commercial Source License 1.0
+
+Copyright (c) 2026 Serhii Ziborov. All rights reserved.
+
+This license governs the source code and software distributed from the
+granttap-mcp repository and package (the "Software"), except for third-party
+components that identify their own license terms.
+
+1. Definitions
+
+"GrantTap" means Serhii Ziborov doing business as GrantTap.
+
+"Authorized Access" means an active paid GrantTap subscription, an official
+GrantTap trial, or a separate written commercial agreement with GrantTap.
+
+"Authorized User" means a person or legal entity covered by Authorized Access.
+
+2. Source inspection and contribution
+
+You may download, inspect, and make local modifications to the source solely to
+evaluate the Software, perform security review, or prepare a contribution to
+the official GrantTap repository. You may create a public fork solely for that
+contribution workflow if the fork retains this license and does not publish a
+release, binary, hosted service, or independently usable distribution.
+
+These rights do not permit production use, commercial use, or use to provide a
+service to another person.
+
+3. Authorized product use
+
+During Authorized Access, GrantTap grants the Authorized User a limited,
+non-exclusive, non-transferable, non-sublicensable license to install, execute,
+and internally modify the Software on devices the Authorized User owns or
+controls, solely to use the official GrantTap product and services.
+
+When Authorized Access ends, the Authorized User must stop using the Software
+except where a separate written agreement says otherwise.
+
+4. Restrictions
+
+Unless GrantTap gives prior written permission, you may not:
+
+- sell, sublicense, redistribute, or publish the Software or a derivative work;
+- offer the Software or a derivative work as a hosted or managed service;
+- use the Software to build or operate a competing product or service;
+- use the Software as a standalone general-purpose coding-agent runtime outside
+  the official GrantTap product;
+- bypass subscription, license, access-control, or entitlement checks;
+- remove or alter copyright, license, attribution, or proprietary notices; or
+- use GrantTap names or marks to imply endorsement of a modified distribution.
+
+5. Ownership
+
+The Software is licensed, not sold. GrantTap retains all right, title, and
+interest in the Software and its derivative works. No trademark, patent, or
+other rights are granted except the limited copyright rights stated here.
+
+6. Third-party components
+
+Third-party components remain governed by their respective licenses. Those
+licenses and notices are not replaced by this license. See
+THIRD_PARTY_NOTICES.md where distributed.
+
+7. Termination
+
+This license terminates automatically if you breach its terms. On termination,
+you must stop using and distributing the Software and delete copies that you
+are not legally required to retain. Sections 4 through 9 survive termination.
+
+8. Disclaimer of warranty
+
+THE SOFTWARE IS PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTIES OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT.
+
+9. Limitation of liability
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, GRANTTAP AND ITS CONTRIBUTORS WILL NOT
+BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR
+PUNITIVE DAMAGES, OR FOR LOSS OF DATA, PROFITS, REVENUE, OR BUSINESS, ARISING
+FROM OR RELATED TO THE SOFTWARE OR THIS LICENSE.
+
+10. Commercial terms
+
+Authorized Access, pricing, and separate commercial licenses are available
+through https://granttap.com.

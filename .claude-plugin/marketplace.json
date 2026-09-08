@@ -1,0 +1,22 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "granttap",
+  "description": "GrantTap plugins for controlling local coding agents from iPhone and Apple Watch.",
+  "owner": {
+    "name": "GrantTap",
+    "email": "support@granttap.com"
+  },
+  "plugins": [
+    {
+      "name": "granttap",
+      "description": "Pair Claude Code with GrantTap and approve, answer, or steer local agent work from iPhone and Apple Watch.",
+      "author": {
+        "name": "GrantTap",
+        "email": "support@granttap.com"
+      },
+      "source": "./plugins/granttap",
+      "category": "development",
+      "homepage": "https://granttap.com"
+    }
+  ]
+}

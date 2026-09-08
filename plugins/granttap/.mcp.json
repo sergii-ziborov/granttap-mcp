@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "granttap": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "granttap-mcp@0.8.6"
+      ]
+    }
+  }
+}

@@ -207,6 +207,26 @@ history stays on the device.
 Installation and production use require Authorized Access under the
 [GrantTap Commercial Source License](LICENSE).
 
+Install the GrantTap plugin directly from this repository's marketplace:
+
+```bash
+# Codex
+codex plugin marketplace add sergii-ziborov/granttap-mcp
+codex plugin add granttap@granttap
+
+# Claude Code
+claude plugin marketplace add sergii-ziborov/granttap-mcp
+claude plugin install granttap@granttap
+```
+
+Ask the agent `Show my GrantTap pairing QR.` The plugin calls the bundled
+`connect` MCP tool, which reuses a healthy pairing or returns a one-time QR
+image when pairing is required. Detailed plugin instructions are in
+[`plugins/granttap/README.md`](plugins/granttap/README.md).
+
+For the full background helper and provider hooks, install the CLI and run
+setup:
+
 ```bash
 npm install -g granttap-mcp
 granttap setup

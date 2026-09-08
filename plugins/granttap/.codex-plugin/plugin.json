@@ -1,0 +1,45 @@
+{
+  "name": "granttap",
+  "version": "0.1.0+codex.20260908195901",
+  "description": "Pair local coding agents with GrantTap and approve, answer, or steer their work from iPhone and Apple Watch.",
+  "author": {
+    "name": "GrantTap",
+    "email": "support@granttap.com",
+    "url": "https://granttap.com"
+  },
+  "homepage": "https://granttap.com",
+  "repository": "https://github.com/sergii-ziborov/granttap-mcp",
+  "license": "SEE LICENSE IN LICENSE",
+  "keywords": [
+    "granttap",
+    "mcp",
+    "approvals",
+    "iphone",
+    "apple-watch",
+    "claude-code",
+    "codex"
+  ],
+  "interface": {
+    "displayName": "GrantTap",
+    "shortDescription": "Control coding agents from iPhone and Apple Watch.",
+    "longDescription": "Pair this computer with GrantTap, then approve requests, answer questions, inspect work, and steer local Claude Code and Codex tasks from iPhone or Apple Watch. The bundled MCP reuses one encrypted machine pairing and shows a one-time QR when pairing is needed.",
+    "developerName": "GrantTap",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive"
+    ],
+    "websiteURL": "https://granttap.com",
+    "privacyPolicyURL": "https://granttap.com/privacy",
+    "termsOfServiceURL": "https://granttap.com/terms",
+    "defaultPrompt": [
+      "Show my GrantTap pairing QR.",
+      "Check whether this computer is connected to GrantTap.",
+      "Reconnect this computer to GrantTap."
+    ],
+    "brandColor": "#E0612E",
+    "composerIcon": "./assets/composer-icon.png",
+    "logo": "./assets/logo.png"
+  },
+  "mcpServers": "./.mcp.json",
+  "skills": "./skills/"
+}
