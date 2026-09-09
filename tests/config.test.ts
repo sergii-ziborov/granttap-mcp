@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmod, mkdtemp, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -7,6 +7,7 @@ import {
   blockedSessionCapability,
   createPairing,
   isGatingSkipped,
+  loadConfig,
   loadRuntimeConfig,
   machineConfigPath,
   pairingUri,
@@ -17,7 +18,23 @@ import {
   setSessionShellAllowed,
   setSessionSkillAllowed,
 } from "../apps/bridge/src/config";
-import { oneTimePairingUri, relayHttpBase } from "../apps/bridge/src/pairing";
+import { DEFAULT_RELAY, oneTimePairingUri, relayHttpBase } from "../apps/bridge/src/pairing";
+
+test("the retired Worker pairing migrates in place without changing its identity", async () => {
+  const configDir = await mkdtemp(join(tmpdir(), "granttap-relay-migration-"));
+  const path = join(configDir, "machine.json");
+  const { machineCfg } = createPairing(DEFAULT_RELAY);
+  machineCfg.relayUrl = "wss://granttap-relay.sergii-ziborov.workers.dev";
+  await writeFile(path, JSON.stringify(machineCfg), { mode: 0o600 });
+
+  const migrated = loadConfig(path);
+
+  assert.equal(DEFAULT_RELAY, "wss://relay.granttap.com");
+  assert.equal(migrated.relayUrl, DEFAULT_RELAY);
+  assert.equal(migrated.room, machineCfg.room);
+  assert.equal(migrated.mySecretKey, machineCfg.mySecretKey);
+  assert.equal(JSON.parse(await readFile(path, "utf8")).relayUrl, DEFAULT_RELAY);
+});
 
 test("gating can exclude exactly one chat without disabling every chat", async (t) => {
   const configDir = await mkdtemp(join(tmpdir(), "granttap-config-"));

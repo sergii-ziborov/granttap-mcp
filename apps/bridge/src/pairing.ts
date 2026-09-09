@@ -8,6 +8,7 @@ import {
 } from "./install";
 import {
   createPairing,
+  DEFAULT_RELAY_URL,
   loadConfig,
   machineConfigPath,
   normalizeRelayUrl,
@@ -16,7 +17,7 @@ import {
 } from "./config";
 import type { PeerConfig } from "../../../packages/core/relay-client";
 
-export const DEFAULT_RELAY = "wss://granttap-relay.sergii-ziborov.workers.dev";
+export const DEFAULT_RELAY = DEFAULT_RELAY_URL;
 export const PAIRING_CODE_TTL_MINUTES = 15;
 
 function validConfig(config: PeerConfig, role: PeerConfig["role"]): boolean {

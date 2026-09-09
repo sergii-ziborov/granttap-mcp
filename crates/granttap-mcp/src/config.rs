@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub const DEFAULT_RELAY: &str = "wss://granttap-relay.sergii-ziborov.workers.dev";
+pub const DEFAULT_RELAY: &str = "wss://relay.granttap.com";
+pub const LEGACY_RELAY: &str = "wss://granttap-relay.sergii-ziborov.workers.dev";
 pub const PAIRING_CODE_TTL_MINUTES: u64 = 15;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -71,16 +72,28 @@ pub fn normalize_relay_url(value: &str) -> Result<String, String> {
             return Err("unencrypted ws:// is allowed only for a loopback development relay".into());
         }
     }
-    Ok(url.to_string())
+    Ok(if url == LEGACY_RELAY {
+        DEFAULT_RELAY.to_string()
+    } else {
+        url.to_string()
+    })
 }
 
 pub fn load_config(path: &Path) -> Result<PeerConfig, String> {
     let raw = fs::read_to_string(path).map_err(|e| format!("read {}: {e}", path.display()))?;
-    blazingly_json::from_str(&raw).map_err(|e| format!("parse {}: {e}", path.display()))
+    let mut config: PeerConfig =
+        blazingly_json::from_str(&raw).map_err(|e| format!("parse {}: {e}", path.display()))?;
+    if config.relay_url == LEGACY_RELAY {
+        config.relay_url = DEFAULT_RELAY.into();
+        save_config(path, &config)?;
+    }
+    Ok(config)
 }
 
 pub fn save_config(path: &Path, cfg: &PeerConfig) -> Result<(), String> {
-    fs::create_dir_all(config_dir()).map_err(|e| e.to_string())?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
     let body = blazingly_json::to_vec_pretty(cfg).map_err(|e| e.to_string())?;
     fs::write(path, body).map_err(|e| e.to_string())?;
     #[cfg(unix)]
@@ -131,4 +144,37 @@ fn hostname() -> String {
                 .map(|s| s.trim().to_string())
                 .unwrap_or_else(|_| "machine".into())
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retired_worker_pairing_migrates_without_changing_identity() {
+        let path = std::env::temp_dir().join(format!(
+            "granttap-relay-migration-{}-{}.json",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        let (mut config, _) = create_pairing(LEGACY_RELAY).expect("pairing");
+        let room = config.room.clone();
+        let secret = config.my_secret_key.clone();
+        config.relay_url = LEGACY_RELAY.into();
+        fs::write(&path, blazingly_json::to_vec_pretty(&config).expect("json"))
+            .expect("write");
+
+        let migrated = load_config(&path).expect("load");
+
+        assert_eq!(DEFAULT_RELAY, "wss://relay.granttap.com");
+        assert_eq!(migrated.relay_url, DEFAULT_RELAY);
+        assert_eq!(migrated.room, room);
+        assert_eq!(migrated.my_secret_key, secret);
+        let persisted = fs::read_to_string(&path).expect("persisted");
+        assert!(persisted.contains(DEFAULT_RELAY));
+        let _ = fs::remove_file(path);
+    }
 }
