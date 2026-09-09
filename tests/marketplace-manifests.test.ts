@@ -27,7 +27,7 @@ test("Cursor marketplace indexes the GrantTap plugin at the repository root", ()
   assert.equal(marketplace.name, "granttap");
   assert.equal(plugins.length, 1);
   assert.equal(plugins[0]?.name, "granttap");
-  assert.equal(plugins[0]?.source, "./cursor-plugin");
+  assert.equal(plugins[0]?.source, "cursor-plugin");
   assert.equal(existsSync(join(repositoryRoot, "cursor-plugin/.cursor-plugin/plugin.json")), true);
   assert.equal(existsSync(join(repositoryRoot, "cursor-plugin/mcp.json")), true);
 });

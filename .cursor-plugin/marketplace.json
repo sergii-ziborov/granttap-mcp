@@ -11,7 +11,7 @@
   "plugins": [
     {
       "name": "granttap",
-      "source": "./cursor-plugin",
+      "source": "cursor-plugin",
       "description": "Pair Cursor with GrantTap through loopback OAuth and keep each approval in its originating chat",
       "version": "0.1.1",
       "author": {
