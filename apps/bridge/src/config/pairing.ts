@@ -4,6 +4,9 @@ import { generateKeyPair, randomId } from "../../../../packages/core/crypto";
 import type { PeerConfig } from "../../../../packages/core/relay-client";
 import { configDir } from "./paths";
 
+export const DEFAULT_RELAY_URL = "wss://relay.granttap.com";
+export const LEGACY_RELAY_URL = "wss://granttap-relay.sergii-ziborov.workers.dev";
+
 export function saveConfig(path: string, cfg: PeerConfig): void {
   mkdirSync(configDir(), { recursive: true });
   if (existsSync(path)) {
@@ -25,7 +28,12 @@ export function saveConfig(path: string, cfg: PeerConfig): void {
 }
 
 export function loadConfig(path: string): PeerConfig {
-  return JSON.parse(readFileSync(path, "utf8")) as PeerConfig;
+  const cfg = JSON.parse(readFileSync(path, "utf8")) as PeerConfig;
+  if (cfg.relayUrl === LEGACY_RELAY_URL) {
+    cfg.relayUrl = DEFAULT_RELAY_URL;
+    saveConfig(path, cfg);
+  }
+  return cfg;
 }
 
 const b64url = (value: string): string =>
@@ -54,7 +62,8 @@ export function normalizeRelayUrl(value: string): string {
   if (url.username || url.password || url.hash || url.search) {
     throw new Error("relay URL must not contain credentials, a query, or a fragment");
   }
-  return url.toString().replace(/\/$/, "");
+  const normalized = url.toString().replace(/\/$/, "");
+  return normalized === LEGACY_RELAY_URL ? DEFAULT_RELAY_URL : normalized;
 }
 
 function validPairingKey(value: string): boolean {
