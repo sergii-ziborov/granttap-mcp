@@ -1,4 +1,4 @@
-# GrantTap for Codex and Claude Code
+# GrantTap for Codex, Claude Code, and Grok Build
 
 ![GrantTap](assets/logo.png)
 
@@ -28,6 +28,15 @@ claude plugin install granttap@granttap
 
 Then run `/granttap:granttap-connect` or ask Claude: `Show my GrantTap pairing
 QR.`
+
+### Grok Build
+
+```bash
+grok plugin marketplace add sergii-ziborov/granttap-mcp
+grok plugin install granttap --trust
+```
+
+Then run `/granttap-connect` or ask Grok: `Show my GrantTap pairing QR.`
 
 The `connect` tool reuses a healthy pairing. If this computer is not paired, it
 returns a one-time QR image and a manual fallback. GrantTap never rotates a

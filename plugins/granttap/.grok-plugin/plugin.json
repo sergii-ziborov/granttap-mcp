@@ -1,0 +1,19 @@
+{
+  "name": "granttap",
+  "version": "0.1.1",
+  "description": "Pair Grok Build with GrantTap and approve, answer, inspect, or steer local agent work from iPhone and Apple Watch.",
+  "author": {
+    "name": "GrantTap",
+    "email": "support@granttap.com",
+    "url": "https://granttap.com"
+  },
+  "homepage": "https://granttap.com",
+  "repository": "https://github.com/sergii-ziborov/granttap-mcp",
+  "license": "SEE LICENSE IN LICENSE",
+  "keywords": [
+    "granttap",
+    "granttap mcp",
+    "granttap pairing",
+    "grok-build"
+  ]
+}

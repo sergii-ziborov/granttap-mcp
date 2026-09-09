@@ -1,10 +1,12 @@
 {
   "name": "granttap",
   "owner": {
-    "name": "GrantTap"
+    "name": "GrantTap",
+    "email": "support@granttap.com"
   },
   "metadata": {
-    "description": "GrantTap for Cursor — local HTTP MCP authorization and exactly correlated phone approvals"
+    "description": "GrantTap for Cursor — local HTTP MCP authorization and exactly correlated phone approvals",
+    "version": "0.1.1"
   },
   "plugins": [
     {

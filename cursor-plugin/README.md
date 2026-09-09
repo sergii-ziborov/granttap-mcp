@@ -36,19 +36,21 @@ The OAuth service listens only at `http://127.0.0.1:17342/mcp`. Cursor cannot
 show **Authorize** for a stdio (`command`/`args`) MCP entry, so do not replace the
 plugin's HTTP configuration with stdio.
 
-## Install these local plugin assets
+## Install from the Cursor marketplace
 
-Until the plugin is published in a Cursor marketplace, link this directory from
-a source checkout and reload Cursor:
+Install **GrantTap** from Cursor's plugin marketplace, then reload Cursor.
+The plugin adds the `/connect` command, a connect skill, and the
+exact-correlation rule; `granttap setup` still configures the MCP endpoint
+itself.
+
+From a source checkout, the same plugin can be linked locally:
 
 ```bash
 mkdir -p "$HOME/.cursor/plugins/local"
 ln -sfn "$PWD/cursor-plugin" "$HOME/.cursor/plugins/local/granttap"
 ```
 
-Run those commands from the repository root. The plugin adds the `/connect`
-command, a connect skill, and the exact-correlation rule; `granttap setup`
-still configures the MCP endpoint itself.
+Run those commands from the repository root.
 
 ## Exact dual-channel behavior
 
@@ -62,7 +64,8 @@ prompt must never resolve the current request.
 | Path | Purpose |
 | --- | --- |
 | `.cursor-plugin/plugin.json` | Cursor plugin manifest |
-| `.cursor-plugin/marketplace.json` | Marketplace metadata for future publication |
+| `.cursor-plugin/marketplace.json` | Plugin-local marketplace metadata |
+| `../.cursor-plugin/marketplace.json` | Repository marketplace index Cursor publishes |
 | `mcp.json` | Loopback Streamable HTTP MCP endpoint |
 | `assets/logo.svg` | Plugin logo |
 | `rules/dual-channel.mdc` | Exact prompt/correlation rule |

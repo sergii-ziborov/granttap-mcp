@@ -217,6 +217,19 @@ codex plugin add granttap@granttap
 # Claude Code
 claude plugin marketplace add sergii-ziborov/granttap-mcp
 claude plugin install granttap@granttap
+
+# Grok Build
+grok plugin marketplace add sergii-ziborov/granttap-mcp
+grok plugin install granttap --trust
+```
+
+Install **GrantTap** from the Cursor plugin marketplace, then open
+**Cursor Settings → MCP → GrantTap → Authorize**. From a source checkout the
+same plugin can be linked locally:
+
+```bash
+mkdir -p "$HOME/.cursor/plugins/local"
+ln -sfn "$PWD/cursor-plugin" "$HOME/.cursor/plugins/local/granttap"
 ```
 
 Open GrantTap from the plugin page or ask `Show my GrantTap pairing QR.` Codex
