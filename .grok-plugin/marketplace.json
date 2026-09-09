@@ -1,0 +1,26 @@
+{
+  "name": "granttap",
+  "description": "GrantTap plugins for controlling local coding agents from iPhone and Apple Watch.",
+  "owner": {
+    "name": "GrantTap",
+    "email": "support@granttap.com"
+  },
+  "plugins": [
+    {
+      "name": "granttap",
+      "description": "Pair Grok Build with GrantTap and approve, answer, inspect, or steer local agent work from iPhone and Apple Watch.",
+      "category": "development",
+      "source": {
+        "type": "local",
+        "path": "./plugins/granttap"
+      },
+      "author": {
+        "name": "GrantTap",
+        "email": "support@granttap.com"
+      },
+      "homepage": "https://granttap.com",
+      "keywords": ["granttap", "granttap mcp", "granttap pairing"],
+      "tags": ["mcp", "iphone", "apple-watch", "approvals"]
+    }
+  ]
+}

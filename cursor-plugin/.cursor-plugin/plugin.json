@@ -1,10 +1,11 @@
 {
   "name": "granttap",
   "displayName": "GrantTap",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "GrantTap for Cursor: loopback HTTP MCP authorization, phone pairing, and exactly correlated dual-channel approvals. Start with granttap authorize.",
   "author": {
     "name": "GrantTap",
+    "email": "support@granttap.com",
     "url": "https://granttap.com"
   },
   "publisher": "GrantTap",

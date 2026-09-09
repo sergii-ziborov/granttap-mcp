@@ -1,0 +1,36 @@
+{
+  "name": "granttap",
+  "owner": {
+    "name": "GrantTap",
+    "email": "support@granttap.com"
+  },
+  "metadata": {
+    "description": "GrantTap for Cursor — local HTTP MCP authorization and exactly correlated phone approvals",
+    "version": "0.1.1"
+  },
+  "plugins": [
+    {
+      "name": "granttap",
+      "source": "./cursor-plugin",
+      "description": "Pair Cursor with GrantTap through loopback OAuth and keep each approval in its originating chat",
+      "version": "0.1.1",
+      "author": {
+        "name": "GrantTap",
+        "email": "support@granttap.com"
+      },
+      "homepage": "https://granttap.com",
+      "repository": "https://github.com/sergii-ziborov/granttap-mcp",
+      "license": "SEE LICENSE IN LICENSE",
+      "category": "integrations",
+      "keywords": [
+        "granttap",
+        "mcp",
+        "approvals",
+        "iphone",
+        "apple-watch",
+        "oauth",
+        "authorize"
+      ]
+    }
+  ]
+}
