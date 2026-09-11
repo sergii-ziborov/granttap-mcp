@@ -50,7 +50,7 @@ healthy pairing merely to display a new QR.
 - `ask_yes_no` asks for an explicit yes or no decision.
 - `ask` asks for typed or spoken input.
 
-The plugin runs the pinned public package `granttap-mcp@0.8.7`. See
+The plugin runs the pinned public package `granttap-mcp@0.8.8`. See
 [granttap.com](https://granttap.com) for the iPhone and Apple Watch app,
 privacy policy, and terms.
 

@@ -22,5 +22,5 @@ Never infer that confirmation from an unrelated connect or status request.
 
 Plugin installation registers the MCP server for this agent. If the user also
 wants provider hooks or the background helper repaired, tell them to run
-`npx -y granttap-mcp@0.8.7 setup` locally. Provider authentication remains
+`npx -y granttap-mcp@0.8.8 setup` locally. Provider authentication remains
 separate from GrantTap pairing.
