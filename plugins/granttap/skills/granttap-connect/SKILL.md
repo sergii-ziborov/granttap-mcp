@@ -5,10 +5,19 @@ description: Connect, reconnect, or pair this computer with GrantTap. Use when t
 
 # Connect GrantTap
 
-Call the GrantTap MCP `connect` tool immediately for pairing, connection-status,
-or QR requests. It reuses the existing secure machine pairing. When no pairing
-exists, it returns an interactive connection card with a one-time QR image and
-a manual fallback for the user to open in GrantTap on iPhone.
+For status, login, connection controls, or diagnostic requests, call
+`connection_status` first. It is read-only and opens the connection center:
+computer name, runtime version, saved pairing, observed relay/phone activity,
+provider readiness, Connect, Refresh, and confirmed Reconnect controls.
+
+GrantTap's local stdio plugin has no account/password sign-in. Pairing with the
+iPhone authorizes this computer. Do not claim a native OAuth login button exists
+on the Codex plugin page. Provider authentication is separate.
+
+For a new pairing or QR request, call `connect`. It returns the current one-time
+QR while it is valid and never replaces a saved pairing. A saved pairing is not
+proof that the phone is online. Expired or lost QR codes require a confirmed
+reconnect; never rotate keys silently.
 
 Show the returned QR image directly in the conversation. Do not expose, repeat,
 log, or summarize the pairing URI or manual token in additional prose.
@@ -22,5 +31,5 @@ Never infer that confirmation from an unrelated connect or status request.
 
 Plugin installation registers the MCP server for this agent. If the user also
 wants provider hooks or the background helper repaired, tell them to run
-`npx -y granttap-mcp@0.8.8 setup` locally. Provider authentication remains
+`npx -y granttap-mcp@0.8.9 setup` locally. Provider authentication remains
 separate from GrantTap pairing.

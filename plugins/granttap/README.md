@@ -15,9 +15,15 @@ codex plugin marketplace add sergii-ziborov/granttap-mcp
 codex plugin add granttap@granttap
 ```
 
-Open GrantTap from the plugin page or ask Codex: `Show my GrantTap pairing QR.`
-Codex shows an interactive connection card with Connect, Reconnect, status,
-and the one-time QR when pairing is needed.
+Ask Codex: `Open my GrantTap connection center.` Compatible MCP Apps hosts
+show Connect, Refresh status, confirmed Reconnect, and a one-time QR when
+pairing is needed. The details section includes computer name, MCP version,
+relay/phone observations, and provider readiness. Other hosts can display the
+QR tool result and use the same tools without interactive controls.
+
+This is a local stdio plugin. Pairing with iPhone authorizes the computer;
+there is no separate GrantTap account/password or native OAuth login button
+on the plugin management page. Provider sign-in remains separate.
 
 ### Claude Code
 
@@ -44,13 +50,14 @@ healthy pairing merely to display a new QR.
 
 ## Included tools
 
+- `connection_status` opens read-only connection controls and diagnostics.
 - `connect` pairs the computer or reuses its current pairing.
 - `reconnect` creates a fresh pairing only after explicit confirmation.
 - `notify` sends a task update to GrantTap.
 - `ask_yes_no` asks for an explicit yes or no decision.
 - `ask` asks for typed or spoken input.
 
-The plugin runs the pinned public package `granttap-mcp@0.8.8`. See
+The plugin runs the pinned public package `granttap-mcp@0.8.9`. See
 [granttap.com](https://granttap.com) for the iPhone and Apple Watch app,
 privacy policy, and terms.
 
