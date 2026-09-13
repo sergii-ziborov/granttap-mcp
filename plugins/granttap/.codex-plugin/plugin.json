@@ -1,6 +1,6 @@
 {
   "name": "granttap",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Pair local coding agents with GrantTap and approve, answer, or steer their work from iPhone and Apple Watch.",
   "author": {
     "name": "GrantTap",
@@ -22,7 +22,7 @@
   "interface": {
     "displayName": "GrantTap",
     "shortDescription": "Control coding agents from iPhone and Apple Watch.",
-    "longDescription": "Pair this computer with GrantTap using a one-time QR, then approve requests, answer questions, and continue local coding-agent tasks from iPhone or Apple Watch. Open the connection center to connect, refresh status, confirm a reconnect, and inspect computer, runtime, relay observations, and provider readiness. No GrantTap account or password is required; provider sign-in is separate.",
+    "longDescription": "Authorize Codex to access the local GrantTap MCP service. The sign-in page displays a one-time QR when this computer needs iPhone pairing; an already paired computer can be authorized without changing its keys. A confirmed reconnect can show a new QR. Then approve requests, answer questions, and continue local coding-agent tasks from iPhone or Apple Watch. No GrantTap account or password is required; provider sign-in is separate.",
     "developerName": "GrantTap",
     "category": "Developer Tools",
     "capabilities": [
@@ -40,6 +40,11 @@
     "composerIcon": "./assets/composer-icon.png",
     "logo": "./assets/logo.png"
   },
-  "mcpServers": "./.mcp.json",
+  "mcpServers": {
+    "granttap": {
+      "type": "http",
+      "url": "http://127.0.0.1:17342/mcp"
+    }
+  },
   "skills": "./skills/"
 }

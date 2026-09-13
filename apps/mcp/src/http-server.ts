@@ -72,10 +72,10 @@ export async function startHttpMcpServer(options: ServeOptions = {}): Promise<{
       }
       const pendingId = String(req.body?.pending_id ?? "");
       if (!provider.getPending(pendingId)) {
-        res.status(400).json({ error: "Authorization request expired. Start Authorize again from Cursor Settings." });
+        res.status(400).json({ error: "Authorization request expired. Start authorization again from your MCP client." });
         return;
       }
-      if (isMachineConfigured()) {
+      if (isMachineConfigured() && req.body?.confirmed !== "true") {
         res.json({ ok: true, alreadyPaired: true });
         return;
       }

@@ -106,7 +106,7 @@ test("published launcher resolves hoisted dependencies and runs setup/serve in i
   const helperState = process.platform === "darwin" ? "Ready" : "Needs attention";
   assert.match(setup.stdout, new RegExp(`Background helper\\s+${helperState}`));
   assert.match(setup.stdout, /Claude Code\s+(?:Ready|Not installed)/);
-  assert.match(setup.stdout, /Codex\s+(?:Needs hook trust|Not installed)/);
+  assert.match(setup.stdout, /Codex\s+(?:Needs connection|Not installed)/);
   assert.match(
     setup.stdout,
     /Cursor\s+(?:Beta · (?:Authorize in Cursor|Needs repair)|Not installed)/,

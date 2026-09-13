@@ -10,20 +10,30 @@ iPhone and Apple Watch.
 
 ### Codex
 
+Install the durable local OAuth service once on macOS:
+
+```bash
+npm install --global granttap-mcp@0.8.10
+granttap setup
+```
+
+Install or update the plugin from the public GitHub marketplace:
+
 ```bash
 codex plugin marketplace add sergii-ziborov/granttap-mcp
 codex plugin add granttap@granttap
 ```
 
-Ask Codex: `Open my GrantTap connection center.` Compatible MCP Apps hosts
-show Connect, Refresh status, confirmed Reconnect, and a one-time QR when
-pairing is needed. The details section includes computer name, MCP version,
-relay/phone observations, and provider readiness. Other hosts can display the
-QR tool result and use the same tools without interactive controls.
+Open GrantTap in Codex's plugin manager and select its native Connect/Sign in
+control. Codex opens the local OAuth consent page. If the computer is not yet
+paired, that page shows a one-time QR for the GrantTap iPhone app. If it is
+already paired, Approve authorizes Codex without changing the phone keys; a
+separate, confirmed reconnect can replace the pairing and show a new QR. No
+GrantTap account or password is needed. Provider sign-in remains separate.
 
-This is a local stdio plugin. Pairing with iPhone authorizes the computer;
-there is no separate GrantTap account/password or native OAuth login button
-on the plugin management page. Provider sign-in remains separate.
+After authorization, ask Codex: `Open my GrantTap connection center.` Its MCP
+Apps view shows connection status, relay and phone observations, provider
+readiness, Connect, Refresh status, and confirmed Reconnect controls.
 
 ### Claude Code
 
@@ -57,7 +67,9 @@ healthy pairing merely to display a new QR.
 - `ask_yes_no` asks for an explicit yes or no decision.
 - `ask` asks for typed or spoken input.
 
-The plugin runs the pinned public package `granttap-mcp@0.8.9`. See
+Claude Code and Grok Build use the pinned public package `granttap-mcp@0.8.9`
+through stdio. Codex uses the persistent local HTTP service installed by
+`granttap setup`. See
 [granttap.com](https://granttap.com) for the iPhone and Apple Watch app,
 privacy policy, and terms.
 

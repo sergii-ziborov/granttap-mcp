@@ -64,9 +64,12 @@ async function main(): Promise<void> {
   const helper = installMonitorHelper();
   let cursorService: InstallResult | null = null;
   let cursorConfig: InstallResult | null = null;
-  if (before.cursor.installed) {
+  const codexInstalled = before.agents.some((item) => item.agent === "codex" && item.installed);
+  if (before.cursor.installed || codexInstalled) {
     cursorService = installHttpMcpService();
-    if (cursorService.status !== "manual") cursorConfig = installCursorHttpConfig();
+    if (before.cursor.installed && cursorService.status !== "manual") {
+      cursorConfig = installCursorHttpConfig();
+    }
   }
   const pairingResult = await pairIfNeeded();
   const paired = isMachineConfigured();
@@ -83,7 +86,8 @@ async function main(): Promise<void> {
     "",
     `Claude Code         ${installed.has("claude") ? state(claudeHook) : "Not installed"}`,
     `Codex               ${installed.has("codex")
-      ? codexHook.status === "manual" ? "Needs attention" : "Needs hook trust"
+      ? codexHook.status === "manual" || cursorService?.status === "manual"
+        ? "Needs attention" : !paired ? "Needs connection" : "Authorize in Codex; review hooks"
       : "Not installed"}`,
     `Cursor              ${before.cursor.installed ? `Beta · ${cursorReady ? "Authorize in Cursor" : "Needs repair"}` : "Not installed"}`,
     `Grok Build          ${installed.has("grok") ? "Ready" : "Not installed"}`,
@@ -92,7 +96,7 @@ async function main(): Promise<void> {
     `Project Governance  ${engine ? "Ready" : "No engine found"}`,
     "",
     paired && installed.has("codex")
-      ? `Next: ${CODEX_TRUST_INSTRUCTION}`
+      ? `Next: authorize GrantTap in Codex, then ${CODEX_TRUST_INSTRUCTION}`
       : paired && before.cursor.installed
         ? "Next: open Cursor Settings → MCP → GrantTap → Authorize."
         : !paired

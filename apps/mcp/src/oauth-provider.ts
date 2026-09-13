@@ -1,7 +1,7 @@
 /**
- * Loopback OAuth 2.1 provider for Cursor Settings → Authorize.
+ * Loopback OAuth 2.1 provider for Codex and Cursor MCP authorization.
  *
- * Authorize means: confirm this Mac's GrantTap pairing for Cursor (issue a
+ * Authorize means: confirm this Mac's GrantTap pairing for a client (issue a
  * bearer token). E2EE keys stay in ~/.granttap — OAuth does not replace pair.
  */
 import { randomUUID } from "node:crypto";
@@ -104,10 +104,10 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
     }));
   }
 
-  /** Complete consent: issue code and redirect to Cursor. */
+  /** Complete consent: issue code and redirect to the requesting MCP client. */
   completeConsent(pendingId: string, approve: boolean): { redirectUrl: string } {
     const pending = this.getPending(pendingId);
-    if (!pending) throw new Error("Authorization request expired. Start Authorize again from Cursor Settings.");
+    if (!pending) throw new Error("Authorization request expired. Start authorization again from your MCP client.");
 
     const target = new URL(pending.params.redirectUri);
     if (!approve) {

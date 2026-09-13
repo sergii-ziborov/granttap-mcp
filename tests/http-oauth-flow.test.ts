@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { createServer as createHttpServer } from "node:http";
 import { createServer as createNetServer } from "node:net";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -31,12 +31,14 @@ async function pairingRelay(status = 201) {
   };
 }
 
-async function registeredAuthorization(base: string, verifier: string) {
-  const redirectUri = "http://127.0.0.1:49123/callback";
+async function registeredAuthorization(base: string, verifier: string, clientName = "Cursor") {
+  const redirectUri = clientName === "Codex"
+    ? "http://127.0.0.1:49123/callback/granttap"
+    : "http://127.0.0.1:49123/callback";
   const registration = await fetch(`${base}/register`, {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      client_name: "Cursor", redirect_uris: [redirectUri], token_endpoint_auth_method: "none",
+      client_name: clientName, redirect_uris: [redirectUri], token_endpoint_auth_method: "none",
       grant_types: ["authorization_code"], response_types: ["code"],
     }),
   });
@@ -52,7 +54,7 @@ async function registeredAuthorization(base: string, verifier: string) {
   const html = await response.text();
   const pendingId = /name="pending_id" value="([^"]+)"/.exec(html)?.[1];
   assert.ok(pendingId);
-  return { clientId: registered.client_id, redirectUri, pendingId };
+  return { clientId: registered.client_id, redirectUri, pendingId, html };
 }
 
 test("HTTP OAuth pairs, consents, exchanges a token, and initializes MCP", async (t) => {
@@ -102,11 +104,33 @@ test("HTTP OAuth pairs, consents, exchanges a token, and initializes MCP", async
   assert.match(pairingBody.qrDataUrl, /^data:image\/png;base64,/);
 
   const second = await registeredAuthorization(base, verifier);
+  const savedPairing = await readFile(join(root, "machine.json"));
   const already = await fetch(`${base}/oauth/pairing`, {
     method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ pending_id: second.pendingId }),
   });
   assert.equal((await already.json() as { alreadyPaired: boolean }).alreadyPaired, true);
+  assert.deepEqual(await readFile(join(root, "machine.json")), savedPairing);
+  const codex = await registeredAuthorization(base, verifier, "Codex");
+  assert.match(codex.html, /Authorize Codex/);
+  assert.match(codex.html, /id="reconnect"/);
+  const foreignReconnect = await fetch(`${base}/oauth/pairing`, {
+    method: "POST", headers: {
+      "content-type": "application/x-www-form-urlencoded", origin: "https://attacker.test",
+    }, body: new URLSearchParams({ pending_id: codex.pendingId, confirmed: "true" }),
+  });
+  assert.equal(foreignReconnect.status, 403);
+  assert.deepEqual(await readFile(join(root, "machine.json")), savedPairing);
+  const reconnect = await fetch(`${base}/oauth/pairing`, {
+    method: "POST", headers: {
+      "content-type": "application/x-www-form-urlencoded", origin: base,
+    }, body: new URLSearchParams({ pending_id: codex.pendingId, confirmed: "true" }),
+  });
+  assert.equal(reconnect.status, 200);
+  const newPairing = await reconnect.json() as { alreadyPaired: boolean; qrDataUrl: string };
+  assert.equal(newPairing.alreadyPaired, false);
+  assert.match(newPairing.qrDataUrl, /^data:image\/png;base64,/);
+  assert.notDeepEqual(await readFile(join(root, "machine.json")), savedPairing);
   const consent = await fetch(`${base}/consent`, {
     method: "POST", redirect: "manual",
     headers: { "content-type": "application/x-www-form-urlencoded", origin: base },
