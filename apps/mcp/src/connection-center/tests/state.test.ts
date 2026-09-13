@@ -1,0 +1,59 @@
+import assert from "node:assert/strict";
+import { mkdtemp, readFile, readdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+import { ConnectionState } from "../state";
+import { createPairing, machineConfigPath, saveConfig } from "../../../../bridge/src/config";
+import { relay, resetRelay, connectionRuntimeStatus } from "../../mcp-tools/relay";
+import { RelayClient } from "../../../../../packages/core/relay-client";
+import { forwardingRelay, waitFor } from "../../../../../tests/support/forwarding-relay";
+
+// Tests use a disposable machine identity and a loopback relay only.
+test("status is read-only; pending codes expire without exposing or rotating keys", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-connection-"));
+  process.env.GRANTTAP_CONFIG_DIR = root;
+  t.after(() => { resetRelay(); delete process.env.GRANTTAP_CONFIG_DIR; });
+  const state = new ConnectionState();
+  assert.equal(state.snapshot().structuredContent.status, "disconnected");
+  assert.deepEqual(await readdir(root), []);
+  const pair = createPairing("ws://127.0.0.1:1");
+  saveConfig(machineConfigPath(), pair.machineCfg);
+  const original = await readFile(machineConfigPath(), "utf8");
+  assert.equal(state.snapshot().structuredContent.status, "paired");
+  state.remember({ room: pair.machineCfg.room, expiresAt: 1000, pairingUri: "secret-test-uri", qrDataUrl: "secret-test-qr" });
+  const pending = state.snapshot(900);
+  assert.equal(pending.structuredContent.status, "pairing");
+  assert.equal(pending._meta.granttap.pairingUri, "secret-test-uri");
+  assert.equal(JSON.stringify(pending.structuredContent).includes("secret-test"), false);
+  const expired = state.snapshot(1000);
+  assert.equal(expired.structuredContent.status, "expired");
+  assert.deepEqual(expired._meta.granttap, {});
+  assert.equal(await readFile(machineConfigPath(), "utf8"), original);
+  saveConfig(machineConfigPath(), createPairing("ws://127.0.0.1:1").machineCfg);
+  assert.equal(state.snapshot(900).structuredContent.status, "paired");
+  assert.deepEqual(state.snapshot(900)._meta.granttap, {});
+});
+
+test("only an encrypted phone message confirms activity; relay online is distinct", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-connection-live-"));
+  const server = await forwardingRelay();
+  const pair = createPairing(server.url);
+  process.env.GRANTTAP_CONFIG_DIR = root;
+  saveConfig(machineConfigPath(), pair.machineCfg);
+  const phone = new RelayClient(pair.phoneCfg);
+  t.after(async () => { phone.close(); resetRelay(); delete process.env.GRANTTAP_CONFIG_DIR; await server.close(); });
+  const state = new ConnectionState();
+  state.remember({ room: pair.machineCfg.room, expiresAt: Date.now() + 60000, pairingUri: "test", qrDataUrl: "test" });
+  await relay();
+  assert.equal(state.snapshot().structuredContent.relayStatus, "online");
+  assert.equal(state.snapshot().structuredContent.status, "pairing");
+  await phone.connect();
+  await phone.send({ type: "user.message", text: "test", createdAt: Date.now() }, "machine");
+  await waitFor(() => connectionRuntimeStatus(pair.machineCfg.room).phoneLastSeenAt !== null);
+  const connected = state.snapshot();
+  assert.equal(connected.structuredContent.status, "connected");
+  assert.deepEqual(connected._meta.granttap, {});
+  assert.equal(state.snapshot(Date.now() + 61000).structuredContent.status, "paired");
+  assert.deepEqual(connectionRuntimeStatus("other-room"), { relayStatus: "unknown", phoneLastSeenAt: null });
+});

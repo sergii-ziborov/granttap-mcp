@@ -1,7 +1,7 @@
 # MCP tools
 
-The Personal MCP surface is an exact allowlist: `connect`, `notify`,
-`ask_yes_no`, and `ask`. `relay.ts` owns one shared encrypted relay connection
+The Personal MCP surface is an exact allowlist: `connection_status`, `connect`,
+`reconnect`, `notify`, `ask_yes_no`, and `ask`. `relay.ts` owns one shared encrypted relay connection
 and the durable question lifecycle. Machine setup, custom relay selection, and
 pairing reset remains an explicit CLI operation. The narrower `reconnect` MCP
 tool can replace only the current pairing, is declared destructive, and requires
@@ -9,7 +9,7 @@ explicit confirmation before it creates a new one-time QR.
 
 `mesh-resource.ts` publishes the Mesh resources for that same surface, and
 `notify` may alternatively carry one bounded task-scoped Mesh event. Neither
-adds a fifth public tool.
+adds another public tool.
 
 Both are caller-scoped. `granttap://mesh/current` returns no Project data;
 `granttap://mesh/{capability}` returns only the calling execution's Project,
@@ -26,3 +26,8 @@ call, and can never create invites, expand scope, change the relay, or reach
 
 License: this module is distributed under the GrantTap Commercial Source License
 in the repository-root `LICENSE` file.
+
+The connection center lives in `../connection-center`. Status requests are
+read-only. Saved pairing, a connected relay socket, and recent encrypted phone
+activity are separate observations. Only explicit connect/reconnect requests
+create codes; transfer material is carried in UI metadata and a user-facing QR.

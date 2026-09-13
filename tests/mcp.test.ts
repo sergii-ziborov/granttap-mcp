@@ -69,18 +69,18 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
 
   const tools = await client.listTools();
   assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
-    "ask", "ask_yes_no", "connect", "notify", "reconnect",
+    "ask", "ask_yes_no", "connect", "connection_status", "notify", "reconnect",
   ]);
   for (const tool of tools.tools) {
-    assert.equal(tool.annotations?.readOnlyHint, false);
+    assert.equal(tool.annotations?.readOnlyHint, tool.name === "connection_status");
     assert.equal(tool.annotations?.openWorldHint, false);
     assert.equal(tool.annotations?.destructiveHint, tool.name === "reconnect");
-    assert.equal(tool.annotations?.idempotentHint, false);
+    assert.equal(tool.annotations?.idempotentHint, tool.name === "connection_status");
   }
   const connectTool = tools.tools.find((tool) => tool.name === "connect");
   assert.deepEqual(Object.keys(connectTool?.inputSchema.properties ?? {}), []);
   const connectMeta = connectTool?._meta as { ui?: { resourceUri?: string } } | undefined;
-  assert.equal(connectMeta?.ui?.resourceUri, "ui://granttap/connection/v1.html");
+  assert.equal(connectMeta?.ui?.resourceUri, "ui://granttap/connection/v2.html");
   const reconnectTool = tools.tools.find((tool) => tool.name === "reconnect");
   assert.deepEqual(Object.keys(reconnectTool?.inputSchema.properties ?? {}), ["confirmed"]);
   const notifyTool = tools.tools.find((tool) => tool.name === "notify");
@@ -93,9 +93,9 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   assert.deepEqual(resources.resources.map((resource) => resource.uri), [
     "granttap://mesh/current",
     "granttap://mesh/map",
-    "ui://granttap/connection/v1.html",
+    "ui://granttap/connection/v2.html",
   ]);
-  const widget = await client.readResource({ uri: "ui://granttap/connection/v1.html" });
+  const widget = await client.readResource({ uri: "ui://granttap/connection/v2.html" });
   const widgetResource = widget.contents[0] as {
     mimeType?: string;
     text?: string;
@@ -135,6 +135,11 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   assert.equal(text?.type, "text");
   if (text?.text) assert.match(text.text, /not paired/i);
 
+  const initialStatus = await client.callTool({ name: "connection_status", arguments: {} });
+  assert.equal((initialStatus.structuredContent as { status: string }).status, "disconnected");
+  assert.equal(pairingWrites, 0);
+  assert.equal(existsSync(join(configDir, "machine.json")), false);
+
   const pairingResult = await client.callTool({ name: "connect", arguments: {} });
   assert.notEqual(pairingResult.isError, true);
   const pairingContent = pairingResult.content as Array<{
@@ -156,7 +161,7 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   );
   assert.match(parkedPath, /^\/pair\/[a-f0-9]{32}$/);
   assert.doesNotThrow(() => JSON.parse(parkedBody));
-  assert.deepEqual(pairingResult.structuredContent, {
+  assert.deepEqual(Object.fromEntries(Object.entries(pairingResult.structuredContent as object).filter(([key]) => ["status", "relay", "expiresInMinutes"].includes(key))), {
     status: "pairing",
     relay: `127.0.0.1:${address.port}`,
     expiresInMinutes: 15,
@@ -176,16 +181,19 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   const mailboxId = parkedPath.split("/").at(-1)!;
   // Pair-v2 intentionally carries the public one-time mailbox id in its URI;
   // the independent transfer key, never the mailbox id, protects the payload.
-  assert.equal(pairingText.includes(mailboxId), true);
+  assert.equal(pairingText.includes(mailboxId), false);
   assert.equal(parkedBody.includes(mailboxId), false);
 
   const reusedResult = await client.callTool({ name: "connect", arguments: {} });
   const reusedContent = reusedResult.content as Array<{ type: string; text?: string }>;
   const reusedText = reusedContent.find((item) => item.type === "text")?.text ?? "";
-  assert.match(reusedText, /existing secure pairing reused/i);
-  assert.doesNotMatch(reusedText, /granttap:\/\/pair-v2|one-time/i);
-  assert.equal(reusedContent.some((item) => item.type === "image"), false);
+  assert.match(reusedText, /one-time/i);
+  assert.doesNotMatch(reusedText, /granttap:\/\/pair-v2/i);
+  assert.equal(reusedContent.some((item) => item.type === "image"), true);
   assert.equal(pairingWrites, 1);
+  const pendingStatus = await client.callTool({ name: "connection_status", arguments: {} });
+  assert.equal((pendingStatus.structuredContent as { status: string }).status, "pairing");
+  assert.equal((pendingStatus._meta as typeof pairingMeta).granttap?.pairingUri, pairingMeta.granttap?.pairingUri);
   assert.equal(await readFile(join(configDir, "machine.json"), "utf8"), machineConfig);
   assert.equal(await readFile(join(configDir, "phone.pairing.json"), "utf8"), phoneConfig);
 

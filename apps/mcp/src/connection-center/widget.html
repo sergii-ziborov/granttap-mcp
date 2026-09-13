@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+:root{color-scheme:light dark;font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+*{box-sizing:border-box}body{margin:0;padding:16px;background:transparent;color:CanvasText}
+.card{border:1px solid color-mix(in srgb,CanvasText 18%,transparent);border-radius:20px;padding:18px;background:color-mix(in srgb,Canvas 94%,#ff7a3d 6%);box-shadow:0 8px 28px #0001}
+header{display:flex;align-items:center;gap:12px;margin-bottom:14px}.logo{width:44px;height:44px;border-radius:13px;background:#ff7a3d;display:grid;place-items:center;color:#19120e;font-weight:800;font-size:19px}.title{font-size:19px;font-weight:750}.status{display:flex;align-items:center;gap:7px;color:color-mix(in srgb,CanvasText 72%,transparent)}
+.dot{width:9px;height:9px;border-radius:50%;background:#ffb020}.connected .dot{background:#2ac769}.error .dot{background:#e5484d}
+.body{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;align-items:center}.copy{max-width:440px}.copy h2{font-size:18px;margin:0 0 6px}.copy p{margin:0;color:color-mix(in srgb,CanvasText 70%,transparent)}
+#qr{width:170px;height:170px;padding:10px;background:#fff;border-radius:15px;object-fit:contain}.hidden{display:none!important}
+.actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:16px}button{font:inherit;font-weight:650;border-radius:11px;border:1px solid color-mix(in srgb,CanvasText 20%,transparent);padding:9px 13px;background:Canvas;color:CanvasText;cursor:pointer}button.primary{background:#ff7a3d;color:#17100c;border-color:#ff7a3d}button:disabled{opacity:.55;cursor:wait}
+.confirm{margin-top:12px;padding:12px;border-radius:12px;background:color-mix(in srgb,#e5484d 10%,transparent)}.confirm p{margin:0 0 10px}.small{font-size:13px}.message{min-height:20px;margin-top:10px;color:color-mix(in srgb,CanvasText 68%,transparent)}
+@media(max-width:520px){.body{grid-template-columns:1fr}#qr{width:min(100%,220px);height:auto;justify-self:center}}
+details{border-top:1px solid #8884;padding-top:14px}summary{cursor:pointer;font-weight:600}dl{display:grid;grid-template-columns:minmax(100px,1fr) 2fr;gap:8px}dd{margin:0;overflow-wrap:anywhere}dt{opacity:.7}li{margin:8px 0}a{color:inherit}.logo svg{width:44px;height:44px}button:focus-visible,summary:focus-visible{outline:3px solid #ff7a3d;outline-offset:3px}
+</style>
+</head>
+<body>
+<main class="card" id="card">
+  <header><div class="logo" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-hidden="true">
+  <rect width="64" height="64" rx="10" fill="#f47f42"/>
+  <path d="M11 31.5 24.5 45 42 19" fill="none" stroke="#1d130e" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M45.5 29v10M52 25v18M58.5 29v10" fill="none" stroke="#1d130e" stroke-width="5" stroke-linecap="round"/>
+</svg>
+</div><div><div class="title">GrantTap</div><div class="status"><span class="dot"></span><span id="status">Checking connection…</span></div></div></header>
+  <section class="body">
+    <div class="copy"><h2 id="heading">Connect this computer</h2><p id="detail">Open GrantTap on iPhone and scan the one-time code.</p><div class="actions"><button class="primary" id="connect">Connect</button><button id="refresh">Refresh status</button><button id="copy" class="hidden">Copy pairing link</button><button id="reconnect" class="hidden">Reconnect</button></div><div class="message small" id="message" role="status"></div></div>
+    <img id="qr" class="hidden" alt="GrantTap pairing QR" />
+  </section>
+  <p id="expiry" class="small" aria-live="polite"></p>
+  <details><summary>Connection details &amp; help</summary>
+    <dl><dt>Computer</dt><dd id="computer">—</dd><dt>MCP version</dt><dd id="version">—</dd>
+    <dt>Relay observed by this MCP</dt><dd id="relay">Not checked</dd>
+    <dt>Last encrypted message from iPhone</dt><dd id="phone">Not observed</dd></dl>
+    <h3>Provider readiness</h3><ul id="providers"></ul>
+    <p>No GrantTap account or password is required. Pair using GrantTap on iPhone → Settings → Connections.
+    Provider sign-in is separate.</p>
+    <p>Missing hooks or background sync? Run <code>npx -y granttap-mcp@0.8.9 setup</code> locally.
+    A saved pairing alone does not prove your phone or the background helper is online.</p>
+    <p><a href="https://granttap.com" target="_blank" rel="noopener noreferrer">Website</a> ·
+    <a href="https://granttap.com/privacy" target="_blank" rel="noopener noreferrer">Privacy</a> ·
+    <a href="mailto:support@granttap.com">Support</a></p>
+  </details>
+  <section id="confirm" class="confirm hidden"><p>Reconnect replaces this computer’s current pairing. Continue?</p><div class="actions"><button class="primary" id="confirm-reconnect">Reconnect</button><button id="cancel">Cancel</button></div></section>
+</main>
+<script type="module">{{SCRIPT}}</script>
+</body>
+</html>

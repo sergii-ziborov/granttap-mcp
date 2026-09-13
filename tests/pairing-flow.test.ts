@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -95,15 +95,27 @@ test("connect MCP returns a one-time QR and then reuses the pairing", async (t) 
   t.after(() => client.close());
   const first = await client.callTool({ name: "connect", arguments: {} });
   assert.equal(first.isError, undefined);
-  assert.match(textResult(first), /one-time link/i);
+  assert.match(textResult(first), /one-time QR/i);
   assert.equal((first.content as Array<{ type: string }>).some((item) => item.type === "image"), true);
   const reused = await client.callTool({ name: "connect", arguments: {} });
   assert.equal(reused.isError, undefined);
-  assert.match(textResult(reused), /existing secure pairing reused/i);
-  assert.equal((reused.content as Array<{ type: string }>).some((item) => item.type === "image"), false);
-  assert.deepEqual(reused.structuredContent, {
-    status: "connected",
-    relay: `127.0.0.1:${new URL(relay.url).port}`,
-    expiresInMinutes: null,
-  });
+  assert.match(textResult(reused), /one-time QR/i);
+  assert.equal((reused.content as Array<{ type: string }>).some((item) => item.type === "image"), true);
+  assert.equal((reused.structuredContent as { status: string }).status, "pairing");
+  assert.deepEqual(reused._meta, first._meta);
+  const original = await readFile(machineConfigPath(), "utf8");
+  await unlink(phonePairingPath());
+  // A new MCP process has no pending QR, but must preserve the valid machine identity.
+  const reopened = await connectInMemory(createGrantTapServer());
+  t.after(() => reopened.close());
+  const saved = await reopened.callTool({ name: "connect", arguments: {} });
+  assert.equal((saved.structuredContent as { status: string }).status, "paired");
+  assert.match(textResult(saved), /existing secure pairing reused/i);
+  assert.equal(await readFile(machineConfigPath(), "utf8"), original);
+  const rejected = await pairingRelay(503);
+  t.after(() => rejected.close());
+  process.env.GRANTTAP_TEST_RELAY_URL = rejected.url;
+  const failure = await reopened.callTool({ name: "reconnect", arguments: { confirmed: true } });
+  assert.equal(failure.isError, true);
+  assert.equal(await readFile(machineConfigPath(), "utf8"), original);
 });

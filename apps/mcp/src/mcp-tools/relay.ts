@@ -12,6 +12,7 @@ const ASK_TIMEOUT_MS = Number(
 );
 let client: RelayClient | null = null;
 let monitor: SessionMonitor | null = null;
+let phoneLastSeenAt: number | null = null;
 
 export type TaskInteractionScope = {
   provider: "claude" | "codex" | "cursor" | "grok";
@@ -25,6 +26,7 @@ export async function relay(): Promise<RelayClient | null> {
   try {
     if (!client) {
       client = new RelayClient(loadConfig(machineConfigPath()), { autoReconnect: true });
+      client.onMessage(() => { phoneLastSeenAt = Date.now(); return false; });
       monitor = startSessionMonitor(client);
     }
     await client.connect();
@@ -40,6 +42,16 @@ export function resetRelay(): void {
   monitor = null;
   client?.close();
   client = null;
+  phoneLastSeenAt = null;
+}
+
+/** Observe this process only; never start a connection for a status request. */
+export function connectionRuntimeStatus(room?: string) {
+  const current = client !== null && client.room === room;
+  return {
+    relayStatus: current ? client!.isConnected ? "online" : "offline" : "unknown",
+    phoneLastSeenAt: current ? phoneLastSeenAt : null,
+  };
 }
 
 /**

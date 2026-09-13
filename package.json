@@ -1,6 +1,6 @@
 {
   "name": "granttap-mcp",
-  "version": "0.8.8",
+  "version": "0.8.9",
   "description": "Personal live control center runtime for local coding agents on iPhone and Apple Watch.",
   "type": "module",
   "bin": {
@@ -25,7 +25,7 @@
     "setup": "node bin/granttap-mcp.mjs setup",
     "status": "node bin/granttap-mcp.mjs status",
     "test": "HOME=$(mktemp -d) GRANTTAP_SKIP_LAUNCHCTL=1 node --import tsx --test tests/*.test.ts",
-    "test:coverage": "HOME=$(mktemp -d) GRANTTAP_SKIP_LAUNCHCTL=1 c8 --all --extension .ts --exclude 'tests/**' --exclude 'scripts/**' --exclude 'packages/core/relay-client-types.ts' --exclude 'apps/bridge/src/capabilities/types.ts' --exclude 'apps/bridge/src/reply/types.ts' --exclude 'apps/bridge/src/mesh/runtime-dependencies.ts' --check-coverage --lines 95 --statements 95 --functions 95 --branches 85 node --import tsx --test tests/*.test.ts",
+    "test:coverage": "HOME=$(mktemp -d) GRANTTAP_SKIP_LAUNCHCTL=1 c8 --all --extension .ts --extension .js --exclude '**/tests/**' --exclude 'scripts/**' --exclude 'packages/core/relay-client-types.ts' --exclude 'apps/bridge/src/capabilities/types.ts' --exclude 'apps/bridge/src/reply/types.ts' --exclude 'apps/bridge/src/mesh/runtime-dependencies.ts' --check-coverage --lines 95 --statements 95 --functions 95 --branches 85 node --import tsx --test tests/*.test.ts",
     "inventory": "node scripts/quality/source-inventory.mjs",
     "package:allowlist": "node scripts/quality/package-allowlist.mjs",
     "typecheck": "tsc --noEmit",
@@ -42,10 +42,12 @@
   },
   "devDependencies": {
     "@types/express": "^5.0.3",
+    "@types/jsdom": "^27.0.0",
     "@types/node": "^22.10.2",
     "@types/qrcode": "^1.5.6",
     "@types/ws": "^8.5.13",
     "c8": "^10.1.3",
+    "jsdom": "^27.4.0",
     "typescript": "^5.7.2"
   },
   "engines": {
