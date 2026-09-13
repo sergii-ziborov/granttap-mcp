@@ -1,6 +1,6 @@
 {
   "name": "granttap",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Pair local coding agents with GrantTap and approve, answer, or steer their work from iPhone and Apple Watch.",
   "author": {
     "name": "GrantTap",
@@ -21,8 +21,8 @@
   ],
   "interface": {
     "displayName": "GrantTap",
-    "shortDescription": "Control coding agents from iPhone and Apple Watch.",
-    "longDescription": "Connect GrantTap from Codex, Claude Code, Cursor, or Grok Build through granttap.com. Pair this computer with a one-time iPhone QR, authorize each coding app, and reconnect only when you confirm replacing the current pairing. Then approve requests, answer questions, and continue local coding-agent tasks from iPhone or Apple Watch. Provider sign-in is separate.",
+    "shortDescription": "Connect GrantTap to your phone",
+    "longDescription": "To connect, click Try now and choose Connect GrantTap to this computer. Codex opens granttap.com/connect to authorize access; the page shows a one-time iPhone QR if this computer is not yet paired. A saved phone pairing is reused without a new QR. Replacing it requires a separate confirmation. Once connected, approve requests, answer questions, and continue local Codex work from iPhone or Apple Watch. Claude Code and Cursor use the same website flow in their own MCP settings. Provider sign-in is separate.",
     "developerName": "GrantTap",
     "category": "Developer Tools",
     "capabilities": [
@@ -32,7 +32,7 @@
     "privacyPolicyURL": "https://granttap.com/privacy",
     "termsOfServiceURL": "https://granttap.com/terms",
     "defaultPrompt": [
-      "Open my GrantTap connection center.",
+      "Connect GrantTap to this computer.",
       "Check whether this computer is connected to GrantTap.",
       "Reconnect this computer to GrantTap."
     ],

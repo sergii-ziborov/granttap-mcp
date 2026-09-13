@@ -10,6 +10,13 @@ For status, login, connection controls, or diagnostic requests, call
 computer name, runtime version, saved pairing, observed relay/phone activity,
 provider readiness, Connect, Refresh, and confirmed Reconnect controls.
 
+When the user chooses the plugin's first starter action, connect this computer
+without making them find a website link or type setup commands. Call
+`connection_status` to open the controls. If the MCP client requests
+authorization, let its normal OAuth flow open `granttap.com/connect`; in Codex
+CLI, `codex mcp login granttap` starts that flow. Explain the next visible step
+briefly and verify connection status after authorization.
+
 Codex, Claude Code, Cursor, and Grok Build use the same local OAuth HTTP
 service. Their MCP authorization control opens `granttap.com/connect` with a
 one-time iPhone QR when this computer is unpaired.

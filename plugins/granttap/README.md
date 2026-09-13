@@ -33,9 +33,11 @@ does not receive the pairing keys or task content. Provider sign-in remains
 separate. A Git marketplace plugin does not acquire the native Connect modal
 of a registered remote OpenAI app merely by installing it.
 
-After authorization, ask Codex: `Open my GrantTap connection center.` Its MCP
-Apps view shows connection status, relay and phone observations, provider
-readiness, Connect, Refresh status, and confirmed Reconnect controls.
+In Codex, click **Try now** on the GrantTap plugin page and choose **Connect
+GrantTap to this computer**. After authorization, the `connection_status` tool
+opens GrantTap's connection panel in the conversation. It shows connection
+status, relay and phone observations, provider readiness, Connect, Refresh
+status, and confirmed Reconnect controls.
 
 ### Claude Code
 
