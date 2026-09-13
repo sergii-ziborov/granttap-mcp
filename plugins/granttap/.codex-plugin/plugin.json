@@ -1,6 +1,6 @@
 {
   "name": "granttap",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Pair local coding agents with GrantTap and approve, answer, or steer their work from iPhone and Apple Watch.",
   "author": {
     "name": "GrantTap",
@@ -28,7 +28,7 @@
     "capabilities": [
       "Interactive"
     ],
-    "websiteURL": "https://granttap.com",
+    "websiteURL": "https://granttap.com/connect",
     "privacyPolicyURL": "https://granttap.com/privacy",
     "termsOfServiceURL": "https://granttap.com/terms",
     "defaultPrompt": [
