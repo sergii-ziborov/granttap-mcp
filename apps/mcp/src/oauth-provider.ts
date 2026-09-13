@@ -22,7 +22,6 @@ import type {
   OAuthTokens,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
 import { isMachineConfigured } from "./pairing-status";
-import { consentHtml } from "./oauth/consent-page";
 import { GrantTapClientsStore, loadOAuthStore, saveOAuthStore } from "./oauth/store";
 
 type PendingAuth = {
@@ -48,7 +47,7 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
 
   constructor(private readonly expectedResource?: string) {}
 
-  /** Begin auth: stash params and return a pending id for the consent page. */
+  /** Begin auth: stash params; the website reads only the opaque request id. */
   createPending(client: OAuthClientInformationFull, params: AuthorizationParams): string {
     this.gcPending();
     const id = randomUUID();
@@ -86,22 +85,15 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
       resource: this.expectedResource ? new URL(this.expectedResource) : params.resource,
     };
     const pendingId = this.createPending(client, normalizedParams);
-    const paired = isMachineConfigured();
     res.set({
       "Cache-Control": "no-store",
-      "Content-Security-Policy": "frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
       "Referrer-Policy": "no-referrer",
-      "X-Frame-Options": "DENY",
       "X-Content-Type-Options": "nosniff",
     });
-    res.status(200).type("html").send(consentHtml({
-      pendingId,
-      paired,
-      clientName: client.client_name?.trim() || "Unknown local MCP client",
-      redirectUri: normalizedParams.redirectUri,
-      scopes: normalizedParams.scopes ?? [],
-      resource: normalizedParams.resource?.href ?? "local GrantTap MCP",
-    }));
+    const website = new URL("https://granttap.com/connect");
+    const resource = new URL(this.expectedResource ?? normalizedParams.resource!.href);
+    website.hash = new URLSearchParams({ request: pendingId, port: resource.port }).toString();
+    res.redirect(302, website.href);
   }
 
   /** Complete consent: issue code and redirect to the requesting MCP client. */

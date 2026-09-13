@@ -1,7 +1,7 @@
 /**
- * GrantTap MCP over Streamable HTTP + loopback OAuth.
+ * GrantTap MCP over Streamable HTTP + loopback OAuth with website consent.
  *
- * This is what Cursor Settings needs for the Authorize button (stdio cannot show it).
+ * Codex, Claude Code, Cursor and Grok Build can discover this OAuth endpoint.
  * Bind is loopback-only. Pairing keys remain in ~/.granttap.
  */
 import { randomUUID } from "node:crypto";
@@ -16,6 +16,7 @@ import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import express from "express";
 import QRCode from "qrcode";
 import { createOneTimePairing, DEFAULT_RELAY } from "../../bridge/src/pairing";
+import { inspectAgentIntegrations } from "../../bridge/src/install";
 import { createGrantTapServer, relay, resetRelay } from "./create-server";
 import { isAllowedLoopbackOrigin } from "./oauth/loopback-origin";
 import { GrantTapOAuthProvider } from "./oauth-provider";
@@ -61,6 +62,48 @@ export async function startHttpMcpServer(options: ServeOptions = {}): Promise<{
     resourceName: "GrantTap MCP",
     serviceDocumentationUrl: new URL("https://granttap.com"),
   }));
+
+  // The public website is the only browser origin allowed to read a pending
+  // authorization. The random pending id lives in the website URL fragment,
+  // never in a request to the website server.
+  app.use(["/oauth/session", "/oauth/pairing", "/oauth/decision"], (req, res, next) => {
+    const origin = req.get("origin");
+    if (origin && origin !== "https://granttap.com"
+        && !isAllowedLoopbackOrigin(origin, issuerUrl.origin)) {
+      res.status(403).json({ error: "Origin is not allowed." });
+      return;
+    }
+    if (origin === "https://granttap.com") {
+      res.set({
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Private-Network": "true",
+        "Vary": "Origin, Access-Control-Request-Private-Network",
+      });
+    }
+    if (req.method === "OPTIONS") {
+      res.status(204).end();
+      return;
+    }
+    next();
+  });
+
+  app.get("/oauth/session", (req, res) => {
+    res.set("Cache-Control", "no-store");
+    const pending = provider.getPending(String(req.query.pending_id ?? ""));
+    if (!pending) {
+      res.status(404).json({ error: "This connection request expired. Start again in your coding app." });
+      return;
+    }
+    res.json({
+      clientName: pending.client.client_name?.trim().slice(0, 80) || "Coding app",
+      paired: isMachineConfigured(),
+      providers: inspectAgentIntegrations()
+        .filter((item) => ["codex", "claude", "cursor"].includes(item.agent))
+        .map((item) => ({ id: item.agent, installed: item.installed, ready: item.hookConfigured })),
+    });
+  });
 
   app.post("/oauth/pairing", async (req, res) => {
     res.set("Cache-Control", "no-store");
@@ -110,6 +153,28 @@ export async function startHttpMcpServer(options: ServeOptions = {}): Promise<{
       });
     } catch (error) {
       res.status(500).json({
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  app.post("/oauth/decision", (req, res) => {
+    res.set("Cache-Control", "no-store");
+    if (req.get("origin") !== "https://granttap.com") {
+      res.status(403).json({ error: "Origin is not allowed." });
+      return;
+    }
+    try {
+      const pendingId = String(req.body?.pending_id ?? "");
+      const decision = String(req.body?.decision ?? "");
+      if (decision !== "approve" && decision !== "deny") {
+        res.status(400).json({ error: "Choose Approve or Deny." });
+        return;
+      }
+      const { redirectUrl } = provider.completeConsent(pendingId, decision === "approve");
+      res.json({ redirectUrl });
+    } catch (error) {
+      res.status(400).json({
         error: error instanceof Error ? error.message : String(error),
       });
     }

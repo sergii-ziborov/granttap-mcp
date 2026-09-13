@@ -137,19 +137,21 @@ test("HTTP MCP OAuth discovery matches Cursor Authorize requirements", async (t)
     resource: `${base}/mcp`,
     state: "state-1",
   }).toString();
-  const authorize = await fetch(authorizeUrl);
-  assert.equal(authorize.status, 200);
-  assert.equal(authorize.headers.get("x-frame-options"), "DENY");
-  assert.match(authorize.headers.get("content-security-policy") ?? "", /frame-ancestors 'none'/);
+  const authorize = await fetch(authorizeUrl, { redirect: "manual" });
+  assert.equal(authorize.status, 302);
   assert.equal(authorize.headers.get("referrer-policy"), "no-referrer");
-  const consent = await authorize.text();
-  assert.match(consent, /&lt;script&gt;not Cursor&lt;\/script&gt;/);
-  assert.doesNotMatch(consent, /<script>not Cursor<\/script>/);
-  assert.match(consent, /manual-code/);
-  assert.match(consent, /data\.manualToken/);
-  assert.match(consent, /id="status-phone" class="chip action_required"/);
-  const pendingId = /name="pending_id" value="([^"]+)"/.exec(consent)?.[1];
+  const website = new URL(authorize.headers.get("location")!);
+  assert.equal(website.origin, "https://granttap.com");
+  assert.equal(website.pathname, "/connect");
+  assert.doesNotMatch(website.href, /script|callback|mcp%3Atools/);
+  const pendingId = new URLSearchParams(website.hash.slice(1)).get("request");
   assert.ok(pendingId);
+  const session = await fetch(`${base}/oauth/session?pending_id=${pendingId}`, {
+    headers: { origin: "https://granttap.com" },
+  });
+  assert.equal(session.status, 200);
+  const sessionBody = await session.json() as { clientName: string };
+  assert.equal(sessionBody.clientName, clientName);
 
   const foreignPairing = await fetch(`${base}/oauth/pairing`, {
     method: "POST",

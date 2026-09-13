@@ -50,11 +50,14 @@ async function registeredAuthorization(base: string, verifier: string, clientNam
     code_challenge: challenge, code_challenge_method: "S256", scope: "mcp:tools",
     resource: `${base}/mcp`, state: "state",
   }).toString();
-  const response = await fetch(url);
-  const html = await response.text();
-  const pendingId = /name="pending_id" value="([^"]+)"/.exec(html)?.[1];
+  const response = await fetch(url, { redirect: "manual" });
+  assert.equal(response.status, 302);
+  const website = new URL(response.headers.get("location")!);
+  assert.equal(website.origin, "https://granttap.com");
+  assert.equal(website.pathname, "/connect");
+  const pendingId = new URLSearchParams(website.hash.slice(1)).get("request");
   assert.ok(pendingId);
-  return { clientId: registered.client_id, redirectUri, pendingId, html };
+  return { clientId: registered.client_id, redirectUri, pendingId, website };
 }
 
 test("HTTP OAuth pairs, consents, exchanges a token, and initializes MCP", async (t) => {
@@ -75,14 +78,47 @@ test("HTTP OAuth pairs, consents, exchanges a token, and initializes MCP", async
   });
   const verifier = "v".repeat(64);
   const first = await registeredAuthorization(base, verifier);
+  const websiteOrigin = "https://granttap.com";
+  const previewOrigin = "https://attacker.test";
+  const preflight = await fetch(`${base}/oauth/session`, {
+    method: "OPTIONS", headers: {
+      origin: websiteOrigin,
+      "access-control-request-method": "GET",
+      "access-control-request-private-network": "true",
+    },
+  });
+  assert.equal(preflight.status, 204);
+  assert.equal(preflight.headers.get("access-control-allow-origin"), websiteOrigin);
+  assert.equal(preflight.headers.get("access-control-allow-private-network"), "true");
+  const decisionPreflight = await fetch(`${base}/oauth/decision`, {
+    method: "OPTIONS", headers: {
+      origin: websiteOrigin,
+      "access-control-request-method": "POST",
+      "access-control-request-private-network": "true",
+    },
+  });
+  assert.equal(decisionPreflight.status, 204);
+  assert.equal(decisionPreflight.headers.get("access-control-allow-private-network"), "true");
+  const blockedSession = await fetch(`${base}/oauth/session?pending_id=${first.pendingId}`, {
+    headers: { origin: previewOrigin },
+  });
+  assert.equal(blockedSession.status, 403);
+  const session = await fetch(`${base}/oauth/session?pending_id=${first.pendingId}`, {
+    headers: { origin: websiteOrigin },
+  });
+  assert.equal(session.status, 200);
+  assert.equal(session.headers.get("access-control-allow-origin"), websiteOrigin);
+  const sessionBody = await session.json() as { clientName: string; paired: boolean; providers: unknown[] };
+  assert.equal(sessionBody.clientName, "Cursor");
+  assert.equal(sessionBody.paired, false);
+  assert.ok(sessionBody.providers.some((provider) => (provider as { id?: string }).id === "codex"));
   const foreignConsent = await fetch(`${base}/consent`, {
     method: "POST", redirect: "manual",
     headers: { "content-type": "application/x-www-form-urlencoded", origin: "https://attacker.test" },
     body: new URLSearchParams({ pending_id: first.pendingId, decision: "approve" }),
   });
   assert.equal(foreignConsent.status, 403);
-  // Cursor Settings loads the loopback consent page inside a vscode-webview.
-  // That webview still POSTs Origin: vscode-webview://… — allow it, keep https blocked.
+  // Older Cursor webviews may still submit consent directly from their own Origin.
   const webviewAuth = await registeredAuthorization(base, verifier);
   const cursorWebviewConsent = await fetch(`${base}/consent`, {
     method: "POST", redirect: "manual",
@@ -95,7 +131,7 @@ test("HTTP OAuth pairs, consents, exchanges a token, and initializes MCP", async
   assert.equal(cursorWebviewConsent.status, 302);
   const pairing = await fetch(`${base}/oauth/pairing`, {
     method: "POST", headers: {
-      "content-type": "application/x-www-form-urlencoded", origin: base,
+      "content-type": "application/x-www-form-urlencoded", origin: websiteOrigin,
     }, body: new URLSearchParams({ pending_id: first.pendingId }),
   });
   assert.equal(pairing.status, 200);
@@ -112,8 +148,7 @@ test("HTTP OAuth pairs, consents, exchanges a token, and initializes MCP", async
   assert.equal((await already.json() as { alreadyPaired: boolean }).alreadyPaired, true);
   assert.deepEqual(await readFile(join(root, "machine.json")), savedPairing);
   const codex = await registeredAuthorization(base, verifier, "Codex");
-  assert.match(codex.html, /Authorize Codex/);
-  assert.match(codex.html, /id="reconnect"/);
+  assert.equal(new URLSearchParams(codex.website.hash.slice(1)).get("request"), codex.pendingId);
   const foreignReconnect = await fetch(`${base}/oauth/pairing`, {
     method: "POST", headers: {
       "content-type": "application/x-www-form-urlencoded", origin: "https://attacker.test",
@@ -131,13 +166,14 @@ test("HTTP OAuth pairs, consents, exchanges a token, and initializes MCP", async
   assert.equal(newPairing.alreadyPaired, false);
   assert.match(newPairing.qrDataUrl, /^data:image\/png;base64,/);
   assert.notDeepEqual(await readFile(join(root, "machine.json")), savedPairing);
-  const consent = await fetch(`${base}/consent`, {
-    method: "POST", redirect: "manual",
-    headers: { "content-type": "application/x-www-form-urlencoded", origin: base },
+  const consent = await fetch(`${base}/oauth/decision`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded", origin: websiteOrigin },
     body: new URLSearchParams({ pending_id: second.pendingId, decision: "approve" }),
   });
-  assert.equal(consent.status, 302);
-  const callback = new URL(consent.headers.get("location")!);
+  assert.equal(consent.status, 200);
+  assert.equal(consent.headers.get("access-control-allow-origin"), websiteOrigin);
+  const callback = new URL((await consent.json() as { redirectUrl: string }).redirectUrl);
   const code = callback.searchParams.get("code")!;
   assert.ok(code);
   const tokenResponse = await fetch(`${base}/token`, {

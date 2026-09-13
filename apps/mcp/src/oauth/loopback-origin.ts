@@ -9,6 +9,7 @@ export function isAllowedLoopbackOrigin(
 ): boolean {
   if (!origin) return true;
   if (origin === issuerOrigin) return true;
+  if (origin === "https://granttap.com") return true;
   const lower = origin.toLowerCase();
   return lower.startsWith("vscode-webview:")
     || lower.startsWith("cursor:")

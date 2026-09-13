@@ -46,8 +46,8 @@ granttap connect
 ```
 
 Show the resulting one-time QR in chat. Preserve the short manual code as a
-fallback when the camera or QR rendering is unavailable. The local OAuth
-consent page can offer the same pairing choices when Authorize starts first.
+fallback when the camera or QR rendering is unavailable. When Authorize starts
+first, `granttap.com/connect` offers the same pairing choices.
 
 ### 3. Install policy hooks
 

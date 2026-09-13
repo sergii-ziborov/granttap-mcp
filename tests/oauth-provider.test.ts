@@ -19,16 +19,15 @@ const params = {
   scopes: ["mcp:tools"], state: "state-1", resource: new URL(resource),
 } as AuthorizationParams;
 
-function responseRecorder(): { response: Response; body: () => string; status: () => number } {
-  let body = "";
+function responseRecorder(): { response: Response; location: () => string; status: () => number } {
+  let location = "";
   let status = 0;
   const response = {
     set: () => response,
     status: (value: number) => { status = value; return response; },
-    type: () => response,
-    send: (value: string) => { body = value; return response; },
+    redirect: (value: number, target: string) => { status = value; location = target; return response; },
   } as unknown as Response;
-  return { response, body: () => body, status: () => status };
+  return { response, location: () => location, status: () => status };
 }
 
 test("OAuth provider completes consent, code exchange, verification, and revocation", async (t) => {
@@ -51,9 +50,12 @@ test("OAuth provider completes consent, code exchange, verification, and revocat
 
   const record = responseRecorder();
   await provider.authorize(client, { ...params, scopes: [] }, record.response);
-  assert.equal(record.status(), 200);
-  assert.match(record.body(), /Cursor/);
-  assert.match(record.body(), /mcp:tools/);
+  assert.equal(record.status(), 302);
+  const website = new URL(record.location());
+  assert.equal(website.origin, "https://granttap.com");
+  assert.equal(website.pathname, "/connect");
+  assert.match(website.hash, /request=/);
+  assert.doesNotMatch(record.location(), /mcp%3Atools|callback|Cursor/);
   await assert.rejects(
     provider.authorize(client, { ...params, scopes: ["admin"] }, record.response),
     /mcp:tools scope/,

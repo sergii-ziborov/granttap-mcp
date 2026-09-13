@@ -21,16 +21,16 @@ The commands have separate jobs:
 1. `granttap setup` detects Cursor, installs and verifies the persistent loopback OAuth/MCP
    service, then writes only GrantTap's entry in `~/.cursor/mcp.json`.
 2. `granttap connect` displays a one-time QR and a short manual code for pairing
-   the iPhone or iPad app. If Cursor's consent page already completed pairing,
+   the iPhone or iPad app. If the website already completed pairing,
    this command is not needed again.
 3. `granttap setup` installs the Cursor, Claude Code, and Codex policy hooks and
    the background task-sync helper. OAuth remains a separate authorization.
 4. `granttap status` performs a read-only readiness check.
 
 After `granttap setup`, open **Cursor Settings → MCP → GrantTap** and choose
-**Authorize**. The local consent page confirms access to this Mac's GrantTap
-pairing. If the Mac is not paired, it offers the same one-time QR and manual-code
-fallback as the CLI.
+**Authorize**. The browser opens granttap.com/connect to authorize Cursor.
+If the Mac is not paired, the website shows a one-time QR and manual-code
+fallback; a saved pairing is reused unless you explicitly confirm reconnect.
 
 The OAuth service listens only at `http://127.0.0.1:17342/mcp`. Cursor cannot
 show **Authorize** for a stdio (`command`/`args`) MCP entry, so do not replace the

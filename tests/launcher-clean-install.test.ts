@@ -105,13 +105,13 @@ test("published launcher resolves hoisted dependencies and runs setup/serve in i
   assert.equal(setup.status, 0, setup.stderr);
   const helperState = process.platform === "darwin" ? "Ready" : "Needs attention";
   assert.match(setup.stdout, new RegExp(`Background helper\\s+${helperState}`));
-  assert.match(setup.stdout, /Claude Code\s+(?:Ready|Not installed)/);
+  assert.match(setup.stdout, /Claude Code\s+(?:Authorize in Claude Code|Not installed)/);
   assert.match(setup.stdout, /Codex\s+(?:Needs connection|Not installed)/);
   assert.match(
     setup.stdout,
     /Cursor\s+(?:Beta · (?:Authorize in Cursor|Needs repair)|Not installed)/,
   );
-  assert.match(setup.stdout, /Grok Build\s+(?:Ready|Not installed)/);
+  assert.match(setup.stdout, /Grok Build\s+(?:Authorize in Grok Build|Not installed)/);
   const cursorHooks = readFileSync(join(isolated, "cursor", "hooks.json"), "utf8");
   for (const route of ["cursor", "cursor-after", "cursor-mcp"]) {
     assert.match(cursorHooks, new RegExp(`internal hook ${route}`));

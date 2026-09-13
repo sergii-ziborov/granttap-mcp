@@ -1,11 +1,8 @@
 {
   "mcpServers": {
     "granttap": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "granttap-mcp@0.8.9"
-      ]
+      "type": "http",
+      "url": "http://127.0.0.1:17342/mcp"
     }
   }
 }

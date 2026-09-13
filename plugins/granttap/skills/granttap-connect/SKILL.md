@@ -10,9 +10,10 @@ For status, login, connection controls, or diagnostic requests, call
 computer name, runtime version, saved pairing, observed relay/phone activity,
 provider readiness, Connect, Refresh, and confirmed Reconnect controls.
 
-Codex uses the local OAuth HTTP service. Its plugin Connect/Sign in control
-opens a consent page with a one-time iPhone QR when this computer is unpaired.
-If already paired, approving Codex access needs no new QR. The page offers a
+Codex, Claude Code, Cursor, and Grok Build use the same local OAuth HTTP
+service. Their MCP authorization control opens `granttap.com/connect` with a
+one-time iPhone QR when this computer is unpaired.
+If already paired, approving an app's access needs no new QR. The page offers a
 separate, explicitly confirmed reconnect to replace the phone pairing and
 show a new QR. GrantTap has no account/password; provider authentication is
 separate.
@@ -32,8 +33,7 @@ For reconnect requests, obtain the user's explicit confirmation that replacing
 the current pairing is intended, then call `reconnect` with `confirmed: true`.
 Never infer that confirmation from an unrelated connect or status request.
 
-The Codex plugin requires the durable local OAuth service. If it is missing,
-run `npm install --global granttap-mcp@0.8.10` and `granttap setup`, then
-reopen GrantTap in Codex's plugin manager. Claude Code and Grok Build still
-use the stdio MCP. Provider authentication remains separate from GrantTap
-pairing.
+Every coding-app integration requires the durable local OAuth service. If it is missing,
+run `npm install --global granttap-mcp@0.8.11` and `granttap setup`, then
+retry authorization in the coding app. Provider authentication remains separate
+from GrantTap pairing.

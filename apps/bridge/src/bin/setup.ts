@@ -62,12 +62,12 @@ async function main(): Promise<void> {
     engineFlag >= 0 ? process.argv[engineFlag + 1] : undefined,
   );
   const helper = installMonitorHelper();
-  let cursorService: InstallResult | null = null;
+  let httpService: InstallResult | null = null;
   let cursorConfig: InstallResult | null = null;
-  const codexInstalled = before.agents.some((item) => item.agent === "codex" && item.installed);
-  if (before.cursor.installed || codexInstalled) {
-    cursorService = installHttpMcpService();
-    if (before.cursor.installed && cursorService.status !== "manual") {
+  const mcpClientInstalled = before.agents.some((item) => item.installed);
+  if (before.cursor.installed || mcpClientInstalled) {
+    httpService = installHttpMcpService();
+    if (before.cursor.installed && httpService.status !== "manual") {
       cursorConfig = installCursorHttpConfig();
     }
   }
@@ -76,7 +76,7 @@ async function main(): Promise<void> {
   const installed = new Set(before.agents.filter((item) => item.installed).map((item) => item.agent));
   const cursorReady = cursorHook.status !== "manual"
     && (!before.cursor.installed
-      || (cursorService?.status !== "manual" && cursorConfig?.status !== "manual"));
+      || (httpService?.status !== "manual" && cursorConfig?.status !== "manual"));
 
   process.stdout.write([
     "GrantTap",
@@ -84,13 +84,17 @@ async function main(): Promise<void> {
     `Phone pairing       ${paired ? "Ready" : pairingResult === "failed" ? "Relay unavailable" : "Needs connection"}`,
     `Background helper   ${state(helper)}`,
     "",
-    `Claude Code         ${installed.has("claude") ? state(claudeHook) : "Not installed"}`,
+    `Claude Code         ${installed.has("claude")
+      ? claudeHook.status === "manual" || httpService?.status === "manual"
+        ? "Needs attention" : "Authorize in Claude Code" : "Not installed"}`,
     `Codex               ${installed.has("codex")
-      ? codexHook.status === "manual" || cursorService?.status === "manual"
+      ? codexHook.status === "manual" || httpService?.status === "manual"
         ? "Needs attention" : !paired ? "Needs connection" : "Authorize in Codex; review hooks"
       : "Not installed"}`,
     `Cursor              ${before.cursor.installed ? `Beta · ${cursorReady ? "Authorize in Cursor" : "Needs repair"}` : "Not installed"}`,
-    `Grok Build          ${installed.has("grok") ? "Ready" : "Not installed"}`,
+    `Grok Build          ${installed.has("grok")
+      ? httpService?.status === "manual" ? "Needs attention" : "Authorize in Grok Build"
+      : "Not installed"}`,
     // Governance is edited on the phone but cannot report until an engine is
     // declared here, so say plainly which of the two is missing.
     `Project Governance  ${engine ? "Ready" : "No engine found"}`,

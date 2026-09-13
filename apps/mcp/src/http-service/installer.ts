@@ -27,7 +27,7 @@ export function installHttpMcpService(options: { forceReload?: boolean } = {}): 
 }
 
 function macosOnly(): InstallResult {
-  return { status: "manual", detail: "persistent Cursor OAuth currently requires macOS" };
+  return { status: "manual", detail: "Persistent GrantTap MCP authorization currently requires macOS" };
 }
 
 function configuredMcpUrl(): URL | Error {
@@ -42,13 +42,13 @@ function safeNodeBin(): string | Error {
   const nodeBin = resolveMonitorNodeBin();
   return nodeBin && !isCursorHelperNode(nodeBin)
     ? nodeBin
-    : new Error("No safe absolute Node binary is available; refusing Cursor's short-lived helper node.");
+    : new Error("No safe absolute Node binary is available for the persistent GrantTap service.");
 }
 
 function validateInstallation(nodeBin: string, executable: string): InstallResult | undefined {
   if (!existsSync(executable)) return { status: "manual", detail: `Installed launcher is missing at ${executable}` };
   if (packageRoot.includes("/.npm/_npx/")) {
-    return { status: "manual", detail: "Authorize requires a stable granttap-mcp install; npm's temporary _npx cache is not durable." };
+    return { status: "manual", detail: "Authorization requires a stable granttap-mcp install; npm's temporary _npx cache is not durable." };
   }
   const version = spawnSync(nodeBin, ["--version"], { encoding: "utf8" });
   const major = Number(/^v(\d+)/.exec(version.stdout.trim())?.[1]);
