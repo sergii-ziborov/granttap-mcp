@@ -224,13 +224,8 @@ grok plugin install granttap --trust
 ```
 
 Install **GrantTap** from the Cursor plugin marketplace, then open
-**Cursor Settings → MCP → GrantTap → Authorize**. From a source checkout the
-same plugin can be linked locally:
-
-```bash
-mkdir -p "$HOME/.cursor/plugins/local"
-ln -sfn "$PWD/cursor-plugin" "$HOME/.cursor/plugins/local/granttap"
-```
+**Cursor Customize → MCPs → GrantTap → Authenticate**. Complete authorization
+and any one-time QR pairing on `https://granttap.com/connect`.
 
 Open GrantTap from the plugin page or ask `Show my GrantTap pairing QR.` Codex
 renders an interactive connection card with pairing status, a one-time QR,

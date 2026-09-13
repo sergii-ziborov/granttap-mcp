@@ -15,9 +15,9 @@ async function serve(): Promise<void> {
     process.stderr.write(
       [
         `[granttap-mcp] HTTP MCP + OAuth listening on ${started.mcpUrl}`,
-        "[granttap-mcp] Cursor Settings → Authorize: set ~/.cursor/mcp.json entry to:",
+        "[granttap-mcp] Cursor authentication: set ~/.cursor/mcp.json entry to:",
         `  "granttap": { "url": "${started.mcpUrl}" }`,
-        "[granttap-mcp] Then open Cursor Settings → MCP → GrantTap → Authorize.",
+        "[granttap-mcp] Then open Cursor Customize → MCPs → GrantTap → Authenticate and continue at granttap.com/connect.",
         "",
       ].join("\n"),
     );

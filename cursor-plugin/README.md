@@ -1,17 +1,16 @@
 # GrantTap Cursor plugin
 
 GrantTap connects Cursor to the GrantTap phone app through a loopback-only HTTP
-MCP server. Cursor can show its native **Authorize** action, while GrantTap keeps
+MCP server. Cursor can show its native **Authenticate** action, while GrantTap keeps
 each phone response tied to the exact originating chat and prompt.
 
 ## Connect Cursor
 
-Install the supported CLI, then run the onboarding commands in this order:
+Install the supported CLI and the GrantTap plugin from Cursor's marketplace,
+then run:
 
 ```bash
 npm install -g granttap-mcp
-granttap setup
-granttap connect
 granttap setup
 granttap status
 ```
@@ -20,20 +19,17 @@ The commands have separate jobs:
 
 1. `granttap setup` detects Cursor, installs and verifies the persistent loopback OAuth/MCP
    service, then writes only GrantTap's entry in `~/.cursor/mcp.json`.
-2. `granttap connect` displays a one-time QR and a short manual code for pairing
-   the iPhone or iPad app. If the website already completed pairing,
-   this command is not needed again.
-3. `granttap setup` installs the Cursor, Claude Code, and Codex policy hooks and
-   the background task-sync helper. OAuth remains a separate authorization.
-4. `granttap status` performs a read-only readiness check.
+2. `granttap setup` also installs the supported policy hooks and background
+   task-sync helper. OAuth remains a separate authorization.
+3. `granttap status` performs a read-only readiness check.
 
-After `granttap setup`, open **Cursor Settings → MCP → GrantTap** and choose
-**Authorize**. The browser opens granttap.com/connect to authorize Cursor.
+After `granttap setup`, open **Cursor Customize → MCPs → GrantTap** and choose
+**Authenticate**. The browser opens granttap.com/connect to authorize Cursor.
 If the Mac is not paired, the website shows a one-time QR and manual-code
 fallback; a saved pairing is reused unless you explicitly confirm reconnect.
 
 The OAuth service listens only at `http://127.0.0.1:17342/mcp`. Cursor cannot
-show **Authorize** for a stdio (`command`/`args`) MCP entry, so do not replace the
+show **Authenticate** for a stdio (`command`/`args`) MCP entry, so do not replace the
 plugin's HTTP configuration with stdio.
 
 ## Install from the Cursor marketplace
@@ -42,15 +38,6 @@ Install **GrantTap** from Cursor's plugin marketplace, then reload Cursor.
 The plugin adds the `/connect` command, a connect skill, and the
 exact-correlation rule; `granttap setup` still configures the MCP endpoint
 itself.
-
-From a source checkout, the same plugin can be linked locally:
-
-```bash
-mkdir -p "$HOME/.cursor/plugins/local"
-ln -sfn "$PWD/cursor-plugin" "$HOME/.cursor/plugins/local/granttap"
-```
-
-Run those commands from the repository root.
 
 ## Exact dual-channel behavior
 

@@ -109,7 +109,7 @@ test("published launcher resolves hoisted dependencies and runs setup/serve in i
   assert.match(setup.stdout, /Codex\s+(?:Needs connection|Not installed)/);
   assert.match(
     setup.stdout,
-    /Cursor\s+(?:Beta · (?:Authorize in Cursor|Needs repair)|Not installed)/,
+    /Cursor\s+(?:Beta · (?:Authenticate in Cursor|Needs repair)|Not installed)/,
   );
   assert.match(setup.stdout, /Grok Build\s+(?:Authorize in Grok Build|Not installed)/);
   const cursorHooks = readFileSync(join(isolated, "cursor", "hooks.json"), "utf8");

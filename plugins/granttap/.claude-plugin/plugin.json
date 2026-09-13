@@ -1,7 +1,7 @@
 {
   "name": "granttap",
   "displayName": "GrantTap",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Pair Claude Code with GrantTap and approve, answer, or steer local agent work from iPhone and Apple Watch.",
   "author": {
     "name": "GrantTap",

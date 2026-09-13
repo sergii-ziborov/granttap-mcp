@@ -5,14 +5,14 @@
     "email": "support@granttap.com"
   },
   "metadata": {
-    "description": "GrantTap for Cursor — local HTTP MCP authorization and exactly correlated phone approvals",
-    "version": "0.1.1"
+    "description": "GrantTap for Cursor — authorize on granttap.com/connect and approve local tasks from your phone",
+    "version": "0.1.5"
   },
   "plugins": [
     {
       "name": "granttap",
       "source": "./",
-      "description": "Pair Cursor with GrantTap through loopback OAuth and keep each approval in its originating chat"
+      "description": "Authorize Cursor on granttap.com/connect, pair by QR, and keep each approval in its originating chat"
     }
   ]
 }

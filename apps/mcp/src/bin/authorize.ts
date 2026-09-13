@@ -71,7 +71,7 @@ async function authorize(): Promise<void> {
         `[granttap-mcp] Cursor · Configured — ${cursor.detail}`,
         `[granttap-mcp] Persistent local OAuth is healthy at ${mcpUrl}`,
         `[granttap-mcp] LaunchAgent: ${service.status} (${service.detail})`,
-        "[granttap-mcp] Open Cursor Settings → MCP → GrantTap → Authorize.",
+        "[granttap-mcp] Open Cursor Customize → MCPs → GrantTap → Authenticate. The browser continues at granttap.com/connect.",
         "[granttap-mcp] If this Mac is not paired, granttap.com/connect shows a QR and manual token.",
         "",
       ].join("\n"),

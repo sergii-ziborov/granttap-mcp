@@ -7,13 +7,12 @@ end-to-end.
 
 1. Run `granttap setup` to detect Cursor and configure the persistent loopback HTTP
    MCP/OAuth service.
-2. Open **Cursor Settings → MCP → GrantTap → Authorize**.
-3. Run `granttap connect` if pairing is still required; surface its one-time QR
-   and manual code to the user.
-4. Run `granttap setup`, then verify the result with `granttap status`.
+2. Open **Cursor Customize → MCPs → GrantTap → Authenticate**. Complete
+   authorization and any one-time QR pairing on `https://granttap.com/connect`.
+3. Run `granttap status`, then verify the GrantTap MCP tools respond in Cursor.
 5. For a test question, send the same complete prompt to Cursor and GrantTap
    under one exact correlation. Accept only the first answer correlated to that
    prompt; never reuse a response from another chat or request.
 
 Do not replace the plugin's HTTP MCP entry with stdio: Cursor exposes
-**Authorize** only for HTTP/SSE MCP transports.
+**Authenticate** only for HTTP/SSE MCP transports.

@@ -91,7 +91,7 @@ async function main(): Promise<void> {
       ? codexHook.status === "manual" || httpService?.status === "manual"
         ? "Needs attention" : !paired ? "Needs connection" : "Authorize in Codex; review hooks"
       : "Not installed"}`,
-    `Cursor              ${before.cursor.installed ? `Beta · ${cursorReady ? "Authorize in Cursor" : "Needs repair"}` : "Not installed"}`,
+    `Cursor              ${before.cursor.installed ? `Beta · ${cursorReady ? "Authenticate in Cursor" : "Needs repair"}` : "Not installed"}`,
     `Grok Build          ${installed.has("grok")
       ? httpService?.status === "manual" ? "Needs attention" : "Authorize in Grok Build"
       : "Not installed"}`,
@@ -102,9 +102,9 @@ async function main(): Promise<void> {
     paired && installed.has("codex")
       ? `Next: authorize GrantTap in Codex, then ${CODEX_TRUST_INSTRUCTION}`
       : paired && before.cursor.installed
-        ? "Next: open Cursor Settings → MCP → GrantTap → Authorize."
+        ? "Next: open Cursor Customize → MCPs → GrantTap → Authenticate."
         : !paired
-          ? "Next: run granttap connect."
+          ? "Next: authenticate GrantTap in your coding app; granttap.com/connect will show the pairing QR."
           : engine
             ? "Governance is live. Restart the helper to pick it up: launchctl kickstart -k gui/$(id -u)/com.granttap.monitor"
             : "Governance stays off until an engine is found. Point at one with: granttap setup --engine <path>",

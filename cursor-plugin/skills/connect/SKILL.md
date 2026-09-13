@@ -1,6 +1,6 @@
 ---
 name: granttap-connect
-description: Authorize Cursor and connect or reconnect GrantTap through loopback HTTP MCP. Use when the user asks to connect, pair, show a QR, reconnect, or repair Cursor Authorize.
+description: Authorize Cursor through granttap.com/connect, pair by QR, or reconnect GrantTap. Use when the user asks to connect, pair, show a QR, reconnect, or repair Cursor authentication.
 ---
 
 # GrantTap connect
@@ -9,7 +9,7 @@ Connect Cursor to the GrantTap phone app without weakening chat isolation.
 
 ## Workflow
 
-### 1. Configure Cursor Authorize
+### 1. Configure Cursor authentication
 
 Run:
 
@@ -19,7 +19,8 @@ granttap setup
 
 This installs and verifies the persistent loopback OAuth/MCP service before it
 changes GrantTap's entry in `~/.cursor/mcp.json`. Then direct the user to
-**Cursor Settings → MCP → GrantTap → Authorize**.
+**Cursor Customize → MCPs → GrantTap → Authenticate**. Cursor opens
+`https://granttap.com/connect` for authorization.
 
 The plugin endpoint must remain HTTP:
 
@@ -35,19 +36,15 @@ The plugin endpoint must remain HTTP:
 ```
 
 Do not replace it with a stdio `command`/`args` entry; Cursor does not expose
-its native **Authorize** action for stdio MCP servers.
+its native **Authenticate** action for stdio MCP servers.
 
-### 2. Pair the phone
+### 2. Pair the phone on the website
 
-If the Mac is not already paired, run:
-
-```bash
-granttap connect
-```
-
-Show the resulting one-time QR in chat. Preserve the short manual code as a
-fallback when the camera or QR rendering is unavailable. When Authorize starts
-first, `granttap.com/connect` offers the same pairing choices.
+If this computer has no pairing, `granttap.com/connect` shows a one-time QR and
+manual-code fallback. If it is already paired, the website reuses that pairing
+without replacing its keys. A new QR for another phone requires the user's
+explicit reconnect confirmation on the website. Do not present localhost as
+the user-facing settings page.
 
 ### 3. Install policy hooks
 
@@ -71,8 +68,8 @@ granttap status
 Confirm the loopback HTTP service and exact Cursor MCP entry are healthy,
 pairing is present, and required hooks are ready. `granttap status` cannot prove
 that Cursor retained an OAuth grant, so also confirm the MCP tools respond after
-**Authorize**. If Cursor loaded the MCP configuration beforehand, reload the
-Cursor window and retry **Authorize**.
+**Authenticate**. If Cursor loaded the MCP configuration beforehand, reload the
+Cursor window and retry **Authenticate**.
 
 For any interactive test, send the same complete prompt to Cursor and GrantTap
 under one exact correlation. The first answer carrying that exact correlation
@@ -86,4 +83,5 @@ correlation.
 - Run `granttap cursor repair` if `granttap status` reports an unhealthy OAuth
   service.
 - Re-run `granttap setup` if the policy hooks or background helper are missing.
-- Re-run `granttap connect` only when pairing is absent or must be replaced.
+- If the website cannot reach the local helper, check Chrome's local-network
+  permission for `granttap.com` and the background helper with `granttap status`.

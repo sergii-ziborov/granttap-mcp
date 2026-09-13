@@ -13,7 +13,7 @@ iPhone and Apple Watch.
 Install the durable local GrantTap helper once on macOS:
 
 ```bash
-npm install --global granttap-mcp@0.8.11
+npm install --global granttap-mcp@0.8.12
 granttap setup
 ```
 
@@ -42,7 +42,7 @@ readiness, Connect, Refresh status, and confirmed Reconnect controls.
 Install the same local helper first, then install the plugin:
 
 ```bash
-npm install --global granttap-mcp@0.8.11
+npm install --global granttap-mcp@0.8.12
 granttap setup
 claude plugin marketplace add sergii-ziborov/granttap-mcp
 claude plugin install granttap@granttap
@@ -54,13 +54,13 @@ Claude for connection status.
 
 ### Cursor
 
-After installing the helper, open **Cursor Settings → MCP → GrantTap →
-Authorize**. Cursor uses the same website flow.
+After installing the helper, open **Cursor Customize → MCPs → GrantTap →
+Authenticate**. Cursor uses the same website flow.
 
 ### Grok Build
 
 ```bash
-npm install --global granttap-mcp@0.8.11
+npm install --global granttap-mcp@0.8.12
 granttap setup
 grok plugin marketplace add sergii-ziborov/granttap-mcp
 grok plugin install granttap --trust

@@ -97,7 +97,7 @@ export function inspectCursorHttpConfig(
   }
   const config = parseConfig(path);
   if (!config) {
-    return { status: "action_required", detail: "Cursor mcp.json is invalid JSON; fix it before Authorize." };
+    return { status: "action_required", detail: "Cursor mcp.json is invalid JSON; fix it before authentication." };
   }
   const servers = config.mcpServers;
   if (servers == null) {
@@ -108,7 +108,7 @@ export function inspectCursorHttpConfig(
   }
   const entry = (servers as Record<string, unknown>).granttap;
   if (isHttpEntry(entry, expectedUrl)) {
-    return { status: "action_required", detail: "Endpoint configured; keep local OAuth running and Authorize in Cursor." };
+    return { status: "action_required", detail: "Endpoint configured; keep local OAuth running and complete authentication in Cursor." };
   }
   return entry == null
     ? { status: "not_configured", detail: "Run granttap setup to add Cursor." }

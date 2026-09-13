@@ -31,7 +31,7 @@ test("Cursor OAuth config install preserves unrelated MCP servers and is idempot
   assert.deepEqual(installed.mcpServers.github, { command: "github-mcp" });
   assert.deepEqual(installed.mcpServers.granttap, { url: CURSOR_HTTP_MCP_URL });
   assert.equal(inspectCursorHttpConfig(path).status, "action_required");
-  assert.match(inspectCursorHttpConfig(path).detail, /Authorize/);
+  assert.match(inspectCursorHttpConfig(path).detail, /authentication/);
   assert.equal(installCursorHttpConfig(path).status, "already");
   assert.ok((await readFile(`${path}.bak-granttap`, "utf8")).includes("granttap-mcp@latest"));
 });

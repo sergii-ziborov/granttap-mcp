@@ -8,8 +8,8 @@ granttap setup
 
 When Cursor is installed, setup preserves unrelated MCP entries, installs the
 GrantTap shell and MCP policy hooks, configures the loopback HTTP MCP endpoint,
-and installs its persistent per-user service. Then open **Cursor Settings → MCP
-→ GrantTap → Authorize** to complete authorization on granttap.com.
+and installs its persistent per-user service. Then open **Cursor Customize →
+MCPs → GrantTap → Authenticate** to complete authorization on granttap.com/connect.
 
 The service binds only to loopback. Its OAuth token does not replace GrantTap's
 end-to-end encrypted computer pairing.

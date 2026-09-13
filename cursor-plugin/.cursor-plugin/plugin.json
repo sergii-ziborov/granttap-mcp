@@ -1,8 +1,8 @@
 {
   "name": "granttap",
   "displayName": "GrantTap",
-  "version": "0.1.1",
-  "description": "GrantTap for Cursor: loopback HTTP MCP authorization, phone pairing, and exactly correlated dual-channel approvals. Start with granttap authorize.",
+  "version": "0.1.5",
+  "description": "Connect Cursor to GrantTap through granttap.com/connect, pair your phone with a one-time QR, and keep approvals in the originating chat.",
   "author": {
     "name": "GrantTap",
     "email": "support@granttap.com",
