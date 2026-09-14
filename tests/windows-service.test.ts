@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, linkSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -28,9 +28,11 @@ test("Windows installer preserves foreign tasks, registers a reusable user job, 
   const root = mkdtempSync(join(tmpdir(), "granttap-windows-tasks-"));
   const record = join(root, "task.xml");
   const node = join(root, "node.exe");
-  const launcher = join(root, "granttap-mcp.mjs");
+  const launcher = join(root, "bin", "granttap-mcp.mjs");
   linkSync(process.execPath, node);
+  mkdirSync(join(root, "bin"));
   writeFileSync(launcher, "// fixture\n");
+  writeFileSync(join(root, "package.json"), '{"version":"0.8.15"}');
   const stub = `#!/usr/bin/env node
 const fs = require('node:fs');
 const args = process.argv.slice(2);
@@ -43,6 +45,8 @@ if (args[0] === '/Query') {
   fs.writeFileSync(record, fs.readFileSync(path, 'utf16le').replace(/^\\uFEFF/, ''));
 } else if (args[0] === '/Delete') {
   fs.unlinkSync(record);
+} else if (args[0] === '/End') {
+  fs.writeFileSync(record + '.end', 'ended');
 } else if (args[0] === '/Run' && !fs.existsSync(record)) process.exit(1);
 `;
   writeFileSync(join(root, "schtasks.exe"), stub, { mode: 0o755 });
@@ -65,6 +69,10 @@ if (args[0] === '/Query') {
   assert.deepEqual(inspectWindowsTask("http"), { configured: true, running: true });
   assert.equal(installWindowsTask("http", node, launcher).status, "already");
   assert.match(snapshotWindowsTask("http") ?? "", /InteractiveToken/);
+  writeFileSync(join(root, "package.json"), '{"version":"0.8.16"}');
+  assert.equal(installWindowsTask("http", node, launcher).status, "installed");
+  assert.match(snapshotWindowsTask("http") ?? "", /GrantTap 0\.8\.16 http/);
+  assert.equal(existsSync(`${record}.end`), true);
   assert.equal(restoreWindowsTask("http", null), true);
   assert.equal(existsSync(record), false);
 

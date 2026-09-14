@@ -1,6 +1,6 @@
 /** Per-user Windows Task Scheduler jobs for the loopback MCP and phone monitor. */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { configDir } from "./config";
 import type { InstallResult } from "./install";
@@ -18,7 +18,7 @@ function xml(value: string): string {
     .replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&apos;");
 }
 
-export function windowsTaskDefinition(job: WindowsJob, node: string, launcher: string, owner = "TestUser"): string {
+export function windowsTaskDefinition(job: WindowsJob, node: string, launcher: string, owner = "TestUser", version = "0.0.0"): string {
   const date = new Date(Date.now() - 60_000);
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   const start = local.toISOString().slice(0, 19);
@@ -26,6 +26,7 @@ export function windowsTaskDefinition(job: WindowsJob, node: string, launcher: s
   return [
     '<?xml version="1.0" encoding="UTF-16"?>',
     '<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">',
+    `<RegistrationInfo><Description>GrantTap ${xml(version)} ${job}</Description></RegistrationInfo>`,
     "<Triggers><TimeTrigger>", `<StartBoundary>${start}</StartBoundary>`,
     "<Enabled>true</Enabled><Repetition><Interval>PT1M</Interval></Repetition>",
     "</TimeTrigger></Triggers>",
@@ -85,14 +86,22 @@ export function installWindowsTask(job: WindowsJob, node: string, launcher: stri
   }
   const owner = identity();
   if (!owner) return { status: "manual", detail: "Could not identify the current Windows user." };
+  let version: string;
+  try {
+    version = (JSON.parse(readFileSync(join(dirname(launcher), "..", "package.json"), "utf8")) as { version: string }).version;
+    if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error("invalid version");
+  } catch {
+    return { status: "manual", detail: "Installed GrantTap package version could not be read." };
+  }
   const path = taskFile(job);
-  const definition = windowsTaskDefinition(job, node, launcher, owner);
+  const definition = windowsTaskDefinition(job, node, launcher, owner, version);
   const previousCommand = previous?.match(/<Command>([^<]*)<\/Command>/)?.[1];
   const previousArgs = previous?.match(/<Arguments>([^<]*)<\/Arguments>/)?.[1];
   const normalizedArgs = previousArgs?.replaceAll("&quot;", '"').replaceAll("&amp;", "&");
   const already = previousCommand === xml(node)
     && normalizedArgs === `"${launcher}" internal ${job === "http" ? "serve" : "monitor"}`
-    && previous?.includes("<Interval>PT1M</Interval>") === true;
+    && previous?.includes("<Interval>PT1M</Interval>") === true
+    && previous.includes(`<Description>GrantTap ${version} ${job}</Description>`);
   if (already && !forceReload && inspectWindowsTask(job).running) return { status: "already", detail: names[job] };
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   // Task Scheduler reads an XML file; keep it private to this user's config directory.
@@ -102,7 +111,9 @@ export function installWindowsTask(job: WindowsJob, node: string, launcher: stri
   });
   unlinkSync(path);
   if (created.status !== 0) return { status: "manual", detail: `${names[job]} could not be registered for this Windows user.` };
-  if (forceReload && previous) spawnSync("schtasks.exe", ["/End", "/TN", names[job]], { windowsHide: true });
+  if (previous && (forceReload || !already)) {
+    spawnSync("schtasks.exe", ["/End", "/TN", names[job]], { windowsHide: true });
+  }
   const started = spawnSync("schtasks.exe", ["/Run", "/TN", names[job]], { encoding: "utf8", windowsHide: true });
   return started.status === 0
     ? { status: already ? "already" : "installed", detail: names[job] }
