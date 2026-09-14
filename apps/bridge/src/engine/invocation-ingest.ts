@@ -74,7 +74,7 @@ export function createInvocationIngestor(options: InvocationIngestOptions) {
               ? [sourceGapFact(record.offset)]
               : parseInvocationLine(provider, record.line, parse, record.offset);
             for (const fact of observed) {
-              events.push(eventFor(session, provider, options.computer(), thread, fact, facts));
+              events.push(eventFor(session, provider, options.computer(), thread, record.offset, fact, facts));
             }
           }
           try {
@@ -102,7 +102,7 @@ export function createInvocationIngestor(options: InvocationIngestOptions) {
           ].sort((a, b) => a.offset - b.offset).flatMap((record) =>
             (record.gap ? [sourceGapFact(record.offset)]
               : parseInvocationDecision(record.line, provider, record.offset))
-              .map((fact) => eventFor(session, provider, options.computer(), thread, fact, facts)));
+              .map((fact) => eventFor(session, provider, options.computer(), thread, record.offset, fact, facts)));
           try {
             for (const event of events) {
               await options.client.request({ operation: "invocation.observe", input: event });
@@ -119,14 +119,18 @@ export function createInvocationIngestor(options: InvocationIngestOptions) {
 
 function eventFor(
   session: SessionInfo, provider: Provider, computer: string,
-  thread: string, fact: InvocationFact, repository?: RepositoryFacts,
+  thread: string, offset: number, fact: InvocationFact, repository?: RepositoryFacts,
 ): InvocationEvent {
-  const invocationId = hash([provider, session.sessionId,
-    fact.phase === "source_gap" ? thread : "", fact.callId]);
+  // A native session may be observed again after handoff. The computer is part
+  // of the Execution identity, while Cursor child transcripts also need their
+  // thread path to avoid reusing a call ID from a sibling conversation.
+  const invocationId = hash([computer, provider, session.sessionId,
+    provider === "cursor" || fact.phase === "source_gap" ? thread : "", fact.callId]);
   const resource = fact.resource && repository
     ? repositoryRelative(fact.resource, repository.root) : undefined;
   return {
-    event_id: hash([invocationId, fact.phase, fact.source, resource ?? "", String(fact.occurredAt)]),
+    event_id: hash([invocationId, thread, String(offset), fact.phase, fact.source,
+      resource ?? "", String(fact.occurredAt)]),
     invocation_id: invocationId,
     project_id: session.projectId!,
     task_id: session.taskId!,

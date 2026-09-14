@@ -74,3 +74,33 @@ test("hook denial joins the exact transcript call, preserving rule and revision"
   assert.equal(recorded[1]?.policy_revision, 7);
   assert.equal(recorded[1]?.policy_rule_id, "deny-write");
 });
+
+test("a handed-off session gets a different Invocation identity on another computer", async () => {
+  const source = join(mkdtempSync(join(tmpdir(), "granttap-handoff-")), "session.jsonl");
+  const repeated = JSON.stringify({ message: { content: [
+    { type: "tool_use", id: "reused-call", name: "Read", input: {} },
+  ] } });
+  writeFileSync(source, `${repeated}\n${repeated}\n`);
+  const observed: Array<Extract<EngineOperation, { operation: "invocation.observe" }>["input"]> = [];
+  const client = { request: async (operation: EngineOperation): Promise<EngineResult> => {
+    if (operation.operation === "engine.ping") return { operation: "engine.pong", engine_version: "test" };
+    if (operation.operation === "invocation.observe") {
+      observed.push(operation.input);
+      return { operation: "invocation.observed", sequence: observed.length };
+    }
+    throw new Error("unexpected operation");
+  } };
+  const session = { sessionId: "same-session", agent: "claude", projectId: "project", taskId: "task",
+    cwd: "/repo" } as SessionInfo;
+  for (const computer of ["source-mac", "target-pc"]) {
+    await createInvocationIngestor({
+      client, enabled: () => true, computer: () => computer, paths: () => [source],
+      inspect: () => ({ root: "/repo", canonicalRepositoryId: "repo" }),
+    }).ingest([session]);
+  }
+  assert.equal(observed.length, 4);
+  assert.notEqual(observed[0]?.event_id, observed[1]?.event_id,
+    "a repeated native call is separate evidence, even at the same timestamp");
+  assert.notEqual(observed[0]?.invocation_id, observed[2]?.invocation_id);
+  assert.notEqual(observed[0]?.execution_id, observed[2]?.execution_id);
+});
