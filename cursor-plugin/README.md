@@ -25,8 +25,15 @@ The commands have separate jobs:
 
 After `granttap setup`, open **Cursor Customize → MCPs → GrantTap** and choose
 **Authenticate**. The browser opens granttap.com/connect to authorize Cursor.
-If the Mac is not paired, the website shows a one-time QR and manual-code
+If this computer is not paired, the website shows a one-time QR and manual-code
 fallback; a saved pairing is reused unless you explicitly confirm reconnect.
+
+On Windows, `granttap setup` registers the loopback MCP and phone monitor as
+least-privileged jobs under your signed-in account. Install Node.js 20+ and the
+current `granttap-mcp` package on that same Windows computer; the plugin alone
+cannot start the local server. The jobs restart after a crash and keep running
+when Cursor closes. Run `granttap status` to confirm readiness before choosing
+**Authenticate** in Cursor.
 
 The OAuth service listens only at `http://127.0.0.1:17342/mcp`. Cursor cannot
 show **Authenticate** for a stdio (`command`/`args`) MCP entry, so do not replace the

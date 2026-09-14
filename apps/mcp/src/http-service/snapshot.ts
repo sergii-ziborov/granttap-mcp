@@ -11,6 +11,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname } from "node:path";
+import { inspectWindowsTask, restoreWindowsTask, snapshotWindowsTask, windowsTaskName } from "../../../bridge/src/windows-service";
 import {
   httpMcpLaunchAgentPath,
   isConfiguredHttpService,
@@ -32,6 +33,15 @@ export type HttpMcpServiceSnapshot = {
 
 /** Exact plist bytes/mode and loaded state for transactional repair rollback. */
 export function snapshotHttpMcpService(): HttpMcpServiceSnapshot {
+  if (process.platform === "win32") {
+    const task = snapshotWindowsTask("http");
+    const state = inspectWindowsTask("http");
+    return {
+      path: windowsTaskName("http"), exists: task !== null,
+      plist: task === null ? null : Buffer.from(task), mode: 0o600,
+      owned: state.configured, configured: state.configured, running: state.running,
+    };
+  }
   const path = httpMcpLaunchAgentPath();
   if (!existsSync(path)) return missingSnapshot(path);
   let plist: Buffer;
@@ -65,6 +75,7 @@ function unreadableSnapshot(path: string): HttpMcpServiceSnapshot {
 
 /** Read-only plist/process inspection. Health is probed separately. */
 export function inspectHttpMcpService(): HttpMcpServiceStatus {
+  if (process.platform === "win32") return inspectWindowsTask("http");
   if (process.platform !== "darwin") return { configured: false, running: false };
   const snapshot = snapshotHttpMcpService();
   return { configured: snapshot.configured, running: snapshot.configured && snapshot.running };
@@ -72,6 +83,10 @@ export function inspectHttpMcpService(): HttpMcpServiceStatus {
 
 /** Restore a failed repair, deleting the service only when this attempt created it. */
 export function restoreHttpMcpServiceAfterFailure(before: HttpMcpServiceSnapshot): boolean {
+  if (process.platform === "win32") {
+    if (before.exists && !before.owned) return false;
+    return restoreWindowsTask("http", before.plist?.toString("utf8") ?? null);
+  }
   if (before.exists && !before.owned) return false;
   const current = currentOwnedPlist(before.path);
   if (current === undefined) return false;

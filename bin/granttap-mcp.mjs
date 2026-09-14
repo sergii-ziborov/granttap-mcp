@@ -2,7 +2,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -107,7 +107,7 @@ const child = spawn(
     cwd: root,
     env: {
       ...process.env,
-      NODE_PATH: [join(root, "node_modules"), process.env.NODE_PATH].filter(Boolean).join(":"),
+      NODE_PATH: [join(root, "node_modules"), process.env.NODE_PATH].filter(Boolean).join(delimiter),
     },
   },
 );

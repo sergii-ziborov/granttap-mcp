@@ -13,7 +13,7 @@ import { createOneTimePairing, DEFAULT_RELAY, PAIRING_CODE_TTL_MINUTES } from ".
 import { declareEngine } from "../engine/engine-declaration";
 import { isMachineConfigured } from "../../../mcp/src/pairing-status";
 import { installCursorHttpConfig } from "../../../mcp/src/cursor-config";
-import { installHttpMcpService } from "../../../mcp/src/http-service";
+import { installHttpMcpService, waitForHttpMcpHealth } from "../../../mcp/src/http-service";
 
 function state(result: InstallResult): string {
   return result.status === "manual" ? "Needs attention" : "Ready";
@@ -67,6 +67,10 @@ async function main(): Promise<void> {
   const mcpClientInstalled = before.agents.some((item) => item.installed);
   if (before.cursor.installed || mcpClientInstalled) {
     httpService = installHttpMcpService();
+    if (process.platform === "win32" && httpService.status !== "manual"
+      && !await waitForHttpMcpHealth(undefined, 15_000)) {
+      httpService = { status: "manual", detail: "Windows background service did not become healthy." };
+    }
     if (before.cursor.installed && httpService.status !== "manual") {
       cursorConfig = installCursorHttpConfig();
     }

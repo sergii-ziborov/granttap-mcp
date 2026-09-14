@@ -5,13 +5,14 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { isCursorHelperNode, resolveMonitorNodeBin, type InstallResult } from "../../../bridge/src/install";
 import { configDir, normalizeRelayUrl } from "../../../bridge/src/config";
+import { installWindowsTask } from "../../../bridge/src/windows-service";
 import { configuredCursorHttpMcpUrl } from "../cursor-config";
 import { HTTP_SERVICE_LABEL, httpMcpLaunchAgentPath, packageRoot, xml } from "./common";
 import { inspectHttpMcpService, restoreHttpMcpServiceAfterFailure, snapshotHttpMcpService } from "./snapshot";
 
 /** Install/repair and load a per-user, loopback-only OAuth MCP daemon. */
 export function installHttpMcpService(options: { forceReload?: boolean } = {}): InstallResult {
-  if (process.platform !== "darwin") return macosOnly();
+  if (process.platform !== "darwin" && process.platform !== "win32") return macosOnly();
   const mcpUrl = configuredMcpUrl();
   if (mcpUrl instanceof Error) return { status: "manual", detail: mcpUrl.message };
   const nodeBin = safeNodeBin();
@@ -19,6 +20,12 @@ export function installHttpMcpService(options: { forceReload?: boolean } = {}): 
   const executable = join(packageRoot, "bin", "granttap-mcp.mjs");
   const installation = validateInstallation(nodeBin, executable);
   if (installation) return installation;
+  if (process.platform === "win32") {
+    if (mcpUrl.href !== "http://127.0.0.1:17342/mcp") {
+      return { status: "manual", detail: "Windows background service currently uses the default loopback endpoint." };
+    }
+    return installWindowsTask("http", nodeBin, executable, options.forceReload);
+  }
   const path = httpMcpLaunchAgentPath();
   const logsDir = join(configDir(), "logs");
   const plist = createPlist(nodeBin, executable, mcpUrl, logsDir);

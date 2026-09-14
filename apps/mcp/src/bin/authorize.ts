@@ -13,7 +13,6 @@ import {
   waitForHttpMcpHealth,
 } from "../http-service";
 import type { InstallResult } from "../../../bridge/src/install";
-import { existsSync } from "node:fs";
 
 async function authorize(): Promise<void> {
   const preflight = validateCursorHttpConfig();
@@ -33,7 +32,7 @@ async function authorize(): Promise<void> {
     if (alreadyHealthy) {
       if (before.configured && before.running) {
         service = { status: "already", detail: httpMcpLaunchAgentPath() };
-      } else if (existsSync(httpMcpLaunchAgentPath())) {
+      } else if (serviceBefore.exists) {
         repairAttempted = true;
         service = installHttpMcpService({ forceReload: true });
       } else {
@@ -70,9 +69,9 @@ async function authorize(): Promise<void> {
       [
         `[granttap-mcp] Cursor · Configured — ${cursor.detail}`,
         `[granttap-mcp] Persistent local OAuth is healthy at ${mcpUrl}`,
-        `[granttap-mcp] LaunchAgent: ${service.status} (${service.detail})`,
+        `[granttap-mcp] Background service: ${service.status} (${service.detail})`,
         "[granttap-mcp] Open Cursor Customize → MCPs → GrantTap → Authenticate. The browser continues at granttap.com/connect.",
-        "[granttap-mcp] If this Mac is not paired, granttap.com/connect shows a QR and manual token.",
+        "[granttap-mcp] If this computer is not paired, granttap.com/connect shows a QR and manual token.",
         "",
       ].join("\n"),
     );

@@ -28,6 +28,7 @@ import { spawnSync } from "node:child_process";
 import type { CodingAgent } from "../../../packages/protocol/schema";
 import { refusesLiveLaunchd } from "./launchd-safety";
 import { configDir, loadRuntimeConfig, verifiableEngine } from "./config";
+import { inspectWindowsTask, installWindowsTask } from "./windows-service";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
@@ -287,6 +288,7 @@ export type MonitorIntegrationStatus = {
 
 /** Read-only status check. It never installs, reloads, or repairs the helper. */
 export function inspectMonitorHelper(): MonitorIntegrationStatus {
+  if (process.platform === "win32") return inspectWindowsTask("monitor");
   if (process.platform !== "darwin") return { configured: false, running: false };
   const agentsDir = process.env.GRANTTAP_LAUNCH_AGENTS_DIR
     ?? join(homedir(), "Library", "LaunchAgents");
@@ -340,7 +342,8 @@ function xml(value: string): string {
 }
 
 export function isCursorHelperNode(nodePath: string): boolean {
-  return nodePath.includes("Cursor.app") || nodePath.includes("/helpers/node");
+  return /Cursor\.app|[\\/]Cursor[\\/].*[\\/]helpers[\\/]node/i.test(nodePath)
+    || nodePath.includes("/helpers/node");
 }
 
 /** True when a plist uses the caller's explicit development monitor pin. */
@@ -407,6 +410,12 @@ function engineEnvironment(): string[] {
 }
 
 export function installMonitorHelper(): InstallResult {
+  if (process.platform === "win32") {
+    const node = resolveMonitorNodeBin();
+    return node && !isCursorHelperNode(node)
+      ? installWindowsTask("monitor", node, join(repoRoot, "bin", "granttap-mcp.mjs"))
+      : { status: "manual", detail: "A stable Node.js 20+ installation is required for Windows background sync." };
+  }
   if (process.platform !== "darwin") {
     return { status: "manual", detail: "background task sync currently requires macOS" };
   }

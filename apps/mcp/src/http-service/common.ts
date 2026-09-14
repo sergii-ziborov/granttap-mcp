@@ -7,6 +7,7 @@ export const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "
 export const HTTP_SERVICE_LABEL = "com.granttap.mcp-http";
 
 export function httpMcpLaunchAgentPath(): string {
+  if (process.platform === "win32") return "GrantTap MCP HTTP";
   const agentsDir = process.env.GRANTTAP_LAUNCH_AGENTS_DIR
     ?? join(homedir(), "Library", "LaunchAgents");
   return join(agentsDir, `${HTTP_SERVICE_LABEL}.plist`);

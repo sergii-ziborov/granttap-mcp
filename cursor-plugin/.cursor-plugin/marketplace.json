@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "GrantTap for Cursor — authorize on granttap.com/connect and approve local tasks from your phone",
-    "version": "0.1.5"
+    "version": "0.1.6"
   },
   "plugins": [
     {
