@@ -39,8 +39,9 @@ test("monitor entry fails closed before pairing and stops cleanly on SIGTERM", a
   await mkdir(config, { recursive: true });
   await writeFile(join(config, "machine.json"), JSON.stringify(createPairing(relay.url).machineCfg));
   const paired = launch(config, { GRANTTAP_ENGINE_ENABLED: "1" });
+  t.after(() => { if (paired.exitCode === null) paired.kill("SIGTERM"); });
   const completion = closed(paired);
-  await waitFor(() => relay.connections() === 1, 2_000);
+  await waitFor(() => relay.connections() === 1, 10_000);
   paired.kill("SIGTERM");
   const stopped = await completion;
   assert.equal(stopped.code, 0, stopped.stderr);

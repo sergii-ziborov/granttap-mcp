@@ -135,9 +135,24 @@ test("HTTP OAuth pairs, consents, exchanges a token, and initializes MCP", async
     }, body: new URLSearchParams({ pending_id: first.pendingId }),
   });
   assert.equal(pairing.status, 200);
-  const pairingBody = await pairing.json() as { alreadyPaired: boolean; qrDataUrl: string };
+  const pairingBody = await pairing.json() as {
+    alreadyPaired: boolean; viewId: string; qrDataUrl?: string; manualToken?: string;
+  };
   assert.equal(pairingBody.alreadyPaired, false);
-  assert.match(pairingBody.qrDataUrl, /^data:image\/png;base64,/);
+  assert.match(pairingBody.viewId, /^[0-9a-f-]{36}$/);
+  assert.equal(pairingBody.qrDataUrl, undefined);
+  assert.equal(pairingBody.manualToken, undefined);
+  const frame = await fetch(`${base}/oauth/pairing/view?view_id=${pairingBody.viewId}`, {
+    headers: { origin: websiteOrigin },
+  });
+  assert.equal(frame.status, 200);
+  assert.equal(frame.headers.get("access-control-allow-origin"), null);
+  assert.equal(frame.headers.get("x-frame-options"), null);
+  assert.match(frame.headers.get("content-security-policy") ?? "", /frame-ancestors https:\/\/granttap\.com/);
+  assert.equal(frame.headers.get("cache-control"), "no-store");
+  assert.match(await frame.text(), /data:image\/png;base64,/);
+  const missingFrame = await fetch(`${base}/oauth/pairing/view?view_id=invalid`);
+  assert.equal(missingFrame.status, 404);
 
   const second = await registeredAuthorization(base, verifier);
   const savedPairing = await readFile(join(root, "machine.json"));

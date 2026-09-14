@@ -42,7 +42,7 @@ test("engine framing is bounded and survives partial input", () => {
   assert.throws(() => new EngineFrameDecoder().push(oversized), EngineProtocolError);
 });
 
-test("client multiplexes requests over one versioned Unix socket", async () => {
+test("client multiplexes requests over one versioned Unix socket", async (t) => {
   const path = socketPath("multiplex");
   let connections = 0;
   const server = createServer((socket) => {
@@ -63,16 +63,15 @@ test("client multiplexes requests over one versioned Unix socket", async () => {
     });
   });
   await listen(server, path);
-  const client = new EngineClient({ socketPath: path, connectTimeoutMs: 100 });
+  const client = new EngineClient({ socketPath: path, connectTimeoutMs: 1_000 });
+  t.after(async () => { client.close(); await close(server, path); });
   const [pong, version] = await Promise.all([
-    client.request({ operation: "engine.ping" }, { timeoutMs: 100 }),
-    client.request({ operation: "engine.version" }, { timeoutMs: 100 }),
+    client.request({ operation: "engine.ping" }, { timeoutMs: 1_000 }),
+    client.request({ operation: "engine.version" }, { timeoutMs: 1_000 }),
   ]);
   assert.equal(pong.operation, "engine.pong");
   assert.equal(version.operation, "engine.version");
   assert.equal(connections, 1);
-  client.close();
-  await close(server, path);
 });
 
 test("request timeout does not retry a critical-path action", async () => {

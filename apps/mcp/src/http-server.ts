@@ -14,11 +14,10 @@ import {
 import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import express from "express";
-import QRCode from "qrcode";
-import { createOneTimePairing, DEFAULT_RELAY } from "../../bridge/src/pairing";
 import { inspectAgentIntegrations } from "../../bridge/src/install";
 import { createGrantTapServer, relay, resetRelay } from "./create-server";
 import { isAllowedLoopbackOrigin } from "./oauth/loopback-origin";
+import { installPairingRoutes } from "./oauth/pairing-view";
 import { GrantTapOAuthProvider } from "./oauth-provider";
 import { isMachineConfigured } from "./pairing-status";
 
@@ -67,6 +66,7 @@ export async function startHttpMcpServer(options: ServeOptions = {}): Promise<{
   // authorization. The random pending id lives in the website URL fragment,
   // never in a request to the website server.
   app.use(["/oauth/session", "/oauth/pairing", "/oauth/decision"], (req, res, next) => {
+    if (req.originalUrl.split("?", 1)[0] === "/oauth/pairing/view") return next();
     const origin = req.get("origin");
     if (origin && origin !== "https://granttap.com"
         && !isAllowedLoopbackOrigin(origin, issuerUrl.origin)) {
@@ -105,58 +105,7 @@ export async function startHttpMcpServer(options: ServeOptions = {}): Promise<{
     });
   });
 
-  app.post("/oauth/pairing", async (req, res) => {
-    res.set("Cache-Control", "no-store");
-    try {
-      const origin = req.get("origin");
-      if (!isAllowedLoopbackOrigin(origin, issuerUrl.origin)) {
-        res.status(403).json({ error: "Cross-origin pairing requests are not allowed." });
-        return;
-      }
-      const pendingId = String(req.body?.pending_id ?? "");
-      if (!provider.getPending(pendingId)) {
-        res.status(400).json({ error: "Authorization request expired. Start authorization again from your MCP client." });
-        return;
-      }
-      if (isMachineConfigured() && req.body?.confirmed !== "true") {
-        res.json({ ok: true, alreadyPaired: true });
-        return;
-      }
-      const pairing = await createOneTimePairing(
-        process.env.GRANTTAP_RELAY_URL ?? process.env.NODVOX_RELAY_URL ?? DEFAULT_RELAY,
-        { installHooks: false },
-      );
-      resetRelay();
-      void relay();
-      const png = await QRCode.toBuffer(pairing.qrPayload, {
-        type: "png",
-        width: 480,
-        margin: 2,
-        errorCorrectionLevel: "L",
-      });
-      res.json({
-        ok: true,
-        alreadyPaired: false,
-        qrDataUrl: `data:image/png;base64,${png.toString("base64")}`,
-        manualToken: pairing.manualToken,
-        relay: pairing.httpBase,
-        providers: [
-          pairing.claude && {
-            id: "claude",
-            status: pairing.claude.status === "manual" ? "action_required" : "connected",
-          },
-          pairing.codex && {
-            id: "codex",
-            status: pairing.codex.status === "manual" ? "action_required" : "connected",
-          },
-        ].filter(Boolean),
-      });
-    } catch (error) {
-      res.status(500).json({
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  });
+  installPairingRoutes(app, provider, issuerUrl.origin);
 
   app.post("/oauth/decision", (req, res) => {
     res.set("Cache-Control", "no-store");
