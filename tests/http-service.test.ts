@@ -215,9 +215,18 @@ test("authorize installs a persistent loopback service, verifies health, then ex
   assert.match(plist, /<key>KeepAlive<\/key>\s*<true\/>/);
   assert.doesNotMatch(plist, /Cursor\.app|\/helpers\/node/);
   assert.match(plist, new RegExp(`<string>${port}<\\/string>`));
+  const packageVersion = (JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8")) as { version: string }).version;
+  assert.match(plist, new RegExp(`<key>GRANTTAP_PACKAGE_VERSION<\\/key>\\s*<string>${packageVersion.replaceAll(".", "\\.")}<\\/string>`));
   assert.deepEqual(inspectHttpMcpService(), { configured: true, running: true });
   assert.equal(installHttpMcpService().status, "already");
+  const previousPid = readFileSync(pidFile, "utf8");
+  writeFileSync(plistPath, plist.replace(`<string>${packageVersion}</string>`, "<string>0.0.0</string>"));
+  const upgraded = await run(["setup"], { ...process.env });
+  assert.equal(upgraded.code, 0, upgraded.stderr);
+  assert.notEqual(readFileSync(pidFile, "utf8"), previousPid);
+  assert.equal(readFileSync(plistPath, "utf8"), plist);
   const mcpUrl = `http://127.0.0.1:${port}/mcp`;
+  await waitFor(() => probeHttpMcpHealth(mcpUrl));
   assert.equal(await probeHttpMcpHealth(mcpUrl), true);
   assert.deepEqual(await inspectCursorOAuthReadiness(), {
     configured: true,

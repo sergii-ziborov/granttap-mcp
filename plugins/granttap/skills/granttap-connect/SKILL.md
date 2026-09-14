@@ -41,6 +41,6 @@ the current pairing is intended, then call `reconnect` with `confirmed: true`.
 Never infer that confirmation from an unrelated connect or status request.
 
 Every coding-app integration requires the durable local OAuth service. If it is missing,
-run `npm install --global granttap-mcp@0.8.13` and `granttap setup`, then
+run `npm install --global granttap-mcp@0.8.14` and `granttap setup`, then
 retry authorization in the coding app. Provider authentication remains separate
 from GrantTap pairing.

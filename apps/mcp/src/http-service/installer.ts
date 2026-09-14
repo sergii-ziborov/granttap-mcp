@@ -58,7 +58,14 @@ function validateInstallation(nodeBin: string, executable: string): InstallResul
 }
 
 function createPlist(nodeBin: string, executable: string, mcpUrl: URL, logsDir: string): string | Error {
-  const environment = serviceEnvironment(nodeBin, mcpUrl);
+  let packageVersion: string;
+  try {
+    packageVersion = (JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8")) as { version: string }).version;
+    if (!/^\d+\.\d+\.\d+$/.test(packageVersion)) throw new Error("Invalid package version");
+  } catch {
+    return new Error("Installed GrantTap package version could not be read.");
+  }
+  const environment = serviceEnvironment(nodeBin, mcpUrl, packageVersion);
   if (environment instanceof Error) return environment;
   const logPath = join(logsDir, "http-mcp.log");
   return [
@@ -79,12 +86,13 @@ function createPlist(nodeBin: string, executable: string, mcpUrl: URL, logsDir: 
   ].join("\n");
 }
 
-function serviceEnvironment(nodeBin: string, mcpUrl: URL): Array<[string, string]> | Error {
+function serviceEnvironment(nodeBin: string, mcpUrl: URL, packageVersion: string): Array<[string, string]> | Error {
   const path = [dirname(nodeBin), join(homedir(), ".local", "bin"), "/usr/local/bin", "/opt/homebrew/bin", "/usr/bin", "/bin"].join(":");
   const values: Array<[string, string]> = [
     ["GRANTTAP_CONFIG_DIR", configDir()],
     ["GRANTTAP_MCP_HTTP_HOST", mcpUrl.hostname.replace(/^\[(.*)\]$/, "$1")],
     ["GRANTTAP_MCP_HTTP_PORT", mcpUrl.port],
+    ["GRANTTAP_PACKAGE_VERSION", packageVersion],
     ["PATH", path],
   ];
   const rawRelayUrl = process.env.GRANTTAP_RELAY_URL ?? process.env.NODVOX_RELAY_URL;
