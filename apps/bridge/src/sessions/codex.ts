@@ -79,6 +79,11 @@ const codexLogPathBySession = new Map<string, string>();
 const codexActivitySourcesBySession = new Map<string, CodexActivitySource[]>();
 const codexAggregatedObservationsBySession = new Map<string, CapabilityObservation[]>();
 
+export function codexTranscriptPaths(sessionId: string): string[] {
+  return codexActivitySourcesBySession.get(sessionId)?.map((source) => source.path)
+    ?? [codexLogPathBySession.get(sessionId)].filter((path): path is string => path != null);
+}
+
 const CODEX_SUMMARY_HEAD_BYTES = 128 * 1024;
 const CODEX_SUMMARY_TAIL_BYTES = 512 * 1024;
 const CODEX_ACTIVITY_HEAD_BYTES = 256 * 1024;

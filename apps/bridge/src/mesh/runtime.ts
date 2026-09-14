@@ -131,9 +131,13 @@ export function createMeshRuntime(deps: MeshRuntimeDependencies) {
         targetProviderEnabled: request.targetProvider === "grok_bot"
           || deps.providerEnabled(request.targetProvider),
         conflicts: (capsule?.resourceClaims ?? []).flatMap((resource) =>
-          deps.store().conflicts(request.projectId, request.sessionId, resource)),
+          deps.store().conflicts(request.projectId, request.sessionId, resource, {
+            repositoryId: capsule?.repository, endpointId: deps.computer(), worktree: cwd,
+          }, true)),
         moduleOverlaps: (capsule?.resourceClaims ?? []).flatMap((resource) =>
-          deps.store().moduleOverlaps(request.projectId, request.sessionId, resource)),
+          deps.store().moduleOverlaps(request.projectId, request.sessionId, resource, {
+            repositoryId: capsule?.repository, endpointId: deps.computer(), worktree: cwd,
+          })),
       });
       if (!readiness.ready) {
         await blockHandoff(client, request, readiness.blockedReason ?? "Handoff is not ready.");

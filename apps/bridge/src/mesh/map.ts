@@ -104,9 +104,11 @@ export function meshMap(snapshot: MeshSnapshot, now = Date.now()): string {
   const byModule = new Map<string, string[]>();
   for (const claim of snapshot.claims) {
     const module = moduleRoot(claim.resource) || "(top level)";
+    const repository = repositoryName(claim.repositoryId, snapshot);
+    const scope = repository ? `${repository} / ${module}` : module;
     const how = claim.mode === "intent" ? "seen editing" : "claimed";
     const entry = `${taskTitle(snapshot, claim.taskId)} (${how} ${claim.resource})`;
-    byModule.set(module, [...(byModule.get(module) ?? []), entry]);
+    byModule.set(scope, [...(byModule.get(scope) ?? []), entry]);
   }
   lines.push("", "## Editing now", "");
   if (byModule.size === 0) lines.push("- (nothing claimed)");
@@ -166,7 +168,10 @@ export function meshBrief(snapshot: MeshSnapshot, taskId: string, now = Date.now
   }
   const neighbours = scopedNeighbours(snapshot, taskId).slice(0, 5);
   for (const { claim, kind } of neighbours) {
-    lines.push(`Next to you: ${taskTitle(snapshot, claim.taskId)} is ${kind === "file" ? "editing the same file" : "working in the same module"} — ${claim.resource}.`);
+    const relation = kind === "file" ? "editing the same checkout file"
+      : kind === "logical_file" ? "editing that path in another checkout"
+        : "working in the same module";
+    lines.push(`Next to you: ${taskTitle(snapshot, claim.taskId)} is ${relation} — ${claim.resource}.`);
   }
   for (const row of otherSide(snapshot, taskId).slice(0, 3)) {
     const through = row.through ? ` ${row.through}` : "";

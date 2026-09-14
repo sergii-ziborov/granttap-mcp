@@ -7,6 +7,30 @@ import { ancestors } from "./descriptors";
 /** Skills available globally and along the task's repository path. */
 export function workspaceSkills(cwd: string | undefined): SkillInfo[] {
   const found = new Map<string, SkillInfo>();
+  for (const root of skillRoots(cwd)) {
+    for (const skill of skillsIn(root)) {
+      if (!found.has(skill.name)) found.set(skill.name, skill);
+    }
+  }
+  return [...found.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** The source file behind a named skill, in the same precedence as the catalog. */
+export function skillDefinitionPath(name: string, cwd: string | undefined): string | undefined {
+  for (const root of skillRoots(cwd)) {
+    let entries: string[];
+    try { entries = readdirSync(root); }
+    catch { continue; }
+    for (const entry of entries) {
+      if (entry.startsWith(".")) continue;
+      const path = join(root, entry, "SKILL.md");
+      if (frontmatter(path)?.name === name) return path;
+    }
+  }
+  return undefined;
+}
+
+function skillRoots(cwd: string | undefined): string[] {
   const roots = [
     join(homedir(), ".cursor", "skills-cursor"),
     join(homedir(), ".agents", "skills"),
@@ -21,12 +45,7 @@ export function workspaceSkills(cwd: string | undefined): SkillInfo[] {
       );
     }
   }
-  for (const root of roots) {
-    for (const skill of skillsIn(root)) {
-      if (!found.has(skill.name)) found.set(skill.name, skill);
-    }
-  }
-  return [...found.values()].sort((a, b) => a.name.localeCompare(b.name));
+  return roots;
 }
 
 function skillsIn(root: string): SkillInfo[] {

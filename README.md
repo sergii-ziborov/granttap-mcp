@@ -54,15 +54,38 @@ and completion events through the existing `notify` tool, and read state from a
 Mesh resource. Full transcripts and hidden reasoning are never mesh payloads.
 Claims have TTLs; a colliding claim is rejected before it is recorded so agents
 can choose different work or contact the owner before escalating to Needs You.
+Observed edit-tool requests are intent claims, not confirmed writes. Resource
+identity includes the repository; equal relative paths from separate repositories
+do not conflict, and another checkout is a coordination warning. The path
+matcher respects segment boundaries, so `src/auth.ts` and `src/auth.ts.bak`
+are distinct. A live repository reading refreshes HEAD after commit or checkout.
+
+When a separately distributed, verified GrantTap Engine is enabled on the
+computer, the bridge sends content-free Invocation events before its small Usage
+buffer is trimmed. Claude Code, Codex, and Cursor transcript scanners record
+native call identity, request, reported outcome, resource path, and explicit
+source gaps. The Engine owns the durable journal and bounded cursor history;
+the phone requests the latest or older page under the Project E2EE key. A
+reported successful tool call alone does not prove a filesystem change, and
+unavailable Engine history is reported as unavailable.
+The bridge does not yet produce verified filesystem-change events or attach
+revision-bound impact/consumer links to individual Invocations. It leaves that
+evidence unknown instead of treating an edit request or reported success as a
+confirmed content change.
+Claude Code and Codex denials with native call IDs are recorded as separate,
+metadata-only hook events with the applied rule and policy revision; an
+unidentified Cursor decision is not assigned to an invented call. Script and
+`SKILL.md` fingerprints include a content hash when the local file is readable,
+separate from their path identity. Missing content evidence remains unknown.
 
 <p align="center">
   <img src="docs/images/iphone-projects-shared.png" width="200" alt="Projects: one owned by this phone, one shared by another">
   <img src="docs/images/iphone-project-mesh.png" width="200" alt="A Project: Governance, members and computers, Mesh status, repositories, Tasks">
-  <img src="docs/images/iphone-task-route.png" width="200" alt="A Task: its executions, its claims, and who else is in its files">
+  <img src="docs/images/iphone-task-route.png" width="200" alt="A Task: executions, Runtime history, and resource claims">
   <img src="docs/images/iphone-handoff.png" width="200" alt="Task handoff: destination, push, and readiness checks">
 </p>
 
-<p align="center"><em>Projects, one of them shared by another phone · a Project with its Governance, members, computers, repositories, and Tasks · a Task with its executions and claims · a handoff with its readiness checks</em></p>
+<p align="center"><em>Projects, one of them shared by another phone · a Project with its Governance, members, computers, repositories, and Tasks · a Task with executions, Runtime history, and claims · a handoff with its readiness checks</em></p>
 
 For Claude Code, Codex, and Cursor, the provider hook runs inside the agent's
 own session and sees the exact call. GrantTap attributes every `notify` to the
@@ -223,8 +246,9 @@ grok plugin marketplace add sergii-ziborov/granttap-mcp
 grok plugin install granttap --trust
 ```
 
-Import `sergii-ziborov/granttap-mcp` as a private Git plugin in Cursor. The
-MIT-licensed plugin is ready for Cursor's public review. Reload Cursor, then open
+For Cursor, use the reviewed **GrantTap** Marketplace listing when it is visible
+to your account, or import the public `sergii-ziborov/granttap-mcp` repository
+once. Reload Cursor, then open
 **Cursor Customize → MCPs → GrantTap → Authenticate**. Complete authorization
 and any one-time QR pairing on `https://granttap.com/connect`.
 

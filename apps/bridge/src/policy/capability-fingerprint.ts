@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { lstatSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, isAbsolute, normalize, resolve } from "node:path";
 import type {
@@ -6,6 +7,7 @@ import type {
   CapabilityKind,
 } from "../engine/engine-policy-types";
 import { commandName } from "../sessions/telemetry";
+import { skillDefinitionPath } from "../capabilities/skills";
 
 export type ActionFingerprintInput = {
   provider: "claude" | "codex" | "cursor" | "grok";
@@ -35,7 +37,12 @@ export function capabilityFingerprint(input: ActionFingerprintInput): Capability
   if (mcp) return fingerprint("mcp", bounded(mcp, 160) ?? "Unknown MCP", input.provider, "mcp");
 
   const skill = skillName(tool, input.toolInput);
-  if (skill) return fingerprint("skill", skill, input.provider, "skill");
+  if (skill) {
+    const definition = skillDefinitionPath(skill, input.cwd);
+    const contentHash = definition ? artifactHash(definition) : undefined;
+    return { ...fingerprint("skill", skill, input.provider, "skill"),
+      ...(contentHash ? { script_hash: contentHash, confidence: "exact" as const } : {}) };
+  }
   if (WRITE_TOOLS.has(normalized)) {
     return fingerprint("file_write", tool, input.provider, "provider-tool");
   }
@@ -80,7 +87,9 @@ function shellFingerprint(
   if (script?.plugin) {
     return {
       ...fingerprint("skill", script.plugin, provider, "shell-plugin"),
-      ...(script.pathHash ? { executable_path_hash: script.pathHash, confidence: "exact" } : {}),
+      ...(script.pathHash ? { executable_path_hash: script.pathHash } : {}),
+      ...(script.contentHash ? { script_hash: script.contentHash } : {}),
+      confidence: script.contentHash ? "exact" : script.pathHash ? "strong" : "name_only",
     };
   }
   // A commit or a pull request that carries a co-authorship or "generated
@@ -98,7 +107,9 @@ function shellFingerprint(
   if (script) {
     return {
       ...fingerprint("script", script.name, provider, "shell-script"),
-      ...(script.pathHash ? { executable_path_hash: script.pathHash, confidence: "exact" } : {}),
+      ...(script.pathHash ? { executable_path_hash: script.pathHash } : {}),
+      ...(script.contentHash ? { script_hash: script.contentHash } : {}),
+      confidence: script.contentHash ? "exact" : script.pathHash ? "strong" : "name_only",
     };
   }
   // Named by the command, so a Project can say "git: allow, rm: ask" instead
@@ -164,7 +175,7 @@ export function networkCommand(command: string): string | undefined {
 function scriptIdentity(
   command: string,
   cwd?: string,
-): { name: string; plugin?: string; pathHash?: string } | undefined {
+): { name: string; plugin?: string; pathHash?: string; contentHash?: string } | undefined {
   const words = commandWords(command);
   const executable = basename(words[0] ?? "").toLowerCase();
   const interpreters = new Set(["bash", "sh", "zsh", "python", "python3", "node", "tsx"]);
@@ -184,7 +195,16 @@ function scriptIdentity(
     name: bounded(basename(token), 160) ?? "Unknown script",
     ...(plugin ? { plugin } : {}),
     ...(path ? { pathHash: createHash("sha256").update(path).digest("hex") } : {}),
+    ...(path ? { contentHash: artifactHash(path) } : {}),
   };
+}
+
+function artifactHash(path: string): string | undefined {
+  try {
+    const file = lstatSync(path);
+    if (!file.isFile() || file.isSymbolicLink() || file.size > 1024 * 1024) return undefined;
+    return createHash("sha256").update(readFileSync(path)).digest("hex");
+  } catch { return undefined; }
 }
 
 function cleanScriptToken(value: string): string {

@@ -30,11 +30,31 @@ function patternMatches(pattern: string, candidate: string): boolean {
 }
 
 export function resourceOverlap(left: string, right: string): boolean {
-  if (left === right || patternMatches(left, right) || patternMatches(right, left)) return true;
-  const prefix = (value: string) => value.split("*")[0]!.replace(/\/$/, "");
-  const a = prefix(left);
-  const b = prefix(right);
-  return Boolean(a && b && (a.startsWith(b) || b.startsWith(a)));
+  const a = left.replace(/\\/g, "/").replace(/\/+$/, "");
+  const b = right.replace(/\\/g, "/").replace(/\/+$/, "");
+  if (a === b) return true;
+  if (a.includes("*") && patternMatches(a, b)) return true;
+  if (b.includes("*") && patternMatches(b, a)) return true;
+  // A literal directory owns descendants at a segment boundary. A bare
+  // string prefix is never enough: auth.ts and auth.ts.bak are distinct files.
+  return (!a.includes("*") && b.startsWith(`${a}/`))
+    || (!b.includes("*") && a.startsWith(`${b}/`));
+}
+
+export type ResourceScope = { repositoryId?: string; endpointId?: string; worktree?: string };
+
+/** Paths only collide inside one logical repository; a second checkout is risk, not a shared file. */
+export function scopedOverlapKind(
+  left: ResourceScope & { resource: string },
+  right: ResourceScope & { resource: string },
+): "file" | "logical_file" | "module" | null {
+  if (left.repositoryId && right.repositoryId && left.repositoryId !== right.repositoryId) return null;
+  const kind = overlapKind(left.resource, right.resource);
+  if (kind !== "file") return kind;
+  if (Boolean(left.repositoryId) !== Boolean(right.repositoryId)) return "logical_file";
+  if (left.worktree && right.worktree && left.worktree !== right.worktree) return "logical_file";
+  if (left.endpointId && right.endpointId && left.endpointId !== right.endpointId) return "logical_file";
+  return "file";
 }
 
 /**

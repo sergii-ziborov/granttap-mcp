@@ -55,6 +55,8 @@ import { sendMeshPayload } from "./session-keys";
 import { handleMeshPayload, meshCatalog, meshSnapshots, prepareMeshHandoff } from "./mesh/runtime";
 import { releaseClaimByPerson, releaseResult } from "./mesh/admin";
 import { deriveObservedClaims } from "./mesh/observed-claims";
+import { ingestRuntimeInvocations } from "./engine/invocation-ingest";
+import { handleInvocationQuery } from "./engine/invocation-query";
 import { localMeshStore } from "./mesh/local";
 import { cachedSessionActivity } from "./monitor-session-activity";
 import { HEARTBEAT_INTERVAL_MS, publishHeartbeat } from "./monitor-heartbeat";
@@ -263,6 +265,9 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       // What agents were seen editing becomes intent claims on their Tasks,
       // so an overlap shows while the work happens rather than at the merge.
       deriveObservedClaims(localMeshStore(), status.sessions);
+      // The Engine owns full per-call history. Ingest in the background so a
+      // slow or unavailable Engine cannot delay phone liveness or Mesh status.
+      void ingestRuntimeInvocations(status.sessions).catch(() => {});
       const meshes = meshSnapshots();
       for (const mesh of meshes) {
         await sendMeshPayload(client, mesh, "phone", {
@@ -392,6 +397,8 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       return true;
     } else if (payload.type === "project.policy.set" && loadRuntimeConfig().meshEnabled) {
       return handleProjectPolicySet(client, payload);
+    } else if (payload.type === "mesh.invocation.query" && loadRuntimeConfig().meshEnabled) {
+      return handleInvocationQuery(client, payload);
     } else if ((payload.type === "mesh.event" || payload.type === "mesh.snapshot")
       && loadRuntimeConfig().meshEnabled) {
       await handleMeshPayload(client, payload);

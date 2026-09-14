@@ -196,6 +196,8 @@ function expectedResultOperation(
   if (operation === "project.get") return "project.found";
   if (operation === "project.list_bindings") return "project.bindings";
   if (operation === "project.upsert_binding") return "project.binding_upserted";
+  if (operation === "invocation.observe") return "invocation.observed";
+  if (operation === "invocation.history") return "invocation.history";
   if (operation === "policy.get") return "policy.found";
   if (operation === "policy.apply") return "policy.applied";
   if (operation === "policy.coverage") return "policy.coverage";

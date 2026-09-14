@@ -9,7 +9,7 @@ import type { MeshEvent, MeshSnapshot, ResourceClaim } from "../../../../package
 import type { ExecutionCapability } from "./capability";
 import { liveExecutionScope } from "./capability";
 import { otherSide, type OtherSideRow } from "./other-side";
-import { overlapKind } from "./store-support";
+import { scopedOverlapKind } from "./store-support";
 
 const MAX_SCOPED_EVENTS = 32;
 const MAX_NEIGHBOURS = 32;
@@ -29,7 +29,7 @@ export type ScopedMeshView = {
   executions: MeshSnapshot["executions"];
   claims: MeshSnapshot["claims"];
   /** Another Task's claim on a file this Task holds, or on the same module. */
-  neighbours: Array<{ claim: ResourceClaim; kind: "file" | "module" }>;
+  neighbours: Array<{ claim: ResourceClaim; kind: "file" | "logical_file" | "module" }>;
   /** The integration map of this Project's repositories, as they state it. */
   peers: NonNullable<MeshSnapshot["peers"]>;
   /** Other Tasks working right now on the far side of this Task's repository. */
@@ -44,15 +44,16 @@ export function scopedNeighbours(
   snapshot: Pick<MeshSnapshot, "claims">,
   taskId: string,
 ): ScopedMeshView["neighbours"] {
-  const mine = snapshot.claims.filter((claim) => claim.taskId === taskId).map((claim) => claim.resource);
+  const mine = snapshot.claims.filter((claim) => claim.taskId === taskId);
   return snapshot.claims
     .filter((claim) => claim.taskId !== taskId)
     .flatMap((claim) => {
-      const kinds = mine.flatMap((resource) => {
-        const kind = overlapKind(resource, claim.resource);
+      const kinds = mine.flatMap((ours) => {
+        const kind = scopedOverlapKind(ours, claim);
         return kind ? [kind] : [];
       });
-      const kind = kinds.includes("file") ? "file" : kinds[0];
+      const kind = kinds.includes("file") ? "file"
+        : kinds.includes("logical_file") ? "logical_file" : kinds[0];
       return kind ? [{ claim, kind }] : [];
     })
     .slice(0, MAX_NEIGHBOURS);

@@ -15,11 +15,29 @@ import {
 import { MeshStore } from "../apps/bridge/src/mesh/store";
 import { classifyHumanAttention } from "../apps/bridge/src/mesh/attention";
 import { capsuleHash, handoffReceipt } from "../apps/bridge/src/mesh/handoff";
-import { linkSessionsToProjects } from "../apps/bridge/src/mesh/catalog";
+import { inspectRepository, linkSessionsToProjects } from "../apps/bridge/src/mesh/catalog";
 import { buildTaskCapsule } from "../apps/bridge/src/mesh/capsule";
 import { createHandoffWorktree } from "../apps/bridge/src/mesh/worktree";
 
 const now = 1_800_000_000_000;
+
+test("a live repository reading refreshes HEAD after a commit", async () => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-live-revision-"));
+  execFileSync("git", ["init", "-q", root]);
+  await writeFile(join(root, "README.md"), "first\n");
+  execFileSync("git", ["-C", root, "add", "README.md"]);
+  const commit = (message: string) => execFileSync("git", ["-C", root,
+    "-c", "user.name=Test", "-c", "user.email=test@example.test", "commit", "-q", "-m", message]);
+  commit("first");
+  const first = inspectRepository(root);
+  await writeFile(join(root, "README.md"), "second\n");
+  execFileSync("git", ["-C", root, "add", "README.md"]);
+  commit("second");
+  const second = inspectRepository(root);
+  assert.notEqual(first.revision, second.revision);
+  assert.equal(first.canonicalRepositoryId, second.canonicalRepositoryId);
+  assert.equal(second.revision, execFileSync("git", ["-C", root, "rev-parse", "HEAD"], { encoding: "utf8" }).trim());
+});
 
 test("repository and task identity remain stable across computers and handoff", () => {
   const ssh = canonicalRepositoryIdentity("git@github.com:Example/GrantTap.git", "/mac/repo");

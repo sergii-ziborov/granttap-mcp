@@ -17,7 +17,17 @@ bypass, paused gating, and auto-accept. Codex carries ASK from `PreToolUse` to
 `PermissionRequest` with a single-use exact-call marker; Cursor evaluates shell
 and redacted MCP fingerprints directly. A disabled or unavailable engine
 preserves the established GrantTap flow, and no hook request is retried inside
-its 50 ms policy budget.
+its 2,000 ms policy budget. Repository impact is not computed synchronously in
+the hook; unavailable impact remains explicitly unavailable.
+
+`invocation-ingest.ts` reads bounded complete transcript lines and exact-call
+hook denial metadata without forwarding tool arguments, output, or reason text.
+Cursor decisions without a native call ID stay unattributed. Events are replayed
+with stable IDs after an IPC failure. `invocation-query.ts` returns bounded
+Engine history to the phone under the Project key, while
+`invocation-scope.ts` exposes one Task slice through the caller's existing
+opaque Mesh capability. The Engine, not this bridge or Usage telemetry, owns
+the durable journal.
 
 The proprietary engine source and Project database do not live in this package.
 

@@ -70,7 +70,13 @@ export function workingTreeState(cwd: string): "clean" | "dirty" | "unknown" {
 
 export function inspectRepository(cwd: string): RepositoryFacts {
   const cached = repositoryCache.get(cwd);
-  if (cached) return cached;
+  if (cached) {
+    // Identity is stable for this checkout; HEAD is not. Keep a new reading
+    // instead of mutating a facts object already given to a caller.
+    const fresh = { ...cached, revision: git(cached.root, ["rev-parse", "HEAD"]) };
+    repositoryCache.set(cwd, fresh);
+    return fresh;
+  }
   const root = git(cwd, ["rev-parse", "--show-toplevel"]) ?? cwd;
   const rawRemote = git(root, ["remote", "get-url", "origin"]);
   const baseRemote = rawRemote ? sanitizedRepositoryRemote(rawRemote) : undefined;

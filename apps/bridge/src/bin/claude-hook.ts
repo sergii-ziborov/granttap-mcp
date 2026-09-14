@@ -88,6 +88,9 @@ async function handlePreToolUse(input: HookInput): Promise<void> {
       recordProjectDecision(input.session_id, {
         at: Date.now(), toolName: input.tool_name ?? "tool", reason: projectDecision.reason,
         ruleId: projectDecision.rule_id,
+        provider: "claude", nativeCallId: input.tool_use_id,
+        policyRevision: projectDecision.policy_revision,
+        artifactHash: projectDecision.artifactHash,
       });
     }
     writePermission("deny", projectDecision.reason);

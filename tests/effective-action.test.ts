@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -21,6 +21,29 @@ import type {
 // What the hook remembers about governed Projects lives in the config dir;
 // these evaluations must not teach the person's own computer anything.
 process.env.GRANTTAP_CONFIG_DIR = mkdtempSync(join(tmpdir(), "granttap-effective-action-"));
+
+test("artifact fingerprint changes when a script or skill changes at the same path", () => {
+  const root = mkdtempSync(join(tmpdir(), "granttap-artifact-"));
+  const script = join(root, "check.sh");
+  writeFileSync(script, "echo one\n");
+  const first = capabilityFingerprint({ provider: "claude", cwd: root,
+    toolName: "Bash", toolInput: { command: "./check.sh" } });
+  writeFileSync(script, "echo two\n");
+  const second = capabilityFingerprint({ provider: "claude", cwd: root,
+    toolName: "Bash", toolInput: { command: "./check.sh" } });
+  assert.equal(first.executable_path_hash, second.executable_path_hash);
+  assert.notEqual(first.script_hash, second.script_hash);
+  const directory = join(root, ".agents", "skills", "example");
+  mkdirSync(directory, { recursive: true });
+  const definition = join(directory, "SKILL.md");
+  writeFileSync(definition, "---\nname: example\n---\none\n");
+  const oldSkill = capabilityFingerprint({ provider: "codex", cwd: root,
+    toolName: "Skill", toolInput: { skill: "example" } });
+  writeFileSync(definition, "---\nname: example\n---\ntwo\n");
+  const newSkill = capabilityFingerprint({ provider: "codex", cwd: root,
+    toolName: "Skill", toolInput: { skill: "example" } });
+  assert.notEqual(oldSkill.script_hash, newSkill.script_hash);
+});
 
 const flags = {
   GRANTTAP_ENGINE_ENABLED: "1",

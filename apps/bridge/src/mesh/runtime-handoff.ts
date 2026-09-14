@@ -112,7 +112,9 @@ export function createHandoffFlow(deps: MeshRuntimeDependencies) {
     // Semantic ownership first: a clean commit can leave filesChanged empty
     // while the Task still owns whole resource paths through its claims.
     const conflict = [...capsule.resourceClaims, ...capsule.filesChanged].flatMap((resource) =>
-      store.conflicts(event.projectId, event.sourceSessionId, resource)).at(0);
+      store.conflicts(event.projectId, event.sourceSessionId, resource, {
+        repositoryId: capsule.repository, endpointId: deps.computer(), worktree: repository,
+      }, true)).at(0);
     if (conflict) {
       return rejectHandoff(client, event, `${conflict.ownerSessionId} currently claims ${conflict.resource}.`);
     }

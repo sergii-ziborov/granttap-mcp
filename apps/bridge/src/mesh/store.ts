@@ -31,7 +31,7 @@ import {
 } from "./store-sync";
 import { preferExecution, isTerminalTaskState, mayOwnTask } from "./convergence";
 import { capsuleHash } from "./handoff";
-import { mergeBy, overlapKind, resourceOverlap } from "./store-support";
+import { mergeBy, scopedOverlapKind, type ResourceScope } from "./store-support";
 import { closeVanished } from "./execution-sweep";
 import { receiptMovesOwnership, taskAfterEvent, taskAfterLocalReading } from "./task-state";
 import {
@@ -457,7 +457,7 @@ export class MeshStore {
       const conflict = this.liveClaims(this.now()).find((item) =>
         item.projectId === event.projectId
         && item.ownerSessionId !== event.sourceSessionId
-        && resourceOverlap(item.resource, claim.resource));
+        && scopedOverlapKind(item, claim) === "file");
       if (conflict) return { accepted: false, conflict };
       if (this.state.events.some((item) => item.eventId === event.eventId)) return { accepted: false };
       this.state.events.push(event);
@@ -468,12 +468,15 @@ export class MeshStore {
     return result.applied ? { applied: true, ...result.value } : { applied: false };
   }
 
-  conflicts(projectId: string, ownerSessionId: string, resource: string): ResourceClaimValue[] {
+  conflicts(projectId: string, ownerSessionId: string, resource: string,
+    scope: ResourceScope = {}, blockUnscopedLegacy = false): ResourceClaimValue[] {
     this.sync();
     return this.activeClaims().filter((claim) =>
       claim.projectId === projectId
       && claim.ownerSessionId !== ownerSessionId
-      && resourceOverlap(claim.resource, resource));
+      && (scopedOverlapKind(claim, { resource, ...scope }) === "file"
+        || (blockUnscopedLegacy && (!claim.repositoryId || !scope.repositoryId)
+          && scopedOverlapKind(claim, { resource, ...scope }) === "logical_file")));
   }
 
   /**
@@ -482,12 +485,12 @@ export class MeshStore {
    * Not a conflict — two agents can work one module without colliding. It is
    * the warning that comes before the conflict, reported rather than enforced.
    */
-  moduleOverlaps(projectId: string, ownerSessionId: string, resource: string): ResourceClaimValue[] {
+  moduleOverlaps(projectId: string, ownerSessionId: string, resource: string, scope: ResourceScope = {}): ResourceClaimValue[] {
     this.sync();
     return this.activeClaims().filter((claim) =>
       claim.projectId === projectId
       && claim.ownerSessionId !== ownerSessionId
-      && overlapKind(claim.resource, resource) === "module");
+      && ["module", "logical_file"].includes(scopedOverlapKind(claim, { resource, ...scope }) ?? ""));
   }
 
   /**

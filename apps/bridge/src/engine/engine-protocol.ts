@@ -3,6 +3,15 @@ import {
   type EnginePolicyOperation,
   type EnginePolicyResult,
 } from "./engine-policy-protocol";
+import {
+  parseInvocationResult,
+  type InvocationEngineOperation,
+  type InvocationEngineResult,
+} from "./engine-invocation-protocol";
+
+export type {
+  InvocationEvent, InvocationHistoryPage, InvocationHistoryQuery, InvocationPhase, InvocationSource,
+} from "./engine-invocation-protocol";
 
 export const ENGINE_PROTOCOL_VERSION = 1 as const;
 export const MAX_ENGINE_FRAME_BYTES = 64 * 1024;
@@ -53,7 +62,7 @@ export type EngineProjectBinding = {
   last_seen_at: number;
 };
 
-export type EngineOperation = EnginePolicyOperation
+export type EngineOperation = EnginePolicyOperation | InvocationEngineOperation
   | { operation: "engine.ping" }
   | { operation: "engine.version" }
   | {
@@ -77,7 +86,7 @@ export type EngineRequest = {
   request_id: string;
 } & EngineOperation;
 
-export type EngineResult = EnginePolicyResult
+export type EngineResult = EnginePolicyResult | InvocationEngineResult
   | { operation: "engine.pong"; engine_version: string }
   | {
     operation: "engine.version";
@@ -202,7 +211,8 @@ function parseResult(value: unknown): EngineResult {
     result.bindings.forEach(parseBinding);
   } else if (operation === "project.binding_upserted") {
     parseBinding(result.binding);
-  } else if (!parsePolicyResult(result, invalidResult)) {
+  } else if (!parsePolicyResult(result, invalidResult)
+    && !parseInvocationResult(result, invalidResult)) {
     throw new EngineProtocolError("engine result operation is unsupported");
   }
   return result as EngineResult;

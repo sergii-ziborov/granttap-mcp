@@ -27,6 +27,7 @@ export type EffectiveActionInput = {
 export type EffectiveActionDecision = EnginePolicyDecision & {
   projectId?: string;
   engineEvaluated: boolean;
+  artifactHash?: string;
 };
 
 export type EffectiveActionOptions = {
@@ -71,6 +72,10 @@ export async function evaluateEffectiveAction(
       ?? meshProjectId(input, endpointId)
       ?? await resolveProject(client, input.cwd, endpointId, deadline, now);
     if (!projectId) return FALLBACK;
+    const capability = input.capability ?? capabilityFingerprint({
+      provider: input.provider, cwd: input.cwd,
+      toolName: input.toolName, toolInput: input.toolInput,
+    });
     const result = await client.request({
       operation: "policy.evaluate_action",
       input: {
@@ -80,10 +85,7 @@ export async function evaluateEffectiveAction(
         task: "inherit",
         project_id: projectId,
         endpoint_id: endpointId,
-        capability: input.capability ?? capabilityFingerprint({
-          provider: input.provider, cwd: input.cwd,
-          toolName: input.toolName, toolInput: input.toolInput,
-        }),
+        capability,
         impact_available: false,
       },
     }, { timeoutMs: remaining(deadline, now) });
@@ -91,7 +93,8 @@ export async function evaluateEffectiveAction(
     if (result.decision.policy_revision != null) {
       rememberGovernedProject(projectId, result.decision.policy_revision, now());
     }
-    return { ...result.decision, projectId, engineEvaluated: true };
+    return { ...result.decision, projectId, engineEvaluated: true,
+      artifactHash: capability.script_hash };
   } catch {
     return projectId ? unavailable(projectId) : FALLBACK;
   } finally {

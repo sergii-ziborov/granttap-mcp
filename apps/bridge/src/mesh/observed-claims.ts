@@ -18,7 +18,7 @@ export function deriveObservedClaims(
   store: MeshStore,
   sessions: readonly SessionInfo[],
   now: number = Date.now(),
-  inspect: (cwd: string) => { root: string } = inspectRepository,
+  inspect: (cwd: string) => { root: string; canonicalRepositoryId?: string; worktree?: string } = inspectRepository,
 ): number {
   let recorded = 0;
   for (const session of sessions) {
@@ -26,13 +26,18 @@ export function deriveObservedClaims(
     if (!projectId || !taskId || !cwd) continue;
     const writes = recentObservedWrites(session.sessionId, now);
     if (writes.length === 0) continue;
-    const root = inspect(cwd).root;
+    const repository = inspect(cwd);
+    const root = repository.root;
     for (const write of writes) {
       const resource = repositoryRelative(write.path, root);
       if (!resource) continue;
+      const identity = `${taskId}\0${repository.canonicalRepositoryId ?? root}\0${resource}`;
       const accepted = store.observeClaim({
-        claimId: `observed-${taskId}-${createHash("sha256").update(resource).digest("hex").slice(0, 16)}`,
+        claimId: `observed-${createHash("sha256").update(identity).digest("hex").slice(0, 32)}`,
         projectId, taskId, ownerSessionId: session.sessionId, resource,
+        ...(repository.canonicalRepositoryId ? { repositoryId: repository.canonicalRepositoryId } : {}),
+        ...(session.computerId ? { endpointId: session.computerId } : {}),
+        ...(session.worktree ?? repository.worktree ? { worktree: session.worktree ?? repository.worktree } : {}),
         mode: "intent", createdAt: write.at, expiresAt: write.at + OBSERVED_WRITE_TTL_MS,
       });
       if (accepted) recorded += 1;

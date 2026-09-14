@@ -16,6 +16,10 @@ export type ProjectDecisionRecord = {
   toolName: string;
   reason: string;
   ruleId?: string;
+  provider?: "claude" | "codex";
+  nativeCallId?: string;
+  policyRevision?: number;
+  artifactHash?: string;
 };
 
 const MAX_RECORDS = 50;
@@ -25,11 +29,29 @@ function logPath(sessionId: string): string {
   return join(configDir(), "decisions", `${safe}.jsonl`);
 }
 
+/** Exact-call decisions have a separate append-only source for Engine replay. */
+export function invocationDecisionPath(sessionId: string): string {
+  const safe = sessionId.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 128);
+  return join(configDir(), "invocation-decisions", `${safe}.jsonl`);
+}
+
 export function recordProjectDecision(sessionId: string, record: ProjectDecisionRecord): void {
   try {
     const path = logPath(sessionId);
     mkdirSync(join(configDir(), "decisions"), { recursive: true, mode: 0o700 });
-    appendFileSync(path, `${JSON.stringify(record)}\n`, { mode: 0o600 });
+    appendFileSync(path, `${JSON.stringify({ at: record.at, toolName: record.toolName,
+      reason: record.reason, ruleId: record.ruleId })}\n`, { mode: 0o600 });
+    if (record.provider && record.nativeCallId
+      && record.nativeCallId.length <= 128 && !/[\u0000-\u001f]/.test(record.nativeCallId)
+      && record.toolName.length <= 160 && !/[\u0000-\u001f]/.test(record.toolName)) {
+      mkdirSync(join(configDir(), "invocation-decisions"), { recursive: true, mode: 0o700 });
+      appendFileSync(invocationDecisionPath(sessionId), `${JSON.stringify({
+        at: record.at, provider: record.provider, nativeCallId: record.nativeCallId,
+        toolName: record.toolName, ruleId: record.ruleId,
+        policyRevision: record.policyRevision,
+        artifactHash: record.artifactHash,
+      })}\n`, { mode: 0o600 });
+    }
     const lines = readFileSync(path, "utf8").split("\n").filter(Boolean);
     if (lines.length > MAX_RECORDS) {
       const trimmed = `${path}.tmp`;

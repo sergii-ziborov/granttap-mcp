@@ -5,6 +5,7 @@ import {
   resolveExecutionCapability,
 } from "../../../bridge/src/mesh/capability";
 import { scopedMeshView } from "../../../bridge/src/mesh/scoped-view";
+import { scopedInvocationSlice } from "../../../bridge/src/engine/invocation-scope";
 import { meshMap } from "../../../bridge/src/mesh/map";
 import { isMeshEnabled } from "../../../bridge/src/config/runtime";
 
@@ -63,7 +64,8 @@ export function registerMeshResource(server: McpServer): void {
       const sessionId = sessionFromEnvironment();
       const capability = isMeshEnabled() && sessionId ? executionCapabilityFor(sessionId) : undefined;
       const view = capability ? scopedMeshView(capability) : undefined;
-      if (view) return json(uri.href, { ...view, enabled: true, scoped: true });
+      if (view) return json(uri.href, { ...view, runtime: await scopedInvocationSlice(capability!),
+        enabled: true, scoped: true });
       return json(uri.href, {
         schema: "granttap.mesh-scope-hint.v1",
         enabled: isMeshEnabled(),
@@ -107,7 +109,8 @@ export function registerMeshResource(server: McpServer): void {
       const resolved = token === "current" ? undefined : resolveExecutionCapability(token);
       const view = resolved ? scopedMeshView(resolved) : undefined;
       if (!view) return json(uri.href, { schema: "granttap.mesh-scope.v1", enabled: true, scoped: false, hint: SCOPE_HINT });
-      return json(uri.href, { ...view, enabled: true, scoped: true });
+      return json(uri.href, { ...view, runtime: await scopedInvocationSlice(resolved!),
+        enabled: true, scoped: true });
     },
   );
 

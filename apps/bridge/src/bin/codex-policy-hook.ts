@@ -43,6 +43,9 @@ async function main(): Promise<void> {
     if (input.session_id) {
       recordProjectDecision(input.session_id, {
         at: Date.now(), toolName: input.tool_name ?? "tool", reason: decision.reason, ruleId: decision.rule_id,
+        provider: "codex", nativeCallId: input.tool_use_id,
+        policyRevision: decision.policy_revision,
+        artifactHash: decision.artifactHash,
       });
     }
     deny(decision.reason);

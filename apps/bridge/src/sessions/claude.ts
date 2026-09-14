@@ -57,6 +57,11 @@ const claudeSummaryCache = new Map<string, CachedClaudeSummary>();
 const claudeLogPathBySession = new Map<string, string>();
 const claudeChildLogPathsBySession = new Map<string, string[]>();
 
+export function claudeTranscriptPaths(sessionId: string): string[] {
+  const parent = claudeLogPathBySession.get(sessionId) ?? claudeLogPath(sessionId);
+  return parent ? [parent, ...(claudeChildLogPathsBySession.get(sessionId) ?? [])] : [];
+}
+
 function claudeChildLogPaths(parentFile: string, sessionId: string): string[] {
   return recentLogs(join(dirname(parentFile), sessionId, "subagents"), 4)
     .filter((path) => basename(path).startsWith("agent-"));

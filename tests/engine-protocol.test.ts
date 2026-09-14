@@ -103,6 +103,25 @@ test("response parser exposes bounded engine errors", () => {
   );
 });
 
+test("invocation history results are parsed and bounded", () => {
+  const event = {
+    event_id: "request", invocation_id: "call", project_id: "project", task_id: "task",
+    execution_id: "execution", provider: "claude", native_call_id: "native", tool_name: "Edit",
+    phase: "requested", source: "transcript", occurred_at: 2,
+    repository_id: "frontend", worktree: "/repo", resource: "src/index.ts",
+    revision: null, content_hash: null, capability_artifact_hash: null, policy_revision: null,
+  };
+  const page = { events: [{ sequence: 1, event }], next_sequence: 1, has_more: false,
+    previous_sequence: 1, has_older: false };
+  assert.equal(parseEngineResponse(response({ operation: "invocation.observed", sequence: 1 }), "request-1").operation,
+    "invocation.observed");
+  assert.equal(parseEngineResponse(response({ operation: "invocation.history", page }), "request-1").operation,
+    "invocation.history");
+  assert.throws(() => parseEngineResponse(response({
+    operation: "invocation.history", page: { ...page, events: [{ sequence: 1, event: { ...event, phase: "executed" } }] },
+  }), "request-1"), EngineProtocolError);
+});
+
 test("response parser rejects malformed and incompatible wire values", () => {
   const invalid = [
     null,

@@ -4,11 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { MeshStore } from "../apps/bridge/src/mesh/store";
-import { moduleRoot, overlapKind } from "../apps/bridge/src/mesh/store-support";
+import { moduleRoot, overlapKind, resourceOverlap } from "../apps/bridge/src/mesh/store-support";
 import {
   clearObservedWrites, recentObservedWrites, recordObservedWrite, writtenPaths,
 } from "../apps/bridge/src/mesh/observed-writes";
 import { deriveObservedClaims, repositoryRelative } from "../apps/bridge/src/mesh/observed-claims";
+import { scopedNeighbours } from "../apps/bridge/src/mesh/scoped-view";
 import { handoffReadiness } from "../apps/bridge/src/mesh/readiness";
 
 const now = 1_800_000_000_000;
@@ -30,6 +31,69 @@ test("a module is recognised from the path alone, the same way everywhere", () =
   assert.equal(overlapKind("apps/bridge/src/mesh/store.ts", "apps/bridge/src/mesh/catalog.ts"), "module");
   assert.equal(overlapKind("apps/bridge/src/mesh/store.ts", "apps/bridge/src/policy/effective-action.ts"), null);
   assert.equal(overlapKind("README.md", "LICENSE"), null, "top-level files share no module");
+});
+
+test("resource overlap respects path segments and glob boundaries", () => {
+  for (const [left, right] of ([
+    ["src/auth.ts", "src/auth.ts.bak"],
+    ["src/auth", "src/author/index.ts"],
+    ["src/auth/*", "src/authentication/file.ts"],
+    ["src/auth/**", "src/authentication/file.ts"],
+  ] as const)) assert.equal(resourceOverlap(left, right), false, `${left} <> ${right}`);
+  assert.equal(resourceOverlap("src/auth", "src/auth/index.ts"), true);
+  assert.equal(resourceOverlap("src/auth/**", "src/auth/index.ts"), true);
+  assert.equal(resourceOverlap("src\\auth\\index.ts", "src/auth/index.ts"), true);
+});
+
+test("same relative path in separate Project repositories is not one file", async () => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-claims-repositories-"));
+  const store = new MeshStore(join(root, "mesh.json"), () => now);
+  store.claim({
+    claimId: "frontend-write", projectId: "project", taskId: "frontend-task",
+    ownerSessionId: "frontend-agent", repositoryId: "github.com/example/frontend",
+    resource: "src/index.ts", mode: "intent", createdAt: now,
+    expiresAt: now + 60_000,
+  });
+  assert.equal(store.conflicts("project", "backend-agent", "src/index.ts", {
+    repositoryId: "github.com/example/backend",
+  }).length, 0);
+  assert.equal(store.conflicts("project", "other-frontend-agent", "src/index.ts", {
+    repositoryId: "github.com/example/frontend",
+  }).length, 1);
+  store.claim({
+    claimId: "backend-write", projectId: "project", taskId: "backend-task",
+    ownerSessionId: "backend-agent", repositoryId: "github.com/example/backend",
+    resource: "src/index.ts", mode: "intent", createdAt: now,
+    expiresAt: now + 60_000,
+  });
+  assert.deepEqual(scopedNeighbours({ claims: store.activeClaims() }, "frontend-task"), []);
+});
+
+test("same logical path in another checkout is a warning, not a shared-file conflict", async () => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-claims-worktrees-"));
+  const store = new MeshStore(join(root, "mesh.json"), () => now);
+  store.claim({
+    claimId: "checkout-a", projectId: "project", taskId: "task-a",
+    ownerSessionId: "agent-a", repositoryId: "github.com/example/repo",
+    endpointId: "mac", worktree: "/repo/worktrees/a", resource: "src/index.ts",
+    mode: "intent", createdAt: now, expiresAt: now + 60_000,
+  });
+  const scope = { repositoryId: "github.com/example/repo", endpointId: "mac", worktree: "/repo/worktrees/b" };
+  assert.equal(store.conflicts("project", "agent-b", "src/index.ts", scope).length, 0);
+  assert.equal(store.moduleOverlaps("project", "agent-b", "src/index.ts", scope).length, 1);
+  const peer = { ...store.activeClaims()[0]!, claimId: "checkout-b", taskId: "task-b", ownerSessionId: "agent-b", worktree: scope.worktree };
+  assert.deepEqual(scopedNeighbours({ claims: [...store.activeClaims(), peer] }, "task-a").map((row) => row.kind), ["logical_file"]);
+});
+
+test("a legacy claim without repository identity is uncertainty, not proof of the same file", async () => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-claims-legacy-"));
+  const store = new MeshStore(join(root, "mesh.json"), () => now);
+  store.claim({ claimId: "legacy", projectId: "project", taskId: "old-task",
+    ownerSessionId: "old-agent", resource: "src/index.ts", mode: "intent",
+    createdAt: now, expiresAt: now + 60_000 });
+  const scope = { repositoryId: "github.com/example/frontend" };
+  assert.equal(store.conflicts("project", "new-agent", "src/index.ts", scope).length, 0);
+  assert.equal(store.moduleOverlaps("project", "new-agent", "src/index.ts", scope).length, 1);
 });
 
 test("edit tools of every provider give up the paths they write", () => {
