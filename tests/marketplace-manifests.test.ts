@@ -42,15 +42,16 @@ test("Cursor marketplace indexes the GrantTap plugin at the repository root", ()
   assert.equal(existsSync(join(repositoryRoot, "cursor-plugin/mcp.json")), true);
 });
 
-test("public install docs include Grok Build and Cursor marketplace entry points", () => {
+test("public install docs distinguish Git plugins from approved listings", () => {
   const readme = readFileSync(join(repositoryRoot, "README.md"), "utf8");
   const pluginReadme = readFileSync(join(repositoryRoot, "plugins/granttap/README.md"), "utf8");
   const cursorReadme = readFileSync(join(repositoryRoot, "cursor-plugin/README.md"), "utf8");
 
   assert.match(readme, /grok plugin marketplace add sergii-ziborov\/granttap-mcp/);
   assert.match(readme, /grok plugin install granttap --trust/);
-  assert.match(readme, /Cursor plugin marketplace/);
+  assert.match(readme, /private Git plugin in Cursor while/);
   assert.match(pluginReadme, /grok plugin marketplace add sergii-ziborov\/granttap-mcp/);
   assert.match(pluginReadme, /grok plugin install granttap --trust/);
-  assert.match(cursorReadme, /Cursor's plugin marketplace/);
+  assert.match(cursorReadme, /Until Cursor approves the public listing/);
+  assert.match(cursorReadme, /re-import/);
 });

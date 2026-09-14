@@ -6,8 +6,7 @@ each phone response tied to the exact originating chat and prompt.
 
 ## Connect Cursor
 
-Install the supported CLI and the GrantTap plugin from Cursor's marketplace,
-then run:
+Install the supported CLI on this computer, then run:
 
 ```bash
 npm install -g granttap-mcp
@@ -39,12 +38,16 @@ The OAuth service listens only at `http://127.0.0.1:17342/mcp`. Cursor cannot
 show **Authenticate** for a stdio (`command`/`args`) MCP entry, so do not replace the
 plugin's HTTP configuration with stdio.
 
-## Install from the Cursor marketplace
+## Install the Cursor plugin
 
-Install **GrantTap** from Cursor's plugin marketplace, then reload Cursor.
-The plugin adds the `/connect` command, a connect skill, and the
-exact-correlation rule; `granttap setup` still configures the MCP endpoint
-itself.
+Until Cursor approves the public listing, import
+`sergii-ziborov/granttap-mcp` as a private Git plugin and reload Cursor.
+The private listing is tied to the version imported on that computer; re-import
+it to pick up the current orange icon and plugin changes. Once the public
+listing is approved, install **GrantTap** from Cursor's marketplace to receive
+its marketplace updates. The plugin adds the `/connect` command, a connect
+skill, and the exact-correlation rule; `granttap setup` configures the local
+MCP endpoint separately.
 
 ## Exact dual-channel behavior
 
