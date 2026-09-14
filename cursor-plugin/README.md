@@ -50,6 +50,15 @@ its reviewed updates. The plugin adds the `/connect` command, a connect
 skill, and the exact-correlation rule; `granttap setup` configures the local
 MCP endpoint separately.
 
+If Customize shows both a lowercase **granttap** entry with a generic cube and
+an older green **GrantTap** entry, those are saved imports from earlier versions.
+Remove both old imports in Cursor, import `sergii-ziborov/granttap-mcp` once at
+the user scope, and reload Cursor. Keep the single **GrantTap** entry with the
+orange check-and-wave icon. On the same computer, rerun `granttap setup` and
+`granttap status` so the MCP service and hooks point to the permanent npm install
+instead of an old temporary path. A workspace-scoped import is not needed when
+the user-scoped plugin is already installed.
+
 ## Exact dual-channel behavior
 
 For an interactive question or approval, Cursor and the phone receive the same
@@ -62,7 +71,6 @@ prompt must never resolve the current request.
 | Path | Purpose |
 | --- | --- |
 | `.cursor-plugin/plugin.json` | Cursor plugin manifest |
-| `.cursor-plugin/marketplace.json` | Plugin-local marketplace metadata |
 | `../.cursor-plugin/marketplace.json` | Repository marketplace index Cursor publishes |
 | `mcp.json` | Loopback Streamable HTTP MCP endpoint |
 | `assets/logo.svg` | Plugin logo |

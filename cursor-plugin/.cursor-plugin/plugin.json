@@ -1,7 +1,7 @@
 {
   "name": "granttap",
   "displayName": "GrantTap",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Connect Cursor to GrantTap through granttap.com/connect, pair your phone with a one-time QR, and keep approvals in the originating chat.",
   "author": {
     "name": "GrantTap",

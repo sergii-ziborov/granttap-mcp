@@ -5,15 +5,16 @@
     "email": "support@granttap.com"
   },
   "metadata": {
-    "description": "GrantTap for Cursor — authorize on granttap.com/connect and approve local tasks from your phone",
-    "version": "0.1.7"
+    "description": "Connect Cursor to GrantTap through granttap.com/connect, pair your phone with a one-time QR, and keep approvals in the originating chat.",
+    "version": "0.1.8"
   },
   "plugins": [
     {
       "name": "granttap",
       "source": "cursor-plugin",
-      "description": "Authorize Cursor on granttap.com/connect, pair by QR, and keep each approval in its originating chat",
-      "version": "0.1.7",
+      "description": "Connect Cursor to GrantTap through granttap.com/connect, pair your phone with a one-time QR, and keep approvals in the originating chat.",
+      "version": "0.1.8",
+      "logo": "https://raw.githubusercontent.com/sergii-ziborov/granttap-mcp/main/cursor-plugin/assets/logo.svg",
       "author": {
         "name": "GrantTap",
         "email": "support@granttap.com"
