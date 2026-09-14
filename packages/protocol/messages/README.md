@@ -22,4 +22,4 @@ claim a provider can block an action when it cannot.
 
 Tests are discoverable in `tests/core.test.ts` and the feature-level bridge and MCP suites.
 
-License: this module is distributed under the GrantTap Commercial Source License in the repository-root `LICENSE` file.
+License: this module is distributed under the MIT License in the repository-root `LICENSE` file.

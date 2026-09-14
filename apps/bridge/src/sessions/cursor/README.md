@@ -5,5 +5,5 @@ summaries, visible activity, and capability observations. `../cursor.ts` is the
 public entry point. Characterization coverage lives in `tests/sessions.test.ts`,
 `tests/agentic-sessions.test.ts`, and the provider capability suites.
 
-License: this module is distributed under the GrantTap Commercial Source License
+License: this module is distributed under the MIT License
 in the repository-root `LICENSE` file.

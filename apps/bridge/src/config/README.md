@@ -6,5 +6,5 @@ and device pairing serialization. `../config.ts` is its public entry point.
 Behavior is covered by `tests/config.test.ts`, `tests/capabilities.test.ts`, and
 `tests/core.test.ts`.
 
-License: this module is distributed under the GrantTap Commercial Source License
+License: this module is distributed under the MIT License
 in the repository-root `LICENSE` file.

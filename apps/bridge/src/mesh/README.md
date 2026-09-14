@@ -62,5 +62,5 @@ installed provider, and periodically projects the canonical policy plus current
 coverage back to the phone. Engine or feature unavailability leaves existing
 GrantTap behavior intact; strict fail-closed decisions remain on the hook path.
 
-License: this module is distributed under the GrantTap Commercial Source License
+License: this module is distributed under the MIT License
 in the repository-root `LICENSE` file.

@@ -6,5 +6,5 @@ This module prepares phone attachments, routes selected MCP/skill intent, and ru
 handoff resumes the same Task on another agent or computer. Providers without an
 implemented remote-start path fail closed instead of reporting parity.
 
-License: this module is distributed under the GrantTap Commercial Source License
+License: this module is distributed under the MIT License
 in the repository-root `LICENSE` file.

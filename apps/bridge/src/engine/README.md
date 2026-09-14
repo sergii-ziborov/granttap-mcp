@@ -21,5 +21,5 @@ its 50 ms policy budget.
 
 The proprietary engine source and Project database do not live in this package.
 
-License: this module is distributed under the GrantTap Commercial Source License
+License: this module is distributed under the MIT License
 in the repository-root `LICENSE` file.

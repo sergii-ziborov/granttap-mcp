@@ -48,7 +48,7 @@ test("publish allowlist accepts the real npm tarball manifest", () => {
   assert.match(result.stdout, /Package allowlist: accepted \d+ files/);
 });
 
-test("public artifacts carry the GrantTap commercial license", () => {
+test("published runtimes and plugins declare the same MIT license", () => {
   const packageJson = JSON.parse(
     readFileSync(join(repositoryRoot, "package.json"), "utf8"),
   ) as { license?: string };
@@ -60,20 +60,22 @@ test("public artifacts carry the GrantTap commercial license", () => {
   const crate = readFileSync(join(repositoryRoot, "crates/granttap-mcp/Cargo.toml"), "utf8");
   const entries = dryRunPackageEntries();
 
-  assert.equal(packageJson.license, "SEE LICENSE IN LICENSE");
-  assert.equal(pluginJson.license, "SEE LICENSE IN LICENSE");
-  assert.match(license, /^GrantTap Commercial Source License 1\.0$/m);
-  assert.match(workspace, /^license-file = "LICENSE"$/m);
-  assert.match(crate, /^license-file\.workspace = true$/m);
+  assert.equal(packageJson.license, "MIT");
+  assert.equal(pluginJson.license, "MIT");
+  assert.match(license, /^MIT License$/m);
+  assert.match(workspace, /^license = "MIT"$/m);
+  assert.match(crate, /^license\.workspace = true$/m);
+  assert.equal(readFileSync(join(repositoryRoot, "cursor-plugin/LICENSE"), "utf8"), license);
+  assert.equal(readFileSync(join(repositoryRoot, "plugins/granttap/LICENSE"), "utf8"), license);
   assert.ok(entries.includes("LICENSE"));
   assert.ok(entries.includes("THIRD_PARTY_NOTICES.md"));
   assert.ok(entries.includes("cursor-plugin/LICENSE"));
 });
 
-test("every repository README identifies the GrantTap commercial license", () => {
+test("every repository README identifies the MIT license", () => {
   const readmes = readmeFiles(repositoryRoot);
   assert.ok(readmes.length > 1);
   for (const readme of readmes) {
-    assert.match(readFileSync(readme, "utf8"), /GrantTap Commercial Source License/);
+    assert.match(readFileSync(readme, "utf8"), /MIT License/);
   }
 });

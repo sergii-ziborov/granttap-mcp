@@ -2,4 +2,4 @@
 
 This module discovers provider-configured MCP servers and available skills. Metadata probing is isolated because it may start an MCP transport; local descriptors and skill discovery remain read-only.
 
-License: this module is distributed under the GrantTap Commercial Source License in the repository-root `LICENSE` file.
+License: this module is distributed under the MIT License in the repository-root `LICENSE` file.

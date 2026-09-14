@@ -1,8 +1,8 @@
 # Third-party notices
 
-GrantTap MCP is proprietary software distributed under the GrantTap Commercial
-Source License. Third-party components retain their own licenses; the GrantTap
-license does not replace or restrict those terms.
+GrantTap MCP is distributed under the MIT License. Third-party components
+retain their own licenses; the GrantTap license does not replace or restrict
+those terms.
 
 The npm package declares, rather than vendors, these direct runtime
 dependencies. Their packages carry the applicable license texts:

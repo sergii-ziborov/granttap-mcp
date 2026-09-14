@@ -30,5 +30,5 @@ or replace the local provider runtime.
 Tests in `tests/` exercise isolated keys, a loopback encrypted phone connection,
 expiry, non-mutating status, and actual DOM button/host-message behavior.
 
-License: this module is distributed under the GrantTap Commercial Source License
+License: this module is distributed under the MIT License
 in the repository-root `LICENSE` file.

@@ -6,5 +6,5 @@ catalogs. `index.ts` assembles and publishes the bounded wire payload,
 the latest provider discovery cost, and `loop.ts` runs the independent adaptive
 five-second active / thirty-second idle cadence from cached session status.
 
-License: this module is distributed under the GrantTap Commercial Source License
+License: this module is distributed under the MIT License
 in the repository-root `LICENSE` file.

@@ -19,5 +19,5 @@ forces the existing GrantTap approval path. Cursor evaluates Project policy
 directly in its shell and MCP hooks; MCP evidence contains only bounded names,
 transport, and a configuration SHA-256, never the descriptor or call arguments.
 
-License: this module is distributed under the GrantTap Commercial Source License
+License: this module is distributed under the MIT License
 in the repository-root `LICENSE` file.

@@ -5,5 +5,5 @@ bounded context cost; and limits encrypted usage payloads. `../telemetry.ts` is
 the public entry point. Tests live in `tests/provider-capability-telemetry.test.ts`
 and `tests/provider-capability-bounds.test.ts`.
 
-License: this module is distributed under the GrantTap Commercial Source License
+License: this module is distributed under the MIT License
 in the repository-root `LICENSE` file.

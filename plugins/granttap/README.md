@@ -13,7 +13,7 @@ iPhone and Apple Watch.
 Install the durable local GrantTap helper on each Mac or Windows computer you connect:
 
 ```bash
-npm install --global granttap-mcp@0.8.16
+npm install --global granttap-mcp@0.8.17
 granttap setup
 ```
 
@@ -44,7 +44,7 @@ status, and confirmed Reconnect controls.
 Install the same local helper first, then install the plugin:
 
 ```bash
-npm install --global granttap-mcp@0.8.16
+npm install --global granttap-mcp@0.8.17
 granttap setup
 claude plugin marketplace add sergii-ziborov/granttap-mcp
 claude plugin install granttap@granttap
@@ -62,7 +62,7 @@ Authenticate**. Cursor uses the same website flow.
 ### Grok Build
 
 ```bash
-npm install --global granttap-mcp@0.8.16
+npm install --global granttap-mcp@0.8.17
 granttap setup
 grok plugin marketplace add sergii-ziborov/granttap-mcp
 grok plugin install granttap --trust
@@ -89,5 +89,5 @@ service installed by `granttap setup`. See
 [granttap.com](https://granttap.com) for the iPhone and Apple Watch app,
 privacy policy, and terms.
 
-Use of GrantTap is governed by the
-[GrantTap Commercial Source License](LICENSE).
+The plugin and local MCP runtime are distributed under the [MIT License](LICENSE).
+The GrantTap iPhone and Apple Watch app and hosted service have separate terms.

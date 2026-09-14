@@ -6,21 +6,21 @@
   },
   "metadata": {
     "description": "GrantTap for Cursor — authorize on granttap.com/connect and approve local tasks from your phone",
-    "version": "0.1.6"
+    "version": "0.1.7"
   },
   "plugins": [
     {
       "name": "granttap",
       "source": "cursor-plugin",
       "description": "Authorize Cursor on granttap.com/connect, pair by QR, and keep each approval in its originating chat",
-      "version": "0.1.6",
+      "version": "0.1.7",
       "author": {
         "name": "GrantTap",
         "email": "support@granttap.com"
       },
       "homepage": "https://granttap.com",
       "repository": "https://github.com/sergii-ziborov/granttap-mcp",
-      "license": "SEE LICENSE IN LICENSE",
+      "license": "MIT",
       "category": "integrations",
       "keywords": [
         "granttap",

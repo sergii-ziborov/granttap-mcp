@@ -40,9 +40,9 @@ plugin's HTTP configuration with stdio.
 
 ## Install the Cursor plugin
 
-A public Cursor Marketplace listing requires an open-source plugin license and
-manual review. The current commercially licensed plugin is available as a
-private Git import: `sergii-ziborov/granttap-mcp`. Reload Cursor after import.
+The plugin is MIT-licensed and available as a private Git import:
+`sergii-ziborov/granttap-mcp`. A public Cursor Marketplace listing requires
+manual review. Reload Cursor after import.
 The private listing is tied to the version imported on that computer; re-import
 it to pick up the current orange icon and plugin changes. If a public listing
 is later approved, install **GrantTap** from Cursor's marketplace to receive
@@ -75,5 +75,5 @@ Troubleshooting details live in
 
 ## License
 
-The plugin is distributed under the GrantTap Commercial Source License included
-in this directory. Production use requires Authorized Access to GrantTap.
+The plugin is distributed under the [MIT License](LICENSE). The GrantTap iPhone
+and Apple Watch app and hosted service have separate terms.

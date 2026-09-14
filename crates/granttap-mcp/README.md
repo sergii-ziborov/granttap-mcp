@@ -61,5 +61,5 @@ cargo build -p granttap-mcp --release
 
 ## License
 
-This unpublished crate is distributed under the GrantTap Commercial Source License
+This unpublished crate is distributed under the MIT License
 inherited from the workspace `LICENSE` file.

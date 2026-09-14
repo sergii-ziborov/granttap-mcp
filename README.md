@@ -2,7 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/granttap-mcp)](https://www.npmjs.com/package/granttap-mcp)
 [![CI](https://github.com/sergii-ziborov/granttap-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/sergii-ziborov/granttap-mcp/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-GrantTap%20Commercial-7c3aed.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 GrantTap is a Personal live control center for local coding agents.
 
@@ -13,9 +13,9 @@ hooks, local adapters, and TypeScript wire schemas. Agents and provider
 credentials stay on your computer. Native iPhone and Apple Watch traffic is
 end-to-end encrypted.
 
-The source is public for inspection and contribution, but GrantTap MCP is
-proprietary paid software rather than open source. Production use requires an
-active GrantTap subscription or a separate commercial agreement.
+The MCP runtime, plugins, and CLI are open source under the MIT License. The
+iPhone and Apple Watch app is a separate, proprietary product; use of GrantTap's
+hosted service is governed by its own terms.
 
 [Website](https://granttap.com) · [npm](https://www.npmjs.com/package/granttap-mcp) ·
 [Security model](SECURITY.md) ·
@@ -204,8 +204,8 @@ history stays on the device.
 
 ## Install
 
-Installation and production use require Authorized Access under the
-[GrantTap Commercial Source License](LICENSE).
+The local runtime and plugins are available under the [MIT License](LICENSE).
+The iPhone and Apple Watch app and hosted service have separate terms.
 
 Install the GrantTap plugin directly from this repository's marketplace:
 
@@ -223,8 +223,8 @@ grok plugin marketplace add sergii-ziborov/granttap-mcp
 grok plugin install granttap --trust
 ```
 
-Import `sergii-ziborov/granttap-mcp` as a private Git plugin in Cursor. A public
-listing requires an open-source plugin license and Cursor review. Reload Cursor, then open
+Import `sergii-ziborov/granttap-mcp` as a private Git plugin in Cursor. The
+MIT-licensed plugin is ready for Cursor's public review. Reload Cursor, then open
 **Cursor Customize → MCPs → GrantTap → Authenticate**. Complete authorization
 and any one-time QR pairing on `https://granttap.com/connect`.
 
@@ -521,9 +521,8 @@ typecheck, and release checks pass.
 
 ## License
 
-GrantTap MCP is distributed under the proprietary
-[GrantTap Commercial Source License 1.0](LICENSE). Public source access does not
-grant open-source, redistribution, hosted-service, or competing-product rights.
+GrantTap MCP, its CLI, and bundled plugins are distributed under the
+[MIT License](LICENSE). The iPhone and Apple Watch app is licensed separately.
 Third-party dependencies retain their own terms; see
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
