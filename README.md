@@ -223,8 +223,8 @@ grok plugin marketplace add sergii-ziborov/granttap-mcp
 grok plugin install granttap --trust
 ```
 
-Import `sergii-ziborov/granttap-mcp` as a private Git plugin in Cursor while
-its public marketplace listing awaits approval. Reload Cursor, then open
+Import `sergii-ziborov/granttap-mcp` as a private Git plugin in Cursor. A public
+listing requires an open-source plugin license and Cursor review. Reload Cursor, then open
 **Cursor Customize → MCPs → GrantTap → Authenticate**. Complete authorization
 and any one-time QR pairing on `https://granttap.com/connect`.
 

@@ -49,9 +49,9 @@ test("public install docs distinguish Git plugins from approved listings", () =>
 
   assert.match(readme, /grok plugin marketplace add sergii-ziborov\/granttap-mcp/);
   assert.match(readme, /grok plugin install granttap --trust/);
-  assert.match(readme, /private Git plugin in Cursor while/);
+  assert.match(readme, /private Git plugin in Cursor/);
   assert.match(pluginReadme, /grok plugin marketplace add sergii-ziborov\/granttap-mcp/);
   assert.match(pluginReadme, /grok plugin install granttap --trust/);
-  assert.match(cursorReadme, /Until Cursor approves the public listing/);
+  assert.match(cursorReadme, /requires an open-source plugin license/);
   assert.match(cursorReadme, /re-import/);
 });

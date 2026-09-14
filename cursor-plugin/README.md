@@ -40,12 +40,13 @@ plugin's HTTP configuration with stdio.
 
 ## Install the Cursor plugin
 
-Until Cursor approves the public listing, import
-`sergii-ziborov/granttap-mcp` as a private Git plugin and reload Cursor.
+A public Cursor Marketplace listing requires an open-source plugin license and
+manual review. The current commercially licensed plugin is available as a
+private Git import: `sergii-ziborov/granttap-mcp`. Reload Cursor after import.
 The private listing is tied to the version imported on that computer; re-import
-it to pick up the current orange icon and plugin changes. Once the public
-listing is approved, install **GrantTap** from Cursor's marketplace to receive
-its marketplace updates. The plugin adds the `/connect` command, a connect
+it to pick up the current orange icon and plugin changes. If a public listing
+is later approved, install **GrantTap** from Cursor's marketplace to receive
+its reviewed updates. The plugin adds the `/connect` command, a connect
 skill, and the exact-correlation rule; `granttap setup` configures the local
 MCP endpoint separately.
 
