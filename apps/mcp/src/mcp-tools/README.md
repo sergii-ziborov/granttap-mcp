@@ -1,7 +1,8 @@
 # MCP tools
 
 The Personal MCP surface is an exact allowlist: `connection_status`, `connect`,
-`reconnect`, `notify`, `ask_yes_no`, and `ask`. `relay.ts` owns one shared encrypted relay connection
+`reconnect`, `notify`, `ask_yes_no`, and `ask`. Context compilation belongs
+inside Project Mesh, not as extra tools. `relay.ts` owns one shared encrypted relay connection
 and the durable question lifecycle. Machine setup, custom relay selection, and
 pairing reset remains an explicit CLI operation. The narrower `reconnect` MCP
 tool can replace only the current pairing, is declared destructive, and requires

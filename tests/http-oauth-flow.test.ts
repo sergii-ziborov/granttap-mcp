@@ -53,7 +53,7 @@ async function registeredAuthorization(base: string, verifier: string, clientNam
   const response = await fetch(url, { redirect: "manual" });
   assert.equal(response.status, 302);
   const website = new URL(response.headers.get("location")!);
-  assert.equal(website.origin, "https://granttap.com");
+  assert.equal(website.origin, "https://relay.granttap.com");
   assert.equal(website.pathname, "/connect");
   const pendingId = new URLSearchParams(website.hash.slice(1)).get("request");
   assert.ok(pendingId);

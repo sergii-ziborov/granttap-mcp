@@ -108,11 +108,11 @@ export function inspectCursorHttpConfig(
   }
   const entry = (servers as Record<string, unknown>).granttap;
   if (isHttpEntry(entry, expectedUrl)) {
-    return { status: "action_required", detail: "Endpoint configured; keep local OAuth running and complete authentication in Cursor." };
+    return { status: "action_required", detail: "Remove the user GrantTap HTTP MCP entry. Cloud cannot reach 127.0.0.1." };
   }
   return entry == null
-    ? { status: "not_configured", detail: "Run granttap setup to add Cursor." }
-    : { status: "action_required", detail: "Replace the existing GrantTap entry with the HTTP OAuth endpoint." };
+    ? { status: "not_configured", detail: "Cursor uses the GrantTap plugin. Pair in the GrantTap app." }
+    : { status: "action_required", detail: "Remove the user GrantTap MCP entry. Cloud cannot reach 127.0.0.1, and settings belong in the plugin and the GrantTap app." };
 }
 
 /** Install only Cursor's GrantTap entry, preserving every unrelated MCP server. */
@@ -145,4 +145,36 @@ export function installCursorHttpConfig(
     if (existsSync(temporary)) unlinkSync(temporary);
   }
   return { status: "installed", detail: `${path} → ${expectedUrl}` };
+}
+
+/** Drop GrantTap from ~/.cursor/mcp.json so Cloud stops fetching localhost. */
+export function removeCursorUserGrantTap(
+  path = cursorMcpConfigPath(),
+): CursorConfigResult {
+  const problem = validateCursorHttpConfig(path);
+  if (problem) return problem;
+  const config = parseConfig(path);
+  if (!config) return { status: "manual", detail: `${path} is invalid JSON; no changes were made.` };
+  const servers = config.mcpServers;
+  if (servers == null || typeof servers !== "object" || Array.isArray(servers)) {
+    return { status: "already", detail: `${path} has no user GrantTap MCP entry.` };
+  }
+  const table = servers as Record<string, unknown>;
+  if (table.granttap == null) {
+    return { status: "already", detail: `${path} has no user GrantTap MCP entry.` };
+  }
+  const { granttap: _removed, ...kept } = table;
+  mkdirSync(dirname(path), { recursive: true });
+  if (existsSync(path) && !existsSync(`${path}.bak-granttap-user`)) {
+    copyFileSync(path, `${path}.bak-granttap-user`);
+  }
+  config.mcpServers = kept;
+  const temporary = `${path}.tmp-${process.pid}-${randomUUID()}`;
+  try {
+    writeFileSync(temporary, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+    renameSync(temporary, path);
+  } finally {
+    if (existsSync(temporary)) unlinkSync(temporary);
+  }
+  return { status: "installed", detail: `removed user GrantTap MCP from ${path}` };
 }

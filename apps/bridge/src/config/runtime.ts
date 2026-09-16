@@ -1,4 +1,5 @@
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { writePrivateFile } from "./write-private";
 import type {
   AgentAccess,
   CodingAgent,
@@ -11,7 +12,7 @@ import {
   shouldAutoAllow,
   type AutoAcceptLevel,
 } from "../policy";
-import { configDir, runtimeConfigPath } from "./paths";
+import { runtimeConfigPath } from "./paths";
 
 export type RuntimeConfig = {
   enabled: boolean;
@@ -27,6 +28,8 @@ export type RuntimeConfig = {
   pausedSessions: string[];
   providerSettings: ProviderRuntimeSettings;
   meshEnabled: boolean;
+  /** Off by default: compile a bounded Mesh packet for the calling Task. */
+  contextCompilerEnabled: boolean;
   /** Absolute path to the separately distributed GrantTap Engine binary. */
   enginePath: string | null;
   /** Expected SHA-256 of that binary, in lowercase hex. */
@@ -46,6 +49,7 @@ const DEFAULT_RUNTIME: RuntimeConfig = {
   pausedSessions: [],
   providerSettings: { claude: true, codex: true, cursor: true, grok: true },
   meshEnabled: true,
+  contextCompilerEnabled: false,
   enginePath: null,
   engineSha256: null,
 };
@@ -150,6 +154,7 @@ export function loadRuntimeConfig(): RuntimeConfig {
       pausedSessions: parseSessionList(raw.pausedSessions),
       providerSettings: parseProviderSettings(raw.providerSettings),
       meshEnabled: raw.meshEnabled !== false,
+      contextCompilerEnabled: raw.contextCompilerEnabled === true,
       enginePath: parseEnginePath(raw.enginePath),
       engineSha256: parseEngineChecksum(raw.engineSha256),
     };
@@ -164,6 +169,7 @@ export function loadRuntimeConfig(): RuntimeConfig {
       pausedSessions: [],
       providerSettings: { ...DEFAULT_RUNTIME.providerSettings },
       meshEnabled: true,
+      contextCompilerEnabled: false,
     };
   }
 }
@@ -176,11 +182,16 @@ export function isMeshEnabled(): boolean {
   return loadRuntimeConfig().meshEnabled;
 }
 
+export function isContextCompilerEnabled(): boolean {
+  const flag = process.env.GRANTTAP_CONTEXT_COMPILER?.trim().toLowerCase();
+  if (flag === "1" || flag === "true") return true;
+  if (flag === "0" || flag === "false") return false;
+  return loadRuntimeConfig().contextCompilerEnabled;
+}
+
 export function saveRuntimeConfig(cfg: Partial<RuntimeConfig>): void {
-  mkdirSync(configDir(), { recursive: true });
   const merged: RuntimeConfig = { ...loadRuntimeConfig(), ...cfg };
-  writeFileSync(runtimeConfigPath(), JSON.stringify(merged, null, 2) + "\n", { mode: 0o600 });
-  chmodSync(runtimeConfigPath(), 0o600);
+  writePrivateFile(runtimeConfigPath(), JSON.stringify(merged, null, 2) + "\n");
 }
 
 export function autoAcceptLevelFor(sessionId: string | null | undefined): AutoAcceptLevel {

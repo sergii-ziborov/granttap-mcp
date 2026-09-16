@@ -21,19 +21,28 @@ function render(value) {
   clearCode();
   const meta = result._meta?.granttap ?? {};
   const labels = {
-    disconnected: ["Not paired", "Connect this computer", "Connect to create a one-time QR. No account or password is required."],
-    pairing: ["Waiting for iPhone", "Scan to connect", "Open GrantTap on iPhone → Settings → Connections. Scan this one-time QR or copy the pairing link."],
-    expired: ["QR expired", "Create a new pairing code", "Choose Reconnect and confirm replacing the pairing. The previous QR can no longer be used."],
-    paired: ["Pairing saved", "This computer is paired", "Phone activity has not been confirmed recently by this MCP. Refresh status or open GrantTap on iPhone."],
-    connected: ["iPhone activity confirmed", "Your iPhone has responded", "An encrypted message was received recently. This does not guarantee continuous reachability."],
+    disconnected: ["Not paired", "Add your iPhone", "Tap Add iPhone. Scan the QR in GrantTap → Settings → Connections."],
+    pairing: ["Waiting for iPhone", "Scan this QR", "Keep this card open. The QR is only here — not in chat."],
+    expired: ["QR expired", "Add iPhone again", "Tap Add iPhone to replace the expired code."],
+    paired: ["iPhone saved", "Phones on this computer", "A pairing is saved. Open GrantTap on the phone, or tap Add iPhone for a new QR."],
+    connected: ["iPhone seen", "Phones on this computer", "GrantTap received a recent message from the phone."],
   };
   const [status, heading, detail] = labels[state.status] || labels.disconnected;
   $("card").className = "card " + (state.status === "connected" ? "connected" : "");
   $("status").textContent = status;
   $("heading").textContent = heading;
   $("detail").textContent = detail;
-  $("connect").classList.toggle("hidden", state.status !== "disconnected");
-  $("reconnect").classList.toggle("hidden", state.status === "disconnected");
+  $("confirm").classList.add("hidden");
+  $("connect").classList.toggle("hidden", state.status === "pairing");
+  $("reconnect").classList.add("hidden");
+  $("phones").replaceChildren();
+  for (const phone of state.phones || []) {
+    const row = document.createElement("li");
+    const when = phone.lastSeenAt ? new Date(phone.lastSeenAt).toLocaleString() : "saved on this Mac";
+    row.textContent = `${phone.name} · ${phone.status === "seen" ? "online just now" : "paired"} · ${when}`;
+    $("phones").append(row);
+  }
+  $("phones-empty").classList.toggle("hidden", (state.phones || []).length > 0);
   if (state.status === "pairing" && state.expiresAt > Date.now()) {
     if (/^granttap:\/\/pair-v2\?/.test(meta.pairingUri || "")) pairingUri = meta.pairingUri;
     if (/^data:image\/png;base64,/.test(meta.qrDataUrl || "")) {
@@ -61,10 +70,18 @@ function updateExpiry() {
   if (current.status === "pairing" && remaining <= 0) {
     clearCode();
     $("status").textContent = "QR expired";
-    $("detail").textContent = "Choose Reconnect to replace the expired pairing code.";
+    $("detail").textContent = "Tap Add iPhone to replace the expired code.";
+    $("connect").classList.remove("hidden");
   }
 }
-$("connect").addEventListener("click", () => call("connect"));
+$("connect").addEventListener("click", () => {
+  if (current.status && current.status !== "disconnected") {
+    $("confirm").classList.remove("hidden");
+    $("cancel").focus();
+    return;
+  }
+  call("connect");
+});
 $("refresh").addEventListener("click", () => call("connection_status"));
 $("reconnect").addEventListener("click", () => {
   $("confirm").classList.remove("hidden");

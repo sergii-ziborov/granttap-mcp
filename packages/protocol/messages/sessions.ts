@@ -149,6 +149,7 @@ export const SessionsStatus = z.object({
   autoAcceptPaused: z.boolean().optional(),
   providerSettings: ProviderRuntimeSettings.optional(),
   meshEnabled: z.boolean().optional(),
+  contextCompilerEnabled: z.boolean().optional(),
   agents: z.array(AgentIntegrationStatus).optional(),
   activities: z.array(SessionActivity).optional(),
   generatedAt: z.number(),
@@ -169,6 +170,7 @@ export const ConfigSet = z.object({
   provider: CodingAgent.optional(),
   providerEnabled: z.boolean().optional(),
   meshEnabled: z.boolean().optional(),
+  contextCompilerEnabled: z.boolean().optional(),
   createdAt: z.number(),
 }).strict().superRefine((value, ctx) => {
   if ((value.provider == null) !== (value.providerEnabled == null)) {

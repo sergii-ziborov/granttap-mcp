@@ -49,18 +49,18 @@ test("a configured hook without its CLI is reported as action required, not conn
   assert.match(detailFor(statuses, "grok"), /Install Grok Build/);
 });
 
-test("background sync and Cursor authorization are separate readiness answers", () => {
+test("background sync and leftover Cursor HTTP MCP are separate readiness answers", () => {
   const noMonitor = providerStatuses(readiness({ monitor: { configured: false, running: false } }));
   assert.match(detailFor(noMonitor, "grok"), /background sync is not configured/);
 
-  const authorized = providerStatuses(readiness({
+  const leftoverHttp = providerStatuses(readiness({
     cursorOAuth: { configured: true, persistent: true, healthy: true },
   }));
-  assert.equal(authorized.find((status) => status.id === "cursor")?.status, "connected");
-  assert.match(detailFor(authorized, "cursor"), /persistent OAuth endpoint/);
+  assert.equal(leftoverHttp.find((status) => status.id === "cursor")?.status, "action_required");
+  assert.match(detailFor(leftoverHttp, "cursor"), /Remove the user GrantTap HTTP MCP entry/);
 
-  const unauthorized = providerStatuses(readiness());
-  assert.match(detailFor(unauthorized, "cursor"), /Run granttap setup for Cursor authorization/);
-  assert.equal(unauthorized.find((status) => status.id === "claude")?.status, "connected");
-  assert.equal(unauthorized.find((status) => status.id === "grok")?.status, "connected");
+  const pluginOnly = providerStatuses(readiness());
+  assert.match(detailFor(pluginOnly, "cursor"), /Use the GrantTap plugin and the GrantTap app/);
+  assert.equal(pluginOnly.find((status) => status.id === "claude")?.status, "connected");
+  assert.equal(pluginOnly.find((status) => status.id === "grok")?.status, "connected");
 });

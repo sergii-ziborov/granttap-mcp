@@ -34,7 +34,7 @@ test("provider status requires the full hook set, live pairing, and monitor", ()
   });
   assert.deepEqual(providers.map((provider) => provider.id), ["cursor", "claude", "codex", "grok"]);
   assert.equal(providers[0]?.status, "connected");
-  assert.match(providers[0]?.detail ?? "", /Run granttap setup for Cursor authorization/);
+  assert.match(providers[0]?.detail ?? "", /Use the GrantTap plugin and the GrantTap app/);
   assert.equal(providers[1]?.status, "connected");
   assert.equal(providers[2]?.status, "action_required");
   assert.match(providers[2]?.detail ?? "", /\/hooks/);
@@ -57,18 +57,12 @@ test("provider status requires the full hook set, live pairing, and monitor", ()
     paired: true,
     monitor: { configured: true, running: true },
   };
-  const deadOAuth = providerStatuses({
-    ...oauthBase,
-    cursorOAuth: { configured: true, persistent: true, healthy: false },
-  });
-  assert.equal(deadOAuth[0]?.status, "action_required");
-  assert.match(deadOAuth[0]?.detail ?? "", /needs repair/);
-  const liveOAuth = providerStatuses({
+  const leftoverHttp = providerStatuses({
     ...oauthBase,
     cursorOAuth: { configured: true, persistent: true, healthy: true },
   });
-  assert.equal(liveOAuth[0]?.status, "connected");
-  assert.match(liveOAuth[0]?.detail ?? "", /persistent OAuth endpoint/);
+  assert.equal(leftoverHttp[0]?.status, "action_required");
+  assert.match(leftoverHttp[0]?.detail ?? "", /Remove the user GrantTap HTTP MCP entry/);
 });
 
 test("status snapshots contain no pairing secrets or private capability", (t) => {

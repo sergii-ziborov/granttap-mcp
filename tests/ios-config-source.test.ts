@@ -65,3 +65,11 @@ test("an unrelated config.set leaves auto-accept intact", (t) => {
   assert.equal(rc.autoAcceptDefault, "except_push");
   assert.ok(rc.excludedSessions.includes("chat-z"));
 });
+
+test("the phone can turn Cortex Loom compilation on without touching Mesh", (t) => {
+  withConfigDir(t);
+  assert.equal(loadRuntimeConfig().contextCompilerEnabled, false);
+  handleConfigSet({ type: "config.set", contextCompilerEnabled: true, createdAt: 0 });
+  assert.equal(loadRuntimeConfig().contextCompilerEnabled, true);
+  assert.equal(loadRuntimeConfig().meshEnabled, true);
+});

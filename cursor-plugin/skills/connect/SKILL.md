@@ -1,6 +1,6 @@
 ---
 name: granttap-connect
-description: Authorize Cursor through granttap.com/connect, pair by QR, or reconnect GrantTap. Use when the user asks to connect, pair, show a QR, reconnect, or repair Cursor authentication.
+description: Pair this computer with GrantTap through the plugin connection card and the GrantTap app. Use when the user asks to connect, pair, reconnect, or repair GrantTap.
 ---
 
 # GrantTap connect
@@ -9,67 +9,51 @@ Connect Cursor to the GrantTap phone app without weakening chat isolation.
 
 ## Workflow
 
-### 1. Configure Cursor authentication
+### 1. Load GrantTap MCP tools
 
-Run:
-
-```bash
-granttap setup
-```
-
-This installs and verifies the persistent loopback OAuth/MCP service before it
-changes GrantTap's entry in `~/.cursor/mcp.json`. Then direct the user to
-**Cursor Customize → MCPs → GrantTap → Authenticate**. Cursor opens
-`https://granttap.com/connect` for authorization.
-
-The plugin endpoint must remain HTTP:
+Use the Marketplace plugin. Its MCP entry is stdio:
 
 ```json
 {
   "mcpServers": {
     "granttap": {
-      "type": "http",
-      "url": "http://127.0.0.1:17342/mcp"
+      "command": "node",
+      "args": ["stdio-bootstrap.js"]
     }
   }
 }
 ```
 
-Do not replace it with a stdio `command`/`args` entry; Cursor does not expose
-its native **Authenticate** action for stdio MCP servers.
-
-### 2. Pair the phone on the website
-
-If this computer has no pairing, `granttap.com/connect` shows a one-time QR and
-manual-code fallback. If it is already paired, the website reuses that pairing
-without replacing its keys. A new QR for another phone requires the user's
-explicit reconnect confirmation on the website. Do not present localhost as
-the user-facing settings page.
-
-### 3. Install policy hooks
-
-Run:
+On this computer, run:
 
 ```bash
 granttap setup
 ```
 
-This installs the supported Cursor, Claude Code, and Codex hooks plus the
-background task-sync helper. It does not replace the separate OAuth consent.
+Setup installs hooks and removes any leftover user GrantTap entry from
+`~/.cursor/mcp.json`. Do not add GrantTap in Cursor Customize → MCPs. A user
+HTTP entry at `http://127.0.0.1:17342/mcp` is why Cloud shows fetch failed.
+
+### 2. Pair the phone
+
+Call `connection_status` or `connect`. Pairing and settings belong on the
+GrantTap connection card and in the GrantTap app. If a QR is needed, it
+appears only on that card. Do not print the pairing URI or manual token.
+Do not open Cursor Customize to change GrantTap settings.
+
+A saved pairing is reused unless the user confirms reconnect.
+
+### 3. Install policy hooks
+
+`granttap setup` installs the supported Cursor, Claude Code, and Codex hooks
+plus the background task-sync helper.
 
 ### 4. Verify
 
-Run the read-only check:
+On the user's computer, run `granttap status`. Confirm pairing is present and
+required hooks are ready. Confirm `connection_status` and `connect` respond.
 
-```bash
-granttap status
-```
-
-Confirm the loopback HTTP service and exact Cursor MCP entry are healthy,
-pairing is present, and required hooks are ready. `granttap status` cannot prove
-that Cursor retained an OAuth grant, so also confirm the MCP tools respond after
-**Authenticate**. If Cursor loaded the MCP configuration beforehand, reload the
-Cursor window and retry **Authenticate**.
+A Cloud pairing belongs to that Cloud environment; it is not the Mac pairing.
 
 For any interactive test, send the same complete prompt to Cursor and GrantTap
 under one exact correlation. The first answer carrying that exact correlation
@@ -78,10 +62,9 @@ correlation.
 
 ## Troubleshooting
 
-- `granttap cursor repair` repairs the OAuth/MCP service when setup cannot;
-  normal onboarding should use the persistent `granttap setup` path.
-- Run `granttap cursor repair` if `granttap status` reports an unhealthy OAuth
-  service.
+- `granttap cursor repair` removes a leftover user GrantTap MCP entry and
+  repairs the local helper.
 - Re-run `granttap setup` if the policy hooks or background helper are missing.
-- If the website cannot reach the local helper, check Chrome's local-network
-  permission for `granttap.com` and the background helper with `granttap status`.
+- If Cloud login fails with `fetch failed` to `127.0.0.1:17342`, GrantTap is
+  still in `~/.cursor/mcp.json`. Remove that user entry, keep the plugin, and
+  pair from the connection card.

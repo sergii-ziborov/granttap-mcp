@@ -21,6 +21,7 @@ test("status is read-only; pending codes expire without exposing or rotating key
   saveConfig(machineConfigPath(), pair.machineCfg);
   const original = await readFile(machineConfigPath(), "utf8");
   assert.equal(state.snapshot().structuredContent.status, "paired");
+  assert.deepEqual(state.snapshot().structuredContent.phones, [{ name: "iPhone", status: "paired", lastSeenAt: null }]);
   state.remember({ room: pair.machineCfg.room, expiresAt: 1000, pairingUri: "secret-test-uri", qrDataUrl: "secret-test-qr" });
   const pending = state.snapshot(900);
   assert.equal(pending.structuredContent.status, "pairing");
@@ -53,6 +54,7 @@ test("only an encrypted phone message confirms activity; relay online is distinc
   await waitFor(() => connectionRuntimeStatus(pair.machineCfg.room).phoneLastSeenAt !== null);
   const connected = state.snapshot();
   assert.equal(connected.structuredContent.status, "connected");
+  assert.equal(connected.structuredContent.phones[0]?.status, "seen");
   assert.deepEqual(connected._meta.granttap, {});
   assert.equal(state.snapshot(Date.now() + 61000).structuredContent.status, "paired");
   assert.deepEqual(connectionRuntimeStatus("other-room"), { relayStatus: "unknown", phoneLastSeenAt: null });

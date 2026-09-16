@@ -247,16 +247,15 @@ grok plugin install granttap --trust
 ```
 
 For Cursor, use the reviewed **GrantTap** Marketplace listing when it is visible
-to your account, or import the public `sergii-ziborov/granttap-mcp` repository
-once. Reload Cursor, then open
-**Cursor Customize → MCPs → GrantTap → Authenticate**. Complete authorization
-and any one-time QR pairing on `https://granttap.com/connect`.
+to your account. Reload Cursor. On this computer, run `granttap setup`. Pair
+and change settings in the GrantTap plugin and the GrantTap app. Do not add
+GrantTap in Cursor Customize → MCPs. A user HTTP entry at
+`http://127.0.0.1:17342/mcp` is why Cloud shows fetch failed.
 
-Open GrantTap from the plugin page or ask `Show my GrantTap pairing QR.` Codex
-renders an interactive connection card with pairing status, a one-time QR,
-copy-link fallback, and confirmed reconnect controls. The same tools still
-return readable MCP content in clients that do not render app UI. Detailed
-plugin instructions are in
+Open GrantTap from the plugin connection card. Pairing status, a one-time QR
+when needed, and confirmed reconnect stay on that card and in the GrantTap
+app. The same tools still return readable MCP content in clients that do not
+render app UI. Detailed plugin instructions are in
 [`plugins/granttap/README.md`](plugins/granttap/README.md).
 
 For the full background helper and provider hooks, install the CLI and run
@@ -268,8 +267,8 @@ granttap setup
 ```
 
 `granttap setup` detects supported local agents, installs or repairs their
-hooks, installs the background helper, configures Cursor's persistent local
-OAuth service when Cursor is present, and starts phone pairing when run in an
+hooks, installs the background helper, removes a leftover user GrantTap MCP
+entry when Cursor is present, and starts phone pairing when run in an
 interactive terminal. It ends with one exact next action.
 
 Setup also declares the separately distributed GrantTap Engine, which Project

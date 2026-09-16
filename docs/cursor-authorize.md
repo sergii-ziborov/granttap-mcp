@@ -6,13 +6,17 @@ The normal path is one command:
 granttap setup
 ```
 
-When Cursor is installed, setup preserves unrelated MCP entries, installs the
-GrantTap shell and MCP policy hooks, configures the loopback HTTP MCP endpoint,
-and installs its persistent per-user service. Then open **Cursor Customize →
-MCPs → GrantTap → Authenticate** to complete authorization on granttap.com/connect.
+When Cursor is installed, setup installs GrantTap shell and MCP policy hooks
+and removes any leftover user GrantTap entry from `~/.cursor/mcp.json`. Pair
+and change settings in the GrantTap plugin and the GrantTap app. Do not add
+GrantTap in Cursor Customize → MCPs.
 
-The service binds only to loopback. Its OAuth token does not replace GrantTap's
-end-to-end encrypted computer pairing.
+Cursor Cloud Agents cannot reach `http://127.0.0.1`. A user HTTP MCP entry
+there is why Cloud shows **Error · fetch failed**. The Marketplace plugin
+uses stdio (`node stdio-bootstrap.js`, which on Windows runs `cmd.exe /c npx`).
+Authorize in the browser on `granttap.com/connect`; that page talks only to
+the website, not to loopback. Pairing stays on the connection card, last
+resort a QR there.
 
 If the Cursor integration later needs repair, run:
 
@@ -20,5 +24,5 @@ If the Cursor integration later needs repair, run:
 granttap cursor repair
 ```
 
-Do not edit `mcp.json` in the normal path. GrantTap backs up the existing file
-before changing only its own entry.
+That repairs the local helper and again removes a user GrantTap MCP entry.
+It does not write GrantTap back into `mcp.json`.

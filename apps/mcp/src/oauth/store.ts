@@ -1,17 +1,9 @@
-import { randomUUID } from "node:crypto";
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { OAuthRegisteredClientsStore } from "@modelcontextprotocol/sdk/server/auth/clients.js";
 import type { OAuthClientInformationFull } from "@modelcontextprotocol/sdk/shared/auth.js";
 import { configDir } from "../../../bridge/src/config";
+import { writePrivateFile } from "../../../bridge/src/config/write-private";
 
 export type StoredToken = {
   clientId: string;
@@ -40,16 +32,7 @@ export function loadOAuthStore(): OAuthStoreFile {
 }
 
 export function saveOAuthStore(store: OAuthStoreFile): void {
-  mkdirSync(configDir(), { recursive: true });
-  const path = storePath();
-  const temporary = `${path}.tmp-${process.pid}-${randomUUID()}`;
-  try {
-    writeFileSync(temporary, JSON.stringify(store, null, 2) + "\n", { mode: 0o600 });
-    renameSync(temporary, path);
-    chmodSync(path, 0o600);
-  } finally {
-    if (existsSync(temporary)) unlinkSync(temporary);
-  }
+  writePrivateFile(storePath(), JSON.stringify(store, null, 2) + "\n");
 }
 
 export class GrantTapClientsStore implements OAuthRegisteredClientsStore {

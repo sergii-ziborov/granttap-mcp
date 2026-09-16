@@ -201,11 +201,18 @@ test("authorize installs a persistent loopback service, verifies health, then ex
     }
   });
 
+  mkdirSync(cursorDir, { recursive: true });
+  writeFileSync(join(cursorDir, "mcp.json"), `${JSON.stringify({
+    mcpServers: {
+      github: { command: "github-mcp" },
+      granttap: { url: `http://127.0.0.1:${port}/mcp` },
+    },
+  }, null, 2)}\n`);
   const result = await run(["internal", "authorize"], { ...process.env });
   assert.equal(result.code, 0, result.stderr);
   assert.equal(result.stdout, "");
-  assert.match(result.stderr, /Persistent local OAuth is healthy/);
-  assert.match(result.stderr, /Open Cursor Customize/);
+  assert.match(result.stderr, /Persistent local helper is healthy/);
+  assert.match(result.stderr, /Use the GrantTap plugin/);
 
   const plistPath = httpMcpLaunchAgentPath();
   const plist = readFileSync(plistPath, "utf8");
@@ -229,20 +236,21 @@ test("authorize installs a persistent loopback service, verifies health, then ex
   await waitFor(() => probeHttpMcpHealth(mcpUrl));
   assert.equal(await probeHttpMcpHealth(mcpUrl), true);
   assert.deepEqual(await inspectCursorOAuthReadiness(), {
-    configured: true,
-    persistent: true,
-    healthy: true,
+    configured: false,
+    persistent: false,
+    healthy: false,
   });
 
   const cursor = JSON.parse(readFileSync(join(cursorDir, "mcp.json"), "utf8")) as {
-    mcpServers: { granttap: { url: string } };
+    mcpServers: Record<string, unknown>;
   };
-  assert.equal(cursor.mcpServers.granttap.url, mcpUrl);
+  assert.equal(cursor.mcpServers.granttap, undefined);
+  assert.deepEqual(cursor.mcpServers.github, { command: "github-mcp" });
 
   writeFileSync(plistPath, plist.replace(executable, "/deleted/granttap-mcp/bin/granttap-mcp.mjs"));
   const setup = await run(["setup"], { ...process.env });
   assert.equal(setup.code, 0, setup.stderr);
-  assert.match(setup.stdout, /Cursor\s+Beta · Authenticate in Cursor/);
+  assert.match(setup.stdout, /Cursor\s+Beta · Use GrantTap plugin/);
   assert.match(readFileSync(plistPath, "utf8"), /<string>internal<\/string>\s*<string>serve<\/string>/);
 
   stopFakeService();
@@ -250,7 +258,7 @@ test("authorize installs a persistent loopback service, verifies health, then ex
   await waitFor(() => !inspectHttpMcpService().running);
   assert.equal(await probeHttpMcpHealth(mcpUrl, 100), false);
   assert.deepEqual(await inspectCursorOAuthReadiness(), {
-    configured: true,
+    configured: false,
     persistent: false,
     healthy: false,
   });

@@ -19,6 +19,7 @@ test("Windows service restarts after logon and a crashed process without elevati
   assert.match(definition, /<MultipleInstancesPolicy>IgnoreNew<\/MultipleInstancesPolicy>/);
   assert.match(definition, /<RunLevel>LeastPrivilege<\/RunLevel>/);
   assert.match(definition, /<Command>C:\\Program Files\\nodejs\\node\.exe<\/Command>/);
+  assert.match(definition, /<WorkingDirectory>C:\\Users\\Alice\\AppData\\Roaming\\npm\\node_modules\\granttap-mcp<\/WorkingDirectory>/);
   assert.match(definition, /internal serve/);
 });
 

@@ -12,7 +12,7 @@ import {
 import { createOneTimePairing, DEFAULT_RELAY, PAIRING_CODE_TTL_MINUTES } from "../pairing";
 import { declareEngine } from "../engine/engine-declaration";
 import { isMachineConfigured } from "../../../mcp/src/pairing-status";
-import { installCursorHttpConfig } from "../../../mcp/src/cursor-config";
+import { removeCursorUserGrantTap } from "../../../mcp/src/cursor-config";
 import { installHttpMcpService, waitForHttpMcpHealth } from "../../../mcp/src/http-service";
 
 function state(result: InstallResult): string {
@@ -72,7 +72,7 @@ async function main(): Promise<void> {
       httpService = { status: "manual", detail: "Windows background service did not become healthy." };
     }
     if (before.cursor.installed && httpService.status !== "manual") {
-      cursorConfig = installCursorHttpConfig();
+      cursorConfig = removeCursorUserGrantTap();
     }
   }
   const pairingResult = await pairIfNeeded();
@@ -95,7 +95,7 @@ async function main(): Promise<void> {
       ? codexHook.status === "manual" || httpService?.status === "manual"
         ? "Needs attention" : !paired ? "Needs connection" : "Authorize in Codex; review hooks"
       : "Not installed"}`,
-    `Cursor              ${before.cursor.installed ? `Beta · ${cursorReady ? "Authenticate in Cursor" : "Needs repair"}` : "Not installed"}`,
+    `Cursor              ${before.cursor.installed ? `Beta · ${cursorReady ? "Use GrantTap plugin" : "Needs repair"}` : "Not installed"}`,
     `Grok Build          ${installed.has("grok")
       ? httpService?.status === "manual" ? "Needs attention" : "Authorize in Grok Build"
       : "Not installed"}`,
@@ -106,9 +106,9 @@ async function main(): Promise<void> {
     paired && installed.has("codex")
       ? `Next: authorize GrantTap in Codex, then ${CODEX_TRUST_INSTRUCTION}`
       : paired && before.cursor.installed
-        ? "Next: open Cursor Customize → MCPs → GrantTap → Authenticate."
+        ? "Next: keep the GrantTap plugin. Pair and change settings in the GrantTap app, not Cursor MCP settings."
         : !paired
-          ? "Next: authenticate GrantTap in your coding app; granttap.com/connect will show the pairing QR."
+          ? "Next: pair from the GrantTap plugin connection card or the GrantTap app."
           : engine
             ? "Governance is live. Restart the helper to pick it up: launchctl kickstart -k gui/$(id -u)/com.granttap.monitor"
             : "Governance stays off until an engine is found. Point at one with: granttap setup --engine <path>",

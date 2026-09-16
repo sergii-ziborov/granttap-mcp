@@ -52,9 +52,10 @@ test("OAuth provider completes consent, code exchange, verification, and revocat
   await provider.authorize(client, { ...params, scopes: [] }, record.response);
   assert.equal(record.status(), 302);
   const website = new URL(record.location());
-  assert.equal(website.origin, "https://granttap.com");
+  assert.equal(website.origin, "https://relay.granttap.com");
   assert.equal(website.pathname, "/connect");
   assert.match(website.hash, /request=/);
+  assert.doesNotMatch(website.hash, /port=/);
   assert.doesNotMatch(record.location(), /mcp%3Atools|callback|Cursor/);
   await assert.rejects(
     provider.authorize(client, { ...params, scopes: ["admin"] }, record.response),
@@ -132,4 +133,16 @@ test("OAuth provider expires stale pending requests, codes, and tokens", async (
   saveOAuthStore(store);
   await assert.rejects(provider.verifyAccessToken("expired"), /expired/);
   assert.equal(loadOAuthStore().tokens.expired, undefined);
+});
+
+test("OAuth pending requests survive a helper restart", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-oauth-pending-"));
+  process.env.GRANTTAP_CONFIG_DIR = root;
+  t.after(() => delete process.env.GRANTTAP_CONFIG_DIR);
+  const first = new GrantTapOAuthProvider(resource);
+  const pendingId = first.createPending(client, params);
+  const restarted = new GrantTapOAuthProvider(resource);
+  assert.equal(restarted.getPending(pendingId)?.client.client_id, client.client_id);
+  restarted.completeConsent(pendingId, false);
+  assert.equal(new GrantTapOAuthProvider(resource).getPending(pendingId), undefined);
 });

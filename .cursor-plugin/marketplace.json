@@ -5,15 +5,15 @@
     "email": "support@granttap.com"
   },
   "metadata": {
-    "description": "Connect Cursor to GrantTap through granttap.com/connect, pair your phone with a one-time QR, and keep approvals in the originating chat.",
-    "version": "0.1.8"
+    "description": "Connect Cursor to GrantTap. Pair and change settings in the plugin and the GrantTap app, not Cursor MCP settings.",
+    "version": "0.1.9"
   },
   "plugins": [
     {
       "name": "granttap",
       "source": "cursor-plugin",
-      "description": "Connect Cursor to GrantTap through granttap.com/connect, pair your phone with a one-time QR, and keep approvals in the originating chat.",
-      "version": "0.1.8",
+      "description": "Connect Cursor to GrantTap. Pair and change settings in the plugin and the GrantTap app, not Cursor MCP settings.",
+      "version": "0.1.9",
       "logo": "https://raw.githubusercontent.com/sergii-ziborov/granttap-mcp/main/cursor-plugin/assets/logo.svg",
       "author": {
         "name": "GrantTap",

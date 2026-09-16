@@ -54,6 +54,10 @@ export function isHttpMcpServiceLoaded(): boolean {
   ).status === 0;
 }
 
+export function isEphemeralNpxInstall(root: string): boolean {
+  return root.replaceAll("\\", "/").toLowerCase().includes("/_npx/");
+}
+
 export function xml(value: string): string {
   return value
     .replaceAll("&", "&amp;")

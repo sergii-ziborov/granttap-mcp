@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { hostname } from "node:os";
 import { loadConfig } from "../../../bridge/src/config";
-import { isMachineConfigured, readOnlyMachineConfigPath } from "../pairing-status";
+import { isMachineConfigured, listPairedPhones, readOnlyMachineConfigPath } from "../pairing-status";
 import { inspectProviderStatusSnapshot } from "../provider-status";
 import { packageVersion } from "../package-version";
 import { connectionRuntimeStatus } from "../mcp-tools/relay";
@@ -13,6 +13,11 @@ export const connectionOutput = {
   relay: z.string(),
   relayStatus: z.enum(["online", "offline", "unknown"]),
   phoneLastSeenAt: z.number().nullable(),
+  phones: z.array(z.object({
+    name: z.string(),
+    status: z.enum(["paired", "seen"]),
+    lastSeenAt: z.number().nullable(),
+  })),
   expiresAt: z.number().nullable(),
   expiresInMinutes: z.number().int().positive().nullable(),
   providers: z.array(z.object({ id: z.string(), status: z.string(), detail: z.string() })),
@@ -50,6 +55,7 @@ export class ConnectionState {
         relay: config ? new URL(config.relayUrl).host : "",
         relayStatus: runtime.relayStatus,
         phoneLastSeenAt: runtime.phoneLastSeenAt,
+        phones: listPairedPhones(runtime.phoneLastSeenAt, now),
         expiresAt: this.pending?.expiresAt ?? null,
         expiresInMinutes: code ? Math.max(1, Math.ceil((code.expiresAt - now) / 60_000)) : null,
         providers: inspectProviderStatusSnapshot().providers,

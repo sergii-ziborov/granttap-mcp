@@ -78,20 +78,17 @@ function cursorStatus(readiness: ProviderReadiness): ProviderConnectionStatus {
   }
   const runtime = runtimeRequirement("cursor", readiness);
   if (runtime) return runtime;
-  if (readiness.cursorOAuth?.configured
-    && (!readiness.cursorOAuth.persistent || !readiness.cursorOAuth.healthy)) {
+  if (readiness.cursorOAuth?.configured) {
     return {
       id: "cursor",
       status: "action_required",
-      detail: "Cursor's local authorization service needs repair. Run granttap cursor repair.",
+      detail: "Remove the user GrantTap HTTP MCP entry. Cloud cannot reach 127.0.0.1. Pair and change settings in the GrantTap plugin and app.",
     };
   }
   return {
     id: "cursor",
     status: "connected",
-    detail: readiness.cursorOAuth?.configured
-      ? "Shell/MCP policy hooks, pairing, background sync, and the persistent OAuth endpoint are ready."
-      : "Shell/MCP policy hooks, pairing, and background sync are ready. Run granttap setup for Cursor authorization.",
+    detail: "Shell/MCP policy hooks, pairing, and background sync are ready. Use the GrantTap plugin and the GrantTap app.",
   };
 }
 

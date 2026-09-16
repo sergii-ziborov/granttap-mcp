@@ -112,8 +112,17 @@ const child = spawn(
   },
 );
 
+function stopChild() {
+  try {
+    if (process.platform === "win32") child.kill();
+    else child.kill("SIGTERM");
+  } catch {
+    // The child may already have exited.
+  }
+}
+
 for (const signal of ["SIGINT", "SIGTERM"]) {
-  process.on(signal, () => child.kill(signal));
+  process.on(signal, stopChild);
 }
 
 child.on("error", (error) => {
@@ -122,6 +131,7 @@ child.on("error", (error) => {
 });
 
 child.on("exit", (code, signal) => {
-  if (signal) process.kill(process.pid, signal);
-  else process.exit(code ?? 1);
+  if (signal && process.platform !== "win32") {
+    try { process.kill(process.pid, signal); } catch { process.exit(code ?? 1); }
+  } else process.exit(code ?? 1);
 });

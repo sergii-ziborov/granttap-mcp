@@ -27,7 +27,9 @@ export function exitWhenAgentLeaves(
     exit(0);
   };
   input.once("end", leave);
-  input.once("close", leave);
+  input.once("close", () => {
+    if ("readableEnded" in input && input.readableEnded) leave();
+  });
 }
 
 async function main(): Promise<void> {

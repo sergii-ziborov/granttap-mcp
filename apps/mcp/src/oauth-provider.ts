@@ -22,13 +22,14 @@ import type {
   OAuthTokens,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
 import { isMachineConfigured } from "./pairing-status";
+import { buildConnectSnapshot } from "./oauth/connect-snapshot";
+import { loadPending, PENDING_TTL_MS, savePending, type PendingAuth } from "./oauth/pending";
 import { GrantTapClientsStore, loadOAuthStore, saveOAuthStore } from "./oauth/store";
-
-type PendingAuth = {
-  client: OAuthClientInformationFull;
-  params: AuthorizationParams;
-  createdAt: number;
-};
+import {
+  publishConnectRequest,
+  watchConnectDecision,
+  websiteOrigin,
+} from "./oauth/website-session";
 
 type StoredCode = {
   clientId: string;
@@ -37,12 +38,11 @@ type StoredCode = {
 };
 const CODE_TTL_MS = 5 * 60_000;
 const TOKEN_TTL_MS = 30 * 24 * 60 * 60_000; // 30 days
-const PENDING_TTL_MS = 15 * 60_000;
 export { GrantTapClientsStore } from "./oauth/store";
 
 export class GrantTapOAuthProvider implements OAuthServerProvider {
   readonly clientsStore = new GrantTapClientsStore();
-  private readonly pending = new Map<string, PendingAuth>();
+  private readonly pending = loadPending();
   private readonly codes = new Map<string, StoredCode>();
 
   constructor(private readonly expectedResource?: string) {}
@@ -52,16 +52,19 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
     this.gcPending();
     const id = randomUUID();
     this.pending.set(id, { client, params, createdAt: Date.now() });
+    savePending(this.pending);
     return id;
   }
 
   getPending(id: string): PendingAuth | undefined {
-    const entry = this.pending.get(id);
+    const entry = this.pending.get(id) ?? loadPending().get(id);
     if (!entry) return undefined;
     if (Date.now() - entry.createdAt > PENDING_TTL_MS) {
       this.pending.delete(id);
+      savePending(this.pending);
       return undefined;
     }
+    this.pending.set(id, entry);
     return entry;
   }
 
@@ -85,14 +88,20 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
       resource: this.expectedResource ? new URL(this.expectedResource) : params.resource,
     };
     const pendingId = this.createPending(client, normalizedParams);
+    const snapshot = buildConnectSnapshot(client.client_name);
+    const origin = websiteOrigin();
+    if (origin) {
+      await publishConnectRequest(origin, pendingId, snapshot).catch(() => {});
+      watchConnectDecision(origin, pendingId, snapshot, (approve) =>
+        this.completeConsent(pendingId, approve));
+    }
     res.set({
       "Cache-Control": "no-store",
       "Referrer-Policy": "no-referrer",
       "X-Content-Type-Options": "nosniff",
     });
-    const website = new URL("https://granttap.com/connect");
-    const resource = new URL(this.expectedResource ?? normalizedParams.resource!.href);
-    website.hash = new URLSearchParams({ request: pendingId, port: resource.port }).toString();
+    const website = new URL(`${origin ?? "https://relay.granttap.com"}/connect`);
+    website.hash = new URLSearchParams({ request: pendingId }).toString();
     res.redirect(302, website.href);
   }
 
@@ -104,6 +113,7 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
     const target = new URL(pending.params.redirectUri);
     if (!approve) {
       this.pending.delete(pendingId);
+      savePending(this.pending);
       target.searchParams.set("error", "access_denied");
       if (pending.params.state) target.searchParams.set("state", pending.params.state);
       return { redirectUrl: target.toString() };
@@ -113,6 +123,7 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
     }
 
     this.pending.delete(pendingId);
+    savePending(this.pending);
     const code = randomUUID();
     this.codes.set(code, {
       clientId: pending.client.client_id,
@@ -219,8 +230,13 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
 
   private gcPending(): void {
     const now = Date.now();
+    let changed = false;
     for (const [id, entry] of this.pending) {
-      if (now - entry.createdAt > PENDING_TTL_MS) this.pending.delete(id);
+      if (now - entry.createdAt > PENDING_TTL_MS) {
+        this.pending.delete(id);
+        changed = true;
+      }
     }
+    if (changed) savePending(this.pending);
   }
 }

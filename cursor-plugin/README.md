@@ -1,8 +1,9 @@
 # GrantTap Cursor plugin
 
-GrantTap connects Cursor to the GrantTap phone app through a loopback-only HTTP
-MCP server. Cursor can show its native **Authenticate** action, while GrantTap keeps
-each phone response tied to the exact originating chat and prompt.
+GrantTap connects Cursor to the GrantTap phone app. The Marketplace plugin
+ships stdio MCP. Pair and change settings in the plugin connection card and
+the GrantTap app. Do not add GrantTap in Cursor Customize → MCPs. GrantTap
+keeps each phone response tied to the exact originating chat and prompt.
 
 ## Connect Cursor
 
@@ -16,27 +17,23 @@ granttap status
 
 The commands have separate jobs:
 
-1. `granttap setup` detects Cursor, installs and verifies the persistent loopback OAuth/MCP
-   service, then writes only GrantTap's entry in `~/.cursor/mcp.json`.
-2. `granttap setup` also installs the supported policy hooks and background
-   task-sync helper. OAuth remains a separate authorization.
+1. `granttap setup` detects Cursor, installs policy hooks, and removes any
+   leftover user GrantTap entry from `~/.cursor/mcp.json`.
+2. `granttap setup` also installs the background task-sync helper.
 3. `granttap status` performs a read-only readiness check.
 
-After `granttap setup`, open **Cursor Customize → MCPs → GrantTap** and choose
-**Authenticate**. The browser opens granttap.com/connect to authorize Cursor.
-If this computer is not paired, the website shows a one-time QR and manual-code
-fallback; a saved pairing is reused unless you explicitly confirm reconnect.
+After `granttap setup`, pair in the GrantTap plugin and the GrantTap app.
+A leftover user HTTP entry at `http://127.0.0.1:17342/mcp` is why Cloud shows
+fetch failed.
 
-On Windows, `granttap setup` registers the loopback MCP and phone monitor as
+On Windows, `granttap setup` registers the local helper and phone monitor as
 least-privileged jobs under your signed-in account. Install Node.js 20+ and the
-current `granttap-mcp` package on that same Windows computer; the plugin alone
-cannot start the local server. The jobs restart after a crash and keep running
-when Cursor closes. Run `granttap status` to confirm readiness before choosing
-**Authenticate** in Cursor.
+current `granttap-mcp` package on that same Windows computer. The jobs restart
+after a crash and keep running when Cursor closes.
 
-The OAuth service listens only at `http://127.0.0.1:17342/mcp`. Cursor cannot
-show **Authenticate** for a stdio (`command`/`args`) MCP entry, so do not replace the
-plugin's HTTP configuration with stdio.
+The plugin `mcp.json` starts `node stdio-bootstrap.js`. On Windows that bootstrap
+runs `cmd.exe /c npx` so Cursor can spawn the MCP. Do not add a GrantTap URL to
+`~/.cursor/mcp.json`.
 
 ## Install the Cursor plugin
 
@@ -70,7 +67,8 @@ prompt must never resolve the current request.
 | --- | --- |
 | `.cursor-plugin/plugin.json` | Cursor plugin manifest |
 | `../.cursor-plugin/marketplace.json` | Repository marketplace index Cursor publishes |
-| `mcp.json` | Loopback Streamable HTTP MCP endpoint |
+| `mcp.json` | Plugin stdio MCP (`node stdio-bootstrap.js`). Do not add GrantTap to user `mcp.json`. |
+| `stdio-bootstrap.js` | Starts `granttap-mcp` via `node` on every OS, and via `cmd /c npx` on Windows. |
 | `assets/logo.svg` | Plugin logo |
 | `rules/dual-channel.mdc` | Exact prompt/correlation rule |
 | `skills/connect/SKILL.md` | Authorization and pairing workflow |

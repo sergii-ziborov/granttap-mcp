@@ -45,6 +45,7 @@ test("runtime defaults preserve four agents and Mesh, then persist exact gates",
     claude: true, codex: true, cursor: true, grok: true,
   });
   assert.equal(defaults.meshEnabled, true);
+  assert.equal(defaults.contextCompilerEnabled, false);
   assert.equal(isProviderEnabled("grok"), true);
   assert.equal(isMeshEnabled(), true);
 

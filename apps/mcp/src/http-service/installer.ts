@@ -7,7 +7,7 @@ import { isCursorHelperNode, resolveMonitorNodeBin, type InstallResult } from ".
 import { configDir, normalizeRelayUrl } from "../../../bridge/src/config";
 import { installWindowsTask } from "../../../bridge/src/windows-service";
 import { configuredCursorHttpMcpUrl } from "../cursor-config";
-import { HTTP_SERVICE_LABEL, httpMcpLaunchAgentPath, packageRoot, xml } from "./common";
+import { HTTP_SERVICE_LABEL, httpMcpLaunchAgentPath, isEphemeralNpxInstall, packageRoot, xml } from "./common";
 import { inspectHttpMcpService, restoreHttpMcpServiceAfterFailure, snapshotHttpMcpService } from "./snapshot";
 
 /** Install/repair and load a per-user, loopback-only OAuth MCP daemon. */
@@ -54,7 +54,7 @@ function safeNodeBin(): string | Error {
 
 function validateInstallation(nodeBin: string, executable: string): InstallResult | undefined {
   if (!existsSync(executable)) return { status: "manual", detail: `Installed launcher is missing at ${executable}` };
-  if (packageRoot.includes("/.npm/_npx/")) {
+  if (isEphemeralNpxInstall(packageRoot)) {
     return { status: "manual", detail: "Authorization requires a stable granttap-mcp install; npm's temporary _npx cache is not durable." };
   }
   const version = spawnSync(nodeBin, ["--version"], { encoding: "utf8" });

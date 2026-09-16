@@ -31,22 +31,30 @@ test("Codex, Claude Code, and Grok Build use the same OAuth HTTP service", () =>
   assert.deepEqual(otherHosts, servers);
 });
 
-test("Cursor marketplace exposes one GrantTap entry with its branded logo", () => {
+test("Cursor marketplace exposes one GrantTap entry with Cloud stdio MCP", () => {
   const marketplace = readJson(".cursor-plugin/marketplace.json");
   const plugins = marketplace.plugins as Array<{ name: string; source: string; logo: string; version: string; description: string }>;
   const plugin = readJson("cursor-plugin/.cursor-plugin/plugin.json");
+  const mcp = readJson("cursor-plugin/mcp.json");
   assert.equal(marketplace.name, "granttap");
   assert.equal((marketplace.metadata as { description: string }).description, plugin.description);
   assert.equal(plugins.length, 1);
   assert.equal(plugins[0]?.name, "granttap");
   assert.equal(plugins[0]?.source, "cursor-plugin");
   assert.equal(plugins[0]?.version, plugin.version);
+  assert.equal(plugin.version, "0.1.9");
   assert.equal(plugins[0]?.description, plugin.description);
   assert.equal(plugins[0]?.logo, "https://raw.githubusercontent.com/sergii-ziborov/granttap-mcp/main/cursor-plugin/assets/logo.svg");
   assert.equal(plugin.logo, "assets/logo.svg");
+  assert.deepEqual(mcp, {
+    mcpServers: {
+      granttap: { command: "node", args: ["stdio-bootstrap.js"] },
+    },
+  });
   assert.equal(existsSync(join(repositoryRoot, "cursor-plugin/.cursor-plugin/marketplace.json")), false);
   assert.equal(existsSync(join(repositoryRoot, "cursor-plugin/.cursor-plugin/plugin.json")), true);
   assert.equal(existsSync(join(repositoryRoot, "cursor-plugin/mcp.json")), true);
+  assert.equal(existsSync(join(repositoryRoot, "cursor-plugin/stdio-bootstrap.js")), true);
 });
 
 test("public install docs distinguish Git plugins from approved listings", () => {

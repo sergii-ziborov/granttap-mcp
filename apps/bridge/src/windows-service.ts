@@ -18,11 +18,17 @@ function xml(value: string): string {
     .replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&apos;");
 }
 
+function parentDir(path: string): string {
+  const index = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  return index <= 0 ? "." : path.slice(0, index);
+}
+
 export function windowsTaskDefinition(job: WindowsJob, node: string, launcher: string, owner = "TestUser", version = "0.0.0"): string {
   const date = new Date(Date.now() - 60_000);
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   const start = local.toISOString().slice(0, 19);
   const args = `"${launcher}" internal ${job === "http" ? "serve" : "monitor"}`;
+  const workingDirectory = parentDir(parentDir(launcher));
   return [
     '<?xml version="1.0" encoding="UTF-16"?>',
     '<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">',
@@ -39,7 +45,7 @@ export function windowsTaskDefinition(job: WindowsJob, node: string, launcher: s
     "<RestartOnFailure><Interval>PT1M</Interval><Count>3</Count></RestartOnFailure>",
     "</Settings>",
     `<Actions Context="Author"><Exec><Command>${xml(node)}</Command>`,
-    `<Arguments>${xml(args)}</Arguments><WorkingDirectory>${xml(dirname(launcher))}</WorkingDirectory>`,
+    `<Arguments>${xml(args)}</Arguments><WorkingDirectory>${xml(workingDirectory)}</WorkingDirectory>`,
     "</Exec></Actions></Task>", "",
   ].join("\n");
 }

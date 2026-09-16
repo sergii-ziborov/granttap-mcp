@@ -1,6 +1,6 @@
 import {
   configuredCursorHttpMcpUrl,
-  installCursorHttpConfig,
+  removeCursorUserGrantTap,
   validateCursorHttpConfig,
 } from "../cursor-config";
 import {
@@ -61,17 +61,16 @@ async function authorize(): Promise<void> {
         `persistent OAuth service did not become healthy at ${new URL("/healthz", mcpUrl).href}; Cursor config was not changed`,
       );
     }
-    const cursor = installCursorHttpConfig(undefined, mcpUrl);
+    const cursor = removeCursorUserGrantTap();
     if (cursor.status === "manual") {
       throw new Error(`Cursor · Action required — ${cursor.detail}`);
     }
     process.stderr.write(
       [
-        `[granttap-mcp] Cursor · Configured — ${cursor.detail}`,
-        `[granttap-mcp] Persistent local OAuth is healthy at ${mcpUrl}`,
+        `[granttap-mcp] Cursor · ${cursor.detail}`,
+        `[granttap-mcp] Persistent local helper is healthy at ${mcpUrl}`,
         `[granttap-mcp] Background service: ${service.status} (${service.detail})`,
-        "[granttap-mcp] Open Cursor Customize → MCPs → GrantTap → Authenticate. The browser continues at granttap.com/connect.",
-        "[granttap-mcp] If this computer is not paired, granttap.com/connect shows a QR and manual token.",
+        "[granttap-mcp] Use the GrantTap plugin. Pair and change settings in the GrantTap app.",
         "",
       ].join("\n"),
     );

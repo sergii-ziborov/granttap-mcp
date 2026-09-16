@@ -25,11 +25,11 @@ codex plugin add granttap@granttap
 ```
 
 Run `codex mcp login granttap` or use Codex's MCP authorization control.
-The browser opens `granttap.com/connect`. If this computer is not yet paired,
-the site shows a one-time QR for the GrantTap iPhone app. If it is already
-paired, approving this coding app preserves the phone keys; a separate,
-confirmed reconnect replaces the pairing and shows a new QR. The website
-does not receive the pairing keys or task content. Provider sign-in remains
+The browser opens `granttap.com/connect`. That page talks only to the
+website; it does not fetch loopback. If this computer is not yet paired,
+scan the QR in the GrantTap plugin or iPhone app, then approve on the site.
+If it is already paired, approving this coding app preserves the phone keys.
+The website does not receive the pairing keys or task content. Provider sign-in remains
 separate. A Git marketplace plugin does not acquire the native Connect modal
 of a registered remote OpenAI app merely by installing it.
 
@@ -56,8 +56,10 @@ Claude for connection status.
 
 ### Cursor
 
-After installing the helper, open **Cursor Customize → MCPs → GrantTap →
-Authenticate**. Cursor uses the same website flow.
+After installing the helper, pair in the GrantTap plugin connection card and
+the GrantTap app. Do not add GrantTap in Cursor Customize → MCPs. Cursor Cloud
+Agents start `node stdio-bootstrap.js` from the Cursor plugin. They cannot
+reach `http://127.0.0.1`.
 
 ### Grok Build
 

@@ -234,6 +234,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       autoAcceptPaused: runtime.autoAcceptPaused,
       providerSettings: runtime.providerSettings,
       meshEnabled: runtime.meshEnabled,
+      contextCompilerEnabled: runtime.contextCompilerEnabled,
       agents: inspectAgentIntegrations(),
       generatedAt: Date.now(),
     };
@@ -636,11 +637,15 @@ export function handleConfigSet(message: ConfigSet): void {
     };
   }
   if (typeof message.meshEnabled === "boolean") runtime.meshEnabled = message.meshEnabled;
+  if (typeof message.contextCompilerEnabled === "boolean") {
+    runtime.contextCompilerEnabled = message.contextCompilerEnabled;
+  }
   saveRuntimeConfig(runtime);
   process.stderr.write(
     `[monitor] config: gating=${runtime.enabled ? "on" : "OFF"}, ` +
       `auto=${runtime.autoAcceptPaused ? "paused" : runtime.autoAcceptDefault}, ` +
-      `excluded=${runtime.excludedSessions.length}, mesh=${runtime.meshEnabled ? "on" : "OFF"}\n`,
+      `excluded=${runtime.excludedSessions.length}, mesh=${runtime.meshEnabled ? "on" : "OFF"}, ` +
+      `context=${runtime.contextCompilerEnabled ? "on" : "OFF"}\n`,
   );
 }
 

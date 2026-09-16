@@ -28,7 +28,10 @@ import { spawnSync } from "node:child_process";
 import type { CodingAgent } from "../../../packages/protocol/schema";
 import { refusesLiveLaunchd } from "./launchd-safety";
 import { configDir, loadRuntimeConfig, verifiableEngine } from "./config";
+import { isCursorHelperNode, resolveMonitorNodeBin } from "./config/node-bin";
 import { inspectWindowsTask, installWindowsTask } from "./windows-service";
+
+export { isCursorHelperNode, resolveMonitorNodeBin };
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
@@ -71,9 +74,14 @@ export type AgentIntegrationStatus = {
 };
 
 function executableAvailable(command: string): boolean {
-  const candidates = command.includes("/")
+  const slashed = /[\\/]/.test(command);
+  const names = slashed || process.platform !== "win32"
     ? [command]
-    : (process.env.PATH ?? "").split(delimiter).filter(Boolean).map((dir) => join(dir, command));
+    : [command, `${command}.exe`, `${command}.cmd`, `${command}.bat`];
+  const candidates = slashed
+    ? names
+    : (process.env.PATH ?? "").split(delimiter).filter(Boolean)
+      .flatMap((dir) => names.map((name) => join(dir, name)));
   return candidates.some((candidate) => {
     try {
       accessSync(candidate, constants.X_OK);
@@ -306,9 +314,7 @@ export function inspectMonitorHelper(): MonitorIntegrationStatus {
     ? /<string>monitor<\/string>/.test(contents)
     : /<string>internal<\/string>\s*<string>monitor<\/string>/.test(contents);
   const hasSafeExecutable = isNodvoxPinnedPlist(contents)
-    || (contents.includes("granttap-mcp.mjs")
-      && !contents.includes("Cursor.app")
-      && !contents.includes("/helpers/node"));
+    || (contents.includes("granttap-mcp.mjs") && !plistProgramUsesCursorHelper(contents));
   const configured = hasLabel && hasMonitorArgument && hasSafeExecutable;
   if (!configured) return { configured: false, running: false };
   const uid = process.getuid?.();
@@ -341,9 +347,20 @@ function xml(value: string): string {
     .replaceAll("'", "&apos;");
 }
 
-export function isCursorHelperNode(nodePath: string): boolean {
-  return /Cursor\.app|[\\/]Cursor[\\/].*[\\/]helpers[\\/]node/i.test(nodePath)
-    || nodePath.includes("/helpers/node");
+function plistProgramUsesCursorHelper(contents: string): boolean {
+  const block = /<key>ProgramArguments<\/key>\s*<array>([\s\S]*?)<\/array>/.exec(contents)?.[1] ?? "";
+  return /Cursor\.app|[\\/]helpers[\\/]node/i.test(block);
+}
+
+function launchAgentPath(nodeBin: string): string {
+  return [
+    dirname(nodeBin),
+    join(homedir(), ".local", "bin"),
+    "/usr/local/bin",
+    "/opt/homebrew/bin",
+    "/usr/bin",
+    "/bin",
+  ].filter((dir, index, all) => dir && all.indexOf(dir) === index).join(":");
 }
 
 /** True when a plist uses the caller's explicit development monitor pin. */
@@ -358,33 +375,6 @@ export function isNodvoxPinnedPlist(contents: string): boolean {
   );
 }
 
-/** Absolute Node for LaunchAgent — never Cursor's helper node (wrong PATH / short-lived). */
-export function resolveMonitorNodeBin(): string | null {
-  const home = homedir();
-  const pinned = join(home, ".nvm", "versions", "node", "v22.13.1", "bin", "node");
-  const envNode = process.env.GRANTTAP_NODE?.trim();
-  const nvmBin = process.env.NVM_BIN ? join(process.env.NVM_BIN, "node") : "";
-  const which = spawnSync("which", ["node"], { encoding: "utf8" });
-  const whichNode = (which.status === 0 ? which.stdout.trim() : "") || "";
-  const candidates = [envNode, pinned, nvmBin, whichNode, process.execPath].filter(
-    (p): p is string => typeof p === "string" && p.length > 0,
-  );
-  for (const candidate of candidates) {
-    if (!existsSync(candidate)) continue;
-    if (isCursorHelperNode(candidate)) continue;
-    return candidate;
-  }
-  return existsSync(pinned) ? pinned : null;
-}
-
-/**
- * Keep task/session sync alive without a terminal or a newly opened MCP chat.
- *
- * Hard rules:
- * - Never overwrite a healthy explicitly pinned LaunchAgent with package / Cursor helpers.
- * - Development pins are opt-in through `GRANTTAP_PINNED_MONITOR_BIN`.
- * - Never put Cursor.app helpers/node in ProgramArguments.
- */
 /**
  * Carry a declared engine into the one process that publishes.
  *
@@ -455,16 +445,7 @@ export function installMonitorHelper(): InstallResult {
   const logPath = usePin
     ? join(homedir(), "Library", "Logs", "GrantTap", "monitor.err.log")
     : join(configDir(), "monitor.log");
-  const environmentPath = usePin
-    ? [
-        join(homedir(), ".local", "bin"),
-        dirname(nodeBin),
-        "/usr/local/bin",
-        "/opt/homebrew/bin",
-        "/usr/bin",
-        "/bin",
-      ].join(":")
-    : (process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin");
+  const environmentPath = launchAgentPath(nodeBin);
 
   const plist = [
     '<?xml version="1.0" encoding="UTF-8"?>',

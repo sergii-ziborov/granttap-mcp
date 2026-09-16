@@ -141,11 +141,12 @@ test("HTTP MCP OAuth discovery matches Cursor Authorize requirements", async (t)
   assert.equal(authorize.status, 302);
   assert.equal(authorize.headers.get("referrer-policy"), "no-referrer");
   const website = new URL(authorize.headers.get("location")!);
-  assert.equal(website.origin, "https://granttap.com");
+  assert.equal(website.origin, "https://relay.granttap.com");
   assert.equal(website.pathname, "/connect");
   assert.doesNotMatch(website.href, /script|callback|mcp%3Atools/);
   const pendingId = new URLSearchParams(website.hash.slice(1)).get("request");
   assert.ok(pendingId);
+  assert.equal(new URLSearchParams(website.hash.slice(1)).get("port"), null);
   const session = await fetch(`${base}/oauth/session?pending_id=${pendingId}`, {
     headers: { origin: "https://granttap.com" },
   });

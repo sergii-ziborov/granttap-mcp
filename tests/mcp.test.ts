@@ -103,8 +103,7 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   };
   assert.equal(widgetResource.mimeType, "text/html;profile=mcp-app");
   assert.equal(widgetResource._meta?.ui?.prefersBorder, true);
-  assert.match(widgetResource.text ?? "", /Connect/);
-  assert.match(widgetResource.text ?? "", /Reconnect/);
+  assert.match(widgetResource.text ?? "", /Add iPhone/);
   assert.match(widgetResource.text ?? "", /GrantTap pairing QR/);
   const templates = await client.listResourceTemplates();
   assert.deepEqual(templates.resourceTemplates.map((template) => template.uriTemplate), [
@@ -150,15 +149,9 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
     annotations?: { audience?: string[] };
   }>;
   const pairingText = pairingContent.find((item) => item.type === "text")?.text ?? "";
-  const pairingImage = pairingContent.find((item) => item.type === "image");
   assert.doesNotMatch(pairingText, /manual secure token:/i);
-  assert.match(pairingText, /one-time/i);
-  assert.equal(pairingImage?.mimeType, "image/png");
-  assert.deepEqual(pairingImage?.annotations?.audience, ["user"]);
-  assert.deepEqual(
-    Buffer.from(pairingImage?.data ?? "", "base64").subarray(0, 8),
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-  );
+  assert.match(pairingText, /GrantTap card/i);
+  assert.equal(pairingContent.some((item) => item.type === "image"), false);
   assert.match(parkedPath, /^\/pair\/[a-f0-9]{32}$/);
   assert.doesNotThrow(() => JSON.parse(parkedBody));
   assert.deepEqual(Object.fromEntries(Object.entries(pairingResult.structuredContent as object).filter(([key]) => ["status", "relay", "expiresInMinutes"].includes(key))), {
@@ -177,7 +170,7 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   const phoneSecret = JSON.parse(phoneConfig).mySecretKey as string;
   assert.ok(phoneSecret);
   assert.equal(pairingText.includes(phoneSecret), false);
-  assert.equal(Buffer.from(pairingImage?.data ?? "", "base64").includes(Buffer.from(phoneSecret)), false);
+  assert.equal((pairingMeta.granttap?.qrDataUrl ?? "").includes(phoneSecret), false);
   const mailboxId = parkedPath.split("/").at(-1)!;
   // Pair-v2 intentionally carries the public one-time mailbox id in its URI;
   // the independent transfer key, never the mailbox id, protects the payload.
@@ -187,9 +180,9 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   const reusedResult = await client.callTool({ name: "connect", arguments: {} });
   const reusedContent = reusedResult.content as Array<{ type: string; text?: string }>;
   const reusedText = reusedContent.find((item) => item.type === "text")?.text ?? "";
-  assert.match(reusedText, /one-time/i);
+  assert.match(reusedText, /GrantTap card/i);
   assert.doesNotMatch(reusedText, /granttap:\/\/pair-v2/i);
-  assert.equal(reusedContent.some((item) => item.type === "image"), true);
+  assert.equal(reusedContent.some((item) => item.type === "image"), false);
   assert.equal(pairingWrites, 1);
   const pendingStatus = await client.callTool({ name: "connection_status", arguments: {} });
   assert.equal((pendingStatus.structuredContent as { status: string }).status, "pairing");

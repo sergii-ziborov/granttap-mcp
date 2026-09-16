@@ -14,11 +14,12 @@ import {
 import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import express from "express";
-import { inspectAgentIntegrations } from "../../bridge/src/install";
 import { createGrantTapServer, relay, resetRelay } from "./create-server";
 import { isAllowedLoopbackOrigin } from "./oauth/loopback-origin";
 import { installPairingRoutes } from "./oauth/pairing-view";
 import { GrantTapOAuthProvider } from "./oauth-provider";
+import { buildConnectSnapshot, publicClientName } from "./oauth/connect-snapshot";
+import { resetConnectWatchers } from "./oauth/website-session";
 import { isMachineConfigured } from "./pairing-status";
 
 export const DEFAULT_HTTP_HOST = "127.0.0.1";
@@ -93,15 +94,16 @@ export async function startHttpMcpServer(options: ServeOptions = {}): Promise<{
     res.set("Cache-Control", "no-store");
     const pending = provider.getPending(String(req.query.pending_id ?? ""));
     if (!pending) {
-      res.status(404).json({ error: "This connection request expired. Start again in your coding app." });
+      res.status(404).json({
+        error: "This connection request expired. Start again in your coding app.",
+        expired: true,
+        paired: isMachineConfigured(),
+      });
       return;
     }
     res.json({
-      clientName: pending.client.client_name?.trim().slice(0, 80) || "Coding app",
-      paired: isMachineConfigured(),
-      providers: inspectAgentIntegrations()
-        .filter((item) => ["codex", "claude", "cursor"].includes(item.agent))
-        .map((item) => ({ id: item.agent, installed: item.installed, ready: item.hookConfigured })),
+      ...buildConnectSnapshot(pending.client.client_name),
+      clientName: publicClientName(pending.client.client_name),
     });
   });
 
@@ -232,6 +234,7 @@ export async function startHttpMcpServer(options: ServeOptions = {}): Promise<{
         await transport.close().catch(() => {});
       }
       transports.clear();
+      resetConnectWatchers();
       resetRelay();
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));

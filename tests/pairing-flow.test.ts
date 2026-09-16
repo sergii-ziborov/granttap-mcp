@@ -95,12 +95,13 @@ test("connect MCP returns a one-time QR and then reuses the pairing", async (t) 
   t.after(() => client.close());
   const first = await client.callTool({ name: "connect", arguments: {} });
   assert.equal(first.isError, undefined);
-  assert.match(textResult(first), /one-time QR/i);
-  assert.equal((first.content as Array<{ type: string }>).some((item) => item.type === "image"), true);
+  assert.match(textResult(first), /GrantTap card/i);
+  assert.equal((first.content as Array<{ type: string }>).some((item) => item.type === "image"), false);
+  assert.match(((first._meta as { granttap?: { qrDataUrl?: string } }).granttap?.qrDataUrl ?? ""), /^data:image\/png;base64,/);
   const reused = await client.callTool({ name: "connect", arguments: {} });
   assert.equal(reused.isError, undefined);
-  assert.match(textResult(reused), /one-time QR/i);
-  assert.equal((reused.content as Array<{ type: string }>).some((item) => item.type === "image"), true);
+  assert.match(textResult(reused), /GrantTap card/i);
+  assert.equal((reused.content as Array<{ type: string }>).some((item) => item.type === "image"), false);
   assert.equal((reused.structuredContent as { status: string }).status, "pairing");
   assert.deepEqual(reused._meta, first._meta);
   const original = await readFile(machineConfigPath(), "utf8");
@@ -110,7 +111,7 @@ test("connect MCP returns a one-time QR and then reuses the pairing", async (t) 
   t.after(() => reopened.close());
   const saved = await reopened.callTool({ name: "connect", arguments: {} });
   assert.equal((saved.structuredContent as { status: string }).status, "paired");
-  assert.match(textResult(saved), /existing secure pairing reused/i);
+  assert.match(textResult(saved), /paired iPhones/i);
   assert.equal(await readFile(machineConfigPath(), "utf8"), original);
   const rejected = await pairingRelay(503);
   t.after(() => rejected.close());

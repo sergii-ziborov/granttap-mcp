@@ -17,6 +17,21 @@ test("reader advances only across complete lines and resumes after append", () =
   assert.equal(second.lines[0]?.offset, 8);
 });
 
+test("idle resume after a request does not invent a history gap", () => {
+  const file = join(mkdtempSync(join(tmpdir(), "granttap-inv-idle-")), "session.jsonl");
+  writeFileSync(file, "{\"tool\":\"Bash\"}\n");
+  const first = readInvocationBatch(file);
+  assert.deepEqual(first.lines.map((row) => row.line), ['{"tool":"Bash"}']);
+  assert.deepEqual(first.gaps, []);
+  const idle = readInvocationBatch(file, first.next);
+  assert.deepEqual(idle.lines, []);
+  assert.deepEqual(idle.gaps, []);
+  appendFileSync(file, "{\"result\":\"ok\"}\n");
+  const second = readInvocationBatch(file, idle.next);
+  assert.deepEqual(second.lines.map((row) => row.line), ['{"result":"ok"}']);
+  assert.deepEqual(second.gaps, []);
+});
+
 test("large or rotated source creates an explicit gap and never parses a partial row", () => {
   const file = join(mkdtempSync(join(tmpdir(), "granttap-inv-gap-")), "session.jsonl");
   writeFileSync(file, "x".repeat(300_000) + "\n{\"ok\":true}\n");

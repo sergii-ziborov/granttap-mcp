@@ -1,7 +1,13 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { loadConfig } from "../../bridge/src/config";
+
+export type PairedPhone = {
+  name: string;
+  status: "paired" | "seen";
+  lastSeenAt: number | null;
+};
 
 /** Resolve the active config without configDir()'s legacy rename side effect. */
 export function readOnlyMachineConfigPath(): string {
@@ -22,4 +28,19 @@ export function isMachineConfigured(): boolean {
   } catch {
     return false;
   }
+}
+
+/** One local pairing slot: keys exist, or a recent encrypted phone message was seen. */
+export function listPairedPhones(phoneLastSeenAt: number | null = null, now = Date.now()): PairedPhone[] {
+  if (!isMachineConfigured()) return [];
+  let name = "iPhone";
+  try {
+    const phonePath = join(dirname(readOnlyMachineConfigPath()), "phone.pairing.json");
+    if (existsSync(phonePath)) {
+      const labeled = loadConfig(phonePath).deviceName?.trim();
+      if (labeled && labeled !== "phone") name = labeled.slice(0, 80);
+    }
+  } catch { /* keep iPhone */ }
+  const seen = phoneLastSeenAt != null && now - phoneLastSeenAt < 60_000;
+  return [{ name, status: seen ? "seen" : "paired", lastSeenAt: phoneLastSeenAt }];
 }

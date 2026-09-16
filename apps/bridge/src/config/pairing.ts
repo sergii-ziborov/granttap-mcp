@@ -1,8 +1,9 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { generateKeyPair, randomId } from "../../../../packages/core/crypto";
 import type { PeerConfig } from "../../../../packages/core/relay-client";
 import { configDir } from "./paths";
+import { writePrivateFile } from "./write-private";
 
 export const DEFAULT_RELAY_URL = "wss://relay.granttap.com";
 export const LEGACY_RELAY_URL = "wss://granttap-relay.sergii-ziborov.workers.dev";
@@ -16,15 +17,13 @@ export function saveConfig(path: string, cfg: PeerConfig): void {
         ? prev.room.slice(0, 16)
         : "unknown";
       const bak = `${path}.bak-${room}-${Date.now()}`;
-      writeFileSync(bak, readFileSync(path), { mode: 0o600 });
-      chmodSync(bak, 0o600);
+      writePrivateFile(bak, readFileSync(path, "utf8"));
       process.stderr.write(`[granttap] backed up previous pairing → ${bak}\n`);
     } catch {
       // Existing invalid pairings remain best-effort backup candidates.
     }
   }
-  writeFileSync(path, JSON.stringify(cfg, null, 2), { mode: 0o600 });
-  chmodSync(path, 0o600);
+  writePrivateFile(path, JSON.stringify(cfg, null, 2));
 }
 
 export function loadConfig(path: string): PeerConfig {

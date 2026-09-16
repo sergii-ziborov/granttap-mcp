@@ -17,13 +17,17 @@ authorization, let its normal OAuth flow open `granttap.com/connect`; in Codex
 CLI, `codex mcp login granttap` starts that flow. Explain the next visible step
 briefly and verify connection status after authorization.
 
-Codex, Claude Code, Cursor, and Grok Build use the same local OAuth HTTP
-service. Their MCP authorization control opens `granttap.com/connect` with a
-one-time iPhone QR when this computer is unpaired.
+Codex, Claude Code, desktop Cursor, and Grok Build use the same local OAuth
+HTTP service. Their MCP authorization control opens `granttap.com/connect` with
+a one-time iPhone QR when this computer is unpaired.
 If already paired, approving an app's access needs no new QR. The page offers a
 separate, explicitly confirmed reconnect to replace the phone pairing and
 show a new QR. GrantTap has no account/password; provider authentication is
 separate.
+
+Cursor Cloud Agents have no loopback helper. Their plugin starts
+`node stdio-bootstrap.js` and pairs through the `connect` QR. Do not point
+Cloud at `http://127.0.0.1:17342/mcp`.
 
 For a new pairing or QR request, call `connect`. It returns the current one-time
 QR while it is valid and never replaces a saved pairing. A saved pairing is not
