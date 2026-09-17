@@ -23,9 +23,7 @@ export function websiteOrigin(): string | undefined {
   if (process.env.GRANTTAP_SKIP_WEBSITE === "1" || process.env.NODE_TEST_CONTEXT) {
     return undefined;
   }
-  // granttap.com still resolves to Lovable. The Hetzner connect app is live on
-  // the already-certified relay hostname until the apex A record moves.
-  return "https://relay.granttap.com";
+  return "https://granttap.com";
 }
 
 export async function publishConnectRequest(
@@ -42,6 +40,26 @@ export async function publishConnectRequest(
   if (!response.ok) {
     throw new Error(`GrantTap website rejected the connection request (${response.status}).`);
   }
+}
+
+/** Reauthenticate must land on granttap.com with a live row before the browser arrives. */
+export async function publishConnectRequestRetry(
+  origin: string,
+  requestId: string,
+  snapshot: ConnectSnapshot,
+  attempts = 3,
+): Promise<boolean> {
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      await publishConnectRequest(origin, requestId, snapshot);
+      return true;
+    } catch {
+      if (attempt + 1 < attempts) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+    }
+  }
+  return false;
 }
 
 export async function readConnectRequest(
@@ -91,9 +109,10 @@ export async function publishConnectError(
 export function watchConnectDecision(
   origin: string,
   requestId: string,
-  snapshot: ConnectSnapshot,
+  snapshot: ConnectSnapshot | (() => ConnectSnapshot),
   complete: (approve: boolean) => { redirectUrl: string },
 ): void {
+  const current = (): ConnectSnapshot => (typeof snapshot === "function" ? snapshot() : snapshot);
   watchers.get(requestId)?.abort();
   const ac = new AbortController();
   watchers.set(requestId, ac);
@@ -101,9 +120,10 @@ export function watchConnectDecision(
     const deadline = Date.now() + PENDING_TTL_MS;
     while (!ac.signal.aborted && Date.now() < deadline) {
       try {
+        const live = current();
         const row = await readConnectRequest(origin, requestId);
         if (!row) {
-          await publishConnectRequest(origin, requestId, snapshot);
+          await publishConnectRequest(origin, requestId, live);
         } else if (row.decision === "approve" || row.decision === "deny") {
           try {
             const { redirectUrl } = complete(row.decision === "approve");
@@ -116,6 +136,8 @@ export function watchConnectDecision(
             );
           }
           return;
+        } else {
+          await publishConnectRequest(origin, requestId, live);
         }
       } catch {
         // Keep retrying until TTL. The website is the only consent channel.

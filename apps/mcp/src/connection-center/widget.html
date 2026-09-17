@@ -27,7 +27,7 @@ details{border-top:1px solid #8884;padding-top:14px}summary{cursor:pointer;font-
 </svg>
 </div><div><div class="title">GrantTap</div><div class="status"><span class="dot"></span><span id="status">Checking connection…</span></div></div></header>
   <section class="body">
-    <div class="copy"><h2 id="heading">Add your iPhone</h2><p id="detail">Tap Add iPhone. The QR stays on this card — not in chat.</p><ul class="phones" id="phones"></ul><p class="empty" id="phones-empty">No iPhone connected yet.</p><div class="actions"><button class="primary" id="connect">Add iPhone</button><button id="refresh">Refresh status</button><button id="copy" class="hidden">Copy pairing link</button><button id="reconnect" class="hidden">Add iPhone</button></div><div class="message small" id="message" role="status"></div></div>
+    <div class="copy"><h2 id="heading">Add a device</h2><p id="detail">Scan the QR in GrantTap on iPhone, iPad, or Android. It appears here as soon as pairing starts.</p><ul class="phones" id="phones"></ul><p class="empty" id="phones-empty">No device in this room yet.</p><div class="actions"><button class="primary" id="connect">Add a device</button><button id="reconnect">Reconnect</button><button id="refresh">Refresh status</button><button id="copy" class="hidden">Copy pairing link</button></div><div class="message small" id="message" role="status"></div></div>
     <img id="qr" class="hidden" alt="GrantTap pairing QR" />
   </section>
   <p id="expiry" class="small" aria-live="polite"></p>
@@ -44,7 +44,7 @@ details{border-top:1px solid #8884;padding-top:14px}summary{cursor:pointer;font-
     <a href="https://granttap.com/privacy" target="_blank" rel="noopener noreferrer">Privacy</a> ·
     <a href="mailto:support@granttap.com">Support</a></p>
   </details>
-  <section id="confirm" class="confirm hidden"><p>Add iPhone replaces this computer’s current pairing and shows a new QR on this card. Continue?</p><div class="actions"><button class="primary" id="confirm-reconnect">Add iPhone</button><button id="cancel">Cancel</button></div></section>
+  <section id="confirm" class="confirm hidden"><p id="confirm-copy">This replaces the current phone pairing and shows a new QR.</p><div class="actions"><button class="primary" id="confirm-reconnect">Show new QR</button><button id="cancel">Cancel</button></div></section>
 </main>
 <script type="module">{{SCRIPT}}</script>
 </body>

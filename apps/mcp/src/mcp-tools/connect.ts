@@ -26,9 +26,9 @@ const changes = {
 export function registerConnectTool(server: McpServer): void {
   const state = new ConnectionState();
   let pendingCall: Promise<CallToolResult> | null = null;
-  const perform = (replace = false) => {
+  const perform = (options: { issue?: boolean; replace?: boolean } = {}) => {
     if (pendingCall) return pendingCall;
-    pendingCall = connect(state, replace).finally(() => { pendingCall = null; });
+    pendingCall = connect(state, options).finally(() => { pendingCall = null; });
     return pendingCall;
   };
   server.registerTool("connection_status", {
@@ -42,7 +42,7 @@ export function registerConnectTool(server: McpServer): void {
   server.registerTool(
     "connect",
     {
-      description: "Open the GrantTap connection card: list paired iPhones and the Add iPhone button. QR stays on the card, not in chat.",
+      description: "Open the GrantTap connection card: devices in this pairing room and Add a device. QR stays on the card, not in chat.",
       inputSchema: {},
       outputSchema: connectionOutput,
       annotations: changes,
@@ -53,23 +53,28 @@ export function registerConnectTool(server: McpServer): void {
   server.registerTool(
     "reconnect",
     {
-      description: "Replace this computer's current GrantTap pairing and create a fresh one-time QR. Requires explicit confirmation.",
-      inputSchema: { confirmed: z.boolean().describe("True only after the user confirms replacing the current pairing") },
+      description: "Show a new one-time QR so another phone, tablet, or this computer can join the same pairing room. Requires confirmation. Does not start a different room.",
+      inputSchema: { confirmed: z.boolean().describe("True only after the user confirms showing a new QR") },
       outputSchema: connectionOutput,
       annotations: { ...changes, destructiveHint: true },
       _meta: widgetMeta,
     },
     async ({ confirmed }): Promise<CallToolResult> => confirmed
-      ? perform(true)
+      ? perform({ issue: true })
       : ({ isError: true, content: [{ type: "text", text: "Reconnect cancelled: explicit confirmation is required." }] }),
   );
 }
 
-async function connect(state: ConnectionState, replace = false): Promise<CallToolResult> {
+async function connect(
+  state: ConnectionState,
+  options: { issue?: boolean; replace?: boolean } = {},
+): Promise<CallToolResult> {
   try {
-    if (!replace && isMachineConfigured()) return connectionResult(state);
+    if (!options.issue && !options.replace && isMachineConfigured()) return connectionResult(state);
     const startedAt = Date.now();
-    const pairing = await createOneTimePairing(process.env.GRANTTAP_TEST_RELAY_URL ?? DEFAULT_RELAY);
+    const pairing = await createOneTimePairing(process.env.GRANTTAP_TEST_RELAY_URL ?? DEFAULT_RELAY, {
+      replace: options.replace === true,
+    });
     const png = await QRCode.toBuffer(pairing.qrPayload, {
       type: "png", width: 900, margin: 4, errorCorrectionLevel: "L",
     });
@@ -94,10 +99,10 @@ function connectionResult(state: ConnectionState): CallToolResult {
   const snapshot = state.snapshot();
   const { status, computer, relay, version, relayStatus } = snapshot.structuredContent;
   const instructions = status === "pairing"
-    ? "Use the GrantTap card: tap Add iPhone if needed, then scan the QR on the card."
-    : status === "disconnected" ? "Use the GrantTap card and tap Add iPhone. The QR stays on the card."
-    : status === "expired" ? "The card QR expired. Tap Add iPhone again and confirm."
-    : "The GrantTap card lists paired iPhones. Tap Add iPhone only to replace the pairing.";
+    ? "Use the GrantTap card: tap Add a device if needed, then scan the QR on the card."
+    : status === "disconnected" ? "Use the GrantTap card and tap Add a device. The QR stays on the card."
+    : status === "expired" ? "The card QR expired. Tap Add a device again and confirm."
+    : "The GrantTap card lists devices in this pairing room. Add another device to join the same room. A Mesh link shares Mesh only.";
   return {
     ...snapshot,
     content: [{ type: "text", text:

@@ -53,7 +53,7 @@ async function registeredAuthorization(base: string, verifier: string, clientNam
   const response = await fetch(url, { redirect: "manual" });
   assert.equal(response.status, 302);
   const website = new URL(response.headers.get("location")!);
-  assert.equal(website.origin, "https://relay.granttap.com");
+  assert.equal(website.origin, "https://granttap.com");
   assert.equal(website.pathname, "/connect");
   const pendingId = new URLSearchParams(website.hash.slice(1)).get("request");
   assert.ok(pendingId);
@@ -150,7 +150,20 @@ test("HTTP OAuth pairs, consents, exchanges a token, and initializes MCP", async
   assert.equal(frame.headers.get("x-frame-options"), null);
   assert.match(frame.headers.get("content-security-policy") ?? "", /frame-ancestors https:\/\/granttap\.com/);
   assert.equal(frame.headers.get("cache-control"), "no-store");
-  assert.match(await frame.text(), /data:image\/png;base64,/);
+  const frameHtml = await frame.text();
+  assert.match(frameHtml, /data:image\/png;base64,/);
+  assert.match(frameHtml, /one-time code/);
+  const embedded = await fetch(`${base}/oauth/pairing/view?view_id=${pairingBody.viewId}&embed=1`, {
+    headers: { origin: websiteOrigin },
+  });
+  assert.equal(embedded.status, 200);
+  const embeddedHtml = await embedded.text();
+  assert.match(embeddedHtml, /data:image\/png;base64,/);
+  assert.doesNotMatch(embeddedHtml, /one-time code/);
+  const framed = await fetch(`${base}/oauth/pairing/view?view_id=${pairingBody.viewId}`, {
+    headers: { origin: websiteOrigin, "sec-fetch-dest": "iframe" },
+  });
+  assert.doesNotMatch(await framed.text(), /one-time code/);
   const missingFrame = await fetch(`${base}/oauth/pairing/view?view_id=invalid`);
   assert.equal(missingFrame.status, 404);
 
@@ -180,6 +193,14 @@ test("HTTP OAuth pairs, consents, exchanges a token, and initializes MCP", async
   const newPairing = await reconnect.json() as { alreadyPaired: boolean; qrDataUrl: string };
   assert.equal(newPairing.alreadyPaired, false);
   assert.match(newPairing.qrDataUrl, /^data:image\/png;base64,/);
+  assert.deepEqual(await readFile(join(root, "machine.json")), savedPairing);
+  const replaced = await fetch(`${base}/oauth/pairing`, {
+    method: "POST", headers: {
+      "content-type": "application/x-www-form-urlencoded", origin: base,
+    }, body: new URLSearchParams({ pending_id: codex.pendingId, confirmed: "true", replace: "true" }),
+  });
+  assert.equal(replaced.status, 200);
+  assert.equal((await replaced.json() as { alreadyPaired: boolean }).alreadyPaired, false);
   assert.notDeepEqual(await readFile(join(root, "machine.json")), savedPairing);
   const consent = await fetch(`${base}/oauth/decision`, {
     method: "POST",
@@ -249,4 +270,34 @@ test("HTTP pairing reports relay rejection without persisting credentials", asyn
   });
   assert.equal(response.status, 500);
   assert.match((await response.json() as { error: string }).error, /HTTP 503/);
+});
+
+test("website can open a pairing QR without an authorization request", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-http-devices-"));
+  const relay = await pairingRelay();
+  const port = await freePort();
+  process.env.GRANTTAP_CONFIG_DIR = root;
+  process.env.GRANTTAP_RELAY_URL = relay.wsUrl;
+  process.env.GRANTTAP_SKIP_HOOKS = "1";
+  const started = await startHttpMcpServer({ port });
+  const base = `http://127.0.0.1:${port}`;
+  t.after(async () => {
+    await started.close();
+    await relay.close();
+    delete process.env.GRANTTAP_CONFIG_DIR;
+    delete process.env.GRANTTAP_RELAY_URL;
+    delete process.env.GRANTTAP_SKIP_HOOKS;
+  });
+  const pairing = await fetch(`${base}/oauth/pairing`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      origin: "https://granttap.com",
+    },
+    body: new URLSearchParams(),
+  });
+  assert.equal(pairing.status, 200);
+  const body = await pairing.json() as { alreadyPaired: boolean; viewId: string };
+  assert.equal(body.alreadyPaired, false);
+  assert.match(body.viewId, /^[0-9a-f-]{36}$/);
 });

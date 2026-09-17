@@ -150,6 +150,10 @@ function inviteParts(uri: string): { base: string; mailbox: string; key: string 
   return { base: baseUrl.toString().replace(/\/$/, ""), mailbox, key };
 }
 
+/**
+ * Redeem a Mesh invite. The device receives Mesh, not the pairing room.
+ * Writes `grok-bot-endpoint.json` and never replaces ~/.granttap machine keys.
+ */
 export async function connectGrokBotInvite(uri: string, now = Date.now()): Promise<GrokBotEndpointBundle> {
   const existing = loadGrokBotEndpoint();
   if (existing && existing.credential.status !== "revoked") {

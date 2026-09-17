@@ -66,7 +66,6 @@ prompt must never resolve the current request.
 | Path | Purpose |
 | --- | --- |
 | `.cursor-plugin/plugin.json` | Cursor plugin manifest |
-| `../.cursor-plugin/marketplace.json` | Repository marketplace index Cursor publishes |
 | `mcp.json` | Plugin stdio MCP (`node stdio-bootstrap.js`). Do not add GrantTap to user `mcp.json`. |
 | `stdio-bootstrap.js` | Starts `granttap-mcp` via `node` on every OS, and via `cmd /c npx` on Windows. |
 | `assets/logo.svg` | Plugin logo |

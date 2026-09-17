@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { loadConfig } from "../../bridge/src/config";
+import { readPhoneLastSeenAt } from "../../bridge/src/presence";
 
 export type PairedPhone = {
   name: string;
@@ -41,6 +42,10 @@ export function listPairedPhones(phoneLastSeenAt: number | null = null, now = Da
       if (labeled && labeled !== "phone") name = labeled.slice(0, 80);
     }
   } catch { /* keep iPhone */ }
-  const seen = phoneLastSeenAt != null && now - phoneLastSeenAt < 60_000;
-  return [{ name, status: seen ? "seen" : "paired", lastSeenAt: phoneLastSeenAt }];
+  const recorded = readPhoneLastSeenAt();
+  const lastSeenAt = [phoneLastSeenAt, recorded].reduce<number | null>((best, value) => (
+    value != null && (best == null || value > best) ? value : best
+  ), null);
+  const seen = lastSeenAt != null && now - lastSeenAt < 60_000;
+  return [{ name, status: seen ? "seen" : "paired", lastSeenAt }];
 }

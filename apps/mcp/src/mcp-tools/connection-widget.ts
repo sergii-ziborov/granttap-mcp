@@ -13,7 +13,7 @@ export function registerConnectionWidget(server: McpServer): void {
     CONNECTION_WIDGET_URI,
     {
       title: "GrantTap connection center",
-      description: "GrantTap card: paired iPhones, Add iPhone, and the QR on this card only.",
+      description: "GrantTap card: devices in this pairing room, Add a device, and the QR on this card only.",
       mimeType: "text/html;profile=mcp-app",
     },
     async (uri) => ({
@@ -23,7 +23,7 @@ export function registerConnectionWidget(server: McpServer): void {
         text: html,
         _meta: {
           ui: { prefersBorder: true, permissions: { clipboardWrite: {} }, csp: { connectDomains: [], resourceDomains: [] } },
-          "openai/widgetDescription": "List paired iPhones and add one with a QR that stays on this card.",
+          "openai/widgetDescription": "List devices in this pairing room and add one with a QR that stays on this card.",
           "openai/widgetPrefersBorder": true,
         },
       }],

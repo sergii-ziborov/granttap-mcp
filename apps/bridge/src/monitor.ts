@@ -60,6 +60,7 @@ import { handleInvocationQuery } from "./engine/invocation-query";
 import { localMeshStore } from "./mesh/local";
 import { cachedSessionActivity } from "./monitor-session-activity";
 import { HEARTBEAT_INTERVAL_MS, publishHeartbeat } from "./monitor-heartbeat";
+import { recordPhoneSeen } from "./presence";
 import { startPublishLoop } from "./monitor-publish-loop";
 import { singleFlightPublisher } from "./monitor-single-flight";
 import { createMachineLoadPublisher } from "./machine-load";
@@ -241,12 +242,12 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
   };
 
   const publish = singleFlightPublisher(async (forceHistory: boolean): Promise<void> => {
-    if (!leadership.acquire()) return;
     if (!client.isConnected) return;
-    // Discovery is synchronous, multi-second filesystem work: once it starts,
-    // the event loop cannot service the socket and the heartbeat loop cannot
-    // fire. Spend the last free moment proving the machine is alive.
+    // Any live socket must prove the machine is alive. The HTTP helper is a
+    // peer and often holds the only WebSocket while the LaunchAgent holds the
+    // lock — gating heartbeat on leadership made the phone mark this Mac offline.
     await publishHeartbeat(client).catch(() => {});
+    if (!leadership.acquire()) return;
     const includeHistory = forceHistory || Date.now() - lastHistoryPublishedAt >= HISTORY_INTERVAL_MS;
     const status = snapshot(includeHistory, forceHistory);
     // The next tick replaces this snapshot outright, so queuing it durably only
@@ -299,6 +300,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
   });
 
   const off = client.onMessage(async (payload) => {
+    recordPhoneSeen();
     // Codex may start one MCP server per open task. Exactly one instance owns
     // phone routing, so a single phone message can never create duplicate tasks.
     if (!leadership.acquire()) return false;
@@ -432,7 +434,8 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
   const stopHeartbeat = startPublishLoop({
     connected: () => client.isConnected,
     intervalMs: HEARTBEAT_INTERVAL_MS,
-    publish: () => (leadership.acquire() ? publishHeartbeat(client) : Promise.resolve()).catch(() => {}),
+    immediate: true,
+    publish: () => publishHeartbeat(client).catch(() => {}),
   });
 
   return {

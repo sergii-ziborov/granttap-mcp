@@ -1,6 +1,8 @@
 export type PublishLoopOptions = {
   connected: () => boolean;
   intervalMs: number;
+  /** Fire once now. Heartbeats use this so a just-paired phone is not left waiting a full interval. */
+  immediate?: boolean;
   publish: () => Promise<void>;
   schedule?: (callback: () => void, delayMs: number) => NodeJS.Timeout;
 };
@@ -21,7 +23,7 @@ export function startPublishLoop(options: PublishLoopOptions): () => void {
     if (options.connected()) await options.publish();
     if (!stopped) timer = schedule(() => void tick(), options.intervalMs);
   };
-  timer = schedule(() => void tick(), options.intervalMs);
+  timer = schedule(() => void tick(), options.immediate ? 0 : options.intervalMs);
   return () => {
     stopped = true;
     if (timer) clearTimeout(timer);

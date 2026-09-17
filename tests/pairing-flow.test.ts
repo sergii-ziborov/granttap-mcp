@@ -50,6 +50,11 @@ test("one-time pairing persists only after relay acceptance and can be reused", 
   assert.doesNotThrow(() => JSON.parse(relay.body()));
   assert.equal(relay.body().includes(pairing.phoneCfg.mySecretKey), false);
   assert.equal(reusablePairing()?.room, pairing.machineCfg.room);
+  const reparked = await createOneTimePairing(relay.url, { installHooks: false });
+  assert.equal(reparked.machineCfg.room, pairing.machineCfg.room);
+  assert.equal(reparked.mailboxId === pairing.mailboxId, false);
+  const replaced = await createOneTimePairing(relay.url, { installHooks: false, replace: true });
+  assert.notEqual(replaced.machineCfg.room, pairing.machineCfg.room);
   assert.equal(reusablePairing(true), null);
 
   const originalPhone = await readFile(phonePairingPath(), "utf8");
@@ -58,6 +63,25 @@ test("one-time pairing persists only after relay acceptance and can be reused", 
   await writeFile(phonePairingPath(), originalPhone);
   await writeFile(machineConfigPath(), "not-json");
   assert.equal(reusablePairing(), null);
+});
+
+test("unpaired computers mint distinct candidate rooms until the same iPhone unifies them", async (t) => {
+  const firstRoot = await mkdtemp(join(tmpdir(), "granttap-pairing-a-"));
+  const secondRoot = await mkdtemp(join(tmpdir(), "granttap-pairing-b-"));
+  const relay = await pairingRelay();
+  t.after(async () => {
+    delete process.env.GRANTTAP_CONFIG_DIR;
+    await relay.close();
+  });
+  process.env.GRANTTAP_CONFIG_DIR = firstRoot;
+  const first = await createOneTimePairing(relay.url, { installHooks: false });
+  process.env.GRANTTAP_CONFIG_DIR = secondRoot;
+  const second = await createOneTimePairing(relay.url, { installHooks: false });
+  // No device has claimed either join yet, so the candidates differ. Once a
+  // phone or tablet is in a room, every later phone, tablet, or PC it pairs
+  // joins that room. A Mesh invite shares Mesh and is not that room.
+  assert.notEqual(first.machineCfg.room, second.machineCfg.room);
+  assert.notEqual(first.machineCfg.senderId, second.machineCfg.senderId);
 });
 
 test("pairing failures do not persist a replacement", async (t) => {
@@ -111,7 +135,7 @@ test("connect MCP returns a one-time QR and then reuses the pairing", async (t) 
   t.after(() => reopened.close());
   const saved = await reopened.callTool({ name: "connect", arguments: {} });
   assert.equal((saved.structuredContent as { status: string }).status, "paired");
-  assert.match(textResult(saved), /paired iPhones/i);
+  assert.match(textResult(saved), /pairing room/i);
   assert.equal(await readFile(machineConfigPath(), "utf8"), original);
   const rejected = await pairingRelay(503);
   t.after(() => rejected.close());

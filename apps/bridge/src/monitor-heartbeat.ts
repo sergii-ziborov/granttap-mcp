@@ -25,3 +25,21 @@ export async function publishHeartbeat(client: RelayClient): Promise<void> {
     { ttlMs: HEARTBEAT_INTERVAL_MS * 3, reliable: false },
   );
 }
+
+/**
+ * One durable liveness frame for the moment after pairing.
+ *
+ * Transient heartbeats are not queued. If the phone joins a few seconds later
+ * it would otherwise sit in an empty room and call this computer offline.
+ * The hold expires quickly so a machine that then goes away is not replayed
+ * as alive.
+ */
+export const HELD_HEARTBEAT_TTL_MS = 60_000;
+
+export async function publishHeldHeartbeat(client: RelayClient): Promise<void> {
+  await client.send(
+    { type: "machine.heartbeat", machine: hostname(), createdAt: Date.now() },
+    "phone",
+    { ttlMs: HELD_HEARTBEAT_TTL_MS, reliable: true },
+  );
+}

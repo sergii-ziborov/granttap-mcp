@@ -16,6 +16,7 @@ import {
   saveConfig,
 } from "./config";
 import type { PeerConfig } from "../../../packages/core/relay-client";
+import { clearPhoneSeen } from "./presence";
 
 export const DEFAULT_RELAY = DEFAULT_RELAY_URL;
 export const PAIRING_CODE_TTL_MINUTES = 15;
@@ -80,12 +81,33 @@ export function oneTimePairingUri(relayUrl: string, mailboxId: string, transferK
   return `granttap://pair-v2?${query.toString()}`;
 }
 
-/** Create, park, and persist a new E2EE pairing for chat or CLI onboarding. */
+/** Reciprocal machine + phone halves when both local files still match. */
+export function reusablePairingHalves(): { machineCfg: PeerConfig; phoneCfg: PeerConfig } | null {
+  const machineCfg = reusablePairing(false);
+  if (!machineCfg) return null;
+  try {
+    const phoneCfg = loadConfig(phonePairingPath());
+    return validConfig(phoneCfg, "phone") ? { machineCfg, phoneCfg } : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Park a one-time mailbox so a device can join the pairing room.
+ *
+ * The room is shared: 1+ iPhone, iPad, Android, Mac, or Windows. A phone
+ * already in the room that pairs another computer puts that computer in the
+ * same room. Reconnect and "add another device" re-issue a QR for this room.
+ * `replace` starts a different room. A Mesh invite is not this room — it only
+ * shares Mesh and must not overwrite these pairing keys.
+ */
 export async function createOneTimePairing(
   relayUrl: string,
-  options: { installHooks?: boolean } = {},
+  options: { installHooks?: boolean; replace?: boolean } = {},
 ): Promise<OneTimePairing> {
-  const { machineCfg, phoneCfg } = createPairing(relayUrl);
+  const existing = options.replace ? null : reusablePairingHalves();
+  const { machineCfg, phoneCfg } = existing ?? createPairing(relayUrl);
   const mailboxId = randomId(16);
   const transferKey = generateTransferKey();
   const sealed = sealWithTransferKey(phoneCfg, transferKey);
@@ -111,8 +133,13 @@ export async function createOneTimePairing(
 
   // Do not replace a working local pairing until the relay has accepted the
   // encrypted phone half. A failed onboarding attempt must be non-destructive.
-  saveConfig(machineConfigPath(), machineCfg);
-  saveConfig(phonePairingPath(), phoneCfg);
+  // Reconnect re-parks the same halves — writing them again would rotate backups
+  // and look like a new room.
+  if (!existing) {
+    saveConfig(machineConfigPath(), machineCfg);
+    saveConfig(phonePairingPath(), phoneCfg);
+    clearPhoneSeen();
+  }
 
   const installHooks = options.installHooks ?? process.env.GRANTTAP_SKIP_HOOKS !== "1";
   const cursor = installHooks ? installCursorHook() : null;

@@ -15,7 +15,7 @@ import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middlew
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import express from "express";
 import { createGrantTapServer, relay, resetRelay } from "./create-server";
-import { isAllowedLoopbackOrigin } from "./oauth/loopback-origin";
+import { isAllowedLoopbackOrigin, isWebsiteOrigin } from "./oauth/loopback-origin";
 import { installPairingRoutes } from "./oauth/pairing-view";
 import { GrantTapOAuthProvider } from "./oauth-provider";
 import { buildConnectSnapshot, publicClientName } from "./oauth/connect-snapshot";
@@ -66,15 +66,15 @@ export async function startHttpMcpServer(options: ServeOptions = {}): Promise<{
   // The public website is the only browser origin allowed to read a pending
   // authorization. The random pending id lives in the website URL fragment,
   // never in a request to the website server.
-  app.use(["/oauth/session", "/oauth/pairing", "/oauth/decision"], (req, res, next) => {
+  app.use(["/oauth/session", "/oauth/connection", "/oauth/pairing", "/oauth/decision"], (req, res, next) => {
     if (req.originalUrl.split("?", 1)[0] === "/oauth/pairing/view") return next();
     const origin = req.get("origin");
-    if (origin && origin !== "https://granttap.com"
+    if (origin && !isWebsiteOrigin(origin)
         && !isAllowedLoopbackOrigin(origin, issuerUrl.origin)) {
       res.status(403).json({ error: "Origin is not allowed." });
       return;
     }
-    if (origin === "https://granttap.com") {
+    if (isWebsiteOrigin(origin)) {
       res.set({
         "Access-Control-Allow-Origin": origin,
         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -105,6 +105,11 @@ export async function startHttpMcpServer(options: ServeOptions = {}): Promise<{
       ...buildConnectSnapshot(pending.client.client_name),
       clientName: publicClientName(pending.client.client_name),
     });
+  });
+
+  app.get("/oauth/connection", (_req, res) => {
+    res.set("Cache-Control", "no-store");
+    res.json(buildConnectSnapshot("GrantTap"));
   });
 
   installPairingRoutes(app, provider, issuerUrl.origin);

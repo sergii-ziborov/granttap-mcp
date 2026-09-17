@@ -52,7 +52,7 @@ test("OAuth provider completes consent, code exchange, verification, and revocat
   await provider.authorize(client, { ...params, scopes: [] }, record.response);
   assert.equal(record.status(), 302);
   const website = new URL(record.location());
-  assert.equal(website.origin, "https://relay.granttap.com");
+  assert.equal(website.origin, "https://granttap.com");
   assert.equal(website.pathname, "/connect");
   assert.match(website.hash, /request=/);
   assert.doesNotMatch(website.hash, /port=/);

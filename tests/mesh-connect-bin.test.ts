@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { mkdtemp } from "node:fs/promises";
+import { access, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -75,4 +75,6 @@ test("trusted Mesh connect entry validates arguments and consumes one invite", a
   assert.equal(connected.code, 0, connected.stderr);
   assert.match(connected.stdout, /Grok Bot endpoint  Connected/);
   assert.match(connected.stdout, /Actors             1/);
+  assert.match(connected.stdout, /does not join the pairing room/);
+  await assert.rejects(access(join(root, "machine.json")), /ENOENT/, "Mesh invite must not write pairing keys");
 });

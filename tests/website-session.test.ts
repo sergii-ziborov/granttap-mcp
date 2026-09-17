@@ -105,9 +105,12 @@ test("helper publishes consent to the website and writes the Cursor redirect the
 
   const snapshot = {
     clientName: "Cursor",
+    computerName: "mac.local",
     paired: true,
     phones: [{ name: "iPhone", status: "paired" as const, lastSeenAt: null }],
     providers: [{ id: "cursor" as const, installed: true, ready: true }],
+    relayStatus: "online" as const,
+    mesh: { present: false, thisComputer: "mac.local", computers: ["mac.local"], openTasks: 0 },
   };
   await publishConnectRequest(site.origin, "11111111-1111-4111-8111-111111111111", snapshot);
   const published = await readConnectRequest(site.origin, "11111111-1111-4111-8111-111111111111");
@@ -145,6 +148,43 @@ test("helper publishes consent to the website and writes the Cursor redirect the
   assert.fail("website never received the Cursor redirect");
 });
 
+test("helper republishes a live phone snapshot while waiting for Approve", async (t) => {
+  const site = await listen();
+  process.env.GRANTTAP_WEBSITE_ORIGIN = site.origin;
+  t.after(async () => {
+    resetConnectWatchers();
+    await site.close();
+    delete process.env.GRANTTAP_WEBSITE_ORIGIN;
+  });
+  const pendingId = "22222222-2222-4222-8222-222222222222";
+  let seen = false;
+  watchConnectDecision(site.origin, pendingId, () => ({
+    clientName: "Cursor",
+    computerName: "mac.local",
+    paired: true,
+    phones: [{
+      name: "iPhone",
+      status: seen ? "seen" as const : "paired" as const,
+      lastSeenAt: seen ? Date.now() : null,
+    }],
+    providers: [],
+    relayStatus: "online" as const,
+    mesh: { present: true, thisComputer: "mac.local", computers: ["mac.local"], openTasks: 1 },
+  }), () => ({ redirectUrl: "http://127.0.0.1:9/callback?code=x" }));
+  const started = Date.now();
+  while (Date.now() - started < 4_000) {
+    const row = site.store.get(pendingId);
+    if (row?.phones && Array.isArray(row.phones) && (row.phones[0] as { status?: string })?.status === "paired") {
+      seen = true;
+    }
+    if (row?.phones && Array.isArray(row.phones) && (row.phones[0] as { status?: string })?.status === "seen") {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.fail("website never received the connected phone");
+});
+
 test("authorize redirect names only the website request id", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "granttap-website-redirect-"));
   process.env.GRANTTAP_CONFIG_DIR = root;
@@ -168,7 +208,7 @@ test("authorize redirect names only the website request id", async (t) => {
     resource: new URL("http://127.0.0.1:17342/mcp"),
   } as AuthorizationParams, response);
   const website = new URL(location);
-  assert.equal(website.origin, "https://relay.granttap.com");
+  assert.equal(website.origin, "https://granttap.com");
   assert.equal(website.pathname, "/connect");
   assert.match(website.hash, /request=/);
   assert.doesNotMatch(website.hash, /port=/);

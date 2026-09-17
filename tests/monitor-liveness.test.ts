@@ -80,10 +80,38 @@ describe("machine liveness heartbeat", () => {
     assert.equal(sent[0]!.payload.type, "machine.heartbeat");
     assert.equal(sent[0]!.to, "phone");
     assert.equal(sent[0]!.options.reliable, false);
+    const held: Array<{ options: any }> = [];
+    const { publishHeldHeartbeat, HELD_HEARTBEAT_TTL_MS } = await import(
+      "../apps/bridge/src/monitor-heartbeat"
+    );
+    await publishHeldHeartbeat({
+      send: async (_payload: any, _to: unknown, options: any) => {
+        held.push({ options });
+      },
+    } as never);
+    assert.equal(held[0]!.options.reliable, true);
+    assert.ok(HELD_HEARTBEAT_TTL_MS <= PHONE_OFFLINE_THRESHOLD_MS);
     assert.ok(
       HEARTBEAT_INTERVAL_MS * 3 <= PHONE_OFFLINE_THRESHOLD_MS,
       "three heartbeats must fit inside the phone's offline threshold",
     );
+  });
+
+  it("holds one intro heartbeat so a phone that joins after pairing still sees the Mac", async () => {
+    const { HELD_HEARTBEAT_TTL_MS, publishHeldHeartbeat } = await import(
+      "../apps/bridge/src/monitor-heartbeat"
+    );
+    const sent: Array<{ payload: any; to: unknown; options: any }> = [];
+    await publishHeldHeartbeat({
+      send: async (payload: any, to: unknown, options: any) => {
+        sent.push({ payload, to, options });
+      },
+    } as never);
+
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0]!.payload.type, "machine.heartbeat");
+    assert.equal(sent[0]!.options.reliable, true);
+    assert.ok(HELD_HEARTBEAT_TTL_MS <= PHONE_OFFLINE_THRESHOLD_MS);
   });
 
   it("runs on a loop of its own, never behind the catalog scan", () => {
@@ -92,6 +120,12 @@ describe("machine liveness heartbeat", () => {
     const loops = src.split("startPublishLoop({").slice(1);
     const heartbeat = loops.find((body) => body.includes("HEARTBEAT_INTERVAL_MS"));
     assert.ok(heartbeat, "liveness needs its own scheduled loop");
+    assert.doesNotMatch(
+      heartbeat,
+      /leadership\.acquire\(\) \? publishHeartbeat/,
+      "a peer socket must keep heartbeating while the LaunchAgent holds the lock",
+    );
+    assert.match(heartbeat, /immediate:\s*true/, "the first heartbeat must not wait a full interval");
   });
 });
 

@@ -2,22 +2,35 @@
 import { randomUUID } from "node:crypto";
 import type { Express } from "express";
 import QRCode from "qrcode";
+import { installMonitorHelper } from "../../../bridge/src/install";
 import { createOneTimePairing, DEFAULT_RELAY } from "../../../bridge/src/pairing";
+import { recordPhoneSeen } from "../../../bridge/src/presence";
 import { relay, resetRelay } from "../create-server";
+import { buildConnectSnapshot } from "./connect-snapshot";
+import { watchMailboxClaim } from "./mailbox-claim";
 import { isMachineConfigured } from "../pairing-status";
 import type { GrantTapOAuthProvider } from "../oauth-provider";
-import { isAllowedLoopbackOrigin } from "./loopback-origin";
+import { isAllowedLoopbackOrigin, isWebsiteOrigin, WEBSITE_ORIGINS } from "./loopback-origin";
 
-const WEBSITE_ORIGIN = "https://granttap.com";
 const VIEW_TTL_MS = 15 * 60_000;
-type View = { qrDataUrl: string; manualToken: string; expiresAt: number };
+type View = { qrDataUrl: string; manualToken: string; expiresAt: number; stopWatch?: () => void };
 
 function escapeHtml(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
 }
 
-function renderView(view: View, nonce: string): string {
+function renderView(view: View, nonce: string, embed: boolean): string {
+  if (embed) {
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GrantTap pairing QR</title><style>
+html,body{margin:0;height:100%;background:#fff;overflow:hidden}
+img{display:block;width:100%;height:100%;object-fit:contain;padding:16px;box-sizing:border-box}
+</style></head><body>
+<img src="${view.qrDataUrl}" alt="One-time GrantTap pairing QR">
+</body></html>`;
+  }
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>GrantTap phone pairing</title><style>
@@ -45,30 +58,53 @@ export function installPairingRoutes(app: Express, provider: GrantTapOAuthProvid
         return;
       }
       const pendingId = String(req.body?.pending_id ?? "");
-      if (!provider.getPending(pendingId)) {
+      const pending = pendingId ? provider.getPending(pendingId) : undefined;
+      if (pendingId && !pending) {
+        res.status(400).json({ error: "Authorization request expired. Start authorization again from your MCP client." });
+        return;
+      }
+      if (!pendingId && !isWebsiteOrigin(origin)) {
         res.status(400).json({ error: "Authorization request expired. Start authorization again from your MCP client." });
         return;
       }
       if (isMachineConfigured() && req.body?.confirmed !== "true") {
-        res.json({ ok: true, alreadyPaired: true });
+        res.json({ ok: true, alreadyPaired: true, ...buildConnectSnapshot() });
         return;
       }
+      const replace = req.body?.replace === "true";
+      const firstPairing = !isMachineConfigured();
       const pairing = await createOneTimePairing(
         process.env.GRANTTAP_RELAY_URL ?? process.env.NODVOX_RELAY_URL ?? DEFAULT_RELAY,
-        { installHooks: false },
+        { installHooks: false, replace },
       );
       resetRelay();
       void relay();
+      // The durable LaunchAgent still holds the old room until it is reloaded.
+      if (firstPairing || replace) installMonitorHelper();
       const png = await QRCode.toBuffer(pairing.qrPayload, {
         type: "png", width: 480, margin: 2, errorCorrectionLevel: "L",
       });
       const qrDataUrl = `data:image/png;base64,${png.toString("base64")}`;
-      if (origin === WEBSITE_ORIGIN) {
-        for (const [id, view] of views) if (view.expiresAt <= Date.now()) views.delete(id);
-        if (views.size >= 16) views.delete(views.keys().next().value!);
+      const expiresAt = Date.now() + VIEW_TTL_MS;
+      const stopWatch = watchMailboxClaim(pairing.httpBase, pairing.mailboxId, expiresAt, () => {
+        recordPhoneSeen();
+        void relay();
+      });
+      if (isWebsiteOrigin(origin)) {
+        for (const [id, view] of views) {
+          if (view.expiresAt <= Date.now()) {
+            view.stopWatch?.();
+            views.delete(id);
+          }
+        }
+        if (views.size >= 16) {
+          const oldest = views.keys().next().value!;
+          views.get(oldest)?.stopWatch?.();
+          views.delete(oldest);
+        }
         const viewId = randomUUID();
-        views.set(viewId, { qrDataUrl, manualToken: pairing.manualToken, expiresAt: Date.now() + VIEW_TTL_MS });
-        res.json({ ok: true, alreadyPaired: false, viewId });
+        views.set(viewId, { qrDataUrl, manualToken: pairing.manualToken, expiresAt, stopWatch });
+        res.json({ ok: true, alreadyPaired: false, viewId, expiresAt });
         return;
       }
       res.json({
@@ -91,12 +127,13 @@ export function installPairingRoutes(app: Express, provider: GrantTapOAuthProvid
       return;
     }
     const nonce = randomUUID().replaceAll("-", "");
+    const embed = req.query.embed === "1" || req.get("sec-fetch-dest") === "iframe";
     res.set({
       "Cache-Control": "no-store",
       "Referrer-Policy": "no-referrer",
       "X-Content-Type-Options": "nosniff",
-      "Content-Security-Policy": `default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; frame-ancestors ${WEBSITE_ORIGIN}; base-uri 'none'; form-action 'none'`,
+      "Content-Security-Policy": `default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; frame-ancestors ${WEBSITE_ORIGINS.join(" ")}; base-uri 'none'; form-action 'none'`,
     });
-    res.type("html").send(renderView(view, nonce));
+    res.type("html").send(renderView(view, nonce, embed));
   });
 }

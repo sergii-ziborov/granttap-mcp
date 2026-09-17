@@ -103,7 +103,7 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   };
   assert.equal(widgetResource.mimeType, "text/html;profile=mcp-app");
   assert.equal(widgetResource._meta?.ui?.prefersBorder, true);
-  assert.match(widgetResource.text ?? "", /Add iPhone/);
+  assert.match(widgetResource.text ?? "", /Add a device/);
   assert.match(widgetResource.text ?? "", /GrantTap pairing QR/);
   const templates = await client.listResourceTemplates();
   assert.deepEqual(templates.resourceTemplates.map((template) => template.uriTemplate), [

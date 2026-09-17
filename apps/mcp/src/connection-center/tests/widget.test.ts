@@ -51,7 +51,7 @@ test("widget initializes, checks status, and requires explicit reconnect confirm
   const ui = await fixture(t);
   assert.deepEqual(ui.calls.map(x => x.name), ["connection_status"]);
   assert.equal(ui.el("status").textContent, "Not paired");
-  assert.equal(ui.el("connect").textContent, "Add iPhone");
+  assert.equal(ui.el("connect").textContent, "Add a device");
   ui.button("connect").click();
   await ui.settle();
   assert.equal(ui.calls.at(-1)?.name, "connect");
@@ -84,7 +84,7 @@ test("widget clears secrets when paired or expired and ignores foreign messages"
   ui.window.dispatchEvent(new ui.window.MessageEvent("message", {
     source: null, data: { jsonrpc: "2.0", method: "ui/notifications/tool-result", params: { structuredContent: { status: "connected" } } },
   }));
-  assert.equal(ui.el("status").textContent, "Waiting for iPhone");
+  assert.equal(ui.el("status").textContent, "Waiting for a device");
   ui.set({ status: "paired", providers: [{ id: "codex", detail: "<script>attack</script>" }] });
   ui.button("refresh").click();
   await ui.settle();
@@ -152,9 +152,9 @@ test("pending pairing refreshes while visible and host notifications update the 
     source: ui.window as unknown as Window, origin, data: { jsonrpc: "2.0", method, params },
   }));
   notify("ui/notifications/tool-result", { structuredContent: { status: "connected", phoneLastSeenAt: Date.now() } }, "https://foreign.example");
-  assert.equal(ui.el("status").textContent, "Waiting for iPhone");
+  assert.equal(ui.el("status").textContent, "Waiting for a device");
   notify("ui/notifications/tool-result", { structuredContent: { status: "connected", phoneLastSeenAt: Date.now(), phones: [{ name: "iPhone", status: "seen", lastSeenAt: Date.now() }] } });
-  assert.equal(ui.el("status").textContent, "iPhone seen");
+  assert.equal(ui.el("status").textContent, "Device seen");
   assert.match(ui.el("phones").textContent || "", /iPhone/);
   assert.equal(ui.el("phones-empty").classList.contains("hidden"), true);
   const connectedCount = ui.calls.length;

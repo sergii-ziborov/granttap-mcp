@@ -6,6 +6,8 @@ import { sendApprovalResolved, terminalApproval } from "../../../bridge/src/appr
 import { loadConfig, machineConfigPath } from "../../../bridge/src/config";
 import { startSessionMonitor, type SessionMonitor } from "../../../bridge/src/monitor";
 import { sendSessionPayload } from "../../../bridge/src/session-keys";
+import { publishHeldHeartbeat } from "../../../bridge/src/monitor-heartbeat";
+import { recordPhoneSeen } from "../../../bridge/src/presence";
 
 const ASK_TIMEOUT_MS = Number(
   process.env.GRANTTAP_ASK_TIMEOUT_MS ?? process.env.NODVOX_ASK_TIMEOUT_MS ?? 180_000,
@@ -26,10 +28,15 @@ export async function relay(): Promise<RelayClient | null> {
   try {
     if (!client) {
       client = new RelayClient(loadConfig(machineConfigPath()), { autoReconnect: true });
-      client.onMessage(() => { phoneLastSeenAt = Date.now(); return false; });
+      client.onMessage(() => {
+        phoneLastSeenAt = Date.now();
+        recordPhoneSeen(phoneLastSeenAt);
+        return false;
+      });
       monitor = startSessionMonitor(client);
     }
     await client.connect();
+    await publishHeldHeartbeat(client).catch(() => {});
     await monitor?.publish().catch(() => {});
     return client;
   } catch {

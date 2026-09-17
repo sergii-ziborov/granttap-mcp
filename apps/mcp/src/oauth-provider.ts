@@ -26,7 +26,7 @@ import { buildConnectSnapshot } from "./oauth/connect-snapshot";
 import { loadPending, PENDING_TTL_MS, savePending, type PendingAuth } from "./oauth/pending";
 import { GrantTapClientsStore, loadOAuthStore, saveOAuthStore } from "./oauth/store";
 import {
-  publishConnectRequest,
+  publishConnectRequestRetry,
   watchConnectDecision,
   websiteOrigin,
 } from "./oauth/website-session";
@@ -88,10 +88,10 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
       resource: this.expectedResource ? new URL(this.expectedResource) : params.resource,
     };
     const pendingId = this.createPending(client, normalizedParams);
-    const snapshot = buildConnectSnapshot(client.client_name);
     const origin = websiteOrigin();
     if (origin) {
-      await publishConnectRequest(origin, pendingId, snapshot).catch(() => {});
+      const snapshot = () => buildConnectSnapshot(client.client_name);
+      await publishConnectRequestRetry(origin, pendingId, snapshot());
       watchConnectDecision(origin, pendingId, snapshot, (approve) =>
         this.completeConsent(pendingId, approve));
     }
@@ -100,7 +100,7 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
       "Referrer-Policy": "no-referrer",
       "X-Content-Type-Options": "nosniff",
     });
-    const website = new URL(`${origin ?? "https://relay.granttap.com"}/connect`);
+    const website = new URL(`${origin ?? "https://granttap.com"}/connect`);
     website.hash = new URLSearchParams({ request: pendingId }).toString();
     res.redirect(302, website.href);
   }

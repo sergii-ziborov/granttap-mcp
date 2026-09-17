@@ -111,6 +111,20 @@ test("HTTP MCP OAuth discovery matches Cursor Authorize requirements", async (t)
   const pairingWithoutAuth = await fetch(`${base}/oauth/pairing`, { method: "POST" });
   assert.equal(pairingWithoutAuth.status, 400);
 
+  const connection = await fetch(`${base}/oauth/connection`, {
+    headers: { origin: "https://granttap.com" },
+  });
+  assert.equal(connection.status, 200);
+  assert.equal(connection.headers.get("cache-control"), "no-store");
+  const connectionBody = await connection.json() as {
+    paired: boolean;
+    phones: unknown[];
+    computerName: string;
+  };
+  assert.equal(connectionBody.paired, false);
+  assert.deepEqual(connectionBody.phones, []);
+  assert.equal(typeof connectionBody.computerName, "string");
+
   const clientName = "<script>not Cursor</script>";
   const redirectUri = "http://127.0.0.1:49123/callback";
   const registration = await fetch(`${base}/register`, {
@@ -141,7 +155,7 @@ test("HTTP MCP OAuth discovery matches Cursor Authorize requirements", async (t)
   assert.equal(authorize.status, 302);
   assert.equal(authorize.headers.get("referrer-policy"), "no-referrer");
   const website = new URL(authorize.headers.get("location")!);
-  assert.equal(website.origin, "https://relay.granttap.com");
+  assert.equal(website.origin, "https://granttap.com");
   assert.equal(website.pathname, "/connect");
   assert.doesNotMatch(website.href, /script|callback|mcp%3Atools/);
   const pendingId = new URLSearchParams(website.hash.slice(1)).get("request");

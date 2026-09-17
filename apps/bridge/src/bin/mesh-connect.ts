@@ -16,6 +16,7 @@ void connectGrokBotInvite(invite).then((bundle) => {
     `Allowed projects   ${bundle.credential.projectIds.length}`,
     "",
     "Configure Grok Bot to run: granttap internal mesh-mcp",
+    "Mesh is shared with this device. It does not join the pairing room.",
     "The scoped MCP server cannot create invites, change relay, or expand Project access.",
     "",
   ].join("\n"));
