@@ -46,14 +46,18 @@ import the public repository once and reload Cursor. The plugin adds `/connect`,
 skill, and the exact-correlation rule; `granttap setup` configures the local
 MCP endpoint separately.
 
-If Customize shows both a lowercase **granttap** entry with a generic cube and
-an older green **GrantTap** entry, those are saved imports from earlier versions.
-Remove both old imports in Cursor, then install one public listing or import
-`sergii-ziborov/granttap-mcp` once at the user scope and reload. Keep the single **GrantTap** entry with the
-orange check-and-wave icon. On the same computer, rerun `granttap setup` and
-`granttap status` so the MCP service and hooks point to the permanent npm install
-instead of an old temporary path. A workspace-scoped import is not needed when
-the user-scoped plugin is already installed.
+Publish by pushing this repository. Keep `name` as `granttap` and the GitHub URL
+as `sergii-ziborov/granttap-mcp`. That updates the existing listing. Do not
+submit Cursor Marketplace or cursor.directory again — a second submit is a
+second card. The only Cursor marketplace file is the repo-root
+`.cursor-plugin/marketplace.json`, and it lists this plugin once.
+
+If Customize or Marketplace shows both a lowercase **granttap** cube and an
+orange **GrantTap** card, uninstall or unpublish the cube. Keep the single
+**GrantTap** entry with the orange check-and-wave icon. On the same computer,
+rerun `granttap setup` and `granttap status` so the MCP service and hooks point
+to the permanent npm install instead of an old temporary path. A workspace-scoped
+import is not needed when the user-scoped plugin is already installed.
 
 ## Exact dual-channel behavior
 

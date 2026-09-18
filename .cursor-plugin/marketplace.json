@@ -1,0 +1,37 @@
+{
+  "name": "granttap",
+  "owner": {
+    "name": "GrantTap",
+    "email": "support@granttap.com"
+  },
+  "metadata": {
+    "description": "The agent connects this computer in chat. Authorize in plugin settings opens the device window. Scan the QR in GrantTap — that scan authorizes. Device list and Add another stay there and in the GrantTap app.",
+    "version": "0.1.9"
+  },
+  "plugins": [
+    {
+      "name": "granttap",
+      "source": "cursor-plugin",
+      "description": "The agent connects this computer in chat. Authorize in plugin settings opens the device window. Scan the QR in GrantTap — that scan authorizes. Device list and Add another stay there and in the GrantTap app.",
+      "version": "0.1.9",
+      "logo": "https://raw.githubusercontent.com/sergii-ziborov/granttap-mcp/main/cursor-plugin/assets/logo.svg",
+      "author": {
+        "name": "GrantTap",
+        "email": "support@granttap.com"
+      },
+      "homepage": "https://granttap.com",
+      "repository": "https://github.com/sergii-ziborov/granttap-mcp",
+      "license": "MIT",
+      "category": "integrations",
+      "keywords": [
+        "granttap",
+        "mcp",
+        "approvals",
+        "iphone",
+        "apple-watch",
+        "oauth",
+        "authorize"
+      ]
+    }
+  ]
+}

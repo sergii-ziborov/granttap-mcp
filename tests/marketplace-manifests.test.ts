@@ -39,10 +39,23 @@ test("Cursor plugin uses the same OAuth HTTP entry so Configure shows Authorize 
   assert.equal(plugin.version, "0.1.9");
   assert.equal(plugin.logo, "assets/logo.svg");
   assert.deepEqual(mcp, hosts);
-  assert.equal(existsSync(join(repositoryRoot, ".cursor-plugin/marketplace.json")), false);
-  assert.equal(existsSync(join(repositoryRoot, "cursor-plugin/.cursor-plugin/marketplace.json")), false);
   assert.equal(existsSync(join(repositoryRoot, "cursor-plugin/.cursor-plugin/plugin.json")), true);
   assert.equal(existsSync(join(repositoryRoot, "cursor-plugin/mcp.json")), true);
+});
+
+test("Cursor publishes one GrantTap listing, never a second marketplace plugin", () => {
+  const marketplace = readJson(".cursor-plugin/marketplace.json");
+  const plugin = readJson("cursor-plugin/.cursor-plugin/plugin.json");
+  const plugins = marketplace.plugins as Array<{ name: string; source: string; logo: string; version: string }>;
+  assert.equal(marketplace.name, "granttap");
+  assert.equal(plugins.length, 1, "a second plugins[] row becomes a second Marketplace card");
+  assert.equal(plugins[0]?.name, "granttap");
+  assert.equal(plugins[0]?.name, plugin.name);
+  assert.equal(plugins[0]?.source, "cursor-plugin");
+  assert.equal(plugins[0]?.version, plugin.version);
+  assert.match(plugins[0]?.logo ?? "", /cursor-plugin\/assets\/logo\.svg/);
+  assert.equal(existsSync(join(repositoryRoot, "cursor-plugin/.cursor-plugin/marketplace.json")), false);
+  assert.equal(existsSync(join(repositoryRoot, ".cursor-plugin/plugin.json")), false);
 });
 
 test("chat connect is the agent; humans manage devices in plugin settings", () => {
