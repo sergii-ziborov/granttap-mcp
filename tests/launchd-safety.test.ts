@@ -80,7 +80,9 @@ test("a temporary config must not rewrite a live LaunchAgent", () => {
   ].join("\n")) ? "temp" : "", /temp/);
 });
 
-test("pairing and inspect refuse a live helper backed by a temporary log", async (t) => {
+test("pairing and inspect refuse a live helper backed by a temporary log", {
+  skip: process.platform !== "darwin" ? "LaunchAgent installation is macOS-only" : false,
+}, async (t) => {
   const previous = {
     agents: process.env.GRANTTAP_LAUNCH_AGENTS_DIR,
     config: process.env.GRANTTAP_CONFIG_DIR,
