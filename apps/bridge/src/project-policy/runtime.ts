@@ -4,6 +4,7 @@ import type { RelayClient } from "../../../../packages/core/relay-client";
 import type {
   ProjectCapabilityKind,
   ProjectEnforcementStatus,
+  ProjectPolicy,
   ProjectPolicyAck,
   ProjectPolicyPayload,
   ProjectPolicyRejected,
@@ -22,6 +23,7 @@ import type {
 import { engineFeatureEnabled, type EngineClientLike } from "../engine/engine-supervisor";
 import { inspectAgentIntegrations } from "../install";
 import { rememberGovernedProject } from "../policy/governed-projects";
+import { loadExecutionPolicy, rememberExecutionPolicy } from "../mesh/execution-policy";
 import { sendProjectPayload } from "../session-keys";
 import {
   acknowledgementFromEngine,
@@ -77,6 +79,13 @@ export function createProjectPolicyRuntime(deps: ProjectPolicyRuntimeDependencie
       if (applied.operation !== "policy.applied") throw new Error(`engine answered ${applied.operation}`);
       // The hook keeps failing closed for this Project when the engine is silent.
       rememberGovernedProject(request.projectId, applied.policy.revision, deps.now());
+      rememberExecutionPolicy(
+        request.projectId,
+        request.policy.execution
+          ? { ...request.policy.execution, revision: applied.policy.revision }
+          : undefined,
+        deps.endpointId(),
+      );
       const targets = new Map(deps.providers().map((item) => [item.provider, item]));
       for (const target of [...targets.values()].sort((left, right) =>
         left.provider.localeCompare(right.provider))) {
@@ -170,6 +179,22 @@ export function createProjectPolicyRuntime(deps: ProjectPolicyRuntimeDependencie
     }
   }
 
+  function withLocalExecution(policy: ProjectPolicy): ProjectPolicy {
+    const execution = loadExecutionPolicy(policy.projectId);
+    if (!execution) return policy;
+    return {
+      ...policy,
+      execution: {
+        mode: execution.mode,
+        targetEndpointId: execution.targetEndpointId,
+        revision: execution.revision,
+        hostGrantId: execution.hostGrantId,
+        hostGrantStatus: execution.hostGrantStatus,
+        offlineBehavior: execution.offlineBehavior,
+      },
+    };
+  }
+
   async function sendStatus(
     relay: RelayClient,
     policy: EngineProjectPolicy,
@@ -182,7 +207,7 @@ export function createProjectPolicyRuntime(deps: ProjectPolicyRuntimeDependencie
       const payload: ProjectPolicyStatus = {
         type: "project.policy.status", sessionId: policy.project_id,
         projectId: policy.project_id,
-        policy: policyFromEngine(policy),
+        policy: withLocalExecution(policyFromEngine(policy)),
         coverage: coverageFromEngine(coverage),
         generatedAt: deps.now(),
       };

@@ -42,6 +42,7 @@ export type CompactProjectContext = {
   peerTasks: ScopedMeshView["peerTasks"];
   events: CompactContextEvent[];
   eventsCut: ContextCut;
+  decisions: CompactContextEvent[];
   claims: Array<{ resource: string; owner: string; taskId: string }>;
   claimsCut: ContextCut;
   expand: { full: string; map: string };
@@ -78,6 +79,8 @@ export function renderCompactProjectContext(
     summary: event.payload.summary,
   }));
   const shownEvents = events.slice(-COMPACT_LIMIT);
+  const decisions = events.filter((event) =>
+    event.eventType === "AGENT_ANSWER" || event.eventType === "TASK_COMPLETED");
   const claims = view.claims.map((claim) => ({
     resource: claim.resource,
     owner: claim.ownerSessionId,
@@ -113,6 +116,7 @@ export function renderCompactProjectContext(
     peerTasks: view.peerTasks,
     events: shownEvents,
     eventsCut: cut(events.length, shownEvents.length, expand.full, "compact event window"),
+    decisions: decisions.slice(-COMPACT_LIMIT),
     claims: shownClaims,
     claimsCut: cut(claims.length, shownClaims.length, expand.full, "compact claim window"),
     expand,

@@ -1,6 +1,7 @@
 /** Persistent, terminal-free task sync for the GrantTap phone app on macOS. */
+import { join } from "node:path";
 import { RelayClient } from "../../../../packages/core/relay-client";
-import { loadConfig, machineConfigPath } from "../config";
+import { configDir, loadConfig, machineConfigPath } from "../config";
 import { EngineSupervisor } from "../engine/engine-supervisor";
 import { startSessionMonitor } from "../monitor";
 
@@ -10,7 +11,11 @@ const engine = new EngineSupervisor();
 let stopping = false;
 
 try {
-  client = new RelayClient(loadConfig(machineConfigPath()), { autoReconnect: true });
+  const cfg = loadConfig(machineConfigPath());
+  client = new RelayClient(cfg, {
+    autoReconnect: true,
+    replayPath: join(configDir(), `replay-${cfg.room}.json`),
+  });
   monitor = startSessionMonitor(client);
 } catch (error) {
   process.stderr.write(

@@ -63,17 +63,47 @@ export const ProjectPolicyRule = z.object({
 }).strict();
 export type ProjectPolicyRule = z.infer<typeof ProjectPolicyRule>;
 
+export const ProjectExecutionMode = z.enum(["distributed", "pinned"]);
+export type ProjectExecutionMode = z.infer<typeof ProjectExecutionMode>;
+export const HostGrantStatus = z.enum(["none", "pending", "applied", "unavailable"]);
+export type HostGrantStatus = z.infer<typeof HostGrantStatus>;
+export const ExecutionOfflineBehavior = z.enum(["reject", "queueUntilDeadline"]);
+export type ExecutionOfflineBehavior = z.infer<typeof ExecutionOfflineBehavior>;
+
+/** Project-scoped host pin. Does not reroute enrollment, revoke, or approvals. */
+export const ProjectExecutionPolicy = z.object({
+  mode: ProjectExecutionMode,
+  targetEndpointId: Identifier.optional(),
+  revision: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  hostGrantId: Identifier.optional(),
+  hostGrantStatus: HostGrantStatus.default("none"),
+  offlineBehavior: ExecutionOfflineBehavior.default("reject"),
+}).strict().superRefine((value, ctx) => {
+  if (value.mode === "pinned" && !value.targetEndpointId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom, path: ["targetEndpointId"], message: "pinned mode needs a host",
+    });
+  }
+});
+export type ProjectExecutionPolicy = z.infer<typeof ProjectExecutionPolicy>;
+
 export const ProjectPolicy = z.object({
   projectId: Identifier,
   revision: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   enforcement: ProjectPolicyEnforcement,
   rules: z.array(ProjectPolicyRule).max(256),
+  execution: ProjectExecutionPolicy.optional(),
 }).strict().superRefine((policy, ctx) => {
   const ids = new Set(policy.rules.map((rule) => rule.ruleId));
   if (ids.size !== policy.rules.length || policy.rules.some((rule) =>
     rule.projectId !== policy.projectId || rule.revision !== policy.revision)) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom, path: ["rules"], message: "policy rule scope mismatch",
+    });
+  }
+  if (policy.execution && policy.execution.revision > policy.revision) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom, path: ["execution"], message: "execution revision ahead of policy",
     });
   }
 });

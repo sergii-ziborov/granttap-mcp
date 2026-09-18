@@ -90,20 +90,25 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
     };
     const pendingId = this.createPending(client, normalizedParams);
     const origin = websiteOrigin();
-    if (origin) {
-      const snapshot = () => buildConnectSnapshot(client.client_name);
-      await publishConnectRequestRetry(origin, pendingId, snapshot());
-      watchConnectDecision(origin, pendingId, snapshot, (approve) =>
-        this.completeConsent(pendingId, approve));
-    }
-    res.set({
+    const headers = {
       "Cache-Control": "no-store",
       "Referrer-Policy": "no-referrer",
       "X-Content-Type-Options": "nosniff",
-    });
+    };
+    // Always open granttap.com/connect. A paired Mac still shows devices,
+    // Reconnect, and Add another — the coding-app callback waits for Approve
+    // or a fresh QR scan. Never await the website here: a hung publish left a
+    // blank 127.0.0.1:17342/authorize tab.
+    res.set(headers);
     const website = new URL(`${origin ?? "https://granttap.com"}/connect`);
     website.hash = new URLSearchParams({ request: pendingId }).toString();
     res.redirect(302, website.href);
+    if (origin) {
+      const snapshot = () => buildConnectSnapshot(client.client_name);
+      watchConnectDecision(origin, pendingId, snapshot, (approve) =>
+        this.completeConsent(pendingId, approve));
+      void publishConnectRequestRetry(origin, pendingId, snapshot());
+    }
   }
 
   /** Complete consent: issue code and redirect to the requesting MCP client. */

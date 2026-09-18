@@ -150,6 +150,8 @@ export const SessionsStatus = z.object({
   providerSettings: ProviderRuntimeSettings.optional(),
   meshEnabled: z.boolean().optional(),
   contextCompilerEnabled: z.boolean().optional(),
+  configRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
+  instanceEpoch: z.string().trim().min(8).max(128).optional(),
   agents: z.array(AgentIntegrationStatus).optional(),
   activities: z.array(SessionActivity).optional(),
   generatedAt: z.number(),
@@ -172,6 +174,11 @@ export const ConfigSet = z.object({
   meshEnabled: z.boolean().optional(),
   contextCompilerEnabled: z.boolean().optional(),
   createdAt: z.number(),
+  operationId: z.string().trim().min(1).max(128).optional(),
+  baseRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
+  expiresAt: z.number().positive().optional(),
+  payloadDigest: z.string().regex(/^[0-9a-f]{64}$/i).optional(),
+  instanceEpoch: z.string().trim().min(8).max(128).optional(),
 }).strict().superRefine((value, ctx) => {
   if ((value.provider == null) !== (value.providerEnabled == null)) {
     ctx.addIssue({

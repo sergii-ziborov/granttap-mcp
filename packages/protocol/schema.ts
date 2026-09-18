@@ -16,6 +16,8 @@ import {
   SessionSubscription,
   UserAttachmentUpload,
   UserMessage,
+  TaskCreate,
+  HostGrant,
 } from "./messages/interaction";
 import { AgentId, Role } from "./messages/primitives";
 import {
@@ -99,6 +101,8 @@ export const Payload = z.union([
   ApprovalResolved,
   ApprovalsStatus,
   UserMessage,
+  TaskCreate,
+  HostGrant,
   UserAttachmentUpload,
   DeliveryReceipt,
   AgentEvent,

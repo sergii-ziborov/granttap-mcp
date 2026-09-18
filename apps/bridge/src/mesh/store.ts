@@ -43,6 +43,7 @@ import {
 import { mergeSnapshotState } from "./snapshot-merge";
 import { selectSnapshotTasks } from "./snapshot-window";
 import { projectSharedSkills } from "../capabilities/skills";
+import { loadExecutionPolicy } from "./execution-policy";
 
 export class MeshStore {
   private state: StoreState;
@@ -649,6 +650,7 @@ export class MeshStore {
       ...bindings.map((binding) => binding.localPathHint),
       ...this.state.executions.filter((item) => taskIds.has(item.taskId)).map((item) => item.workspace),
     ]);
+    const execution = loadExecutionPolicy(projectId);
     return MeshSnapshot.parse({
       type: "mesh.snapshot",
       sessionId: projectId,
@@ -660,6 +662,14 @@ export class MeshStore {
       peers: peers.length > 0 ? peers : undefined,
       skills: skills.length > 0 ? skills : undefined,
       incomplete: incomplete || undefined,
+      ...(execution ? { execution: {
+        mode: execution.mode,
+        targetEndpointId: execution.targetEndpointId,
+        revision: execution.revision,
+        hostGrantId: execution.hostGrantId,
+        hostGrantStatus: execution.hostGrantStatus,
+        offlineBehavior: execution.offlineBehavior,
+      } } : {}),
       tasks,
       executions: this.state.executions.filter((item) => taskIds.has(item.taskId)).slice(-128),
       claims: this.activeClaims().filter((item) => item.projectId === projectId && taskIds.has(item.taskId)).slice(-128),

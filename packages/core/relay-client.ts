@@ -15,6 +15,7 @@ import { Envelope, Payload, type Role } from "../protocol/schema";
 import { openFromPeers, openWithTransferKey, peerPublicKeys, seal, sealWithTransferKey } from "./crypto";
 import type { PeerConfig, RelayClientOptions, SendOptions } from "./relay-client-types";
 export type { PeerConfig, RelayClientOptions, SendOptions } from "./relay-client-types";
+import { loadReplayFingerprints, saveReplayFingerprints } from "./replay-store";
 import { sealEnvelope } from "./relay-envelope";
 export { sealEnvelope } from "./relay-envelope";
 
@@ -46,6 +47,9 @@ export class RelayClient {
     private readonly opts: RelayClientOptions = {},
   ) {
     this.reconnectDelay = opts.minReconnectMs ?? 1_000;
+    for (const fingerprint of loadReplayFingerprints(opts.replayPath)) {
+      this.seenCiphertexts.add(fingerprint);
+    }
   }
 
   /** Authenticated pairing room used to scope E2EE chat deep links. */
@@ -194,6 +198,7 @@ export class RelayClient {
         const oldest = this.seenCiphertexts.values().next().value;
         if (oldest) this.seenCiphertexts.delete(oldest);
       }
+      saveReplayFingerprints(this.opts.replayPath, this.seenCiphertexts);
       this.ackDelivery(env.deliveryId);
     } finally {
       this.processingCiphertexts.delete(fingerprint);

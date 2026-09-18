@@ -61,6 +61,34 @@ export const UserMessage = z.object({
 });
 export type UserMessage = z.infer<typeof UserMessage>;
 
+/** A new Project task. Not a reused user.message: no sessionId, cwd is required. */
+export const TaskCreate = z.object({
+  type: z.literal("project.task.create"),
+  operationId: z.string().trim().min(8).max(128),
+  text: z.string().min(1).max(32_000),
+  cwd: z.string().min(1).max(4_096),
+  agent: CodingAgent.optional(),
+  model: z.string().min(1).max(120)
+    .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/).optional(),
+  instanceEpoch: z.string().trim().min(8).max(128).optional(),
+  parentSessionId: z.string().trim().min(1).max(180).optional(),
+  attachments: z.array(UserAttachment).max(5).optional(),
+  attachmentRefs: z.array(UserAttachmentRef).max(5).optional(),
+  createdAt: z.number(),
+}).strict();
+export type TaskCreate = z.infer<typeof TaskCreate>;
+
+/** The pinned host confirms or withdraws its grant. Phone pending is not applied. */
+export const HostGrant = z.object({
+  type: z.literal("project.execution.host-grant"),
+  projectId: z.string().trim().min(1).max(180),
+  grant: z.enum(["applied", "unavailable"]),
+  revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  instanceEpoch: z.string().trim().min(8).max(128).optional(),
+  createdAt: z.number(),
+}).strict();
+export type HostGrant = z.infer<typeof HostGrant>;
+
 export const DeliveryReceipt = z.object({
   type: z.literal("delivery.receipt"),
   messageId: z.string().min(1).max(180),

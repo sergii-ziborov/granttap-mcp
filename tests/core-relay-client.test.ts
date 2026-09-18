@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { createServer } from "node:http";
 import { WebSocketServer } from "ws";
@@ -70,6 +73,34 @@ test("relay client rejects spoofed routing and authenticated ciphertext replays"
   await receiveRaw(client, { ...valid, deliveryId: "attacker-changed-id" });
   assert.equal(received.length, 1);
   assert.equal(received[0]?.type, "agent.event");
+});
+
+test("a restart still refuses a ciphertext that was already accepted", async () => {
+  const machine = generateKeyPair();
+  const phone = generateKeyPair();
+  const phoneCfg: PeerConfig = {
+    relayUrl: "ws://127.0.0.1:1",
+    room: "room-persist",
+    role: "phone",
+    deviceName: "phone",
+    senderId: "phone-1",
+    myPublicKey: phone.publicKey,
+    mySecretKey: phone.secretKey,
+    peerPublicKey: machine.publicKey,
+  };
+  const replayPath = join(mkdtempSync(join(tmpdir(), "granttap-replay-")), "seen.json");
+  const first = new RelayClient(phoneCfg, { replayPath });
+  const seen: Payload[] = [];
+  first.onMessage((payload) => { seen.push(payload); return true; });
+  const envelope = encryptedEnvelope(
+    { type: "agent.event", text: "once", createdAt: Date.now() },
+    phoneCfg.room, "machine", "phone", machine.secretKey, phone.publicKey,
+  );
+  await receiveRaw(first, envelope);
+  const restarted = new RelayClient(phoneCfg, { replayPath });
+  restarted.onMessage((payload) => { seen.push(payload); return true; });
+  await receiveRaw(restarted, { ...envelope, deliveryId: "other-delivery" });
+  assert.equal(seen.length, 1);
 });
 
 test("a phone in a shared room opens a second computer's envelopes", async () => {

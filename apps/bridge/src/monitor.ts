@@ -3,6 +3,7 @@ import { RelayClient } from "../../../packages/core/relay-client";
 import type {
   AgentEvent,
   ConfigSet,
+  HostGrant,
   SessionAccessSet,
   SessionCompact,
   SessionControl,
@@ -12,6 +13,7 @@ import type {
   SessionSkillSet,
   SessionSubscription,
   SessionsStatus,
+  TaskCreate,
   UserAttachment,
   UserMessage,
 } from "../../../packages/protocol/schema";
@@ -41,6 +43,14 @@ import { abandonDelivery, beginDelivery, completeDelivery } from "./delivery";
 import { inspectAgentIntegrations } from "./install";
 import { handleToolUpdate } from "./tools/update-handler";
 import { noteDeliveredRun } from "./mesh/run-digest";
+import { applyConfigSet, currentConfigRevision, loadConfigCommandState } from "./config-commands";
+import { acceptInstanceEpoch, currentInstanceEpoch } from "./instance-epoch";
+import { applyHostGrant } from "./mesh/execution-policy";
+import { evaluateCreateTask } from "./mesh/create-task";
+import { recordDelegation } from "./mesh/delegation-loop";
+import { enqueuePinnedTask } from "./mesh/task-queue";
+import { computerId } from "./mesh/computer-identity";
+import { localMeshStore } from "./mesh/local";
 
 /**
  * How long one delivery may run. A phone message can ask for real work — read
@@ -57,7 +67,6 @@ import { releaseClaimByPerson, releaseResult } from "./mesh/admin";
 import { deriveObservedClaims } from "./mesh/observed-claims";
 import { ingestRuntimeInvocations } from "./engine/invocation-ingest";
 import { handleInvocationQuery } from "./engine/invocation-query";
-import { localMeshStore } from "./mesh/local";
 import { cachedSessionActivity } from "./monitor-session-activity";
 import { HEARTBEAT_INTERVAL_MS, publishHeartbeat } from "./monitor-heartbeat";
 import { applyPairingJoin } from "./pairing";
@@ -237,6 +246,8 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       providerSettings: runtime.providerSettings,
       meshEnabled: runtime.meshEnabled,
       contextCompilerEnabled: runtime.contextCompilerEnabled,
+      configRevision: currentConfigRevision(),
+      instanceEpoch: currentInstanceEpoch(),
       agents: inspectAgentIntegrations(),
       generatedAt: Date.now(),
     };
@@ -348,6 +359,27 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       return storeAttachment(payload, client.room);
     } else if (payload.type === "config.set") {
       handleConfigSet(payload);
+      void publish().catch(() => {});
+      return true;
+    } else if (payload.type === "project.task.create") {
+      const state = beginDelivery(payload.operationId);
+      if (state === "completed") {
+        await sendDeliveryReceipt(client, payload.operationId, "accepted");
+        return true;
+      }
+      if (state === "processing") return false;
+      try {
+        await handleTaskCreate(client, payload);
+        completeDelivery(payload.operationId);
+        await sendDeliveryReceipt(client, payload.operationId, "accepted");
+        void publish().catch(() => {});
+        return true;
+      } catch {
+        abandonDelivery(payload.operationId);
+        return false;
+      }
+    } else if (payload.type === "project.execution.host-grant") {
+      handleHostGrant(payload);
       void publish().catch(() => {});
       return true;
     } else if (payload.type === "session.subscribe") {
@@ -622,42 +654,93 @@ function handleSubscription(subscriptions: Set<string>, message: SessionSubscrip
 }
 
 export function handleConfigSet(message: ConfigSet): void {
-  const runtime = loadRuntimeConfig();
-  if (typeof message.enabled === "boolean") runtime.enabled = message.enabled;
-  if (message.excludeSession && !runtime.excludedSessions.includes(message.excludeSession)) {
-    runtime.excludedSessions.push(message.excludeSession);
+  applyConfigSet(message);
+}
+
+export function handleHostGrant(message: HostGrant): void {
+  if (!acceptInstanceEpoch(message.instanceEpoch, loadConfigCommandState().requireFreshCommands)) {
+    return;
   }
-  if (message.includeSession) {
-    runtime.excludedSessions = runtime.excludedSessions.filter((id) => id !== message.includeSession);
-  }
-  // Auto-accept is configured from iOS only; this is the write path the phone
-  // uses. The hooks never change these — they just read the persisted level.
-  if (message.autoAcceptDefault) runtime.autoAcceptDefault = message.autoAcceptDefault;
-  if (typeof message.autoAcceptPaused === "boolean") {
-    runtime.autoAcceptPaused = message.autoAcceptPaused;
-  }
-  if (message.autoAcceptSession) {
-    const { sessionId, level } = message.autoAcceptSession;
-    if (level == null) delete runtime.autoAcceptBySession[sessionId];
-    else runtime.autoAcceptBySession[sessionId] = level;
-  }
-  if (message.provider && typeof message.providerEnabled === "boolean") {
-    runtime.providerSettings = {
-      ...runtime.providerSettings,
-      [message.provider]: message.providerEnabled,
+  applyHostGrant(message.projectId, message.grant, message.revision, computerId());
+}
+
+export async function handleTaskCreate(
+  client: RelayClient,
+  message: TaskCreate,
+): Promise<void> {
+  const say = (text: string, sessionId?: string, wake = false) => {
+    const payload = {
+      type: "agent.event" as const,
+      text,
+      sessionId,
+      createdAt: Date.now(),
     };
+    const options = { ttlMs: 15 * 60_000, wake: wake || undefined };
+    return (sessionId
+      ? sendSessionPayload(client, payload, sessionId, "phone", options)
+      : client.send(payload, "phone", options)).catch(() => {});
+  };
+  if (!acceptInstanceEpoch(message.instanceEpoch, loadConfigCommandState().requireFreshCommands)) {
+    await say("This command was issued for a previous instance of this computer.", undefined, true);
+    return;
   }
-  if (typeof message.meshEnabled === "boolean") runtime.meshEnabled = message.meshEnabled;
-  if (typeof message.contextCompilerEnabled === "boolean") {
-    runtime.contextCompilerEnabled = message.contextCompilerEnabled;
+  const loop = recordDelegation({
+    operationId: message.operationId,
+    parentSessionId: message.parentSessionId,
+  });
+  if (!loop.ok) {
+    await say("This bot cannot create another task from a delegated task.", undefined, true);
+    return;
   }
-  saveRuntimeConfig(runtime);
-  process.stderr.write(
-    `[monitor] config: gating=${runtime.enabled ? "on" : "OFF"}, ` +
-      `auto=${runtime.autoAcceptPaused ? "paused" : runtime.autoAcceptDefault}, ` +
-      `excluded=${runtime.excludedSessions.length}, mesh=${runtime.meshEnabled ? "on" : "OFF"}, ` +
-      `context=${runtime.contextCompilerEnabled ? "on" : "OFF"}\n`,
+  const agent = message.agent ?? "codex";
+  const displayName = {
+    claude: "Claude Code", codex: "Codex", cursor: "Cursor", grok: "Grok Build",
+  }[agent];
+  if (!loadRuntimeConfig().providerSettings[agent]) {
+    await say(`${displayName} is disabled in GrantTap Settings.`, undefined, true);
+    return;
+  }
+  const resolved = resolveMessageAttachments(
+    { attachmentRefs: message.attachmentRefs, attachments: message.attachments },
+    (attachmentId) => takeAttachment(attachmentId, client.room),
   );
+  if (!resolved.ok) {
+    await sendDeliveryReceipt(client, message.operationId, "rejected", ATTACHMENT_MISSING_ERROR);
+    return;
+  }
+  const admitted = evaluateCreateTask({
+    cwd: message.cwd, agent, model: message.model,
+    hostOnline: client.isConnected,
+  });
+  if (!admitted.ok) {
+    await say(admitted.detail, undefined, true);
+    return;
+  }
+  if ("queued" in admitted && admitted.queued) {
+    enqueuePinnedTask({
+      operationId: message.operationId,
+      projectId: admitted.projectId,
+      text: message.text,
+      cwd: message.cwd,
+      agent,
+      model: message.model,
+    });
+    await say("The pinned host is offline. The task is queued until the deadline.", undefined, true);
+    return;
+  }
+  await say(`Creating a new ${displayName} task…`);
+  const create = {
+    claude: createClaudeSession,
+    codex: createCodexSession,
+    cursor: createCursorSession,
+    grok: createGrokSession,
+  }[agent];
+  const result = await create(message.text, message.cwd, DELIVERY_TIMEOUT_MS, resolved.attachments);
+  if (result.ok) {
+    await say(result.text, result.sessionId, true);
+  } else {
+    await say(`Could not create a ${displayName} task: ${result.error}`, undefined, true);
+  }
 }
 
 const ATTACHMENT_SWEEP_MS = 10 * 60_000;
@@ -723,11 +806,12 @@ export async function handleUserMessage(
     }
     const requestedCwd = message.cwd?.trim();
     if (requestedCwd) {
-      const known = [...scanSessions().sessions, ...scanSessionHistory()].some((session) =>
-        session.agent === agent && session.cwd === requestedCwd);
-      if (!known) {
-        await say("That project folder is not one of the agent workspaces currently advertised to this phone.",
-          undefined, true);
+      const admitted = evaluateCreateTask({
+        cwd: requestedCwd, agent, model: message.model,
+        hostOnline: client.isConnected,
+      });
+      if (!admitted.ok) {
+        await say(admitted.detail, undefined, true);
         return;
       }
     }

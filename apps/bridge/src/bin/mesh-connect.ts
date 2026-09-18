@@ -1,9 +1,18 @@
 import { connectGrokBotInvite } from "../mesh/endpoint";
+import { parseInviteArgs, readInvite } from "../mesh/invite-source";
 
 function inviteArgument(args: string[]): string {
-  if (args.length === 1 && !["--help", "-h"].includes(args[0]!)) return args[0]!;
-  process.stderr.write("Usage: granttap mesh connect <one-time-invite>\n");
-  process.exit(1);
+  const source = parseInviteArgs(args);
+  if (source.kind === "help" || source.kind === "error") {
+    process.stderr.write("Usage: granttap mesh connect <one-time-invite | --file path | ->\n");
+    process.exit(1);
+  }
+  try {
+    return readInvite(source);
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    process.exit(1);
+  }
 }
 
 const invite = inviteArgument(process.argv.slice(2));

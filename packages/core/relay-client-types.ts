@@ -30,6 +30,8 @@ export type RelayClientOptions = {
    */
   pingIntervalMs?: number;
   pongTimeoutMs?: number;
+  /** Durable ciphertext fingerprints so a restart cannot replay a consumed box. */
+  replayPath?: string;
 };
 
 export type SendOptions = {

@@ -67,12 +67,17 @@ async function registeredAuthorization(base: string, verifier: string, clientNam
   }).toString();
   const response = await fetch(url, { redirect: "manual" });
   assert.equal(response.status, 302);
-  const website = new URL(response.headers.get("location")!);
-  assert.equal(website.origin, "https://granttap.com");
-  assert.equal(website.pathname, "/connect");
-  const pendingId = new URLSearchParams(website.hash.slice(1)).get("request");
+  const location = new URL(response.headers.get("location")!);
+  if (location.hostname === "127.0.0.1") {
+    const code = location.searchParams.get("code");
+    assert.ok(code);
+    return { clientId: registered.client_id, redirectUri, pendingId: "", website: location, code };
+  }
+  assert.equal(location.origin, "https://granttap.com");
+  assert.equal(location.pathname, "/connect");
+  const pendingId = new URLSearchParams(location.hash.slice(1)).get("request") ?? "";
   assert.ok(pendingId);
-  return { clientId: registered.client_id, redirectUri, pendingId, website };
+  return { clientId: registered.client_id, redirectUri, pendingId, website: location };
 }
 
 test("HTTP OAuth pairs, consents, exchanges a token, and initializes MCP", async (t) => {
@@ -183,35 +188,36 @@ test("HTTP OAuth pairs, consents, exchanges a token, and initializes MCP", async
   assert.equal(missingFrame.status, 404);
 
   const second = await registeredAuthorization(base, verifier);
+  assert.ok(second.pendingId, "a paired Mac still opens /connect so the person can Reconnect");
+  assert.equal(second.code, undefined);
   const savedPairing = await readFile(join(root, "machine.json"));
   const already = await fetch(`${base}/oauth/pairing`, {
-    method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ pending_id: second.pendingId }),
+    method: "POST", headers: {
+      "content-type": "application/x-www-form-urlencoded", origin: websiteOrigin,
+    },
   });
   assert.equal((await already.json() as { alreadyPaired: boolean }).alreadyPaired, true);
   assert.deepEqual(await readFile(join(root, "machine.json")), savedPairing);
   const codex = await registeredAuthorization(base, verifier, "Codex");
-  assert.equal(new URLSearchParams(codex.website.hash.slice(1)).get("request"), codex.pendingId);
+  assert.ok(codex.pendingId);
+  assert.equal(codex.code, undefined);
   const foreignReconnect = await fetch(`${base}/oauth/pairing`, {
     method: "POST", headers: {
       "content-type": "application/x-www-form-urlencoded", origin: "https://attacker.test",
-    }, body: new URLSearchParams({ pending_id: codex.pendingId, confirmed: "true" }),
+    }, body: new URLSearchParams({ confirmed: "true" }),
   });
   assert.equal(foreignReconnect.status, 403);
   assert.deepEqual(await readFile(join(root, "machine.json")), savedPairing);
   const reconnect = await fetch(`${base}/oauth/pairing`, {
     method: "POST", headers: {
       "content-type": "application/x-www-form-urlencoded", origin: base,
-    }, body: new URLSearchParams({ pending_id: codex.pendingId, confirmed: "true" }),
+    }, body: new URLSearchParams({ confirmed: "true" }),
   });
-  assert.equal(reconnect.status, 200);
-  const newPairing = await reconnect.json() as { alreadyPaired: boolean; qrDataUrl: string };
-  assert.equal(newPairing.alreadyPaired, false);
-  assert.match(newPairing.qrDataUrl, /^data:image\/png;base64,/);
+  assert.equal(reconnect.status, 400);
   const websiteReconnect = await fetch(`${base}/oauth/pairing`, {
     method: "POST", headers: {
       "content-type": "application/x-www-form-urlencoded", origin: websiteOrigin,
-    }, body: new URLSearchParams({ pending_id: second.pendingId, confirmed: "true" }),
+    }, body: new URLSearchParams({ confirmed: "true" }),
   });
   assert.equal(websiteReconnect.status, 200);
   const websitePairing = await websiteReconnect.json() as { alreadyPaired: boolean; viewId?: string };
@@ -224,23 +230,19 @@ test("HTTP OAuth pairs, consents, exchanges a token, and initializes MCP", async
   assert.deepEqual(await readFile(join(root, "machine.json")), savedPairing);
   const replaced = await fetch(`${base}/oauth/pairing`, {
     method: "POST", headers: {
-      "content-type": "application/x-www-form-urlencoded", origin: base,
-    }, body: new URLSearchParams({ pending_id: codex.pendingId, confirmed: "true", replace: "true" }),
+      "content-type": "application/x-www-form-urlencoded", origin: websiteOrigin,
+    }, body: new URLSearchParams({ confirmed: "true", replace: "true" }),
   });
   assert.equal(replaced.status, 200);
   assert.equal((await replaced.json() as { alreadyPaired: boolean }).alreadyPaired, false);
   assert.notDeepEqual(await readFile(join(root, "machine.json")), savedPairing);
-  const consent = await fetch(`${base}/oauth/decision`, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded", origin: websiteOrigin },
+  const consented = await fetch(`${base}/consent`, {
+    method: "POST", redirect: "manual",
+    headers: { "content-type": "application/x-www-form-urlencoded", origin: base },
     body: new URLSearchParams({ pending_id: second.pendingId, decision: "approve" }),
   });
-  assert.equal(consent.status, 200);
-  assert.equal(consent.headers.get("access-control-allow-origin"), websiteOrigin);
-  const callback = new URL((await consent.json() as { redirectUrl: string }).redirectUrl);
-  assert.equal(callback.hostname, "127.0.0.1");
-  assert.doesNotMatch(callback.href, /cursor\.com|cloud/i);
-  const code = callback.searchParams.get("code")!;
+  assert.equal(consented.status, 302);
+  const code = new URL(consented.headers.get("location")!).searchParams.get("code");
   assert.ok(code);
   const tokenResponse = await fetch(`${base}/token`, {
     method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },

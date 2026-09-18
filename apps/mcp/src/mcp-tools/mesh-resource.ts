@@ -9,6 +9,7 @@ import { scopedInvocationSlice } from "../../../bridge/src/engine/invocation-sco
 import { meshMap } from "../../../bridge/src/mesh/map";
 import { isMeshEnabled } from "../../../bridge/src/config/runtime";
 import { parseProjectContextMode, renderProjectContext } from "../../../bridge/src/mesh/project-context";
+import { renderContextDelta } from "../../../bridge/src/mesh/context-delta";
 import { projectScopedSnapshot } from "../../../bridge/src/mesh/snapshot-window";
 
 const MESH_URI = "granttap://mesh/current";
@@ -79,7 +80,10 @@ export function registerMeshResource(server: McpServer): void {
       const view = capability ? scopedMeshView(capability) : undefined;
       if (view) {
         const mode = parseProjectContextMode(uri.searchParams.get("mode") ?? undefined);
-        const body = renderProjectContext(view, mode);
+        const cursor = uri.searchParams.get("cursor") ?? undefined;
+        const body = cursor
+          ? renderContextDelta(view, { lastEventId: cursor })
+          : renderProjectContext(view, mode);
         return json(uri.href, {
           ...((body && typeof body === "object") ? body : {}),
           runtime: mode === "full" ? await scopedInvocationSlice(capability!) : undefined,
@@ -135,7 +139,10 @@ export function registerMeshResource(server: McpServer): void {
       const view = resolved ? scopedMeshView(resolved) : undefined;
       if (!view) return json(uri.href, { schema: "granttap.mesh-scope.v1", enabled: true, scoped: false, hint: SCOPE_HINT });
       const mode = parseProjectContextMode(uri.searchParams.get("mode") ?? undefined);
-      const body = renderProjectContext(view, mode);
+      const cursor = uri.searchParams.get("cursor") ?? undefined;
+      const body = cursor
+        ? renderContextDelta(view, { lastEventId: cursor })
+        : renderProjectContext(view, mode);
       return json(uri.href, {
         ...(typeof body === "object" && body ? body : {}),
         runtime: mode === "full" ? await scopedInvocationSlice(resolved!) : undefined,

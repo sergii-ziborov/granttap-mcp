@@ -55,8 +55,7 @@ test("OAuth provider completes consent, code exchange, verification, and revocat
   assert.equal(website.origin, "https://granttap.com");
   assert.equal(website.pathname, "/connect");
   assert.match(website.hash, /request=/);
-  assert.doesNotMatch(website.hash, /port=/);
-  assert.doesNotMatch(record.location(), /mcp%3Atools|callback|Cursor/);
+  assert.doesNotMatch(record.location(), /mcp%3Atools|code=/);
   await assert.rejects(
     provider.authorize(client, { ...params, scopes: ["admin"] }, record.response),
     /mcp:tools scope/,

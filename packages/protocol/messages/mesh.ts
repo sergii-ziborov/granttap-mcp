@@ -5,8 +5,10 @@ import {
   Identifier,
   Label,
   MeshExecutionProvider,
+  MeshProvider,
   Path,
 } from "./mesh-endpoint";
+import { ProjectExecutionPolicy } from "./project-policy";
 export * from "./mesh-endpoint";
 
 export const Project = z.object({
@@ -365,6 +367,25 @@ export const SharedSkill = z.object({
 }).strict();
 export type SharedSkill = z.infer<typeof SharedSkill>;
 
+export const AdvertisedModel = z.object({
+  modelId: z.string().trim().min(1).max(160),
+  provider: MeshProvider,
+  endpointId: Identifier,
+  source: z.enum(["observed", "advertised"]),
+  label: Label.optional(),
+  observedAt: z.number().nonnegative(),
+}).strict();
+export type AdvertisedModel = z.infer<typeof AdvertisedModel>;
+
+export const EndpointModelCatalog = z.object({
+  endpointId: Identifier,
+  observedAt: z.number().nonnegative(),
+  stale: z.boolean().optional(),
+  models: z.array(AdvertisedModel).max(64),
+  reason: z.string().trim().min(1).max(240).optional(),
+}).strict();
+export type EndpointModelCatalog = z.infer<typeof EndpointModelCatalog>;
+
 export const MeshSnapshot = z.object({
   type: z.literal("mesh.snapshot"),
   sessionId: Identifier,
@@ -374,6 +395,8 @@ export const MeshSnapshot = z.object({
   peers: z.array(IntegrationPeer).max(64).optional(),
   skills: z.array(SharedSkill).max(64).optional(),
   incomplete: z.boolean().optional(),
+  execution: ProjectExecutionPolicy.optional(),
+  modelCatalog: z.array(EndpointModelCatalog).max(32).optional(),
   tasks: z.array(MeshTask).max(64),
   executions: z.array(ExecutionSessionLink).max(128),
   claims: z.array(ResourceClaim).max(128),

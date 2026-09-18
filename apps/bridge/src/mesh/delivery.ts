@@ -37,3 +37,13 @@ export function planBroadcast(targets: readonly BroadcastPlanInput[]): DeliveryT
 export function retryable(target: DeliveryTarget): boolean {
   return target.state === "offline" || target.state === "expired" || target.state === "unsupported";
 }
+
+export function advanceBroadcast(
+  targets: DeliveryTarget[],
+  executionId: string,
+  state: DeliveryState,
+  reason?: string,
+): DeliveryTarget[] {
+  return targets.map((target) =>
+    target.executionId === executionId ? { executionId, state, reason } : target);
+}

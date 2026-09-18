@@ -69,6 +69,9 @@ export function installPairingRoutes(app: Express, provider: GrantTapOAuthProvid
         return;
       }
       if (isMachineConfigured() && req.body?.confirmed !== "true") {
+        resetRelay();
+        void relay();
+        reloadPairingHelper();
         res.json({ ok: true, alreadyPaired: true, ...buildConnectSnapshot() });
         return;
       }

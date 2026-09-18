@@ -189,6 +189,92 @@ test("a seen phone is the Approve; the helper writes the coding-app redirect", a
   assert.fail("QR scan never completed authorization");
 });
 
+test("a paired Mac still opens /connect so Reconnect stays available", async (t) => {
+  const site = await listen();
+  const root = await mkdtemp(join(tmpdir(), "granttap-already-paired-oauth-"));
+  process.env.GRANTTAP_CONFIG_DIR = root;
+  process.env.GRANTTAP_WEBSITE_ORIGIN = site.origin;
+  t.after(async () => {
+    resetConnectWatchers();
+    await site.close();
+    delete process.env.GRANTTAP_CONFIG_DIR;
+    delete process.env.GRANTTAP_WEBSITE_ORIGIN;
+  });
+  const pairing = createPairing("wss://relay.example.test");
+  saveConfig(machineConfigPath(), pairing.machineCfg);
+  saveConfig(phonePairingPath(), pairing.phoneCfg);
+  const provider = new GrantTapOAuthProvider("http://127.0.0.1:17342/mcp");
+  let location = "";
+  const response = {
+    set: () => response,
+    redirect: (_status: number, target: string) => { location = target; },
+  } as unknown as Response;
+  const started = Date.now();
+  await provider.authorize({
+    client_id: "cursor-client",
+    client_name: "Cursor",
+    redirect_uris: ["http://127.0.0.1:49123/callback"],
+  } as OAuthClientInformationFull, {
+    redirectUri: "http://127.0.0.1:49123/callback",
+    codeChallenge: "A".repeat(43),
+    scopes: ["mcp:tools"],
+    state: "s",
+    resource: new URL("http://127.0.0.1:17342/mcp"),
+  } as AuthorizationParams, response);
+  assert.ok(Date.now() - started < 800, "authorize must not wait on the website");
+  const website = new URL(location);
+  assert.equal(website.pathname, "/connect");
+  const pendingId = new URLSearchParams(website.hash.slice(1)).get("request");
+  assert.ok(pendingId);
+  const approved = provider.completeConsent(pendingId, true);
+  const callback = new URL(approved.redirectUrl);
+  assert.equal(callback.hostname, "127.0.0.1");
+  assert.equal(callback.pathname, "/callback");
+  assert.ok(callback.searchParams.get("code"));
+});
+
+test("a hung website does not leave /authorize blank", async (t) => {
+  const hung = await new Promise<{ origin: string; close: () => Promise<void> }>((resolve) => {
+    const server = createServer(() => { /* never answer */ });
+    server.listen(0, "127.0.0.1", () => {
+      const { port } = server.address() as AddressInfo;
+      resolve({
+        origin: `http://127.0.0.1:${port}`,
+        close: () => new Promise((done) => server.close(() => done())),
+      });
+    });
+  });
+  const root = await mkdtemp(join(tmpdir(), "granttap-hung-website-"));
+  process.env.GRANTTAP_CONFIG_DIR = root;
+  process.env.GRANTTAP_WEBSITE_ORIGIN = hung.origin;
+  t.after(async () => {
+    resetConnectWatchers();
+    await hung.close();
+    delete process.env.GRANTTAP_CONFIG_DIR;
+    delete process.env.GRANTTAP_WEBSITE_ORIGIN;
+  });
+  const pairing = createPairing("wss://relay.example.test");
+  saveConfig(machineConfigPath(), pairing.machineCfg);
+  saveConfig(phonePairingPath(), pairing.phoneCfg);
+  const provider = new GrantTapOAuthProvider("http://127.0.0.1:17342/mcp");
+  let location = "";
+  const response = {
+    set: () => response,
+    redirect: (_status: number, target: string) => { location = target; },
+  } as unknown as Response;
+  const started = Date.now();
+  await provider.authorize({
+    client_id: "c", client_name: "Cursor", redirect_uris: ["http://127.0.0.1:9/callback"],
+  } as OAuthClientInformationFull, {
+    redirectUri: "http://127.0.0.1:9/callback",
+    codeChallenge: "A".repeat(43),
+    scopes: ["mcp:tools"],
+    resource: new URL("http://127.0.0.1:17342/mcp"),
+  } as AuthorizationParams, response);
+  assert.ok(Date.now() - started < 800);
+  assert.equal(new URL(location).pathname, "/connect");
+});
+
 test("only a seen phone counts as the QR-scan Approve", () => {
   assert.equal(phoneScanApproves({
     clientName: "Cursor",

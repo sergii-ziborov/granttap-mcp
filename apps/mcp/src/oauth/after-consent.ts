@@ -14,13 +14,18 @@ export function wakePairingRoomAfterApprove(
   // The test runner keeps the process alive for open sockets. Production
   // still wakes the room; tests inject `start` when they want this path.
   if (start === relay && process.env.NODE_TEST_CONTEXT) return;
-  reloadMonitorHelper();
-  void Promise.resolve(start()).then((client) => {
-    if (client == null) {
-      process.stderr.write("[granttap] pairing room wake did not connect\n");
-    }
-  }).catch((error) => {
-    const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`[granttap] pairing room wake failed: ${message}\n`);
-  });
+  // launchctl kickstart is spawnSync. Doing it inside /authorize blocks the
+  // 302 Cursor is waiting on and leaves a blank localhost tab.
+  const wake = (): void => {
+    reloadMonitorHelper();
+    void Promise.resolve(start()).then((client) => {
+      if (client == null) {
+        process.stderr.write("[granttap] pairing room wake did not connect\n");
+      }
+    }).catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      process.stderr.write(`[granttap] pairing room wake failed: ${message}\n`);
+    });
+  };
+  setImmediate(wake);
 }

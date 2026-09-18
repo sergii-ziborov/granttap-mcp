@@ -21,6 +21,7 @@ import { isProviderEnabled } from "../config/runtime";
 import { scanSessionHistory, scanSessions } from "../sessions";
 import { sendMeshPayload } from "../session-keys";
 import { linkSessionsToProjects, workingTreeState } from "./catalog";
+import { catalogFromSessions } from "./model-catalog";
 import { computerId } from "./computer-identity";
 import { createCheckpoint } from "./checkpoint";
 import { buildTaskCapsule } from "./capsule";
@@ -81,7 +82,15 @@ export function createMeshRuntime(deps: MeshRuntimeDependencies) {
     },
     snapshots(): MeshSnapshot[] {
       const store = deps.store();
-      return store.projectIds().flatMap((projectId) => store.snapshot(projectId) ?? []);
+      const catalog = catalogFromSessions(deps.computer(), deps.sessions());
+      return store.projectIds().flatMap((projectId) => {
+        const snapshot = store.snapshot(projectId);
+        if (!snapshot) return [];
+        return [{
+          ...snapshot,
+          modelCatalog: catalog.models.length > 0 || catalog.reason ? [catalog] : undefined,
+        }];
+      });
     },
     async handle(
       client: RelayClient,

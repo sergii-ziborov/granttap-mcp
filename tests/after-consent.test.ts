@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { wakePairingRoomAfterApprove } from "../apps/mcp/src/oauth/after-consent";
 
-test("Approve wakes the pairing room; Deny leaves it alone", () => {
+test("Approve wakes the pairing room; Deny leaves it alone", async () => {
   const started: string[] = [];
   const start = () => {
     started.push("relay");
@@ -10,6 +10,7 @@ test("Approve wakes the pairing room; Deny leaves it alone", () => {
   };
   wakePairingRoomAfterApprove(true, start);
   wakePairingRoomAfterApprove(false, start);
+  await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(started, ["relay"]);
 });
 
