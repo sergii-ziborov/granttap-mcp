@@ -314,17 +314,7 @@ export function inspectMonitorHelper(): MonitorIntegrationStatus {
   } catch {
     return { configured: false, running: false };
   }
-  const hasLabel = contents.includes(`<string>${launchAgentLabel}</string>`);
-  const pinned = isNodvoxPinnedPlist(contents);
-  const hasMonitorArgument = pinned
-    ? /<string>monitor<\/string>/.test(contents)
-    : /<string>internal<\/string>\s*<string>monitor<\/string>/.test(contents);
-  const hasSafeExecutable = isNodvoxPinnedPlist(contents)
-    || (contents.includes("granttap-mcp.mjs") && !plistProgramUsesCursorHelper(contents));
-  const liveHelper = !insideTemporaryDirectory(agentsDir);
-  const configured = hasLabel && hasMonitorArgument && hasSafeExecutable
-    && !(liveHelper && plistUsesTemporaryIO(contents));
-  if (!configured) return { configured: false, running: false };
+  if (!monitorPlistLooksInstalled(contents, agentsDir)) return { configured: false, running: false };
   const uid = process.getuid?.();
   if (uid == null) return { configured: true, running: false };
   const active = spawnSync(
@@ -407,6 +397,20 @@ function engineEnvironment(): string[] {
   ];
 }
 
+/** True when the plist is ours and, if it lives in the user Library, does not log to temp. */
+export function monitorPlistLooksInstalled(contents: string, agentsDir: string): boolean {
+  const hasLabel = contents.includes(`<string>${launchAgentLabel}</string>`);
+  const pinned = isNodvoxPinnedPlist(contents);
+  const hasMonitorArgument = pinned
+    ? /<string>monitor<\/string>/.test(contents)
+    : /<string>internal<\/string>\s*<string>monitor<\/string>/.test(contents);
+  const hasSafeExecutable = pinned
+    || (contents.includes("granttap-mcp.mjs") && !plistProgramUsesCursorHelper(contents));
+  const liveHelper = !insideTemporaryDirectory(agentsDir);
+  return hasLabel && hasMonitorArgument && hasSafeExecutable
+    && !(liveHelper && plistUsesTemporaryIO(contents));
+}
+
 function monitorAgentsDir(): string {
   return process.env.GRANTTAP_LAUNCH_AGENTS_DIR
     ?? join(homedir(), "Library", "LaunchAgents");
@@ -416,7 +420,7 @@ function monitorPlistPath(): string {
   return join(monitorAgentsDir(), `${launchAgentLabel}.plist`);
 }
 
-function monitorPlistNeedsRepair(path: string): boolean {
+export function monitorPlistNeedsRepair(path: string): boolean {
   if (!existsSync(path)) return true;
   try {
     return plistUsesTemporaryIO(readFileSync(path, "utf8"));

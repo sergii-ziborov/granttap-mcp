@@ -12,7 +12,13 @@ import {
   refusesClobberingLiveHelper,
   refusesLiveLaunchd,
 } from "../apps/bridge/src/launchd-safety";
-import { installMonitorHelper, inspectMonitorHelper, reloadPairingHelper } from "../apps/bridge/src/install";
+import {
+  installMonitorHelper,
+  inspectMonitorHelper,
+  monitorPlistLooksInstalled,
+  monitorPlistNeedsRepair,
+  reloadPairingHelper,
+} from "../apps/bridge/src/install";
 
 test("a plist under the operating system temp directory never reaches launchd", async () => {
   const sandbox = await mkdtemp(join(tmpdir(), "granttap-launchd-safety-"));
@@ -130,4 +136,75 @@ test("pairing and inspect refuse a live helper backed by a temporary log", {
   const blocked = installMonitorHelper();
   assert.equal(blocked.status, "manual");
   assert.match(blocked.detail, /live LaunchAgent/);
+});
+
+test("a live helper plist with a vanished temp log is not installed", async (t) => {
+  const previous = {
+    config: process.env.GRANTTAP_CONFIG_DIR,
+    agents: process.env.GRANTTAP_LAUNCH_AGENTS_DIR,
+    pin: process.env.GRANTTAP_PINNED_MONITOR_BIN,
+  };
+  const liveConfig = join(process.cwd(), `.granttap-ci-reload-${process.pid}`);
+  const liveAgentsDir = join(process.cwd(), `.granttap-ci-agents-reload-${process.pid}`);
+  mkdirSync(liveConfig, { recursive: true });
+  mkdirSync(liveAgentsDir, { recursive: true });
+  process.env.GRANTTAP_CONFIG_DIR = liveConfig;
+  process.env.GRANTTAP_LAUNCH_AGENTS_DIR = liveAgentsDir;
+  delete process.env.GRANTTAP_PINNED_MONITOR_BIN;
+  t.after(() => {
+    rmSync(liveConfig, { recursive: true, force: true });
+    rmSync(liveAgentsDir, { recursive: true, force: true });
+    for (const [key, value] of [
+      ["GRANTTAP_CONFIG_DIR", previous.config],
+      ["GRANTTAP_LAUNCH_AGENTS_DIR", previous.agents],
+      ["GRANTTAP_PINNED_MONITOR_BIN", previous.pin],
+    ] as const) {
+      if (value == null) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+  const tempLog = [
+    "<key>Label</key><string>com.granttap.monitor</string>",
+    "<key>ProgramArguments</key><array><string>internal</string><string>monitor</string></array>",
+    "<string>granttap-mcp.mjs</string>",
+    "<key>StandardErrorPath</key><string>/tmp/granttap-http-devices-Lbcnxp/monitor.log</string>",
+  ].join("");
+  const durable = tempLog.replace(
+    "/tmp/granttap-http-devices-Lbcnxp/monitor.log",
+    "/Users/granttap/Library/Logs/GrantTap/monitor.err.log",
+  );
+  const cursorHelper = [
+    "<key>Label</key><string>com.granttap.monitor</string>",
+    "<key>ProgramArguments</key><array>",
+    "<string>/Applications/Cursor.app/Contents/Resources/app/helpers/node</string>",
+    "<string>granttap-mcp.mjs</string>",
+    "<string>internal</string><string>monitor</string>",
+    "</array>",
+  ].join("");
+  const liveAgents = join(sep, "Users", "granttap", "Library", "LaunchAgents");
+  const sandboxAgents = join(tmpdir(), "LaunchAgents");
+  const missingPlist = join(liveAgentsDir, "missing-monitor.plist");
+  const brokenPlist = join(liveAgentsDir, "broken-monitor.plist");
+  const durablePlist = join(liveAgentsDir, "durable-monitor.plist");
+  writeFileSync(brokenPlist, tempLog);
+  writeFileSync(durablePlist, durable);
+  mkdirSync(join(liveAgentsDir, "not-a-plist"));
+  process.env.GRANTTAP_PINNED_MONITOR_BIN = "/opt/nodvox/bin/granttap.mjs";
+  assert.equal(monitorPlistLooksInstalled([
+    "<key>Label</key><string>com.granttap.monitor</string>",
+    "<string>/opt/nodvox/bin/granttap.mjs</string>",
+    "<string>monitor</string>",
+  ].join(""), liveAgents), true);
+  delete process.env.GRANTTAP_PINNED_MONITOR_BIN;
+  assert.equal(monitorPlistLooksInstalled(tempLog, liveAgents), false);
+  assert.equal(monitorPlistLooksInstalled(durable, liveAgents), true);
+  assert.equal(monitorPlistLooksInstalled(tempLog, sandboxAgents), true);
+  assert.equal(monitorPlistLooksInstalled(cursorHelper, liveAgents), false);
+  assert.equal(monitorPlistLooksInstalled("<string>other</string>", liveAgents), false);
+  assert.equal(monitorPlistNeedsRepair(missingPlist), true);
+  assert.equal(monitorPlistNeedsRepair(brokenPlist), true);
+  assert.equal(monitorPlistNeedsRepair(durablePlist), false);
+  assert.equal(monitorPlistNeedsRepair(join(liveAgentsDir, "not-a-plist")), true);
+  assert.equal(reloadPairingHelper()?.status, "already");
+  assert.equal(reloadPairingHelper({ firstPairing: true })?.status, "manual");
 });
