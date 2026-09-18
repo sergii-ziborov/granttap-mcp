@@ -425,6 +425,15 @@ function monitorPlistNeedsRepair(path: string): boolean {
   }
 }
 
+/** Pairing from a temp config must not touch the live helper. */
+export function reloadPairingHelper(
+  options: { firstPairing?: boolean; replace?: boolean } = {},
+): InstallResult | undefined {
+  if (insideTemporaryDirectory(configDir())) return undefined;
+  const reloaded = reloadMonitorHelper();
+  return options.firstPairing || options.replace ? installMonitorHelper() : reloaded;
+}
+
 /** Restart the already-installed monitor so it rereads the current pairing room. */
 export function reloadMonitorHelper(): InstallResult {
   if (process.env.GRANTTAP_SKIP_LAUNCHCTL === "1" || process.env.NODE_TEST_CONTEXT) {

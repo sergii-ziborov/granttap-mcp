@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
@@ -11,7 +12,7 @@ import {
   refusesClobberingLiveHelper,
   refusesLiveLaunchd,
 } from "../apps/bridge/src/launchd-safety";
-import { installMonitorHelper } from "../apps/bridge/src/install";
+import { installMonitorHelper, inspectMonitorHelper, reloadPairingHelper } from "../apps/bridge/src/install";
 
 test("a plist under the operating system temp directory never reaches launchd", async () => {
   const sandbox = await mkdtemp(join(tmpdir(), "granttap-launchd-safety-"));
@@ -77,4 +78,54 @@ test("a temporary config must not rewrite a live LaunchAgent", () => {
     "<key>StandardErrorPath</key>",
     `<string>${temp}/monitor.log</string>`,
   ].join("\n")) ? "temp" : "", /temp/);
+});
+
+test("pairing and inspect refuse a live helper backed by a temporary log", async (t) => {
+  const previous = {
+    agents: process.env.GRANTTAP_LAUNCH_AGENTS_DIR,
+    config: process.env.GRANTTAP_CONFIG_DIR,
+    cwd: process.env.GRANTTAP_MONITOR_CWD,
+  };
+  const liveAgents = join(process.cwd(), `.granttap-ci-agents-${process.pid}`);
+  const liveConfig = join(process.cwd(), `.granttap-ci-config-${process.pid}`);
+  const tempConfig = await mkdtemp(join(tmpdir(), "granttap-ci-temp-config-"));
+  mkdirSync(liveAgents, { recursive: true });
+  writeFileSync(join(liveAgents, "com.granttap.monitor.plist"), [
+    "<dict>",
+    "<key>Label</key><string>com.granttap.monitor</string>",
+    "<key>ProgramArguments</key><array>",
+    "<string>internal</string><string>monitor</string>",
+    "</array>",
+    "<key>WorkingDirectory</key><string>/Users/granttap/dev/granttap-mcp</string>",
+    "<key>StandardErrorPath</key><string>/var/folders/xx/granttap-http-devices-Lbcnxp/monitor.log</string>",
+    "</dict>",
+  ].join(""));
+  process.env.GRANTTAP_LAUNCH_AGENTS_DIR = liveAgents;
+  process.env.GRANTTAP_CONFIG_DIR = tempConfig;
+  process.env.GRANTTAP_MONITOR_CWD = process.cwd();
+  t.after(() => {
+    rmSync(liveAgents, { recursive: true, force: true });
+    rmSync(liveConfig, { recursive: true, force: true });
+    rmSync(tempConfig, { recursive: true, force: true });
+    for (const [key, value] of [
+      ["GRANTTAP_LAUNCH_AGENTS_DIR", previous.agents],
+      ["GRANTTAP_CONFIG_DIR", previous.config],
+      ["GRANTTAP_MONITOR_CWD", previous.cwd],
+    ] as const) {
+      if (value == null) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+
+  assert.equal(inspectMonitorHelper().configured, false);
+  assert.equal(reloadPairingHelper({ firstPairing: true }), undefined);
+  const clobber = installMonitorHelper();
+  assert.equal(clobber.status, "manual");
+  assert.match(clobber.detail, /temporary config|live LaunchAgent/);
+
+  process.env.GRANTTAP_CONFIG_DIR = liveConfig;
+  mkdirSync(liveConfig, { recursive: true });
+  const blocked = installMonitorHelper();
+  assert.equal(blocked.status, "manual");
+  assert.match(blocked.detail, /live LaunchAgent/);
 });
