@@ -120,14 +120,20 @@ function sharedSkillsIn(root: string): SharedSkill[] {
     if (!skill) continue;
     skills.push({
       name: skill.name,
-      description: skill.description,
-      version: skill.version,
+      description: clipSkillText(skill.description, 500),
+      version: clipSkillText(skill.version, 64),
       digest: skill.digest,
-      source: root,
+      source: clipSkillText(root, 240),
       state: "installed",
     });
   }
   return skills;
+}
+
+function clipSkillText(value: string | undefined, max: number): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  return trimmed.length > max ? trimmed.slice(0, max) : trimmed;
 }
 
 function readSkillFile(path: string): {
@@ -147,9 +153,9 @@ function readSkillFile(path: string): {
     const description = header.match(/^description:\s*["']?([^\n"']+)["']?\s*$/m)?.[1]?.trim();
     const version = header.match(/^version:\s*["']?([^\n"']+)["']?\s*$/m)?.[1]?.trim();
     return {
-      name,
-      description,
-      version,
+      name: name.slice(0, 160),
+      description: clipSkillText(description, 500),
+      version: clipSkillText(version, 64),
       digest: createHash("sha256").update(body).digest("hex"),
     };
   } catch {

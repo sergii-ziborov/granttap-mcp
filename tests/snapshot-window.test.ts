@@ -119,3 +119,24 @@ version: 1.2.0
     claims: [], dependencies: [], events: [], generatedAt: now,
   }).success, true);
 });
+
+test("a long SKILL.md description is clipped so a mesh snapshot still publishes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-mesh-long-skill-"));
+  await mkdir(join(root, ".cursor", "skills", "long-check"), { recursive: true });
+  await writeFile(join(root, ".cursor", "skills", "long-check", "SKILL.md"), `---
+name: long-check
+description: ${"x".repeat(600)}
+---
+# Long
+`);
+  const skills = projectSharedSkills([root]);
+  assert.equal(skills[0]?.description?.length, 500);
+  const store = new MeshStore(join(root, "mesh.json"), () => now);
+  store.upsertProject({
+    projectId: "project", name: "GrantTap", repositoryRoot: root,
+    canonicalRepositoryId: "github.com/example/granttap", createdAt: now,
+  });
+  store.upsertTask(task("task", "working", now));
+  const snapshot = store.snapshot("project");
+  assert.equal(snapshot?.skills?.[0]?.description?.length, 500);
+});

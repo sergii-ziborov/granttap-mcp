@@ -26,7 +26,13 @@ import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import type { CodingAgent } from "../../../packages/protocol/schema";
-import { refusesLiveLaunchd } from "./launchd-safety";
+import {
+  CLOBBER_LIVE_HELPER_DETAIL,
+  insideTemporaryDirectory,
+  plistUsesTemporaryIO,
+  refusesClobberingLiveHelper,
+  refusesLiveLaunchd,
+} from "./launchd-safety";
 import { configDir, loadRuntimeConfig, verifiableEngine } from "./config";
 import { isCursorHelperNode, resolveMonitorNodeBin } from "./config/node-bin";
 import { inspectWindowsTask, installWindowsTask } from "./windows-service";
@@ -315,7 +321,9 @@ export function inspectMonitorHelper(): MonitorIntegrationStatus {
     : /<string>internal<\/string>\s*<string>monitor<\/string>/.test(contents);
   const hasSafeExecutable = isNodvoxPinnedPlist(contents)
     || (contents.includes("granttap-mcp.mjs") && !plistProgramUsesCursorHelper(contents));
-  const configured = hasLabel && hasMonitorArgument && hasSafeExecutable;
+  const liveHelper = !insideTemporaryDirectory(agentsDir);
+  const configured = hasLabel && hasMonitorArgument && hasSafeExecutable
+    && !(liveHelper && plistUsesTemporaryIO(contents));
   if (!configured) return { configured: false, running: false };
   const uid = process.getuid?.();
   if (uid == null) return { configured: true, running: false };
@@ -399,6 +407,24 @@ function engineEnvironment(): string[] {
   ];
 }
 
+function monitorAgentsDir(): string {
+  return process.env.GRANTTAP_LAUNCH_AGENTS_DIR
+    ?? join(homedir(), "Library", "LaunchAgents");
+}
+
+function monitorPlistPath(): string {
+  return join(monitorAgentsDir(), `${launchAgentLabel}.plist`);
+}
+
+function monitorPlistNeedsRepair(path: string): boolean {
+  if (!existsSync(path)) return true;
+  try {
+    return plistUsesTemporaryIO(readFileSync(path, "utf8"));
+  } catch {
+    return true;
+  }
+}
+
 /** Restart the already-installed monitor so it rereads the current pairing room. */
 export function reloadMonitorHelper(): InstallResult {
   if (process.env.GRANTTAP_SKIP_LAUNCHCTL === "1" || process.env.NODE_TEST_CONTEXT) {
@@ -408,6 +434,7 @@ export function reloadMonitorHelper(): InstallResult {
   if (process.platform !== "darwin") {
     return { status: "manual", detail: "background task sync currently requires macOS" };
   }
+  if (monitorPlistNeedsRepair(monitorPlistPath())) return installMonitorHelper();
   const uid = process.getuid?.();
   if (uid == null) return { status: "manual", detail: "could not determine user id" };
   const kicked = spawnSync(
@@ -430,9 +457,8 @@ export function installMonitorHelper(): InstallResult {
     return { status: "manual", detail: "background task sync currently requires macOS" };
   }
 
-  const agentsDir =
-    process.env.GRANTTAP_LAUNCH_AGENTS_DIR ?? join(homedir(), "Library", "LaunchAgents");
-  const path = join(agentsDir, `${launchAgentLabel}.plist`);
+  const agentsDir = monitorAgentsDir();
+  const path = monitorPlistPath();
   if (existsSync(path)) {
     const existing = readFileSync(path, "utf8");
     if (isNodvoxPinnedPlist(existing)) {
@@ -462,9 +488,19 @@ export function installMonitorHelper(): InstallResult {
     };
   }
 
-  const logPath = usePin
-    ? join(homedir(), "Library", "Logs", "GrantTap", "monitor.err.log")
-    : join(configDir(), "monitor.log");
+  const liveAgents = !insideTemporaryDirectory(agentsDir);
+  const durableLog = join(homedir(), "Library", "Logs", "GrantTap", "monitor.err.log");
+  const logPath = usePin || liveAgents ? durableLog : join(configDir(), "monitor.log");
+  const clobber = refusesClobberingLiveHelper({
+    agentsDir,
+    logPath,
+    workingDirectory,
+    configDirectory: configDir(),
+  });
+  if (clobber) return { status: "manual", detail: clobber };
+  if (process.env.NODE_TEST_CONTEXT && liveAgents) {
+    return { status: "manual", detail: CLOBBER_LIVE_HELPER_DETAIL };
+  }
   const environmentPath = launchAgentPath(nodeBin);
 
   const plist = [
@@ -513,8 +549,8 @@ export function installMonitorHelper(): InstallResult {
   ].join("\n");
 
   mkdirSync(agentsDir, { recursive: true });
-  if (!usePin) mkdirSync(configDir(), { recursive: true });
-  else mkdirSync(dirname(logPath), { recursive: true });
+  mkdirSync(dirname(logPath), { recursive: true });
+  if (!usePin && !liveAgents) mkdirSync(configDir(), { recursive: true });
   const already = existsSync(path) && readFileSync(path, "utf8") === plist;
   writeFileSync(path, plist, { mode: 0o644 });
 

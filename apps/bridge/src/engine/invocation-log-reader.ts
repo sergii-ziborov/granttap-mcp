@@ -23,8 +23,9 @@ export type InvocationLogBatch = {
 export function readInvocationBatch(path: string, cursor?: InvocationLogCursor): InvocationLogBatch {
   const stat = lstatSync(path);
   if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("transcript is not a regular file");
-  const rotated = cursor && (cursor.dev !== stat.dev || cursor.ino !== stat.ino || stat.size < cursor.offset);
-  const reuse = Boolean(cursor && !rotated);
+  const rotated = cursor != null
+    && (cursor.dev !== stat.dev || cursor.ino !== stat.ino || stat.size < cursor.offset);
+  const reuse = cursor != null && !rotated;
   const initial = reuse ? cursor.offset : Math.max(0, stat.size - MAX_INITIAL_BYTES);
   const gaps = rotated ? [cursor.offset] : !reuse && initial > 0 ? [initial] : [];
   const start = initial;

@@ -67,11 +67,16 @@ export function resetRelay(): void {
 }
 
 /** Observe this process only; never start a connection for a status request. */
-export function connectionRuntimeStatus(room?: string) {
-  const current = client !== null && client.room === room;
+export function connectionRuntimeStatus(room?: string): {
+  relayStatus: "online" | "offline" | "unknown";
+  phoneLastSeenAt: number | null;
+} {
+  if (!client || client.room !== room) {
+    return { relayStatus: "unknown", phoneLastSeenAt: null };
+  }
   return {
-    relayStatus: current ? client!.isConnected ? "online" : "offline" : "unknown",
-    phoneLastSeenAt: current ? phoneLastSeenAt : null,
+    relayStatus: client.isConnected ? "online" : "offline",
+    phoneLastSeenAt,
   };
 }
 

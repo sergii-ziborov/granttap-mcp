@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import type { Express } from "express";
 import QRCode from "qrcode";
 import { installMonitorHelper, reloadMonitorHelper } from "../../../bridge/src/install";
+import { configDir } from "../../../bridge/src/config";
+import { insideTemporaryDirectory } from "../../../bridge/src/launchd-safety";
 import { createOneTimePairing, DEFAULT_RELAY } from "../../../bridge/src/pairing";
 import { recordPhoneSeen } from "../../../bridge/src/presence";
 import { relay, resetRelay } from "../create-server";
@@ -80,9 +82,13 @@ export function installPairingRoutes(app: Express, provider: GrantTapOAuthProvid
       );
       resetRelay();
       void relay();
-      // The durable LaunchAgent keeps the previous room in memory until reload.
-      reloadMonitorHelper();
-      if (firstPairing || replace) installMonitorHelper();
+      // A sandboxed config must never rewrite the live helper plist.
+      if (!insideTemporaryDirectory(configDir())) {
+        // The durable LaunchAgent keeps the previous room in memory until reload.
+        // A helper whose log path vanished is repaired here, not kickstarted dead.
+        reloadMonitorHelper();
+        if (firstPairing || replace) installMonitorHelper();
+      }
       const png = await QRCode.toBuffer(pairing.qrPayload, {
         type: "png", width: 480, margin: 2, errorCorrectionLevel: "L",
       });

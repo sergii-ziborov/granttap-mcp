@@ -4,8 +4,11 @@ import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import test from "node:test";
 import {
+  CLOBBER_LIVE_HELPER_DETAIL,
   SANDBOXED_LAUNCH_AGENT_DETAIL,
   insideTemporaryDirectory,
+  plistUsesTemporaryIO,
+  refusesClobberingLiveHelper,
   refusesLiveLaunchd,
 } from "../apps/bridge/src/launchd-safety";
 import { installMonitorHelper } from "../apps/bridge/src/install";
@@ -51,4 +54,27 @@ test("installing the helper from a sandboxed home reports manual instead of hija
   const result = installMonitorHelper();
   assert.equal(result.status, "manual");
   assert.match(result.detail, new RegExp(SANDBOXED_LAUNCH_AGENT_DETAIL));
+});
+
+test("a temporary config must not rewrite a live LaunchAgent", () => {
+  const live = join(sep, "Users", "granttap", "Library", "LaunchAgents");
+  const temp = join(sep, "var", "folders", "xx", "granttap-http-devices-Lbcnxp");
+  assert.equal(refusesClobberingLiveHelper({
+    agentsDir: join(temp, "LaunchAgents"),
+    logPath: join(temp, "monitor.log"),
+    workingDirectory: temp,
+    configDirectory: temp,
+  }), null);
+  assert.equal(refusesClobberingLiveHelper({
+    agentsDir: live,
+    logPath: join(temp, "monitor.log"),
+    workingDirectory: join(sep, "Users", "granttap", "dev", "granttap-mcp"),
+    configDirectory: temp,
+  }), CLOBBER_LIVE_HELPER_DETAIL);
+  assert.match(plistUsesTemporaryIO([
+    "<key>WorkingDirectory</key>",
+    "<string>/Users/granttap/dev/granttap-mcp</string>",
+    "<key>StandardErrorPath</key>",
+    `<string>${temp}/monitor.log</string>`,
+  ].join("\n")) ? "temp" : "", /temp/);
 });

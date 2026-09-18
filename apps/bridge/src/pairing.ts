@@ -121,10 +121,11 @@ function machineIdentityPresent(): boolean {
 }
 
 /**
- * A new computer mints a candidate room until a phone that is already in a
- * room scans its QR. That scan moves this computer into the phone's room —
- * it does not create a second room. Reconnect re-issues a QR for this room.
- * `replace` starts a different room. A Mesh invite is not this room.
+ * Room ownership is decided by who is already Live, not by a leftover file:
+ * a phone with no live computer adopts this QR's room; a phone that is already
+ * Live sends pairing.join and this computer moves there; two live rooms merge
+ * into the phone's room. Reconnect re-issues a QR for this room. `replace`
+ * starts a different room. A Mesh invite is not this room.
  */
 
 export type PairingJoinResult = "adopted" | "already" | "rejected";

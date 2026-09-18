@@ -109,6 +109,7 @@ test("unpaired computers mint distinct candidate rooms until the same iPhone uni
     phonePublicKey: first.phoneCfg.myPublicKey,
     phoneCfg: {
       ...first.phoneCfg,
+      role: "phone" as const,
       extraPeerPublicKeys: [second.machineCfg.myPublicKey],
     },
     createdAt: Date.now(),
@@ -130,7 +131,7 @@ test("unpaired computers mint distinct candidate rooms until the same iPhone uni
     room: first.phoneCfg.room,
     relayUrl: first.phoneCfg.relayUrl,
     phonePublicKey: first.phoneCfg.myPublicKey,
-    phoneCfg: first.phoneCfg,
+    phoneCfg: { ...first.phoneCfg, role: "phone" as const },
     createdAt: Date.now(),
   }), "already");
   assert.equal(PairingJoin.parse({
@@ -138,7 +139,7 @@ test("unpaired computers mint distinct candidate rooms until the same iPhone uni
     room: first.phoneCfg.room,
     relayUrl: first.phoneCfg.relayUrl,
     phonePublicKey: first.phoneCfg.myPublicKey,
-    phoneCfg: { ...first.phoneCfg, pushAuth: "" },
+    phoneCfg: { ...first.phoneCfg, role: "phone" as const, pushAuth: "" },
     createdAt: Date.now(),
   }).type, "pairing.join");
 });

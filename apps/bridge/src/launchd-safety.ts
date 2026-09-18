@@ -39,6 +39,10 @@ export const SANDBOXED_LAUNCH_AGENT_DETAIL =
   "refusing to load a LaunchAgent from a temporary directory; "
   + "a sandboxed run must not replace the installed GrantTap helper";
 
+export const CLOBBER_LIVE_HELPER_DETAIL =
+  "refusing to rewrite the installed GrantTap helper from a temporary config; "
+  + "a sandboxed run must not replace the live LaunchAgent";
+
 /**
  * Whether this plist may be handed to `launchctl` in the live user domain.
  *
@@ -50,4 +54,43 @@ export const SANDBOXED_LAUNCH_AGENT_DETAIL =
 export function refusesLiveLaunchd(path: string): string | null {
   if (process.env.GRANTTAP_TEST_FAKE_LAUNCHCTL === "1") return null;
   return insideTemporaryDirectory(path) ? `${path}: ${SANDBOXED_LAUNCH_AGENT_DETAIL}` : null;
+}
+
+function unescapePlistPath(value: string): string {
+  return value
+    .replaceAll("&amp;", "&")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&apos;", "'");
+}
+
+/** True when a helper plist would log or run from a directory that vanishes. */
+export function plistUsesTemporaryIO(contents: string): boolean {
+  const paths = [...contents.matchAll(
+    /<key>(?:StandardErrorPath|StandardOutPath|WorkingDirectory)<\/key>\s*<string>([^<]*)<\/string>/g,
+  )].map((match) => unescapePlistPath(match[1] ?? ""));
+  return paths.some((path) => path.length > 0 && insideTemporaryDirectory(path));
+}
+
+/**
+ * A live LaunchAgents directory plus a temporary config/log/cwd is how a test
+ * or probe used to overwrite the user's helper with a job that dies when the
+ * temp folder is deleted. Sandboxed agent directories may still write.
+ */
+export function refusesClobberingLiveHelper(input: {
+  agentsDir: string;
+  logPath: string;
+  workingDirectory: string;
+  configDirectory: string;
+}): string | null {
+  if (insideTemporaryDirectory(input.agentsDir)) return null;
+  if (
+    insideTemporaryDirectory(input.logPath)
+    || insideTemporaryDirectory(input.workingDirectory)
+    || insideTemporaryDirectory(input.configDirectory)
+  ) {
+    return CLOBBER_LIVE_HELPER_DETAIL;
+  }
+  return null;
 }

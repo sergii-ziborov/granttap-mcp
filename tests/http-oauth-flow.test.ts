@@ -8,6 +8,21 @@ import { join } from "node:path";
 import test from "node:test";
 import { startHttpMcpServer } from "../apps/mcp/src/http-server";
 
+function isolateHelper(root: string): () => void {
+  const previous = {
+    agents: process.env.GRANTTAP_LAUNCH_AGENTS_DIR,
+    config: process.env.GRANTTAP_CONFIG_DIR,
+  };
+  process.env.GRANTTAP_LAUNCH_AGENTS_DIR = join(root, "LaunchAgents");
+  process.env.GRANTTAP_CONFIG_DIR = root;
+  return () => {
+    if (previous.agents == null) delete process.env.GRANTTAP_LAUNCH_AGENTS_DIR;
+    else process.env.GRANTTAP_LAUNCH_AGENTS_DIR = previous.agents;
+    if (previous.config == null) delete process.env.GRANTTAP_CONFIG_DIR;
+    else process.env.GRANTTAP_CONFIG_DIR = previous.config;
+  };
+}
+
 async function freePort(): Promise<number> {
   const server = createNetServer();
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -64,7 +79,7 @@ test("HTTP OAuth pairs, consents, exchanges a token, and initializes MCP", async
   const root = await mkdtemp(join(tmpdir(), "granttap-http-flow-"));
   const relay = await pairingRelay();
   const port = await freePort();
-  process.env.GRANTTAP_CONFIG_DIR = root;
+  const restoreHelper = isolateHelper(root);
   process.env.GRANTTAP_RELAY_URL = relay.wsUrl;
   process.env.GRANTTAP_SKIP_HOOKS = "1";
   const started = await startHttpMcpServer({ port });
@@ -72,7 +87,7 @@ test("HTTP OAuth pairs, consents, exchanges a token, and initializes MCP", async
   t.after(async () => {
     await started.close();
     await relay.close();
-    delete process.env.GRANTTAP_CONFIG_DIR;
+    restoreHelper();
     delete process.env.GRANTTAP_RELAY_URL;
     delete process.env.GRANTTAP_SKIP_HOOKS;
   });
@@ -266,7 +281,7 @@ test("HTTP pairing reports relay rejection without persisting credentials", asyn
   const root = await mkdtemp(join(tmpdir(), "granttap-http-flow-error-"));
   const relay = await pairingRelay(503);
   const port = await freePort();
-  process.env.GRANTTAP_CONFIG_DIR = root;
+  const restoreHelper = isolateHelper(root);
   process.env.GRANTTAP_RELAY_URL = relay.wsUrl;
   process.env.GRANTTAP_SKIP_HOOKS = "1";
   const started = await startHttpMcpServer({ port });
@@ -274,7 +289,7 @@ test("HTTP pairing reports relay rejection without persisting credentials", asyn
   t.after(async () => {
     await started.close();
     await relay.close();
-    delete process.env.GRANTTAP_CONFIG_DIR;
+    restoreHelper();
     delete process.env.GRANTTAP_RELAY_URL;
     delete process.env.GRANTTAP_SKIP_HOOKS;
   });
@@ -291,7 +306,7 @@ test("website can open a pairing QR without an authorization request", async (t)
   const root = await mkdtemp(join(tmpdir(), "granttap-http-devices-"));
   const relay = await pairingRelay();
   const port = await freePort();
-  process.env.GRANTTAP_CONFIG_DIR = root;
+  const restoreHelper = isolateHelper(root);
   process.env.GRANTTAP_RELAY_URL = relay.wsUrl;
   process.env.GRANTTAP_SKIP_HOOKS = "1";
   const started = await startHttpMcpServer({ port });
@@ -299,7 +314,7 @@ test("website can open a pairing QR without an authorization request", async (t)
   t.after(async () => {
     await started.close();
     await relay.close();
-    delete process.env.GRANTTAP_CONFIG_DIR;
+    restoreHelper();
     delete process.env.GRANTTAP_RELAY_URL;
     delete process.env.GRANTTAP_SKIP_HOOKS;
   });

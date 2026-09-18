@@ -50,7 +50,7 @@ test("Cursor plugin bootstrap is valid JavaScript and pins the published package
 test("Cursor plugin MCP starts from a foreign cwd, unlike a relative bootstrap path", () => {
   const plugin = join(import.meta.dirname, "..", "cursor-plugin");
   const mcp = JSON.parse(readFileSync(join(plugin, "mcp.json"), "utf8")) as {
-    mcpServers: { granttap: { command: string; args: string[] } };
+    mcpServers: { granttap: { type?: string; url?: string; command?: string; args?: string[] } };
   };
   const cwd = mkdtempSync(join(tmpdir(), "granttap-stdio-cwd-"));
   const env = { ...process.env, GRANTTAP_BOOTSTRAP_DRY_RUN: "1" };
@@ -60,11 +60,10 @@ test("Cursor plugin MCP starts from a foreign cwd, unlike a relative bootstrap p
   assert.notEqual(relative.status, 0);
   assert.match(`${relative.stderr}${relative.stdout}`, /Cannot find module|MODULE_NOT_FOUND/i);
 
-  const inline = spawnSync(process.execPath, mcp.mcpServers.granttap.args, {
-    cwd, env, encoding: "utf8",
-  });
-  assert.equal(inline.status, 0, inline.stderr);
-  assert.equal(inline.stdout, "ok");
+  // Configure talks HTTP on loopback. cwd of the coding app must not matter.
+  assert.equal(mcp.mcpServers.granttap.type, "http");
+  assert.equal(mcp.mcpServers.granttap.url, "http://127.0.0.1:17342/mcp");
+  assert.equal(mcp.mcpServers.granttap.args, undefined);
 
   const absolute = spawnSync(process.execPath, [join(plugin, "stdio-bootstrap.cjs")], {
     cwd, env, encoding: "utf8",
