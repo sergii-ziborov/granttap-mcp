@@ -210,6 +210,8 @@ test("HTTP OAuth pairs, consents, exchanges a token, and initializes MCP", async
   assert.equal(consent.status, 200);
   assert.equal(consent.headers.get("access-control-allow-origin"), websiteOrigin);
   const callback = new URL((await consent.json() as { redirectUrl: string }).redirectUrl);
+  assert.equal(callback.hostname, "127.0.0.1");
+  assert.doesNotMatch(callback.href, /cursor\.com|cloud/i);
   const code = callback.searchParams.get("code")!;
   assert.ok(code);
   const tokenResponse = await fetch(`${base}/token`, {

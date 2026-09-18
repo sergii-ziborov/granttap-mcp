@@ -7,7 +7,7 @@
     "email": "support@granttap.com",
     "url": "https://granttap.com"
   },
-  "homepage": "https://granttap.com",
+  "homepage": "https://granttap.com/connect",
   "repository": "https://github.com/sergii-ziborov/granttap-mcp",
   "license": "MIT",
   "keywords": [
@@ -22,7 +22,7 @@
   "interface": {
     "displayName": "GrantTap",
     "shortDescription": "Connect GrantTap to your phone",
-    "longDescription": "To connect, click Try now and choose Connect GrantTap to this computer. Codex opens granttap.com/connect to authorize access; the page shows a one-time iPhone QR if this computer is not yet paired. A saved phone pairing is reused without a new QR. Replacing it requires a separate confirmation. Once connected, approve requests, answer questions, and continue local Codex work from iPhone or Apple Watch. Claude Code and Cursor use the same website flow in their own MCP settings. Provider sign-in is separate.",
+    "longDescription": "Try now / Connect GrantTap: the agent connects this computer. You do not pair in chat. Device list, Add another device, and Reconnect are in GrantTap plugin settings here, in Cursor Configure, in Claude Code plugin settings, and in the GrantTap app. The same pairing room is shared. Provider sign-in is separate.",
     "developerName": "GrantTap",
     "category": "Developer Tools",
     "capabilities": [

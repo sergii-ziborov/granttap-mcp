@@ -60,6 +60,7 @@ import { handleInvocationQuery } from "./engine/invocation-query";
 import { localMeshStore } from "./mesh/local";
 import { cachedSessionActivity } from "./monitor-session-activity";
 import { HEARTBEAT_INTERVAL_MS, publishHeartbeat } from "./monitor-heartbeat";
+import { applyPairingJoin } from "./pairing";
 import { recordPhoneSeen } from "./presence";
 import { startPublishLoop } from "./monitor-publish-loop";
 import { singleFlightPublisher } from "./monitor-single-flight";
@@ -300,6 +301,13 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
   });
 
   const off = client.onMessage(async (payload) => {
+    if (payload.type === "pairing.join") {
+      const result = applyPairingJoin(payload);
+      if (result === "adopted" && process.env.GRANTTAP_MONITOR_PRIMARY === "1") {
+        setImmediate(() => process.exit(0));
+      }
+      return true;
+    }
     recordPhoneSeen();
     // Codex may start one MCP server per open task. Exactly one instance owns
     // phone routing, so a single phone message can never create duplicate tasks.

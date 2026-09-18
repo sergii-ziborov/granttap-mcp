@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { isCursorHelperNode, resolveMonitorNodeBin } from "../apps/bridge/src/config/node-bin";
@@ -36,7 +37,7 @@ test("ephemeral npx installs are detected on Unix and Windows cache paths", () =
 });
 
 test("Cursor plugin bootstrap is valid JavaScript and pins the published package", () => {
-  const path = join(import.meta.dirname, "..", "cursor-plugin", "stdio-bootstrap.js");
+  const path = join(import.meta.dirname, "..", "cursor-plugin", "stdio-bootstrap.cjs");
   const checked = spawnSync(process.execPath, ["--check", path], { encoding: "utf8" });
   assert.equal(checked.status, 0, checked.stderr);
   const source = readFileSync(path, "utf8");
@@ -44,4 +45,32 @@ test("Cursor plugin bootstrap is valid JavaScript and pins the published package
   assert.match(source, /ComSpec/);
   assert.match(source, /cmd\.exe/);
   assert.match(source, /where granttap-mcp/);
+});
+
+test("Cursor plugin MCP starts from a foreign cwd, unlike a relative bootstrap path", () => {
+  const plugin = join(import.meta.dirname, "..", "cursor-plugin");
+  const mcp = JSON.parse(readFileSync(join(plugin, "mcp.json"), "utf8")) as {
+    mcpServers: { granttap: { command: string; args: string[] } };
+  };
+  const cwd = mkdtempSync(join(tmpdir(), "granttap-stdio-cwd-"));
+  const env = { ...process.env, GRANTTAP_BOOTSTRAP_DRY_RUN: "1" };
+  const relative = spawnSync(process.execPath, ["stdio-bootstrap.js"], {
+    cwd, env, encoding: "utf8",
+  });
+  assert.notEqual(relative.status, 0);
+  assert.match(`${relative.stderr}${relative.stdout}`, /Cannot find module|MODULE_NOT_FOUND/i);
+
+  const inline = spawnSync(process.execPath, mcp.mcpServers.granttap.args, {
+    cwd, env, encoding: "utf8",
+  });
+  assert.equal(inline.status, 0, inline.stderr);
+  assert.equal(inline.stdout, "ok");
+
+  const absolute = spawnSync(process.execPath, [join(plugin, "stdio-bootstrap.cjs")], {
+    cwd, env, encoding: "utf8",
+  });
+  assert.equal(absolute.status, 0, absolute.stderr);
+  const launched = JSON.parse(absolute.stdout) as { command: string; args: string[] };
+  assert.equal(typeof launched.command, "string");
+  assert.equal(Array.isArray(launched.args), true);
 });

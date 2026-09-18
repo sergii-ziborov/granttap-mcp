@@ -1,20 +1,12 @@
 ---
-description: Authorize Cursor and connect or reconnect the GrantTap phone app
+description: The agent connects this computer to GrantTap
 ---
 
-Use the `granttap-connect` skill in `skills/connect/SKILL.md` and follow it
-end-to-end.
+Call GrantTap tools yourself. Do not ask the person to pair in this chat.
 
-1. On this computer, run `granttap setup`. It installs hooks and removes any
-   leftover user GrantTap entry from `~/.cursor/mcp.json`.
-2. Pair and change settings in the GrantTap plugin connection card and the
-   GrantTap app. Do not add GrantTap in Cursor Customize → MCPs.
-3. Keep the plugin's stdio MCP entry. Do not point Cloud at
-   `http://127.0.0.1:17342/mcp`.
-4. Run `granttap status` on the user's computer, then verify the GrantTap MCP
-   tools respond in Cursor.
-5. For a test question, send the same complete prompt to Cursor and GrantTap
-   under one exact correlation. Accept only the first answer correlated to that
-   prompt; never reuse a response from another chat or request.
-
-Do not write GrantTap into `~/.cursor/mcp.json`. Cloud cannot reach localhost.
+1. Call `connection_status`.
+2. If this computer is not paired, call `connect`.
+3. Do not print a pairing URI, token, or QR in chat.
+4. Device list, Add another device, and Reconnect belong in GrantTap plugin
+   settings (Cursor Configure, Codex plugin, Claude Code plugin) and in the
+   GrantTap app — not in chat.

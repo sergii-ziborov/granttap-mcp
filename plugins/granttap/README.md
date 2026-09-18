@@ -58,7 +58,7 @@ Claude for connection status.
 
 After installing the helper, pair in the GrantTap plugin connection card and
 the GrantTap app. Do not add GrantTap in Cursor Customize → MCPs. Cursor Cloud
-Agents start `node stdio-bootstrap.js` from the Cursor plugin. They cannot
+Agents start `node -e` GrantTap from the Cursor plugin. They cannot
 reach `http://127.0.0.1`.
 
 ### Grok Build

@@ -2,7 +2,7 @@ import type { McpServerInfo, SessionInfo } from "../../../packages/protocol/sche
 import { descriptorsForSession } from "./capabilities/descriptors";
 import { cachedMetadata, refreshDescriptorMetadata } from "./capabilities/metadata";
 
-export { workspaceSkills } from "./capabilities/skills";
+export { projectSharedSkills, workspaceSkills } from "./capabilities/skills";
 
 /** Resolve real MCP initialization metadata and cache it for a session. */
 export async function refreshMcpMetadataForSession(session: SessionInfo): Promise<void> {

@@ -349,6 +349,22 @@ export const IntegrationPeer = z.object({
 }).strict();
 export type IntegrationPeer = z.infer<typeof IntegrationPeer>;
 
+/**
+ * One SKILL.md the Project catalog published. Presence is not permission;
+ * Governance is the only authority for what may run.
+ */
+export const SharedSkillState = z.enum(["installed", "available", "used", "unknown"]);
+export type SharedSkillState = z.infer<typeof SharedSkillState>;
+export const SharedSkill = z.object({
+  name: z.string().trim().min(1).max(160),
+  description: z.string().trim().min(1).max(500).optional(),
+  version: z.string().trim().min(1).max(64).optional(),
+  digest: z.string().trim().min(1).max(128).optional(),
+  source: z.string().trim().min(1).max(240).optional(),
+  state: SharedSkillState.optional(),
+}).strict();
+export type SharedSkill = z.infer<typeof SharedSkill>;
+
 export const MeshSnapshot = z.object({
   type: z.literal("mesh.snapshot"),
   sessionId: Identifier,
@@ -356,6 +372,8 @@ export const MeshSnapshot = z.object({
   project: Project,
   bindings: z.array(ProjectBindingSummary).max(64).optional(),
   peers: z.array(IntegrationPeer).max(64).optional(),
+  skills: z.array(SharedSkill).max(64).optional(),
+  incomplete: z.boolean().optional(),
   tasks: z.array(MeshTask).max(64),
   executions: z.array(ExecutionSessionLink).max(128),
   claims: z.array(ResourceClaim).max(128),
@@ -367,6 +385,10 @@ export const MeshSnapshot = z.object({
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["sessionId"], message: "project scope mismatch" });
   }
   const taskIds = new Set(value.tasks.map((task) => task.taskId));
+  const skillNames = new Set(value.skills?.map((skill) => skill.name));
+  if ((value.skills?.length ?? 0) !== skillNames.size) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["skills"], message: "duplicate skill name" });
+  }
   const bindingIds = new Set(value.bindings?.map((binding) => binding.bindingId));
   const bindingKeys = new Set(value.bindings?.map(
     (binding) => `${binding.endpointId}\0${binding.repositoryId}`,

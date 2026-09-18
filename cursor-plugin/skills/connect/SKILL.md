@@ -1,70 +1,30 @@
 ---
 name: granttap-connect
-description: Pair this computer with GrantTap through the plugin connection card and the GrantTap app. Use when the user asks to connect, pair, reconnect, or repair GrantTap.
+description: The agent connects this computer to GrantTap. Use when work needs pairing or the user asks to connect, pair, or repair.
 ---
 
 # GrantTap connect
 
-Connect Cursor to the GrantTap phone app without weakening chat isolation.
+The person does not pair in chat. You connect this computer by calling tools.
 
-## Workflow
+## Chat (you)
 
-### 1. Load GrantTap MCP tools
+1. Call `connection_status`.
+2. If this computer is not paired, call `connect`.
+3. Never print a pairing URI, manual token, or QR in chat.
+4. Never tell the person to scan something in this conversation, open a website,
+   or type a setup command.
 
-Use the Marketplace plugin. Its MCP entry is stdio:
+A saved pairing is reused. Do not call `reconnect` unless they confirmed
+Add another device or Reconnect in plugin settings.
 
-```json
-{
-  "mcpServers": {
-    "granttap": {
-      "command": "node",
-      "args": ["stdio-bootstrap.js"]
-    }
-  }
-}
-```
+## Settings (the person)
 
-On this computer, run:
+Device list, Add another device, and Reconnect live in the GrantTap plugin
+settings of this host — Cursor Configure, Codex plugin settings, Claude Code
+plugin settings — and in the GrantTap app. The same pairing room is shared
+across those hosts on this computer.
 
-```bash
-granttap setup
-```
-
-Setup installs hooks and removes any leftover user GrantTap entry from
-`~/.cursor/mcp.json`. Do not add GrantTap in Cursor Customize → MCPs. A user
-HTTP entry at `http://127.0.0.1:17342/mcp` is why Cloud shows fetch failed.
-
-### 2. Pair the phone
-
-Call `connection_status` or `connect`. Pairing and settings belong on the
-GrantTap connection card and in the GrantTap app. If a QR is needed, it
-appears only on that card. Do not print the pairing URI or manual token.
-Do not open Cursor Customize to change GrantTap settings.
-
-A saved pairing is reused unless the user confirms reconnect.
-
-### 3. Install policy hooks
-
-`granttap setup` installs the supported Cursor, Claude Code, and Codex hooks
-plus the background task-sync helper.
-
-### 4. Verify
-
-On the user's computer, run `granttap status`. Confirm pairing is present and
-required hooks are ready. Confirm `connection_status` and `connect` respond.
-
-A Cloud pairing belongs to that Cloud environment; it is not the Mac pairing.
-
-For any interactive test, send the same complete prompt to Cursor and GrantTap
-under one exact correlation. The first answer carrying that exact correlation
-wins. Never use a response from another chat, agent task, prompt, or older
-correlation.
-
-## Troubleshooting
-
-- `granttap cursor repair` removes a leftover user GrantTap MCP entry and
-  repairs the local helper.
-- Re-run `granttap setup` if the policy hooks or background helper are missing.
-- If Cloud login fails with `fetch failed` to `127.0.0.1:17342`, GrantTap is
-  still in `~/.cursor/mcp.json`. Remove that user entry, keep the plugin, and
-  pair from the connection card.
+For an interactive question, send the same complete prompt to Cursor and
+GrantTap under one exact correlation. The first answer with that correlation
+wins.

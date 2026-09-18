@@ -13,7 +13,7 @@ export function createGrantTapServer(): McpServer {
     name: "granttap",
     title: "GrantTap",
     version: packageVersion(),
-    websiteUrl: "https://granttap.com",
+    websiteUrl: "https://granttap.com/connect",
     icons: [{ src: "https://granttap.com/favicon.png", mimeType: "image/png", sizes: ["64x64"] }],
   });
   registerConnectTool(server);

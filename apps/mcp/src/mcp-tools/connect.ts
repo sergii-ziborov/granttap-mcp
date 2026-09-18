@@ -70,7 +70,10 @@ async function connect(
   options: { issue?: boolean; replace?: boolean } = {},
 ): Promise<CallToolResult> {
   try {
-    if (!options.issue && !options.replace && isMachineConfigured()) return connectionResult(state);
+    if (!options.issue && !options.replace && isMachineConfigured()) {
+      void relay();
+      return connectionResult(state);
+    }
     const startedAt = Date.now();
     const pairing = await createOneTimePairing(process.env.GRANTTAP_TEST_RELAY_URL ?? DEFAULT_RELAY, {
       replace: options.replace === true,

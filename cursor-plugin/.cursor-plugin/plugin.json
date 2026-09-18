@@ -2,14 +2,14 @@
   "name": "granttap",
   "displayName": "GrantTap",
   "version": "0.1.9",
-  "description": "Connect Cursor to GrantTap. Pair and change settings in the plugin and the GrantTap app, not Cursor MCP settings.",
+  "description": "The agent connects this computer in chat. Authorize in plugin settings opens the device window. Scan the QR in GrantTap — that scan authorizes. Device list and Add another stay there and in the GrantTap app.",
   "author": {
     "name": "GrantTap",
     "email": "support@granttap.com",
     "url": "https://granttap.com"
   },
   "publisher": "GrantTap",
-  "homepage": "https://granttap.com",
+  "homepage": "https://granttap.com/connect",
   "repository": "https://github.com/sergii-ziborov/granttap-mcp",
   "license": "MIT",
   "category": "integrations",

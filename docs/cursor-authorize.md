@@ -13,7 +13,8 @@ GrantTap in Cursor Customize → MCPs.
 
 Cursor Cloud Agents cannot reach `http://127.0.0.1`. A user HTTP MCP entry
 there is why Cloud shows **Error · fetch failed**. The Marketplace plugin
-uses stdio (`node stdio-bootstrap.js`, which on Windows runs `cmd.exe /c npx`).
+uses stdio (`node -e` so cwd `$HOME` still starts GrantTap; on Windows that
+bootstrap runs `cmd.exe /c npx`).
 Authorize in the browser on `granttap.com/connect`; that page talks only to
 the website, not to loopback. Pairing stays on the connection card, last
 resort a QR there.

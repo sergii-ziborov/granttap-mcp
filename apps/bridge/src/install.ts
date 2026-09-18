@@ -399,6 +399,26 @@ function engineEnvironment(): string[] {
   ];
 }
 
+/** Restart the already-installed monitor so it rereads the current pairing room. */
+export function reloadMonitorHelper(): InstallResult {
+  if (process.env.GRANTTAP_SKIP_LAUNCHCTL === "1" || process.env.NODE_TEST_CONTEXT) {
+    return { status: "already", detail: "launchctl skipped" };
+  }
+  if (process.platform === "win32") return installMonitorHelper();
+  if (process.platform !== "darwin") {
+    return { status: "manual", detail: "background task sync currently requires macOS" };
+  }
+  const uid = process.getuid?.();
+  if (uid == null) return { status: "manual", detail: "could not determine user id" };
+  const kicked = spawnSync(
+    "launchctl",
+    ["kickstart", "-k", `gui/${uid}/${launchAgentLabel}`],
+    { encoding: "utf8" },
+  );
+  if (kicked.status !== 0) return installMonitorHelper();
+  return { status: "already", detail: `gui/${uid}/${launchAgentLabel}` };
+}
+
 export function installMonitorHelper(): InstallResult {
   if (process.platform === "win32") {
     const node = resolveMonitorNodeBin();

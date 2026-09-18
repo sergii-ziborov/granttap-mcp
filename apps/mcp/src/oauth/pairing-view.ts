@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import type { Express } from "express";
 import QRCode from "qrcode";
-import { installMonitorHelper } from "../../../bridge/src/install";
+import { installMonitorHelper, reloadMonitorHelper } from "../../../bridge/src/install";
 import { createOneTimePairing, DEFAULT_RELAY } from "../../../bridge/src/pairing";
 import { recordPhoneSeen } from "../../../bridge/src/presence";
 import { relay, resetRelay } from "../create-server";
@@ -79,7 +79,8 @@ export function installPairingRoutes(app: Express, provider: GrantTapOAuthProvid
       );
       resetRelay();
       void relay();
-      // The durable LaunchAgent still holds the old room until it is reloaded.
+      // The durable LaunchAgent keeps the previous room in memory until reload.
+      reloadMonitorHelper();
       if (firstPairing || replace) installMonitorHelper();
       const png = await QRCode.toBuffer(pairing.qrPayload, {
         type: "png", width: 480, margin: 2, errorCorrectionLevel: "L",
@@ -88,7 +89,9 @@ export function installPairingRoutes(app: Express, provider: GrantTapOAuthProvid
       const expiresAt = Date.now() + VIEW_TTL_MS;
       const stopWatch = watchMailboxClaim(pairing.httpBase, pairing.mailboxId, expiresAt, () => {
         recordPhoneSeen();
+        resetRelay();
         void relay();
+        reloadMonitorHelper();
       });
       if (isWebsiteOrigin(origin)) {
         for (const [id, view] of views) {

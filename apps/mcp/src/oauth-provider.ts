@@ -25,6 +25,7 @@ import { isMachineConfigured } from "./pairing-status";
 import { buildConnectSnapshot } from "./oauth/connect-snapshot";
 import { loadPending, PENDING_TTL_MS, savePending, type PendingAuth } from "./oauth/pending";
 import { GrantTapClientsStore, loadOAuthStore, saveOAuthStore } from "./oauth/store";
+import { wakePairingRoomAfterApprove } from "./oauth/after-consent";
 import {
   publishConnectRequestRetry,
   watchConnectDecision,
@@ -119,7 +120,7 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
       return { redirectUrl: target.toString() };
     }
     if (!isMachineConfigured()) {
-      throw new Error("GrantTap is not paired on this Mac yet. Scan the QR, then Approve.");
+      throw new Error("GrantTap is not paired on this Mac yet. Scan the QR in GrantTap.");
     }
 
     this.pending.delete(pendingId);
@@ -132,6 +133,7 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
     });
     target.searchParams.set("code", code);
     if (pending.params.state) target.searchParams.set("state", pending.params.state);
+    wakePairingRoomAfterApprove(true);
     return { redirectUrl: target.toString() };
   }
 

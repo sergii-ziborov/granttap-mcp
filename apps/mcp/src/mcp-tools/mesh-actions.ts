@@ -14,6 +14,7 @@ import {
 } from "../../../bridge/src/mesh/endpoint";
 import { handoffReceipt } from "../../../bridge/src/mesh/handoff";
 import { localMeshStore } from "../../../bridge/src/mesh/local";
+import { projectScopedSnapshot } from "../../../bridge/src/mesh/snapshot-window";
 import { grokBotRelay, publishGrokBotEvent } from "./mesh-relay";
 
 export type MeshScope = { actorId: string; projectId: string; taskId: string };
@@ -55,11 +56,14 @@ function authorize(scope: MeshScope, operation: Parameters<typeof authorizeGrokB
 }
 
 export function status(scope: Omit<MeshScope, "taskId">) {
-  authorizeGrokBotOperation({ ...scope, operation: "status" });
+  const bundle = authorizeGrokBotOperation({ ...scope, operation: "status" });
   // A read is also the safe bootstrap point for the endpoint's encrypted
   // channel. Do not make local status availability depend on relay uptime.
   void grokBotRelay().catch(() => undefined);
-  const snapshot = localMeshStore().snapshot(scope.projectId);
+  const snapshot = projectScopedSnapshot(
+    localMeshStore().snapshot(scope.projectId),
+    bundle.credential.taskIds,
+  );
   return snapshot ? {
     project: snapshot.project,
     tasks: snapshot.tasks,
@@ -67,6 +71,8 @@ export function status(scope: Omit<MeshScope, "taskId">) {
     claims: snapshot.claims,
     dependencies: snapshot.dependencies,
     events: snapshot.events.slice(-32),
+    skills: snapshot.skills,
+    incomplete: snapshot.incomplete,
   } : { project: null, tasks: [], executions: [], claims: [], dependencies: [], events: [] };
 }
 

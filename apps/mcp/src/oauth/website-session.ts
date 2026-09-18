@@ -1,7 +1,8 @@
 /**
  * The coding-app browser talks only to granttap.com.
- * This helper publishes the public consent snapshot there and later reads
- * Approve/Deny. Pairing keys never leave the computer.
+ * This helper publishes the public consent snapshot there. A QR scan — a
+ * phone marked seen — is the Approve. Deny stays a website action.
+ * Pairing keys never leave the computer.
  */
 import { PENDING_TTL_MS } from "./pending";
 import type { ConnectSnapshot } from "./connect-snapshot";
@@ -124,9 +125,9 @@ export function watchConnectDecision(
         const row = await readConnectRequest(origin, requestId);
         if (!row) {
           await publishConnectRequest(origin, requestId, live);
-        } else if (row.decision === "approve" || row.decision === "deny") {
+        } else if (row.decision === "approve" || row.decision === "deny" || phoneScanApproves(live)) {
           try {
-            const { redirectUrl } = complete(row.decision === "approve");
+            const { redirectUrl } = complete(row.decision !== "deny");
             await publishConnectRedirect(origin, requestId, redirectUrl);
           } catch (error) {
             await publishConnectError(
@@ -140,7 +141,7 @@ export function watchConnectDecision(
           await publishConnectRequest(origin, requestId, live);
         }
       } catch {
-        // Keep retrying until TTL. The website is the only consent channel.
+        // Keep retrying until TTL. Scan or Deny finishes consent.
       }
       await sleep(1_000, ac.signal);
     }
@@ -150,6 +151,11 @@ export function watchConnectDecision(
 export function resetConnectWatchers(): void {
   for (const ac of watchers.values()) ac.abort();
   watchers.clear();
+}
+
+/** The phone fetched the pairing mailbox, or a live heartbeat landed. That is consent. */
+export function phoneScanApproves(snapshot: ConnectSnapshot): boolean {
+  return snapshot.phones.some((phone) => phone.status === "seen");
 }
 
 function sleep(ms: number, signal: AbortSignal): Promise<void> {

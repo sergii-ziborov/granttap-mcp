@@ -59,6 +59,8 @@ test("widget initializes, checks status, and requires explicit reconnect confirm
   ui.button("refresh").click();
   await ui.settle();
   assert.match(ui.el("phones").textContent || "", /iPhone/);
+  assert.equal(ui.el("connect").textContent, "Add another device");
+  assert.equal(ui.el("reconnect").classList.contains("hidden"), false);
   ui.button("connect").click();
   assert.equal(ui.el("confirm").classList.contains("hidden"), false);
   ui.button("cancel").click();

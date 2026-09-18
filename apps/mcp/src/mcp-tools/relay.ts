@@ -7,6 +7,8 @@ import { loadConfig, machineConfigPath } from "../../../bridge/src/config";
 import { startSessionMonitor, type SessionMonitor } from "../../../bridge/src/monitor";
 import { sendSessionPayload } from "../../../bridge/src/session-keys";
 import { publishHeldHeartbeat } from "../../../bridge/src/monitor-heartbeat";
+import { applyPairingJoin } from "../../../bridge/src/pairing";
+import { installMonitorHelper, reloadMonitorHelper } from "../../../bridge/src/install";
 import { recordPhoneSeen } from "../../../bridge/src/presence";
 
 const ASK_TIMEOUT_MS = Number(
@@ -28,7 +30,19 @@ export async function relay(): Promise<RelayClient | null> {
   try {
     if (!client) {
       client = new RelayClient(loadConfig(machineConfigPath()), { autoReconnect: true });
-      client.onMessage(() => {
+      client.onMessage((payload) => {
+        if (payload.type === "pairing.join") {
+          const result = applyPairingJoin(payload);
+          if (result === "adopted") {
+            installMonitorHelper();
+            reloadMonitorHelper();
+            setImmediate(() => {
+              resetRelay();
+              void relay();
+            });
+          }
+          return true;
+        }
         phoneLastSeenAt = Date.now();
         recordPhoneSeen(phoneLastSeenAt);
         return false;

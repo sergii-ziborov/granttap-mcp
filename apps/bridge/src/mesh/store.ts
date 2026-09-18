@@ -41,6 +41,8 @@ import {
   workspaceForRepository as boundWorkspace,
 } from "./binding-state";
 import { mergeSnapshotState } from "./snapshot-merge";
+import { selectSnapshotTasks } from "./snapshot-window";
+import { projectSharedSkills } from "../capabilities/skills";
 
 export class MeshStore {
   private state: StoreState;
@@ -637,23 +639,32 @@ export class MeshStore {
     this.sync();
     const project = this.state.projects.find((item) => item.projectId === projectId);
     if (!project) return undefined;
-    const tasks = this.state.tasks.filter((task) => task.projectId === projectId).slice(-64);
+    const allTasks = this.state.tasks.filter((task) => task.projectId === projectId);
+    const { tasks, incomplete } = selectSnapshotTasks(allTasks);
     const taskIds = new Set(tasks.map((task) => task.taskId));
     const peers = this.state.peers.filter((item) => item.projectId === projectId).slice(0, 64);
+    const bindings = this.state.bindings.filter((item) => item.projectId === projectId).slice(0, 64);
+    const skills = projectSharedSkills([
+      project.repositoryRoot,
+      ...bindings.map((binding) => binding.localPathHint),
+      ...this.state.executions.filter((item) => taskIds.has(item.taskId)).map((item) => item.workspace),
+    ]);
     return MeshSnapshot.parse({
       type: "mesh.snapshot",
       sessionId: projectId,
       projectId,
       project,
-      bindings: this.state.bindings.filter((item) => item.projectId === projectId).slice(0, 64),
+      bindings,
       // Absent rather than empty: a repository without a map publishes the
       // snapshot it always did.
       peers: peers.length > 0 ? peers : undefined,
+      skills: skills.length > 0 ? skills : undefined,
+      incomplete: incomplete || undefined,
       tasks,
       executions: this.state.executions.filter((item) => taskIds.has(item.taskId)).slice(-128),
-      claims: this.activeClaims().filter((item) => item.projectId === projectId).slice(-128),
+      claims: this.activeClaims().filter((item) => item.projectId === projectId && taskIds.has(item.taskId)).slice(-128),
       dependencies: this.state.dependencies.filter((item) => taskIds.has(item.taskId)).slice(-128),
-      events: this.eventsForProject(projectId),
+      events: this.eventsForProject(projectId).filter((event) => taskIds.has(event.taskId)),
       generatedAt: this.now(),
     });
   }

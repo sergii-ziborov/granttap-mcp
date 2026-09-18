@@ -21,6 +21,8 @@ test("status is read-only; pending codes expire without exposing or rotating key
   saveConfig(machineConfigPath(), pair.machineCfg);
   const original = await readFile(machineConfigPath(), "utf8");
   assert.equal(state.snapshot().structuredContent.status, "paired");
+  assert.equal(state.snapshot().structuredContent.roomPrefix, pair.machineCfg.room.slice(0, 8));
+  assert.equal(JSON.stringify(state.snapshot().structuredContent).includes(pair.machineCfg.room), false);
   assert.deepEqual(state.snapshot().structuredContent.phones, [{ name: "iPhone", status: "paired", lastSeenAt: null }]);
   state.remember({ room: pair.machineCfg.room, expiresAt: 1000, pairingUri: "secret-test-uri", qrDataUrl: "secret-test-qr" });
   const pending = state.snapshot(900);

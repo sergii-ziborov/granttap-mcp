@@ -11,6 +11,7 @@ import {
   installCodexHook,
   installCursorHook,
   installMonitorHelper,
+  reloadMonitorHelper,
 } from "../apps/bridge/src/install";
 
 test("macOS background task sync is installed as a terminal-free LaunchAgent", async (t) => {
@@ -62,6 +63,7 @@ test("macOS background task sync is installed as a terminal-free LaunchAgent", a
 
   const second = installMonitorHelper();
   assert.equal(second.status, "already");
+  assert.equal(reloadMonitorHelper().status, "already");
 });
 
 test("installMonitorHelper preserves an existing nodvox-pinned LaunchAgent", async (t) => {

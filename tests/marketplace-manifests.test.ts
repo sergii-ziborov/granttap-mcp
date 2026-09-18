@@ -31,22 +31,35 @@ test("Codex, Claude Code, and Grok Build use the same OAuth HTTP service", () =>
   assert.deepEqual(otherHosts, servers);
 });
 
-test("Cursor plugin ships Cloud stdio MCP without a workspace marketplace", () => {
+test("Cursor plugin uses the same OAuth HTTP entry so Configure shows Authorize and Logout", () => {
   const plugin = readJson("cursor-plugin/.cursor-plugin/plugin.json");
   const mcp = readJson("cursor-plugin/mcp.json");
+  const hosts = readJson("plugins/granttap/.mcp.json");
   assert.equal(plugin.name, "granttap");
   assert.equal(plugin.version, "0.1.9");
   assert.equal(plugin.logo, "assets/logo.svg");
-  assert.deepEqual(mcp, {
-    mcpServers: {
-      granttap: { command: "node", args: ["stdio-bootstrap.js"] },
-    },
-  });
+  assert.deepEqual(mcp, hosts);
   assert.equal(existsSync(join(repositoryRoot, ".cursor-plugin/marketplace.json")), false);
   assert.equal(existsSync(join(repositoryRoot, "cursor-plugin/.cursor-plugin/marketplace.json")), false);
   assert.equal(existsSync(join(repositoryRoot, "cursor-plugin/.cursor-plugin/plugin.json")), true);
   assert.equal(existsSync(join(repositoryRoot, "cursor-plugin/mcp.json")), true);
-  assert.equal(existsSync(join(repositoryRoot, "cursor-plugin/stdio-bootstrap.js")), true);
+});
+
+test("chat connect is the agent; humans manage devices in plugin settings", () => {
+  const cursorSkill = readFileSync(join(repositoryRoot, "cursor-plugin/skills/connect/SKILL.md"), "utf8");
+  const cursorCommand = readFileSync(join(repositoryRoot, "cursor-plugin/commands/connect.md"), "utf8");
+  const hostSkill = readFileSync(join(repositoryRoot, "plugins/granttap/skills/granttap-connect/SKILL.md"), "utf8");
+  const codex = readJson("plugins/granttap/.codex-plugin/plugin.json");
+  const face = (codex.interface ?? {}) as { longDescription?: string; websiteURL?: string };
+  for (const text of [cursorSkill, cursorCommand, hostSkill]) {
+    assert.match(text, /Call `connection_status`/);
+    assert.match(text, /plugin\s+settings/);
+    assert.doesNotMatch(text, /Show the returned QR image directly in the conversation/);
+    assert.doesNotMatch(text, /granttap\.com\/connect/);
+  }
+  assert.match(face.longDescription ?? "", /plugin settings/);
+  assert.doesNotMatch(face.longDescription ?? "", /granttap\.com\/connect/);
+  assert.equal(face.websiteURL, "https://granttap.com/connect");
 });
 
 test("public install docs distinguish Git plugins from approved listings", () => {

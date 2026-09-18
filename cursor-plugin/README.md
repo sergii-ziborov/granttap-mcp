@@ -31,7 +31,8 @@ least-privileged jobs under your signed-in account. Install Node.js 20+ and the
 current `granttap-mcp` package on that same Windows computer. The jobs restart
 after a crash and keep running when Cursor closes.
 
-The plugin `mcp.json` starts `node stdio-bootstrap.js`. On Windows that bootstrap
+The plugin `mcp.json` starts GrantTap with `node -e` so Cursor's cwd=`$HOME`
+does not have to contain `stdio-bootstrap.js`. On Windows that bootstrap
 runs `cmd.exe /c npx` so Cursor can spawn the MCP. Do not add a GrantTap URL to
 `~/.cursor/mcp.json`.
 
@@ -66,8 +67,8 @@ prompt must never resolve the current request.
 | Path | Purpose |
 | --- | --- |
 | `.cursor-plugin/plugin.json` | Cursor plugin manifest |
-| `mcp.json` | Plugin stdio MCP (`node stdio-bootstrap.js`). Do not add GrantTap to user `mcp.json`. |
-| `stdio-bootstrap.js` | Starts `granttap-mcp` via `node` on every OS, and via `cmd /c npx` on Windows. |
+| `mcp.json` | Plugin stdio MCP (`node -e`, cwd-independent). Do not add GrantTap to user `mcp.json`. |
+| `stdio-bootstrap.cjs` | Readable bootstrap used by tests and Windows `cmd /c npx`. |
 | `assets/logo.svg` | Plugin logo |
 | `rules/dual-channel.mdc` | Exact prompt/correlation rule |
 | `skills/connect/SKILL.md` | Authorization and pairing workflow |

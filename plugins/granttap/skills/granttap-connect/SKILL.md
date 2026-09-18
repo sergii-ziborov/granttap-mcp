@@ -1,50 +1,31 @@
 ---
 name: granttap-connect
-description: Connect, reconnect, or pair this computer with GrantTap. Use when the user asks to install GrantTap, connect an agent, check the pairing, or show a GrantTap QR.
+description: The agent connects this computer to GrantTap. Use when work needs pairing or the user asks to connect, pair, or repair.
 ---
 
-# Connect GrantTap
+# GrantTap connect
 
-For status, login, connection controls, or diagnostic requests, call
-`connection_status` first. It is read-only and opens the connection center:
-computer name, runtime version, saved pairing, observed relay/phone activity,
-provider readiness, Connect, Refresh, and confirmed Reconnect controls.
+The person does not pair in chat. You connect this computer by calling tools.
+This is the same on Cursor, Codex, and Claude Code.
 
-When the user chooses the plugin's first starter action, connect this computer
-without making them find a website link or type setup commands. Call
-`connection_status` to open the controls. If the MCP client requests
-authorization, let its normal OAuth flow open `granttap.com/connect`; in Codex
-CLI, `codex mcp login granttap` starts that flow. Explain the next visible step
-briefly and verify connection status after authorization.
+## Chat (you)
 
-Codex, Claude Code, desktop Cursor, and Grok Build use the same local OAuth
-HTTP service. Their MCP authorization control opens `granttap.com/connect` with
-a one-time iPhone QR when this computer is unpaired.
-If already paired, approving an app's access needs no new QR. The page offers a
-separate, explicitly confirmed reconnect to replace the phone pairing and
-show a new QR. GrantTap has no account/password; provider authentication is
-separate.
+1. Call `connection_status`.
+2. If this computer is not paired, call `connect`.
+3. If the host asks to authorize the MCP client, complete that host flow. Do
+   not send the person to a website or ask them to scan in this chat.
+4. Never print a pairing URI, manual token, or QR in chat.
 
-Cursor Cloud Agents have no loopback helper. Their plugin starts
-`node stdio-bootstrap.js` and pairs through the `connect` QR. Do not point
-Cloud at `http://127.0.0.1:17342/mcp`.
+A saved pairing is reused. Do not call `reconnect` unless they confirmed
+Add another device or Reconnect in that host's GrantTap plugin settings.
 
-For a new pairing or QR request, call `connect`. It returns the current one-time
-QR while it is valid and never replaces a saved pairing. A saved pairing is not
-proof that the phone is online. Expired or lost QR codes require a confirmed
-reconnect; never rotate keys silently.
+## Settings (the person)
 
-Show the returned QR image directly in the conversation. Do not expose, repeat,
-log, or summarize the pairing URI or manual token in additional prose.
+Device list, Add another device, and Reconnect live in GrantTap plugin
+settings — Cursor Configure, Codex plugin settings, Claude Code plugin
+settings — and in the GrantTap app. All three hosts on this computer share
+the same pairing room.
 
-Do not reset or replace a healthy pairing just to display a QR. If `connect`
-reports that the pairing was reused, explain that no new QR is needed.
-
-For reconnect requests, obtain the user's explicit confirmation that replacing
-the current pairing is intended, then call `reconnect` with `confirmed: true`.
-Never infer that confirmation from an unrelated connect or status request.
-
-Every coding-app integration requires the durable local OAuth service. If it is missing,
-run `npm install --global granttap-mcp@0.8.18` and `granttap setup`, then
-retry authorization in the coding app. Provider authentication remains separate
-from GrantTap pairing.
+For an interactive question, send the same complete prompt to the coding app
+and GrantTap under one exact correlation. The first answer with that
+correlation wins.

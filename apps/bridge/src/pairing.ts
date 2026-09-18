@@ -16,6 +16,7 @@ import {
   saveConfig,
 } from "./config";
 import type { PeerConfig } from "../../../packages/core/relay-client";
+import type { PairingJoin } from "../../../packages/protocol/messages/pairing-join";
 import { clearPhoneSeen } from "./presence";
 
 export const DEFAULT_RELAY = DEFAULT_RELAY_URL;
@@ -93,20 +94,89 @@ export function reusablePairingHalves(): { machineCfg: PeerConfig; phoneCfg: Pee
   }
 }
 
+/** Same room on disk, even if the key halves drifted and are no longer reciprocal. */
+export function parkedPairingHalves(): { machineCfg: PeerConfig; phoneCfg: PeerConfig } | null {
+  const halves = reusablePairingHalves();
+  if (halves) return halves;
+  try {
+    const machineCfg = loadConfig(machineConfigPath());
+    const phoneCfg = loadConfig(phonePairingPath());
+    return validConfig(machineCfg, "machine")
+      && validConfig(phoneCfg, "phone")
+      && machineCfg.room === phoneCfg.room
+      && machineCfg.relayUrl === phoneCfg.relayUrl
+      ? { machineCfg, phoneCfg }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function machineIdentityPresent(): boolean {
+  try {
+    return validConfig(loadConfig(machineConfigPath()), "machine");
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Park a one-time mailbox so a device can join the pairing room.
- *
- * The room is shared: 1+ iPhone, iPad, Android, Mac, or Windows. A phone
- * already in the room that pairs another computer puts that computer in the
- * same room. Reconnect and "add another device" re-issue a QR for this room.
- * `replace` starts a different room. A Mesh invite is not this room — it only
- * shares Mesh and must not overwrite these pairing keys.
+ * A new computer mints a candidate room until a phone that is already in a
+ * room scans its QR. That scan moves this computer into the phone's room —
+ * it does not create a second room. Reconnect re-issues a QR for this room.
+ * `replace` starts a different room. A Mesh invite is not this room.
  */
+
+export type PairingJoinResult = "adopted" | "already" | "rejected";
+
+/**
+ * The phone already had a room. This computer keeps its machine keys and
+ * switches into that room so the next heartbeat lands where the phone is.
+ */
+export function applyPairingJoin(payload: PairingJoin): PairingJoinResult {
+  let machine: PeerConfig;
+  try {
+    machine = loadConfig(machineConfigPath());
+  } catch {
+    return "rejected";
+  }
+  if (!validConfig(machine, "machine")) return "rejected";
+  if (payload.phoneCfg.room !== payload.room) return "rejected";
+  if (payload.phoneCfg.myPublicKey !== payload.phonePublicKey) return "rejected";
+  if (!validConfig(payload.phoneCfg, "phone")) return "rejected";
+  let relayUrl: string;
+  try {
+    relayUrl = normalizeRelayUrl(payload.relayUrl);
+  } catch {
+    return "rejected";
+  }
+  if (machine.room === payload.room && machine.peerPublicKey === payload.phonePublicKey
+      && machine.relayUrl === relayUrl) {
+    return "already";
+  }
+  const nextMachine: PeerConfig = {
+    ...machine,
+    relayUrl,
+    room: payload.room,
+    peerPublicKey: payload.phonePublicKey,
+    pushAuth: payload.phoneCfg.pushAuth ?? machine.pushAuth,
+  };
+  if (!validConfig(nextMachine, "machine")) return "rejected";
+  saveConfig(machineConfigPath(), nextMachine);
+  saveConfig(phonePairingPath(), payload.phoneCfg);
+  clearPhoneSeen();
+  return "adopted";
+}
 export async function createOneTimePairing(
   relayUrl: string,
   options: { installHooks?: boolean; replace?: boolean } = {},
 ): Promise<OneTimePairing> {
-  const existing = options.replace ? null : reusablePairingHalves();
+  const existing = options.replace ? null : parkedPairingHalves();
+  if (!existing && !options.replace && machineIdentityPresent()) {
+    throw new Error(
+      "GrantTap already has a pairing room on this computer, but the local phone half is missing or does not match. Reconnect reuses that room. Confirm replace only to start a different room.",
+    );
+  }
   const { machineCfg, phoneCfg } = existing ?? createPairing(relayUrl);
   const mailboxId = randomId(16);
   const transferKey = generateTransferKey();

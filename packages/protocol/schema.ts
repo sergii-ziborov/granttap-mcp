@@ -27,6 +27,7 @@ import {
   MeshSnapshot,
 } from "./messages/mesh";
 import { MachineLoad } from "./messages/machine";
+import { PairingJoin } from "./messages/pairing-join";
 import { MeshInvocationPage, MeshInvocationQuery } from "./messages/mesh-invocations";
 import {
   ProjectPolicyAck,
@@ -56,6 +57,7 @@ export * from "./messages/approvals";
 export * from "./messages/capabilities";
 export * from "./messages/interaction";
 export * from "./messages/machine";
+export * from "./messages/pairing-join";
 export * from "./messages/mesh";
 export * from "./messages/mesh-invocations";
 export * from "./messages/primitives";
@@ -134,6 +136,7 @@ export const Payload = z.union([
   Hello,
   MachineHeartbeat,
   MachineLoad,
+  PairingJoin,
 ]).superRefine((payload, ctx) => {
   if (payload.type !== "user.message") return;
   const encodedCharacters = payload.attachments?.reduce(

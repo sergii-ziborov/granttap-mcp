@@ -11,6 +11,7 @@ import type { Response } from "express";
 import { createPairing, machineConfigPath, phonePairingPath, saveConfig } from "../apps/bridge/src/config";
 import { GrantTapOAuthProvider } from "../apps/mcp/src/oauth-provider";
 import {
+  phoneScanApproves,
   publishConnectRequest,
   readConnectRequest,
   resetConnectWatchers,
@@ -148,7 +149,7 @@ test("helper publishes consent to the website and writes the Cursor redirect the
   assert.fail("website never received the Cursor redirect");
 });
 
-test("helper republishes a live phone snapshot while waiting for Approve", async (t) => {
+test("a seen phone is the Approve; the helper writes the coding-app redirect", async (t) => {
   const site = await listen();
   process.env.GRANTTAP_WEBSITE_ORIGIN = site.origin;
   t.after(async () => {
@@ -177,12 +178,34 @@ test("helper republishes a live phone snapshot while waiting for Approve", async
     if (row?.phones && Array.isArray(row.phones) && (row.phones[0] as { status?: string })?.status === "paired") {
       seen = true;
     }
-    if (row?.phones && Array.isArray(row.phones) && (row.phones[0] as { status?: string })?.status === "seen") {
+    if (typeof row?.redirectUrl === "string") {
+      assert.equal(row.redirectUrl, "http://127.0.0.1:9/callback?code=x");
       return;
     }
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  assert.fail("website never received the connected phone");
+  assert.fail("QR scan never completed authorization");
+});
+
+test("only a seen phone counts as the QR-scan Approve", () => {
+  assert.equal(phoneScanApproves({
+    clientName: "Cursor",
+    computerName: "mac.local",
+    paired: true,
+    phones: [{ name: "iPhone", status: "paired", lastSeenAt: null }],
+    providers: [],
+    relayStatus: "online",
+    mesh: { present: false, thisComputer: "mac.local", computers: ["mac.local"], openTasks: 0 },
+  }), false);
+  assert.equal(phoneScanApproves({
+    clientName: "Cursor",
+    computerName: "mac.local",
+    paired: true,
+    phones: [{ name: "iPhone", status: "seen", lastSeenAt: Date.now() }],
+    providers: [],
+    relayStatus: "online",
+    mesh: { present: false, thisComputer: "mac.local", computers: ["mac.local"], openTasks: 0 },
+  }), true);
 });
 
 test("authorize redirect names only the website request id", async (t) => {

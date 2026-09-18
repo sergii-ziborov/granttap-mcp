@@ -72,6 +72,41 @@ test("relay client rejects spoofed routing and authenticated ciphertext replays"
   assert.equal(received[0]?.type, "agent.event");
 });
 
+test("a phone in a shared room opens a second computer's envelopes", async () => {
+  const first = generateKeyPair();
+  const second = generateKeyPair();
+  const phone = generateKeyPair();
+  const client = new RelayClient({
+    relayUrl: "ws://127.0.0.1:1",
+    room: "room-shared",
+    role: "phone",
+    deviceName: "phone",
+    senderId: "phone-1",
+    myPublicKey: phone.publicKey,
+    mySecretKey: phone.secretKey,
+    peerPublicKey: first.publicKey,
+    extraPeerPublicKeys: [second.publicKey],
+  });
+  const received: Payload[] = [];
+  client.onMessage((payload) => { received.push(payload); return true; });
+  const payload: Payload = {
+    type: "machine.heartbeat",
+    machine: "Second PC",
+    createdAt: Date.now(),
+  };
+  await receiveRaw(client, encryptedEnvelope(
+    payload,
+    "room-shared",
+    "machine",
+    "phone",
+    second.secretKey,
+    phone.publicKey,
+    "delivery-second",
+  ));
+  assert.equal(received.length, 1);
+  assert.equal(received[0]?.type, "machine.heartbeat");
+});
+
 test("relay ACK waits until one consumer actually accepts the decrypted payload", async () => {
   const machine = generateKeyPair();
   const phone = generateKeyPair();

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { machineConfigPath, phonePairingPath } from "../apps/bridge/src/config";
-import { createOneTimePairing, reusablePairing } from "../apps/bridge/src/pairing";
+import { applyPairingJoin, createOneTimePairing, reusablePairing } from "../apps/bridge/src/pairing";
 import { createGrantTapServer, resetRelay } from "../apps/mcp/src/create-server";
 import { connectInMemory, textResult } from "./support/mcp-client";
 
@@ -65,6 +65,25 @@ test("one-time pairing persists only after relay acceptance and can be reused", 
   assert.equal(reusablePairing(), null);
 });
 
+test("a broken phone half does not mint a different room", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-pairing-keep-room-"));
+  const relay = await pairingRelay();
+  process.env.GRANTTAP_CONFIG_DIR = root;
+  t.after(async () => {
+    delete process.env.GRANTTAP_CONFIG_DIR;
+    await relay.close();
+  });
+  const pairing = await createOneTimePairing(relay.url, { installHooks: false });
+  const original = await readFile(machineConfigPath(), "utf8");
+  await unlink(phonePairingPath());
+  await assert.rejects(
+    createOneTimePairing(relay.url, { installHooks: false }),
+    /already has a pairing room/,
+  );
+  assert.equal(await readFile(machineConfigPath(), "utf8"), original);
+  assert.equal(JSON.parse(original).room, pairing.machineCfg.room);
+});
+
 test("unpaired computers mint distinct candidate rooms until the same iPhone unifies them", async (t) => {
   const firstRoot = await mkdtemp(join(tmpdir(), "granttap-pairing-a-"));
   const secondRoot = await mkdtemp(join(tmpdir(), "granttap-pairing-b-"));
@@ -77,11 +96,38 @@ test("unpaired computers mint distinct candidate rooms until the same iPhone uni
   const first = await createOneTimePairing(relay.url, { installHooks: false });
   process.env.GRANTTAP_CONFIG_DIR = secondRoot;
   const second = await createOneTimePairing(relay.url, { installHooks: false });
-  // No device has claimed either join yet, so the candidates differ. Once a
-  // phone or tablet is in a room, every later phone, tablet, or PC it pairs
-  // joins that room. A Mesh invite shares Mesh and is not that room.
+  // No device has claimed either join yet, so the candidates differ.
   assert.notEqual(first.machineCfg.room, second.machineCfg.room);
   assert.notEqual(first.machineCfg.senderId, second.machineCfg.senderId);
+
+  process.env.GRANTTAP_CONFIG_DIR = secondRoot;
+  const adoptedJoin = applyPairingJoin({
+    type: "pairing.join",
+    room: first.phoneCfg.room,
+    relayUrl: first.phoneCfg.relayUrl,
+    phonePublicKey: first.phoneCfg.myPublicKey,
+    phoneCfg: {
+      ...first.phoneCfg,
+      extraPeerPublicKeys: [second.machineCfg.myPublicKey],
+    },
+    createdAt: Date.now(),
+  });
+  assert.equal(adoptedJoin, "adopted");
+  const adopted = JSON.parse(await readFile(machineConfigPath(), "utf8")) as {
+    room: string; senderId: string; myPublicKey: string; peerPublicKey: string;
+  };
+  assert.equal(adopted.room, first.machineCfg.room);
+  assert.equal(adopted.senderId, second.machineCfg.senderId);
+  assert.equal(adopted.myPublicKey, second.machineCfg.myPublicKey);
+  assert.equal(adopted.peerPublicKey, first.phoneCfg.myPublicKey);
+  assert.equal(applyPairingJoin({
+    type: "pairing.join",
+    room: first.phoneCfg.room,
+    relayUrl: first.phoneCfg.relayUrl,
+    phonePublicKey: first.phoneCfg.myPublicKey,
+    phoneCfg: first.phoneCfg,
+    createdAt: Date.now(),
+  }), "already");
 });
 
 test("pairing failures do not persist a replacement", async (t) => {

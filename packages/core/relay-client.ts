@@ -12,7 +12,7 @@
 import WebSocket from "ws";
 import { createHash } from "node:crypto";
 import { Envelope, Payload, type Role } from "../protocol/schema";
-import { open, openWithTransferKey, seal, sealWithTransferKey } from "./crypto";
+import { openFromPeers, openWithTransferKey, peerPublicKeys, seal, sealWithTransferKey } from "./crypto";
 import type { PeerConfig, RelayClientOptions, SendOptions } from "./relay-client-types";
 export type { PeerConfig, RelayClientOptions, SendOptions } from "./relay-client-types";
 import { sealEnvelope } from "./relay-envelope";
@@ -125,7 +125,13 @@ export class RelayClient {
     if (env.from !== this.otherRole()) return;
     if (env.to !== this.cfg.role && env.to !== "all") return;
     if (env.expiresAt != null && env.expiresAt <= Date.now()) return;
-    const body = open(env.nonce, env.box, this.cfg.peerPublicKey, this.cfg.mySecretKey);
+    const body = openFromPeers(
+      env.nonce,
+      env.box,
+      this.cfg.mySecretKey,
+      this.cfg.peerPublicKey,
+      this.cfg.extraPeerPublicKeys,
+    );
     if (body === null) return; // not for us, or tampered
     const parsedPayload = Payload.safeParse(body);
     if (!parsedPayload.success) return;
@@ -200,7 +206,17 @@ export class RelayClient {
   ): Promise<void> {
     const ws = this.ws;
     if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error("relay not connected");
-    ws.send(sealEnvelope(this.cfg, payload, to, options));
+    const peers = this.cfg.role === "phone" && (to === "machine" || to === "all")
+      ? peerPublicKeys(this.cfg.peerPublicKey, this.cfg.extraPeerPublicKeys)
+      : [this.cfg.peerPublicKey];
+    for (const peerPublicKey of peers) {
+      ws.send(sealEnvelope(
+        { ...this.cfg, peerPublicKey },
+        payload,
+        to,
+        peers.length === 1 ? options : { ...options, deliveryId: undefined },
+      ));
+    }
   }
 
   setSessionKey(sessionId: string, key: string): void {

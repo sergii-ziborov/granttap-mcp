@@ -21,6 +21,7 @@ export const connectionOutput = {
   expiresAt: z.number().nullable(),
   expiresInMinutes: z.number().int().positive().nullable(),
   providers: z.array(z.object({ id: z.string(), status: z.string(), detail: z.string() })),
+  roomPrefix: z.string(),
 };
 
 export type PendingCode = {
@@ -59,6 +60,7 @@ export class ConnectionState {
         expiresAt: this.pending?.expiresAt ?? null,
         expiresInMinutes: code ? Math.max(1, Math.ceil((code.expiresAt - now) / 60_000)) : null,
         providers: inspectProviderStatusSnapshot().providers,
+        roomPrefix: config?.room ? config.room.slice(0, 8) : "",
       },
       _meta: { granttap: code ? { pairingUri: code.pairingUri, qrDataUrl: code.qrDataUrl } : {} },
     };

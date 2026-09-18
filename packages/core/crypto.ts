@@ -34,6 +34,15 @@ export function seal(
   return { nonce: b64(nonce), box: b64(box) };
 }
 
+/** Distinct peer public keys in one pairing room. */
+export function peerPublicKeys(
+  peerPublicKey: string,
+  extraPeerPublicKeys: string[] | undefined = [],
+): string[] {
+  const keys = [peerPublicKey, ...extraPeerPublicKeys];
+  return [...new Set(keys.filter((key) => key.length > 0))];
+}
+
 /** Open a sealed payload. Returns null on any auth/parse failure. */
 export function open(
   nonce: string,
@@ -53,6 +62,21 @@ export function open(
   } catch {
     return null;
   }
+}
+
+/** A phone in a shared room opens envelopes from every machine public key. */
+export function openFromPeers(
+  nonce: string,
+  box: string,
+  mySecretKey: string,
+  peerPublicKey: string,
+  extraPeerPublicKeys?: string[],
+): unknown | null {
+  for (const peer of peerPublicKeys(peerPublicKey, extraPeerPublicKeys)) {
+    const body = open(nonce, box, peer, mySecretKey);
+    if (body !== null) return body;
+  }
+  return null;
 }
 
 /** Short random hex id (rooms, request ids, device ids). */
