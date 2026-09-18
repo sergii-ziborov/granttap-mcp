@@ -24,8 +24,8 @@ function render(value) {
     disconnected: ["Not paired", "Add a device", "Tap Add a device. Scan the QR in GrantTap on iPhone, iPad, or Android."],
     pairing: ["Waiting for a device", "Scan this QR", "Keep this card open. The QR is only here — not in chat."],
     expired: ["QR expired", "Add a device again", "Tap Add a device for a new QR in this same room."],
-    paired: ["Device saved", "Devices in this room", "Phones, tablets, and PCs share this pairing room. A Mesh link shares Mesh only — it is not this room."],
-    connected: ["Device seen", "Devices in this room", "GrantTap received a recent message from a device in this room."],
+    paired: ["Saved pairing", "Saved pairing", "This Mac has one saved pairing slot. That is not a registry of every device in the room, and a Mesh link is a different membership."],
+    connected: ["Last confirmed activity", "Saved pairing", "GrantTap confirmed activity on the saved pairing. A shared room is not a shared Project."],
   };
   const [status, heading, detail] = labels[state.status] || labels.disconnected;
   const hasPhone = (state.phones || []).length > 0 || state.status === "paired" || state.status === "connected";
@@ -37,11 +37,12 @@ function render(value) {
   $("connect").textContent = hasPhone ? "Add another device" : "Add a device";
   $("connect").classList.toggle("hidden", state.status === "pairing");
   $("reconnect").classList.toggle("hidden", state.status === "pairing" || state.status === "disconnected");
+  $("new-qr")?.classList.toggle("hidden", state.status !== "expired");
   $("phones").replaceChildren();
   for (const phone of state.phones || []) {
     const row = document.createElement("li");
     const when = phone.lastSeenAt ? new Date(phone.lastSeenAt).toLocaleString() : "saved on this Mac";
-    row.textContent = `${phone.name} · ${phone.status === "seen" ? "online just now" : "paired, not seen yet"} · ${when}`;
+    row.textContent = `${phone.name} · ${phone.status === "seen" ? "last confirmed activity just now" : "saved pairing"} · ${when}`;
     $("phones").append(row);
   }
   $("phones-empty").classList.toggle("hidden", (state.phones || []).length > 0);
@@ -72,8 +73,10 @@ function updateExpiry() {
   if (current.status === "pairing" && remaining <= 0) {
     clearCode();
     $("status").textContent = "QR expired";
-    $("detail").textContent = "Refreshing a new QR…";
-    call("reconnect", { confirmed: true });
+    $("heading").textContent = "Create a new QR";
+    $("detail").textContent = "The previous code expired. Tap Create a new QR when you want another attempt. GrantTap will not mint one from this timer.";
+    $("new-qr")?.classList.remove("hidden");
+    $("connect").classList.add("hidden");
   }
 }
 $("connect").addEventListener("click", () => {
@@ -95,6 +98,11 @@ $("cancel").addEventListener("click", () => $("confirm").classList.add("hidden")
 $("confirm-reconnect").addEventListener("click", () => {
   $("confirm").classList.add("hidden");
   call("reconnect", { confirmed: true });
+});
+$("new-qr")?.addEventListener("click", () => {
+  $("confirm-copy").textContent = "Create a new QR starts one new enrollment attempt in this same room. The saved pairing stays. This is not automatic.";
+  $("confirm").classList.remove("hidden");
+  $("cancel").focus();
 });
 $("copy").addEventListener("click", async () => {
   updateExpiry();

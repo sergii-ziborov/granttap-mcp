@@ -31,7 +31,7 @@ export function isMachineConfigured(): boolean {
   }
 }
 
-/** One local pairing slot: keys exist, or a recent encrypted phone message was seen. */
+/** One saved pairing slot on this Mac, not every device that knows the room. */
 export function listPairedPhones(phoneLastSeenAt: number | null = null, now = Date.now()): PairedPhone[] {
   if (!isMachineConfigured()) return [];
   let name = "iPhone";

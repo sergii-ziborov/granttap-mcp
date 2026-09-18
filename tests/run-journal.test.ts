@@ -109,7 +109,7 @@ test("the map reads as a page and the brief as the few lines that matter to one 
   const { snapshot } = seeded(root);
   const map = meshMap(snapshot, at + 60_000);
   assert.match(map, /^# Project Mesh — Payments\n/);
-  assert.match(map, /_3 Tasks · 2 live executions · /);
+  assert.match(map, /_3 Tasks · 2 active in the last hour · /);
   assert.match(map, /- \*\*Add refunds to the API\*\* — working; claude on mac-a in payments-api — agent question: Which topic carries refunds\?/);
   assert.match(map, /- \*\*Consume refund events\*\* — working; codex on mac-a in payment-worker — task progress: Phone: «fold it» → done/);
   assert.match(map, /- \*\*Old idea\*\* — working\n/, "no live execution, no computer");
@@ -128,7 +128,7 @@ test("the map reads as a page and the brief as the few lines that matter to one 
   assert.deepEqual(meshBrief(snapshot, "task-idle").filter((line) => line.startsWith("Next to you")), []);
 
   const empty = meshMap({ ...snapshot, tasks: [], executions: [], claims: [], dependencies: [], events: [], peers: undefined }, at);
-  assert.match(empty, /_0 Tasks · 0 live executions/);
+  assert.match(empty, /_0 Tasks · 0 active in the last hour/);
   assert.match(empty, /- \(none\)\n\n## Editing now\n\n- \(nothing claimed\)\n\n## Other side\n\n- \(no integration map; commit a WEAVATRIX\.md/);
   assert.match(empty, /## Recent\n\n- \(quiet\)/);
 });
@@ -292,7 +292,7 @@ test("a chat that has not done anything for an hour is idle, not live, in the ma
     workspace: "/repo/payments-api", startedAt: now - 24 * 60 * 60_000, updatedAt: now - 24 * 60 * 60_000,
   });
   const map = meshMap(aged, now);
-  assert.match(map, /_3 Tasks · 1 live execution · 2 idle · /);
+  assert.match(map, /_3 Tasks · 1 active in the last hour · 2 idle · /);
   assert.match(map, /\*\*Add refunds to the API\*\* — working; claude on mac-a in payments-api, active 5 min ago/);
   assert.match(map, /\*\*Consume refund events\*\* — working; idle since 2 h ago/);
   const brief = meshBrief(aged, "task-api", now);

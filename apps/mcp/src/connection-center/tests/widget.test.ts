@@ -98,6 +98,11 @@ test("widget clears secrets when paired or expired and ignores foreign messages"
   await ui.settle();
   assert.equal(ui.el("status").textContent, "QR expired");
   assert.equal(ui.el("qr").hasAttribute("src"), false);
+  const before = ui.calls.length;
+  ui.poll();
+  assert.equal(ui.calls.some((item) => item.name === "reconnect"), false);
+  assert.equal(ui.calls.length, before);
+  assert.equal(ui.el("new-qr").classList.contains("hidden"), false);
 });
 
 
@@ -156,7 +161,7 @@ test("pending pairing refreshes while visible and host notifications update the 
   notify("ui/notifications/tool-result", { structuredContent: { status: "connected", phoneLastSeenAt: Date.now() } }, "https://foreign.example");
   assert.equal(ui.el("status").textContent, "Waiting for a device");
   notify("ui/notifications/tool-result", { structuredContent: { status: "connected", phoneLastSeenAt: Date.now(), phones: [{ name: "iPhone", status: "seen", lastSeenAt: Date.now() }] } });
-  assert.equal(ui.el("status").textContent, "Device seen");
+  assert.equal(ui.el("status").textContent, "Last confirmed activity");
   assert.match(ui.el("phones").textContent || "", /iPhone/);
   assert.equal(ui.el("phones-empty").classList.contains("hidden"), true);
   const connectedCount = ui.calls.length;

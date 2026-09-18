@@ -42,7 +42,7 @@ export function registerConnectTool(server: McpServer): void {
   server.registerTool(
     "connect",
     {
-      description: "Open the GrantTap connection card: devices in this pairing room and Add a device. QR stays on the card, not in chat.",
+      description: "Open the GrantTap connection card: the saved pairing slot and Add a device. QR stays on the card, not in chat.",
       inputSchema: {},
       outputSchema: connectionOutput,
       annotations: changes,
@@ -105,7 +105,7 @@ function connectionResult(state: ConnectionState): CallToolResult {
     ? "Use the GrantTap card: tap Add a device if needed, then scan the QR on the card."
     : status === "disconnected" ? "Use the GrantTap card and tap Add a device. The QR stays on the card."
     : status === "expired" ? "The card QR expired. Tap Add a device again and confirm."
-    : "The GrantTap card lists devices in this pairing room. Add another device to join the same room. A Mesh link shares Mesh only.";
+    : "The GrantTap card shows the saved pairing room on this Mac and last confirmed activity. Add another device to start a new enrollment attempt. A Mesh link shares Mesh only.";
   return {
     ...snapshot,
     content: [{ type: "text", text:

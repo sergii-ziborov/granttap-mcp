@@ -54,3 +54,32 @@ export function projectScopedSnapshot(
     events: snapshot.events.filter((item) => ids.has(item.taskId)),
   });
 }
+
+/** Filter first, then rank. Search never sees a task the credential hid. */
+export function searchScopedSnapshot(
+  snapshot: SnapshotValue | undefined,
+  query: string,
+  taskIds?: string[],
+): {
+  tasks: SnapshotValue["tasks"];
+  events: SnapshotValue["events"];
+  claims: SnapshotValue["claims"];
+} {
+  const permitted = projectScopedSnapshot(snapshot, taskIds);
+  if (!permitted) return { tasks: [], events: [], claims: [] };
+  const needle = query.trim().toLowerCase();
+  const match = (value: string | undefined) =>
+    !needle || (value != null && value.toLowerCase().includes(needle));
+  return {
+    tasks: permitted.tasks.filter((task) => match(task.taskId) || match(task.title) || match(task.goal)),
+    events: permitted.events.filter((event) =>
+      match(event.eventId)
+      || match(event.eventType)
+      || match(event.payload.summary)
+      || match(event.payload.question)
+      || match(event.payload.answer)
+      || match(event.payload.reason)),
+    claims: permitted.claims.filter((claim) =>
+      match(claim.claimId) || match(claim.resource) || match(claim.taskId)),
+  };
+}

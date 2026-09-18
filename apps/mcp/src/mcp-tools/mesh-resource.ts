@@ -7,8 +7,9 @@ import {
 import { scopedMeshView } from "../../../bridge/src/mesh/scoped-view";
 import { scopedInvocationSlice } from "../../../bridge/src/engine/invocation-scope";
 import { meshMap } from "../../../bridge/src/mesh/map";
-import { isContextCompilerEnabled, isMeshEnabled } from "../../../bridge/src/config/runtime";
-import { compileMeshContext } from "../../../bridge/src/mesh/context-packet";
+import { isMeshEnabled } from "../../../bridge/src/config/runtime";
+import { parseProjectContextMode, renderProjectContext } from "../../../bridge/src/mesh/project-context";
+import { projectScopedSnapshot } from "../../../bridge/src/mesh/snapshot-window";
 
 const MESH_URI = "granttap://mesh/current";
 export const MAP_URI = "granttap://mesh/map";
@@ -26,8 +27,17 @@ const SCOPE_HINT =
  * trust. Other providers set nothing here and keep using minted capabilities.
  */
 export function sessionFromEnvironment(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  return sessionBindingFromEnvironment(env).sessionId;
+}
+
+/** Claude's process env is a bootstrap id, not proof the current chat still owns it. */
+export function sessionBindingFromEnvironment(env: NodeJS.ProcessEnv = process.env): {
+  sessionId?: string;
+  identity: "bound" | "unbound";
+} {
   const id = env.CLAUDE_CODE_SESSION_ID?.trim() ?? "";
-  return /^[A-Za-z0-9._-]{8,128}$/.test(id) ? id : undefined;
+  if (/^[A-Za-z0-9._-]{8,128}$/.test(id)) return { sessionId: id, identity: "bound" };
+  return { identity: "unbound" };
 }
 
 /** This chat's Project as a page of markdown, or how to get one. */
@@ -62,20 +72,30 @@ export function registerMeshResource(server: McpServer): void {
     },
     async (uri) => {
       // A server that knows its chat serves that chat's own scope here.
-      const sessionId = sessionFromEnvironment();
-      const capability = isMeshEnabled() && sessionId ? executionCapabilityFor(sessionId) : undefined;
+      const binding = sessionBindingFromEnvironment();
+      const capability = isMeshEnabled() && binding.sessionId
+        ? executionCapabilityFor(binding.sessionId)
+        : undefined;
       const view = capability ? scopedMeshView(capability) : undefined;
-      if (view) return json(uri.href, {
-        ...view,
-        runtime: await scopedInvocationSlice(capability!),
-        packet: isContextCompilerEnabled() ? compileMeshContext(view) : undefined,
-        enabled: true, scoped: true,
-      });
+      if (view) {
+        const mode = parseProjectContextMode(uri.searchParams.get("mode") ?? undefined);
+        const body = renderProjectContext(view, mode);
+        return json(uri.href, {
+          ...((body && typeof body === "object") ? body : {}),
+          runtime: mode === "full" ? await scopedInvocationSlice(capability!) : undefined,
+          enabled: true,
+          scoped: true,
+          identity: binding.identity,
+        });
+      }
       return json(uri.href, {
         schema: "granttap.mesh-scope-hint.v1",
         enabled: isMeshEnabled(),
         scoped: false,
-        hint: SCOPE_HINT,
+        identity: binding.identity,
+        hint: binding.identity === "unbound"
+          ? `${SCOPE_HINT} This server has no current session identity; it will not guess one from the working directory.`
+          : SCOPE_HINT,
       });
     },
   );
@@ -114,11 +134,13 @@ export function registerMeshResource(server: McpServer): void {
       const resolved = token === "current" ? undefined : resolveExecutionCapability(token);
       const view = resolved ? scopedMeshView(resolved) : undefined;
       if (!view) return json(uri.href, { schema: "granttap.mesh-scope.v1", enabled: true, scoped: false, hint: SCOPE_HINT });
+      const mode = parseProjectContextMode(uri.searchParams.get("mode") ?? undefined);
+      const body = renderProjectContext(view, mode);
       return json(uri.href, {
-        ...view,
-        runtime: await scopedInvocationSlice(resolved!),
-        packet: isContextCompilerEnabled() ? compileMeshContext(view) : undefined,
-        enabled: true, scoped: true,
+        ...(typeof body === "object" && body ? body : {}),
+        runtime: mode === "full" ? await scopedInvocationSlice(resolved!) : undefined,
+        enabled: true,
+        scoped: true,
       });
     },
   );
@@ -137,9 +159,10 @@ export function registerMeshResource(server: McpServer): void {
       const token = Array.isArray(capability) ? capability[0] : capability;
       const resolved = isMeshEnabled() ? resolveExecutionCapability(token) : undefined;
       const scope = resolved ? liveExecutionScope(resolved.sessionId) : undefined;
-      const text = scope && scope.snapshot.projectId === resolved?.projectId
-        ? meshMap(scope.snapshot)
-        : mapFor(undefined);
+      const permitted = scope && scope.snapshot.projectId === resolved?.projectId
+        ? projectScopedSnapshot(scope.snapshot)
+        : undefined;
+      const text = permitted ? meshMap(permitted) : mapFor(undefined);
       return { contents: [{ uri: uri.href, mimeType: "text/markdown", text }] };
     },
   );

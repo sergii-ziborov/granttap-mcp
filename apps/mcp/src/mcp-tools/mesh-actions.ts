@@ -14,7 +14,8 @@ import {
 } from "../../../bridge/src/mesh/endpoint";
 import { handoffReceipt } from "../../../bridge/src/mesh/handoff";
 import { localMeshStore } from "../../../bridge/src/mesh/local";
-import { projectScopedSnapshot } from "../../../bridge/src/mesh/snapshot-window";
+import { meshMap } from "../../../bridge/src/mesh/map";
+import { projectScopedSnapshot, searchScopedSnapshot } from "../../../bridge/src/mesh/snapshot-window";
 import { grokBotRelay, publishGrokBotEvent } from "./mesh-relay";
 
 export type MeshScope = { actorId: string; projectId: string; taskId: string };
@@ -74,6 +75,30 @@ export function status(scope: Omit<MeshScope, "taskId">) {
     skills: snapshot.skills,
     incomplete: snapshot.incomplete,
   } : { project: null, tasks: [], executions: [], claims: [], dependencies: [], events: [] };
+}
+
+function permittedStatusSnapshot(scope: Omit<MeshScope, "taskId">) {
+  const bundle = authorizeGrokBotOperation({ ...scope, operation: "status" });
+  return projectScopedSnapshot(
+    localMeshStore().snapshot(scope.projectId),
+    bundle.credential.taskIds,
+  );
+}
+
+/** Same permitted window as status(), as markdown. */
+export function map(scope: Omit<MeshScope, "taskId">): string {
+  const snapshot = permittedStatusSnapshot(scope);
+  return snapshot ? meshMap(snapshot) : "# Project Mesh\n\n";
+}
+
+/** Same permitted window as status(), then ranked by the query. */
+export function search(scope: Omit<MeshScope, "taskId">, query: string) {
+  const bundle = authorizeGrokBotOperation({ ...scope, operation: "status" });
+  return searchScopedSnapshot(
+    localMeshStore().snapshot(scope.projectId),
+    query,
+    bundle.credential.taskIds,
+  );
 }
 
 export function task(scope: MeshScope) {

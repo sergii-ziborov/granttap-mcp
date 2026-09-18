@@ -10,12 +10,12 @@
  * The text is bounded, and the bound is honoured by saying less, never by
  * cutting: fewer runs, then fewer Mesh lines, then shorter run lines. The
  * Project's name and the way to the full map are always kept. A run is
- * marked read only once it was actually shown, whole or in its short form;
- * what did not fit comes on the next turn instead of vanishing.
+ * offered in the hook response only once it was actually shown; that is not
+ * an ACK. What did not fit comes on the next turn instead of vanishing.
  */
 import { liveExecutionScope } from "./capability";
 import {
-  describeRun, markRunsDelivered, unreadRuns, type RunDescriptionLimits, type RunRecord,
+  describeRun, markRunsOffered, unreadRuns, type RunDescriptionLimits, type RunRecord,
 } from "./journal";
 import { meshBrief } from "./map";
 import type { MeshSnapshot } from "../../../../packages/protocol/schema";
@@ -34,7 +34,7 @@ export type PromptContextDeps = {
 
 const liveDeps: PromptContextDeps = {
   unread: unreadRuns,
-  markDelivered: markRunsDelivered,
+  markDelivered: markRunsOffered,
   scope: (sessionId) => {
     const scope = liveExecutionScope(sessionId);
     return scope ? { snapshot: scope.snapshot, taskId: scope.execution.taskId } : undefined;

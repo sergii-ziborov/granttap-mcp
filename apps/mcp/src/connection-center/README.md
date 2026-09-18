@@ -14,8 +14,9 @@ transfer code but preserves the pairing. It never persists transfer secrets.
 Saved keys, this process's relay socket, and recent authenticated phone messages
 are distinct. Unknown phone availability stays unknown. Provider readiness is
 configuration information, not evidence that the provider is currently running.
-A phone observation clears the pending QR. Expired QR images and copy actions
-are removed; reconnect can issue a replacement after confirmation.
+A phone observation does not clear a pending QR. Enrollment completes only when
+a new endpoint identity is adopted. Expired QR images and copy actions are
+removed; Create a new QR or confirmed reconnect can issue a replacement.
 
 The UI initializes the MCP Apps bridge before invoking tools, bounds waits,
 checks parent messages, refreshes pending pairing while visible, and keeps

@@ -7,7 +7,7 @@ import { MeshSnapshot } from "../packages/protocol/schema";
 import { projectSharedSkills } from "../apps/bridge/src/capabilities/skills";
 import { MeshStore } from "../apps/bridge/src/mesh/store";
 import { projectScopedSnapshot, selectSnapshotTasks } from "../apps/bridge/src/mesh/snapshot-window";
-import { status } from "../apps/mcp/src/mcp-tools/mesh-actions";
+import { map, search, status } from "../apps/mcp/src/mcp-tools/mesh-actions";
 import { saveGrokBotEndpoint } from "../apps/bridge/src/mesh/endpoint";
 import { resetLocalMeshStore, localMeshStore } from "../apps/bridge/src/mesh/local";
 
@@ -30,6 +30,34 @@ test("an old live task stays in the 64-task window and marks the snapshot incomp
   assert.equal(tasks.length, 64);
   assert.ok(tasks.some((item) => item.taskId === "old-live"));
   assert.equal(tasks.filter((item) => item.state === "completed").length, 63);
+});
+
+test("65 tasks keep an old live claim and mark the snapshot incomplete", async () => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-mesh-65-"));
+  const store = new MeshStore(join(root, "mesh.json"), () => now);
+  store.upsertProject({
+    projectId: "project", name: "Project", canonicalRepositoryId: "repo", createdAt: now,
+  });
+  store.upsertTask(task("old-live", "working", now - 65_000));
+  for (let index = 0; index < 64; index += 1) {
+    store.upsertTask(task(`done-${index}`, "completed", now + index));
+  }
+  store.claim({
+    claimId: "old-claim", projectId: "project", taskId: "old-live",
+    ownerSessionId: "claude", resource: "src/auth.ts", mode: "claim",
+    createdAt: now - 65_000, expiresAt: now + 60_000,
+  });
+  assert.equal(store.acceptEvent({
+    type: "mesh.event", sessionId: "old-live", eventId: "old-event",
+    projectId: "project", taskId: "old-live", sourceSessionId: "claude",
+    eventType: "TASK_PROGRESS", createdAt: now - 64_000,
+    payload: { summary: "still working", reason: "needs the old claim" },
+  }), true);
+  const snapshot = store.snapshot("project");
+  assert.equal(snapshot?.incomplete, true);
+  assert.equal(snapshot?.tasks.some((item) => item.taskId === "old-live"), true);
+  assert.equal(snapshot?.claims.some((item) => item.claimId === "old-claim"), true);
+  assert.equal(snapshot?.events.some((item) => item.eventId === "old-event"), true);
 });
 
 test("A-only credential status hides task B claims and events", async (t) => {
@@ -88,6 +116,10 @@ test("A-only credential status hides task B claims and events", async (t) => {
   const body = status({ actorId: "qa", projectId: "project" });
   assert.deepEqual(body.tasks.map((item) => item.taskId), ["task-a"]);
   assert.equal(body.claims.some((item) => item.taskId === "task-b"), false);
+  assert.doesNotMatch(map({ actorId: "qa", projectId: "project" }), /task-b|secret/);
+  const found = search({ actorId: "qa", projectId: "project" }, "secret");
+  assert.equal(found.tasks.some((item) => item.taskId === "task-b"), false);
+  assert.equal(found.claims.some((item) => item.claimId === "secret-b"), false);
 });
 
 test("project skills ride on the snapshot and old snapshots without them still parse", async () => {

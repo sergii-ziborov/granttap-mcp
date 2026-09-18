@@ -118,6 +118,7 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   const mesh = await client.readResource({ uri: "granttap://mesh/current" });
   const meshState = JSON.parse((mesh.contents[0] as { text?: string }).text ?? "{}");
   assert.equal(meshState.scoped, false);
+  assert.equal(meshState.identity, "unbound");
   assert.equal("projects" in meshState, false);
   assert.equal("tasks" in meshState, false);
   const forged = await client.readResource({ uri: "granttap://mesh/not-a-capability" });

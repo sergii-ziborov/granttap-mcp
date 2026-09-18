@@ -5,6 +5,7 @@ import { isMachineConfigured, listPairedPhones, readOnlyMachineConfigPath } from
 import { inspectProviderStatusSnapshot } from "../provider-status";
 import { packageVersion } from "../package-version";
 import { connectionRuntimeStatus } from "../mcp-tools/relay";
+import { beginEnrollment, cancelEnrollment, enrollmentIsOpen } from "./enrollment";
 
 export const connectionOutput = {
   status: z.enum(["disconnected", "paired", "pairing", "expired", "connected"]),
@@ -25,6 +26,7 @@ export const connectionOutput = {
 };
 
 export type PendingCode = {
+  attemptId: string;
   room: string;
   expiresAt: number;
   pairingUri: string;
@@ -35,18 +37,29 @@ export type PendingCode = {
 export class ConnectionState {
   private pending: PendingCode | null = null;
 
-  remember(code: PendingCode): void {
-    this.pending = code;
+  remember(code: Omit<PendingCode, "attemptId"> & { attemptId?: string }): void {
+    const attempt = beginEnrollment({
+      room: code.room,
+      peerPublicKey: isMachineConfigured()
+        ? loadConfig(readOnlyMachineConfigPath()).peerPublicKey
+        : null,
+    });
+    this.pending = { ...code, attemptId: code.attemptId ?? attempt.attemptId };
   }
 
   snapshot(now = Date.now()) {
     const config = isMachineConfigured() ? loadConfig(readOnlyMachineConfigPath()) : null;
     const runtime = connectionRuntimeStatus(config?.room);
-    if (!config || this.pending?.room !== config.room || runtime.phoneLastSeenAt) this.pending = null;
+    const phones = listPairedPhones(runtime.phoneLastSeenAt, now);
+    const lastSeenAt = phones[0]?.lastSeenAt ?? runtime.phoneLastSeenAt;
+    if (!config || this.pending?.room !== config.room) {
+      cancelEnrollment();
+      this.pending = null;
+    } else if (this.pending && !enrollmentIsOpen(this.pending.attemptId)) this.pending = null;
     const expired = this.pending !== null && this.pending.expiresAt <= now;
     const status = !config ? "disconnected" : this.pending
       ? expired ? "expired" : "pairing"
-      : runtime.phoneLastSeenAt && now - runtime.phoneLastSeenAt < 60_000 ? "connected" : "paired";
+      : lastSeenAt && now - lastSeenAt < 60_000 ? "connected" : "paired";
     const code = expired ? null : this.pending;
     return {
       structuredContent: {
@@ -55,8 +68,8 @@ export class ConnectionState {
         version: packageVersion(),
         relay: config ? new URL(config.relayUrl).host : "",
         relayStatus: runtime.relayStatus,
-        phoneLastSeenAt: runtime.phoneLastSeenAt,
-        phones: listPairedPhones(runtime.phoneLastSeenAt, now),
+        phoneLastSeenAt: lastSeenAt,
+        phones,
         expiresAt: this.pending?.expiresAt ?? null,
         expiresInMinutes: code ? Math.max(1, Math.ceil((code.expiresAt - now) / 60_000)) : null,
         providers: inspectProviderStatusSnapshot().providers,

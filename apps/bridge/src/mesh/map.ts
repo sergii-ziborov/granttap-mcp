@@ -81,7 +81,7 @@ export function meshMap(snapshot: MeshSnapshot, now = Date.now()): string {
   const idle = snapshot.executions.filter((item) => item.endedAt == null && !isLive(item, now));
   lines.push(`# Project Mesh — ${snapshot.project.name}`);
   lines.push("");
-  lines.push(`_${snapshot.tasks.length} Task${snapshot.tasks.length === 1 ? "" : "s"} · ${live.length} live execution${live.length === 1 ? "" : "s"}${idle.length ? ` · ${idle.length} idle` : ""} · ${new Date(now).toISOString()}_`);
+  lines.push(`_${snapshot.tasks.length} Task${snapshot.tasks.length === 1 ? "" : "s"} · ${live.length} active in the last hour${idle.length ? ` · ${idle.length} idle` : ""}${snapshot.incomplete ? " · snapshot incomplete" : ""} · ${new Date(now).toISOString()}_`);
 
   lines.push("", "## Tasks", "");
   const tasks = [...snapshot.tasks].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, MAX_MAP_TASKS);

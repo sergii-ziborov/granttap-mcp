@@ -14,6 +14,8 @@ import { join } from "node:path";
 import { configDir } from "../config/paths";
 
 export type RunRecord = {
+  /** Stable id for this run. Start time is not a confirmation key. */
+  runId?: string;
   /** When the run started and finished, epoch ms. */
   at: number;
   endedAt: number;
@@ -29,7 +31,12 @@ export type RunRecord = {
   tools: number;
   /** The run hit the delivery timeout and was stopped mid-work. */
   cutOff?: boolean;
-  /** When a live session was told about this run. */
+  /**
+   * When a hook response included this run. That is offered, not an ACK that
+   * the host accepted it or that the model understood it.
+   */
+  offeredAt?: number;
+  /** @deprecated same instant as offeredAt; kept so older journals still parse. */
   deliveredAt?: number;
 };
 
@@ -64,7 +71,8 @@ export function runJournal(sessionId: string): RunRecord[] {
       .flatMap((line) => {
         try {
           const record = JSON.parse(line) as RunRecord;
-          return typeof record.at === "number" && typeof record.prompt === "string" ? [record] : [];
+          if (typeof record.at !== "number" || typeof record.prompt !== "string") return [];
+          return [{ ...record, runId: record.runId || `run:${record.at}` }];
         } catch {
           return [];
         }
@@ -78,6 +86,7 @@ export function recordRun(sessionId: string, record: RunRecord): void {
   try {
     const bounded: RunRecord = {
       ...record,
+      runId: record.runId || `run:${record.at}`,
       prompt: compactText(record.prompt, MAX_PROMPT_CHARS),
       outcome: compactText(record.outcome, MAX_OUTCOME_CHARS),
       files: record.files.slice(0, MAX_FILES),
@@ -88,27 +97,42 @@ export function recordRun(sessionId: string, record: RunRecord): void {
   }
 }
 
-/** Runs a live session has not been told about yet. */
+function offeredAt(record: RunRecord): number | undefined {
+  return record.offeredAt ?? record.deliveredAt;
+}
+
+/** Runs a live session has not been offered in a hook response yet. */
 export function unreadRuns(sessionId: string): RunRecord[] {
-  return runJournal(sessionId).filter((record) => record.deliveredAt == null);
+  return runJournal(sessionId).filter((record) => offeredAt(record) == null);
 }
 
 /**
- * Mark runs as told. Given `only`, the runs with those start times and no
- * other: a run that did not fit into one prompt stays unread for the next.
+ * Mark runs as included in a hook response. That is offered, not read.
+ * `only` is start times for older callers, or runIds when strings are passed
+ * through `markRunsOffered`.
  */
-export function markRunsDelivered(sessionId: string, at: number, only?: readonly number[]): void {
+export function markRunsOffered(sessionId: string, at: number, only?: readonly number[] | readonly string[]): void {
   try {
-    const chosen = only == null ? undefined : new Set(only);
+    const chosen = only == null ? undefined : new Set(only.map(String));
     const pending = (record: RunRecord) =>
-      record.deliveredAt == null && (chosen == null || chosen.has(record.at));
+      offeredAt(record) == null
+      && (chosen == null || (record.runId != null && chosen.has(record.runId)) || chosen.has(String(record.at)));
     const records = runJournal(sessionId);
     if (!records.some(pending)) return;
     write(journalPath(sessionId), records.map((record) =>
-      pending(record) ? { ...record, deliveredAt: at } : record));
+      pending(record) ? { ...record, offeredAt: at, deliveredAt: at } : record));
   } catch {
-    // Left unread, it is shown again next time; never worse than that.
+    // Left unoffered, it is shown again next time; never worse than that.
   }
+}
+
+/** @deprecated name; same as markRunsOffered. */
+export function markRunsDelivered(
+  sessionId: string,
+  at: number,
+  only?: readonly number[],
+): void {
+  markRunsOffered(sessionId, at, only);
 }
 
 /** How much of a run one line may carry: fewer files, a shorter outcome, when room is short. */

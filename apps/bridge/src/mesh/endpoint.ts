@@ -96,8 +96,11 @@ export function authorizeGrokBotOperation(input: Authorization): GrokBotEndpoint
   if (!actor || !actor.enabled || actorPolicy?.enabled !== true) throw new Error("Mesh actor is disabled");
   if (!bundle.credential.projectIds.includes(input.projectId)
     || !bundle.policy.projectIds.includes(input.projectId)) throw new Error("Project scope is not allowed");
-  if (input.taskId && bundle.credential.taskIds
-    && !bundle.credential.taskIds.includes(input.taskId)) throw new Error("Task scope is not allowed");
+  if (bundle.credential.taskIds?.length) {
+    if (input.taskId && !bundle.credential.taskIds.includes(input.taskId)) {
+      throw new Error("Task scope is not allowed");
+    }
+  }
   if (!bundle.credential.operations.includes(input.operation)) throw new Error("Mesh operation is not allowed");
   return bundle;
 }
