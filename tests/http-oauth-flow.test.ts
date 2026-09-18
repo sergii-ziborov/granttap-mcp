@@ -193,6 +193,19 @@ test("HTTP OAuth pairs, consents, exchanges a token, and initializes MCP", async
   const newPairing = await reconnect.json() as { alreadyPaired: boolean; qrDataUrl: string };
   assert.equal(newPairing.alreadyPaired, false);
   assert.match(newPairing.qrDataUrl, /^data:image\/png;base64,/);
+  const websiteReconnect = await fetch(`${base}/oauth/pairing`, {
+    method: "POST", headers: {
+      "content-type": "application/x-www-form-urlencoded", origin: websiteOrigin,
+    }, body: new URLSearchParams({ pending_id: second.pendingId, confirmed: "true" }),
+  });
+  assert.equal(websiteReconnect.status, 200);
+  const websitePairing = await websiteReconnect.json() as { alreadyPaired: boolean; viewId?: string };
+  assert.equal(websitePairing.alreadyPaired, false);
+  assert.ok(websitePairing.viewId);
+  const firstView = await fetch(`${base}/oauth/pairing/view?view_id=${pairingBody.viewId}&embed=1`);
+  assert.equal(firstView.status, 404, "a new QR must drop the previous mailbox watch");
+  const latestView = await fetch(`${base}/oauth/pairing/view?view_id=${websitePairing.viewId}&embed=1`);
+  assert.equal(latestView.status, 200);
   assert.deepEqual(await readFile(join(root, "machine.json")), savedPairing);
   const replaced = await fetch(`${base}/oauth/pairing`, {
     method: "POST", headers: {

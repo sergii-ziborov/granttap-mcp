@@ -14,6 +14,7 @@ import { isAllowedLoopbackOrigin, isWebsiteOrigin, WEBSITE_ORIGINS } from "./loo
 
 const VIEW_TTL_MS = 15 * 60_000;
 type View = { qrDataUrl: string; manualToken: string; expiresAt: number; stopWatch?: () => void };
+let loopbackWatchStop: (() => void) | undefined;
 
 function escapeHtml(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;")
@@ -94,22 +95,15 @@ export function installPairingRoutes(app: Express, provider: GrantTapOAuthProvid
         reloadMonitorHelper();
       });
       if (isWebsiteOrigin(origin)) {
-        for (const [id, view] of views) {
-          if (view.expiresAt <= Date.now()) {
-            view.stopWatch?.();
-            views.delete(id);
-          }
-        }
-        if (views.size >= 16) {
-          const oldest = views.keys().next().value!;
-          views.get(oldest)?.stopWatch?.();
-          views.delete(oldest);
-        }
+        for (const view of views.values()) view.stopWatch?.();
+        views.clear();
         const viewId = randomUUID();
         views.set(viewId, { qrDataUrl, manualToken: pairing.manualToken, expiresAt, stopWatch });
         res.json({ ok: true, alreadyPaired: false, viewId, expiresAt });
         return;
       }
+      loopbackWatchStop?.();
+      loopbackWatchStop = stopWatch;
       res.json({
         ok: true, alreadyPaired: false, qrDataUrl, manualToken: pairing.manualToken,
         relay: pairing.httpBase,

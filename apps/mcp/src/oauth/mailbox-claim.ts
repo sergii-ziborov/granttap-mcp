@@ -44,7 +44,7 @@ export function watchMailboxClaim(
   const peek = options.peek ?? peekPairingMailbox;
   const now = options.now ?? Date.now;
   const schedule = options.schedule ?? setTimeout;
-  const intervalMs = options.intervalMs ?? 1_000;
+  const intervalMs = options.intervalMs ?? 2_000;
   let stopped = false;
   let seenOccupied = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
