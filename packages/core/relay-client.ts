@@ -134,7 +134,14 @@ export class RelayClient {
     );
     if (body === null) return; // not for us, or tampered
     const parsedPayload = Payload.safeParse(body);
-    if (!parsedPayload.success) return;
+    if (!parsedPayload.success) {
+      const type = body && typeof body === "object" && "type" in body ? String((body as { type?: unknown }).type) : "";
+      if (type === "pairing.join") {
+        const paths = parsedPayload.error.issues.map((issue) => `${issue.path.join(".")}:${issue.code}`);
+        console.error(`[granttap] dropped pairing.join (${paths.join(",") || "invalid"})`);
+      }
+      return;
+    }
     let payload: Payload = parsedPayload.data;
     if (payload.type === "session.key.grant") {
       // A machine owns native-session keys. The paired phone may forward only

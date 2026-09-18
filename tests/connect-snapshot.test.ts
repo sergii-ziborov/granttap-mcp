@@ -25,6 +25,7 @@ test("connect snapshot lists the saved phone and Mesh without secrets", async (t
   const snapshot = buildConnectSnapshot("Cursor");
   assert.equal(snapshot.clientName, "Cursor");
   assert.equal(snapshot.paired, true);
+  assert.equal(snapshot.roomPrefix, pairing.machineCfg.room.slice(0, 8));
   assert.equal(snapshot.phones[0]?.name, "iPhone");
   assert.equal(snapshot.mesh.present, false);
   assert.ok(snapshot.mesh.thisComputer);

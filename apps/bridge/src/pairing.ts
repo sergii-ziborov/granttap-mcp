@@ -163,7 +163,10 @@ export function applyPairingJoin(payload: PairingJoin): PairingJoinResult {
   };
   if (!validConfig(nextMachine, "machine")) return "rejected";
   saveConfig(machineConfigPath(), nextMachine);
-  saveConfig(phonePairingPath(), payload.phoneCfg);
+  saveConfig(phonePairingPath(), {
+    ...payload.phoneCfg,
+    peerPublicKey: nextMachine.myPublicKey,
+  });
   clearPhoneSeen();
   return "adopted";
 }

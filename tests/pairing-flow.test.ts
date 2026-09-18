@@ -6,6 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { machineConfigPath, phonePairingPath } from "../apps/bridge/src/config";
 import { applyPairingJoin, createOneTimePairing, reusablePairing } from "../apps/bridge/src/pairing";
+import { PairingJoin } from "../packages/protocol/messages/pairing-join";
 import { createGrantTapServer, resetRelay } from "../apps/mcp/src/create-server";
 import { connectInMemory, textResult } from "./support/mcp-client";
 
@@ -120,6 +121,10 @@ test("unpaired computers mint distinct candidate rooms until the same iPhone uni
   assert.equal(adopted.senderId, second.machineCfg.senderId);
   assert.equal(adopted.myPublicKey, second.machineCfg.myPublicKey);
   assert.equal(adopted.peerPublicKey, first.phoneCfg.myPublicKey);
+  const adoptedPhone = JSON.parse(await readFile(phonePairingPath(), "utf8")) as {
+    peerPublicKey: string;
+  };
+  assert.equal(adoptedPhone.peerPublicKey, second.machineCfg.myPublicKey);
   assert.equal(applyPairingJoin({
     type: "pairing.join",
     room: first.phoneCfg.room,
@@ -128,6 +133,14 @@ test("unpaired computers mint distinct candidate rooms until the same iPhone uni
     phoneCfg: first.phoneCfg,
     createdAt: Date.now(),
   }), "already");
+  assert.equal(PairingJoin.parse({
+    type: "pairing.join",
+    room: first.phoneCfg.room,
+    relayUrl: first.phoneCfg.relayUrl,
+    phonePublicKey: first.phoneCfg.myPublicKey,
+    phoneCfg: { ...first.phoneCfg, pushAuth: "" },
+    createdAt: Date.now(),
+  }).type, "pairing.join");
 });
 
 test("pairing failures do not persist a replacement", async (t) => {

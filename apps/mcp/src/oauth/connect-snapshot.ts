@@ -27,6 +27,8 @@ export type ConnectSnapshot = {
   clientName: string;
   computerName: string;
   paired: boolean;
+  /** First 8 hex chars of the pairing room. Never the full id. */
+  roomPrefix: string;
   phones: ReturnType<typeof listPairedPhones>;
   providers: ConnectProvider[];
   relayStatus: "online" | "offline" | "unknown";
@@ -39,13 +41,13 @@ export function publicClientName(name: string | undefined): string {
 
 export function buildConnectSnapshot(clientName?: string): ConnectSnapshot {
   const paired = isMachineConfigured();
-  const runtime = connectionRuntimeStatus(
-    paired ? loadConfig(readOnlyMachineConfigPath()).room : undefined,
-  );
+  const room = paired ? loadConfig(readOnlyMachineConfigPath()).room : "";
+  const runtime = connectionRuntimeStatus(room || undefined);
   return {
     clientName: publicClientName(clientName),
     computerName: hostname(),
     paired,
+    roomPrefix: room ? room.slice(0, 8) : "",
     phones: listPairedPhones(runtime.phoneLastSeenAt),
     providers: inspectAgentIntegrations()
       .filter((item): item is typeof item & { agent: ConnectProvider["id"] } =>

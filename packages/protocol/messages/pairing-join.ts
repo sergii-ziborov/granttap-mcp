@@ -13,7 +13,10 @@ export const PairingJoinPhone = z.object({
   myPublicKey: PairingKey,
   mySecretKey: PairingKey,
   peerPublicKey: PairingKey,
-  pushAuth: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  pushAuth: z.preprocess(
+    (value) => value === "" || value == null ? undefined : value,
+    z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  ),
   extraPeerPublicKeys: z.array(PairingKey).max(16).optional(),
 }).strict();
 export type PairingJoinPhone = z.infer<typeof PairingJoinPhone>;
