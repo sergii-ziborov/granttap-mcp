@@ -260,8 +260,9 @@ and change settings on [granttap.com/connect](https://granttap.com/connect)
 and in the GrantTap app. Authenticate opens that page even when this Mac is
 already paired — Approve the coding app, Reconnect, or Add another. A scan in
 GrantTap authorizes a new device; a saved pairing does not skip the page.
-Do not add GrantTap in Cursor Customize → MCPs. A user HTTP entry at
-`http://127.0.0.1:17342/mcp` is why Cloud shows fetch failed.
+Do not add GrantTap in Cursor Customize → MCPs. Cloud **Error · fetch
+failed** is leftover HTTP at `http://127.0.0.1:17342/mcp` — a user MCP row
+or an old plugin `mcp.json`. The Cursor plugin is stdio (`node -e`).
 
 Open GrantTap from the plugin connection card. Pairing status, a one-time QR
 when needed, and confirmed reconnect stay on that card, on

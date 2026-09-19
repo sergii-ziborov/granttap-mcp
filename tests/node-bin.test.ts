@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { Script } from "node:vm";
 import { isCursorHelperNode, resolveMonitorNodeBin } from "../apps/bridge/src/config/node-bin";
 import { isEphemeralNpxInstall } from "../apps/mcp/src/http-service/common";
 
@@ -60,10 +61,13 @@ test("Cursor plugin MCP starts from a foreign cwd, unlike a relative bootstrap p
   assert.notEqual(relative.status, 0);
   assert.match(`${relative.stderr}${relative.stdout}`, /Cannot find module|MODULE_NOT_FOUND/i);
 
-  // Configure talks HTTP on loopback. cwd of the coding app must not matter.
-  assert.equal(mcp.mcpServers.granttap.type, "http");
-  assert.equal(mcp.mcpServers.granttap.url, "http://127.0.0.1:17342/mcp");
-  assert.equal(mcp.mcpServers.granttap.args, undefined);
+  // Cursor Cloud cannot fetch 127.0.0.1. The plugin is stdio; cwd must not matter.
+  assert.equal(mcp.mcpServers.granttap.command, "node");
+  assert.equal(mcp.mcpServers.granttap.args?.[0], "-e");
+  assert.match(mcp.mcpServers.granttap.args?.[1] ?? "", /granttap-mcp@0\.8\.18/);
+  assert.equal(mcp.mcpServers.granttap.url, undefined);
+  assert.equal(mcp.mcpServers.granttap.type, undefined);
+  assert.doesNotThrow(() => new Script(mcp.mcpServers.granttap.args?.[1] ?? ""));
 
   const absolute = spawnSync(process.execPath, [join(plugin, "stdio-bootstrap.cjs")], {
     cwd, env, encoding: "utf8",

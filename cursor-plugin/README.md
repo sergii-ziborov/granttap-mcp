@@ -22,11 +22,12 @@ The commands have separate jobs:
 2. `granttap setup` also installs the background task-sync helper.
 3. `granttap status` performs a read-only readiness check.
 
-After `granttap setup`, Authenticate. The helper 302s immediately to
-`granttap.com/connect` — Approve this coding app, Reconnect, or Add another.
-A saved pairing still opens that page. Scan in the GrantTap app only when a
-new device joins. A leftover user HTTP entry at `http://127.0.0.1:17342/mcp`
-is why Cloud shows fetch failed.
+After `granttap setup`, pair on `granttap.com/connect` — Approve this coding
+app, Reconnect, or Add another. A saved pairing still opens that page. Scan
+in the GrantTap app only when a new device joins. Cloud **Error · fetch
+failed** is a leftover HTTP MCP at `http://127.0.0.1:17342/mcp` — either a
+user Customize → MCPs row or an old plugin `mcp.json`. The current plugin is
+stdio (`node -e`) so Cloud never fetches loopback.
 
 On Windows, `granttap setup` registers the local helper and phone monitor as
 least-privileged jobs under your signed-in account. Install Node.js 20+ and the

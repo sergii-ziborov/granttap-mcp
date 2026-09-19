@@ -57,12 +57,11 @@ Claude for connection status.
 
 ### Cursor
 
-After installing the helper, Authenticate. The browser opens
-`granttap.com/connect`. Pair in that page and the GrantTap app. Do not add
-GrantTap in Cursor Customize → MCPs. A leftover user HTTP entry at
-`http://127.0.0.1:17342/mcp` is why Cloud shows fetch failed. Cursor Cloud
-Agents start `node -e` GrantTap from the Cursor plugin. They cannot
-reach `http://127.0.0.1`.
+After installing the helper, pair on `granttap.com/connect` and in the
+GrantTap app. Do not add GrantTap in Cursor Customize → MCPs. Cloud **Error
+· fetch failed** is leftover HTTP at `http://127.0.0.1:17342/mcp` — a user
+MCP row or an old plugin `mcp.json`. The Cursor plugin is stdio (`node -e`).
+Cloud Agents start that process. They cannot fetch `http://127.0.0.1`.
 
 ### Grok Build
 

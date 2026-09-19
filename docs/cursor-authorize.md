@@ -11,10 +11,11 @@ and removes any leftover user GrantTap entry from `~/.cursor/mcp.json`. Pair
 and change settings in the GrantTap plugin and the GrantTap app. Do not add
 GrantTap in Cursor Customize → MCPs.
 
-Cursor Cloud Agents cannot reach `http://127.0.0.1`. A user HTTP MCP entry
-there is why Cloud shows **Error · fetch failed**. The Marketplace plugin
-uses stdio (`node -e` so cwd `$HOME` still starts GrantTap; on Windows that
-bootstrap runs `cmd.exe /c npx`).
+Cursor Cloud Agents cannot reach `http://127.0.0.1`. An HTTP MCP entry
+there — leftover user Customize → MCPs, or an old plugin `mcp.json` — is why
+Cloud shows **Error · fetch failed**. The Marketplace plugin uses stdio
+(`node -e` so cwd `$HOME` still starts GrantTap; on Windows that bootstrap
+runs `cmd.exe /c npx`).
 Authorize in the browser on `granttap.com/connect`; that page talks only to
 the website, not to loopback. Pairing stays on the connection card, last
 resort a QR there.
