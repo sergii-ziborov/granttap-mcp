@@ -21,10 +21,10 @@ Add another device or Reconnect in that host's GrantTap plugin settings.
 
 ## Settings (the person)
 
-Device list, Add another device, and Reconnect live in GrantTap plugin
-settings — Cursor Configure, Codex plugin settings, Claude Code plugin
-settings — and in the GrantTap app. All three hosts on this computer share
-the same pairing room.
+Device list, Approve, Add another device, and Reconnect live on
+granttap.com/connect, in GrantTap plugin settings, and in the GrantTap app.
+Authenticate opens that page even when this computer is already paired.
+All three hosts on this computer share the same pairing room.
 
 For an interactive question, send the same complete prompt to the coding app
 and GrantTap under one exact correlation. The first answer with that

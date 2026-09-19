@@ -27,10 +27,11 @@ codex plugin add granttap@granttap
 Run `codex mcp login granttap` or use Codex's MCP authorization control.
 The browser opens `granttap.com/connect`. That page talks only to the
 website; it does not fetch loopback. If this computer is not yet paired,
-scan the QR in the GrantTap plugin or iPhone app, then approve on the site.
-If it is already paired, approving this coding app preserves the phone keys.
+scan the QR in the GrantTap app. A scan of a new device is the Approve.
+If it is already paired, the same page still opens so you can Approve this
+coding app, Reconnect, or Add another — it does not skip to the callback.
 The website does not receive the pairing keys or task content. Provider sign-in remains
-separate. A Git marketplace plugin does not acquire the native Connect modal
+separate. Do not ask the agent to print a pairing QR in chat. A Git marketplace plugin does not acquire the native Connect modal
 of a registered remote OpenAI app merely by installing it.
 
 In Codex, click **Try now** on the GrantTap plugin page and choose **Connect
@@ -56,8 +57,10 @@ Claude for connection status.
 
 ### Cursor
 
-After installing the helper, pair in the GrantTap plugin connection card and
-the GrantTap app. Do not add GrantTap in Cursor Customize → MCPs. Cursor Cloud
+After installing the helper, Authenticate. The browser opens
+`granttap.com/connect`. Pair in that page and the GrantTap app. Do not add
+GrantTap in Cursor Customize → MCPs. A leftover user HTTP entry at
+`http://127.0.0.1:17342/mcp` is why Cloud shows fetch failed. Cursor Cloud
 Agents start `node -e` GrantTap from the Cursor plugin. They cannot
 reach `http://127.0.0.1`.
 

@@ -22,7 +22,7 @@
   "interface": {
     "displayName": "GrantTap",
     "shortDescription": "Connect GrantTap to your phone",
-    "longDescription": "Try now / Connect GrantTap: the agent connects this computer. You do not pair in chat. Device list, Add another device, and Reconnect are in GrantTap plugin settings here, in Cursor Configure, in Claude Code plugin settings, and in the GrantTap app. The same pairing room is shared. Provider sign-in is separate.",
+    "longDescription": "Try now / Connect GrantTap: the agent connects this computer. You do not pair in chat. Authenticate opens granttap.com/connect. Device list, Approve, Add another device, and Reconnect stay on that page, in GrantTap plugin settings, and in the GrantTap app. The same pairing room is shared. Provider sign-in is separate.",
     "developerName": "GrantTap",
     "category": "Developer Tools",
     "capabilities": [

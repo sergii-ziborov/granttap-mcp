@@ -185,6 +185,14 @@ and from then on that computer takes part in the mesh like any other: its
 chats are the Project's, its claims are seen by every other computer, and a
 Task can be handed to it.
 
+A Project can pin new tasks to one confirmed computer. The endpoint id is
+the stored computer identity, not the display name. Models offered on the
+phone come from that host's catalog. If the pinned host is offline, the
+Project either refuses the create or queues it until a deadline — it does
+not silently start the task elsewhere. A command issued for a previous
+instance of the computer (a restore or clone that kept pairing keys) is
+rejected. A pin is not a secure VM.
+
 ### A claim released by the person
 
 A claim outlives an agent that crashed or was closed, and the files it names
@@ -248,14 +256,18 @@ grok plugin install granttap --trust
 
 For Cursor, use the reviewed **GrantTap** Marketplace listing when it is visible
 to your account. Reload Cursor. On this computer, run `granttap setup`. Pair
-and change settings in the GrantTap plugin and the GrantTap app. Do not add
-GrantTap in Cursor Customize → MCPs. A user HTTP entry at
+and change settings on [granttap.com/connect](https://granttap.com/connect)
+and in the GrantTap app. Authenticate opens that page even when this Mac is
+already paired — Approve the coding app, Reconnect, or Add another. A scan in
+GrantTap authorizes a new device; a saved pairing does not skip the page.
+Do not add GrantTap in Cursor Customize → MCPs. A user HTTP entry at
 `http://127.0.0.1:17342/mcp` is why Cloud shows fetch failed.
 
 Open GrantTap from the plugin connection card. Pairing status, a one-time QR
-when needed, and confirmed reconnect stay on that card and in the GrantTap
-app. The same tools still return readable MCP content in clients that do not
-render app UI. Detailed plugin instructions are in
+when needed, and confirmed reconnect stay on that card, on
+`granttap.com/connect`, and in the GrantTap app. Do not ask an agent to print
+a pairing QR in chat. The same tools still return readable MCP content in
+clients that do not render app UI. Detailed plugin instructions are in
 [`plugins/granttap/README.md`](plugins/granttap/README.md).
 
 For the full background helper and provider hooks, install the CLI and run

@@ -67,11 +67,11 @@ test("chat connect is the agent; humans manage devices in plugin settings", () =
   for (const text of [cursorSkill, cursorCommand, hostSkill]) {
     assert.match(text, /Call `connection_status`/);
     assert.match(text, /plugin\s+settings/);
+    assert.match(text, /granttap\.com\/connect/);
     assert.doesNotMatch(text, /Show the returned QR image directly in the conversation/);
-    assert.doesNotMatch(text, /granttap\.com\/connect/);
   }
   assert.match(face.longDescription ?? "", /plugin settings/);
-  assert.doesNotMatch(face.longDescription ?? "", /granttap\.com\/connect/);
+  assert.match(face.longDescription ?? "", /granttap\.com\/connect/);
   assert.equal(face.websiteURL, "https://granttap.com/connect");
 });
 

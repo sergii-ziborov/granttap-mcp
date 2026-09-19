@@ -62,5 +62,12 @@ installed provider, and periodically projects the canonical policy plus current
 coverage back to the phone. Engine or feature unavailability leaves existing
 GrantTap behavior intact; strict fail-closed decisions remain on the hook path.
 
+`execution-policy.ts` pins new tasks to one confirmed endpoint. `create-task.ts`
+refuses an unpublished workspace and a wrong or unconfirmed host.
+`model-catalog.ts` advertises models observed on this computer; the phone does
+not invent aliases. `task-queue.ts` holds a create until the offline deadline.
+`instance-epoch` (bridge) rejects commands issued for a previous instance after
+restore or clone. Display names and device aliases are never routing keys.
+
 License: this module is distributed under the MIT License
 in the repository-root `LICENSE` file.
