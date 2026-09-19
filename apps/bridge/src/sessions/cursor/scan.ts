@@ -7,6 +7,7 @@ import {
   composerActivityAt,
   composerParentSets,
   composerState,
+  isCursorTaskCloneId,
   isNestedComposer,
   loadComposerCatalog,
   loadSidebarTitles,
@@ -58,7 +59,7 @@ function childSummaries(
 ): { children: ChildThreadInfo[]; summaries: CursorTranscriptSummary[] } {
   const groups = new Map<string, CursorLogFile[]>();
   for (const file of files) {
-    if (!file.isSubagent || !file.threadId) continue;
+    if (!file.isSubagent || !file.threadId || isCursorTaskCloneId(file.threadId)) continue;
     const group = groups.get(file.threadId) ?? [];
     group.push(file);
     groups.set(file.threadId, group);
@@ -86,6 +87,7 @@ function childSummaries(
     });
   }
   for (const composer of descendants) {
+    if (isCursorTaskCloneId(composer.id)) continue;
     const existing = byId.get(composer.id);
     const created = childFromComposer(composer, sessionId);
     if (!existing) {
@@ -127,7 +129,9 @@ function addComposerSession(context: ScanContext, composer: ComposerRow): void {
     composer.cwd,
   );
   const descendants = [...context.composers.values()].filter((row) =>
-    row.id !== composer.id && context.rootOf(row.id) === composer.id);
+    row.id !== composer.id
+    && context.rootOf(row.id) === composer.id
+    && !isCursorTaskCloneId(row.id));
   const child = childSummaries(composer.id, files, composer.cwd, context.composers, descendants);
   const childLast = child.children.reduce((latest, item) => Math.max(latest, item.lastActivityAt), 0);
   const lastActivityAt = Math.max(

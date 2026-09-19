@@ -153,21 +153,31 @@ function activityForSession(session: SessionInfo): ActivityEntry[] {
 }
 
 /**
- * Keep the newest transcript window plus bounded older capability/child rows so
- * one busy subagent cannot erase all sibling navigation and accounting rows.
+ * Keep the person's chat first. Newest child rows used to fill the whole
+ * window, so a Cursor chat with many Task-tool runs arrived with no root
+ * messages and the phone showed only Agent conversations.
  */
-function pickActivityEntries(all: ActivityEntry[], limit: number): ActivityEntry[] {
+export function pickActivityEntries(all: ActivityEntry[], limit: number): ActivityEntry[] {
   if (all.length <= limit) return all;
-  const recent = all.slice(-limit);
-  const recentIds = new Set(recent.map((entry) => entry.id));
+  const root = all.filter((entry) => !entry.childThreadId);
+  const children = all.filter((entry) => entry.childThreadId);
+  const pickedRoot = children.length === 0
+    ? root.slice(-limit)
+    : root.slice(-Math.min(root.length, Math.max(12, Math.ceil((limit * 2) / 3))));
+  const newestByThread = new Map<string, ActivityEntry>();
+  for (const entry of children) {
+    newestByThread.set(entry.childThreadId!, entry);
+  }
+  const childBudget = Math.max(4, limit - pickedRoot.length);
+  const childCrumbs = [...newestByThread.values()]
+    .sort((a, b) => a.createdAt - b.createdAt)
+    .slice(-childBudget);
+  const keptIds = new Set([...pickedRoot, ...childCrumbs].map((entry) => entry.id));
   const extras = all
-    .filter((entry) =>
-      (entry.mcpServer || entry.skill || entry.childThreadId) && !recentIds.has(entry.id)
-    )
+    .filter((entry) => (entry.mcpServer || entry.skill) && !keptIds.has(entry.id))
     .slice(-limit);
-  if (extras.length === 0) return recent;
   const byId = new Map<string, ActivityEntry>();
-  for (const entry of [...extras, ...recent]) byId.set(entry.id, entry);
+  for (const entry of [...extras, ...childCrumbs, ...pickedRoot]) byId.set(entry.id, entry);
   return [...byId.values()].sort((a, b) => a.createdAt - b.createdAt);
 }
 

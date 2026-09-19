@@ -178,8 +178,8 @@ test("Cursor Task-tool clones stay under the person chat, not as Working rows", 
   assert.equal(scan.sessions[0]?.state, "working");
   const childIds = new Set(scan.sessions[0]?.childThreads?.map((child) => child.threadId));
   assert.equal(childIds.has("listed-child"), true);
-  assert.equal(childIds.has("task-orphan-clone"), true);
-  assert.equal(childIds.has("task-listed-child"), true);
+  assert.equal(childIds.has("task-orphan-clone"), false);
+  assert.equal(childIds.has("task-listed-child"), false);
   assert.equal(cursorRootSessionId("task-orphan-clone", db), "chat-root");
   assert.equal(cursorRootSessionId("listed-child", db), "chat-root");
 });

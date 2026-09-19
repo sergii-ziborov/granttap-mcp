@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import type { CapabilityUsageStatus, SessionInfo } from "../packages/protocol/schema";
 import {
+  pickActivityEntries,
   scanCapabilityUsage,
   scanSessionActivity,
   scanSessionHistory,
@@ -56,6 +57,28 @@ test("session catalog reserves bounded rows and retains an older capability acti
   const activity = scanSessionActivity(rich);
   assert.equal(activity.entries.some((entry) => entry.mcpServer === "github"), true);
   assert.equal(activity.entries.length > 24, true);
+});
+
+test("a busy set of child threads cannot erase the person's own chat window", () => {
+  const entries = [
+    ...Array.from({ length: 8 }, (_, index) => ({
+      id: `root-${index}`,
+      kind: "user" as const,
+      text: `Person ${index}`,
+      createdAt: index,
+    })),
+    ...Array.from({ length: 40 }, (_, index) => ({
+      id: `child-${index}`,
+      kind: "message" as const,
+      text: `Agent ${index}`,
+      createdAt: 100 + index,
+      childThreadId: `thread-${index % 22}`,
+    })),
+  ];
+  const window = pickActivityEntries(entries, 24);
+  assert.equal(window.some((entry) => entry.id.startsWith("root-")), true);
+  assert.ok(window.filter((entry) => !entry.childThreadId).length >= 8);
+  assert.ok(window.filter((entry) => entry.childThreadId).length <= 16);
 });
 
 test("unknown providers stay empty and room scoping rejects unsafe identifiers", () => {
