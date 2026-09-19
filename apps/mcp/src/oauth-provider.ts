@@ -37,6 +37,11 @@ type StoredCode = {
   params: AuthorizationParams;
   expiresAt: number;
 };
+type CompletedConsent = {
+  approve: boolean;
+  redirectUrl: string;
+  expiresAt: number;
+};
 const CODE_TTL_MS = 5 * 60_000;
 const TOKEN_TTL_MS = 30 * 24 * 60 * 60_000; // 30 days
 export { GrantTapClientsStore } from "./oauth/store";
@@ -45,6 +50,7 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
   readonly clientsStore = new GrantTapClientsStore();
   private readonly pending = loadPending();
   private readonly codes = new Map<string, StoredCode>();
+  private readonly completed = new Map<string, CompletedConsent>();
 
   constructor(private readonly expectedResource?: string) {}
 
@@ -111,8 +117,25 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
     }
   }
 
+  /** Helper restart used to drop in-memory watchers while pending ids stayed on disk. */
+  resumeConnectWatches(): void {
+    const origin = websiteOrigin();
+    if (!origin) return;
+    for (const pendingId of this.pending.keys()) {
+      const snapshot = () =>
+        buildConnectSnapshot(this.getPending(pendingId)?.client.client_name);
+      watchConnectDecision(origin, pendingId, snapshot, (approve) =>
+        this.completeConsent(pendingId, approve));
+      void publishConnectRequestRetry(origin, pendingId, snapshot());
+    }
+  }
+
   /** Complete consent: issue code and redirect to the requesting MCP client. */
   completeConsent(pendingId: string, approve: boolean): { redirectUrl: string } {
+    const remembered = this.completed.get(pendingId);
+    if (remembered && remembered.expiresAt > Date.now() && remembered.approve === approve) {
+      return { redirectUrl: remembered.redirectUrl };
+    }
     const pending = this.getPending(pendingId);
     if (!pending) throw new Error("Authorization request expired. Start authorization again from your MCP client.");
 
@@ -122,7 +145,13 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
       savePending(this.pending);
       target.searchParams.set("error", "access_denied");
       if (pending.params.state) target.searchParams.set("state", pending.params.state);
-      return { redirectUrl: target.toString() };
+      const redirectUrl = target.toString();
+      this.completed.set(pendingId, {
+        approve: false,
+        redirectUrl,
+        expiresAt: Date.now() + CODE_TTL_MS,
+      });
+      return { redirectUrl };
     }
     if (!isMachineConfigured()) {
       throw new Error("GrantTap is not paired on this Mac yet. Scan the QR in GrantTap.");
@@ -139,7 +168,13 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
     target.searchParams.set("code", code);
     if (pending.params.state) target.searchParams.set("state", pending.params.state);
     wakePairingRoomAfterApprove(true);
-    return { redirectUrl: target.toString() };
+    const redirectUrl = target.toString();
+    this.completed.set(pendingId, {
+      approve: true,
+      redirectUrl,
+      expiresAt: Date.now() + CODE_TTL_MS,
+    });
+    return { redirectUrl };
   }
 
   async challengeForAuthorizationCode(
@@ -245,5 +280,8 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
       }
     }
     if (changed) savePending(this.pending);
+    for (const [id, entry] of this.completed) {
+      if (now > entry.expiresAt) this.completed.delete(id);
+    }
   }
 }

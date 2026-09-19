@@ -67,6 +67,7 @@ test("OAuth provider completes consent, code exchange, verification, and revocat
 
   const pendingId = provider.createPending(client, params);
   const approved = provider.completeConsent(pendingId, true);
+  assert.equal(provider.completeConsent(pendingId, true).redirectUrl, approved.redirectUrl);
   const code = new URL(approved.redirectUrl).searchParams.get("code")!;
   assert.ok(code);
   assert.equal(await provider.challengeForAuthorizationCode(client, code), params.codeChallenge);

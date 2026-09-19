@@ -286,7 +286,7 @@ test("Codex tasks and visible activity are discovered from local rollouts", asyn
 });
 
 import {
-  harnessTaskNotification, harnessUserNotice, pushEntry, stripAttachmentNote, visibleUserText,
+  harnessTaskNotification, harnessUserNotice, pushEntry, stripAttachmentNote, stripTranscriptMarkup, visibleUserText,
 } from "../apps/bridge/src/sessions/activity-helpers";
 
 test("a background-task notice the host wrote as a user turn is shown as status, not as the person's words", () => {
@@ -338,6 +338,23 @@ test("the host's slash commands, their output, and its image notes are notices o
   pushEntry(out, seen, "s", "user", "<command-name>/model</command-name><command-args>opus</command-args>", 1, 0);
   pushEntry(out, seen, "s", "user", "[Image: original 10x10, displayed at 5x5.]", 2, 1);
   assert.deepEqual(out.map((entry) => [entry.kind, entry.text]), [["status", "/model opus"]]);
+});
+
+test("Cursor timestamp and user_query marks are not the message", () => {
+  const wrapped = [
+    "<timestamp>Saturday, Sep 19, 2026, 5:11 PM (UTC+3)</timestamp>",
+    "<user_query>pin the last line while history loads</user_query>",
+  ].join("\n");
+  assert.equal(stripTranscriptMarkup(wrapped), "pin the last line while history loads");
+  assert.equal(visibleUserText(wrapped), "pin the last line while history loads");
+  const out: import("../packages/protocol/schema").ActivityEntry[] = [];
+  const seen = new Set<string>();
+  pushEntry(out, seen, "s", "user", wrapped, 1, 0);
+  pushEntry(out, seen, "s", "message", "<timestamp>Saturday, Sep 19, 2026, 5:11 PM (UTC+3)</timestamp>\nThe graph is the towers.", 2, 1);
+  assert.deepEqual(out.map((entry) => [entry.kind, entry.text]), [
+    ["user", "pin the last line while history loads"],
+    ["message", "The graph is the towers."],
+  ]);
 });
 
 test("the attachment note GrantTap appended is stripped, so the phone's own bubble is recognised", () => {

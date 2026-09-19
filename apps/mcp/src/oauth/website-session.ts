@@ -130,14 +130,16 @@ export function watchConnectDecision(
           try {
             const { redirectUrl } = complete(row.decision !== "deny");
             await publishConnectRedirect(origin, requestId, redirectUrl);
+            return;
           } catch (error) {
             await publishConnectError(
               origin,
               requestId,
               error instanceof Error ? error.message : String(error),
             );
+            // A failed publish used to stop the watcher after deleting the
+            // pending id. Approve then sat on "Waiting for this computer".
           }
-          return;
         }
         const body = JSON.stringify(live);
         if (!row || body !== lastBody) {

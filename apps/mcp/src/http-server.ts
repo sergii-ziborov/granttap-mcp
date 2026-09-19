@@ -228,6 +228,7 @@ export async function startHttpMcpServer(options: ServeOptions = {}): Promise<{
     httpServer.on("error", reject);
   });
 
+  provider.resumeConnectWatches();
   void relay();
 
   return {

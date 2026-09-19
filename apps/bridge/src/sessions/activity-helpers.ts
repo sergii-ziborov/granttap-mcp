@@ -20,8 +20,21 @@ export function compact(value: unknown, max = MAX_ACTIVITY_TEXT): string {
 }
 
 function activityText(value: unknown, max = MAX_ACTIVITY_TEXT): string {
-  const text = String(value ?? "").replace(/\r\n/g, "\n").trim();
+  const text = stripTranscriptMarkup(String(value ?? "")).replace(/\r\n/g, "\n").trim();
   return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
+}
+
+/**
+ * Cursor wraps turns in host tags. The phone was showing `<timestamp>` on the
+ * agent's bubble after the real words arrived, and the person's query sat
+ * inside `<user_query>`. Those marks are not the message.
+ */
+export function stripTranscriptMarkup(value: unknown): string {
+  let text = String(value ?? "");
+  text = text.replace(/<timestamp\b[^>]*>[\s\S]*?<\/timestamp>/gi, "");
+  const query = /<user_query>\s*([\s\S]*?)\s*<\/user_query>/i.exec(text);
+  if (query?.[1] != null) text = query[1];
+  return text.replace(/^\s+|\s+$/g, "");
 }
 
 /** Remove host-injected transport context that is not a message the person typed. */
@@ -38,7 +51,7 @@ export function stripAttachmentNote(text: string): string {
 }
 
 export function visibleUserText(value: unknown): string {
-  const text = stripAttachmentNote(String(value ?? "").trim());
+  const text = stripAttachmentNote(stripTranscriptMarkup(String(value ?? "")).trim());
   if (!text) return "";
   // The host's own notes about what it showed the model: nobody typed them.
   if (text.startsWith("[Image: original ") || text.startsWith("<local-command-caveat>")) return "";
