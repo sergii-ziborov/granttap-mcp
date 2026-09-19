@@ -151,10 +151,14 @@ export function resolveAutoAcceptLevel(opts: {
   paused?: boolean;
   defaultLevel?: AutoAcceptLevel;
   bySession?: Record<string, AutoAcceptLevel>;
+  byProject?: Record<string, AutoAcceptLevel>;
   sessionId?: string;
+  projectId?: string;
 }): AutoAcceptLevel {
   if (opts.paused) return "ask";
   const sid = opts.sessionId;
   if (sid && opts.bySession?.[sid]) return opts.bySession[sid]!;
+  const projectId = opts.projectId;
+  if (projectId && opts.byProject?.[projectId]) return opts.byProject[projectId]!;
   return opts.defaultLevel ?? "except_push";
 }

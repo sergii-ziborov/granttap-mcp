@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { writePrivateFile } from "./write-private";
 import type {
   AgentAccess,
@@ -12,7 +13,8 @@ import {
   shouldAutoAllow,
   type AutoAcceptLevel,
 } from "../policy";
-import { runtimeConfigPath } from "./paths";
+import { loadStoreState } from "../mesh/store-state";
+import { configDir, runtimeConfigPath } from "./paths";
 
 export type RuntimeConfig = {
   enabled: boolean;
@@ -20,6 +22,7 @@ export type RuntimeConfig = {
   sessionAccess: Record<string, AgentAccess>;
   autoAcceptDefault: AutoAcceptLevel;
   autoAcceptBySession: Record<string, AutoAcceptLevel>;
+  autoAcceptByProject: Record<string, AutoAcceptLevel>;
   autoAcceptPaused: boolean;
   sessionMcpDisabled: Record<string, string[]>;
   sessionSkillsDisabled: Record<string, string[]>;
@@ -42,6 +45,7 @@ const DEFAULT_RUNTIME: RuntimeConfig = {
   sessionAccess: {},
   autoAcceptDefault: "except_push",
   autoAcceptBySession: {},
+  autoAcceptByProject: {},
   autoAcceptPaused: false,
   sessionMcpDisabled: {},
   sessionSkillsDisabled: {},
@@ -81,11 +85,15 @@ export function capabilityName(raw: unknown): string | null {
   return boundedIdentifier(raw, 160);
 }
 
-function parseBySession(raw: unknown): Record<string, AutoAcceptLevel> {
+function parseByLevel(
+  raw: unknown,
+  maxKeyLength: number,
+): Record<string, AutoAcceptLevel> {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
   const out: Record<string, AutoAcceptLevel> = {};
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    if (isAutoAcceptLevel(value)) out[key] = value;
+    const id = boundedIdentifier(key, maxKeyLength);
+    if (id && isAutoAcceptLevel(value)) out[id] = value;
   }
   return out;
 }
@@ -146,7 +154,8 @@ export function loadRuntimeConfig(): RuntimeConfig {
       autoAcceptDefault: isAutoAcceptLevel(raw.autoAcceptDefault)
         ? raw.autoAcceptDefault
         : DEFAULT_RUNTIME.autoAcceptDefault,
-      autoAcceptBySession: parseBySession(raw.autoAcceptBySession),
+      autoAcceptBySession: parseByLevel(raw.autoAcceptBySession, 256),
+      autoAcceptByProject: parseByLevel(raw.autoAcceptByProject, 128),
       autoAcceptPaused: raw.autoAcceptPaused === true,
       sessionMcpDisabled: parseDisabledCapabilities(raw.sessionMcpDisabled),
       sessionSkillsDisabled: parseDisabledCapabilities(raw.sessionSkillsDisabled),
@@ -163,6 +172,7 @@ export function loadRuntimeConfig(): RuntimeConfig {
       ...DEFAULT_RUNTIME,
       sessionAccess: {},
       autoAcceptBySession: {},
+      autoAcceptByProject: {},
       sessionMcpDisabled: {},
       sessionSkillsDisabled: {},
       sessionShellDisabled: [],
@@ -194,13 +204,27 @@ export function saveRuntimeConfig(cfg: Partial<RuntimeConfig>): void {
   writePrivateFile(runtimeConfigPath(), JSON.stringify(merged, null, 2) + "\n");
 }
 
+function projectIdForSession(sessionId: string | null | undefined): string | undefined {
+  if (!sessionId) return undefined;
+  try {
+    const state = loadStoreState(join(configDir(), "project-mesh.json"));
+    const execution = state.executions.find((item) => item.sessionId === sessionId);
+    if (!execution) return undefined;
+    return state.tasks.find((item) => item.taskId === execution.taskId)?.projectId;
+  } catch {
+    return undefined;
+  }
+}
+
 export function autoAcceptLevelFor(sessionId: string | null | undefined): AutoAcceptLevel {
   const cfg = loadRuntimeConfig();
   return resolveAutoAcceptLevel({
     paused: cfg.autoAcceptPaused,
     defaultLevel: cfg.autoAcceptDefault,
     bySession: cfg.autoAcceptBySession,
+    byProject: cfg.autoAcceptByProject,
     sessionId: sessionId ?? undefined,
+    projectId: projectIdForSession(sessionId),
   });
 }
 

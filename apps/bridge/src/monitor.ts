@@ -242,6 +242,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       // what the Mac is actually enforcing, not what it last sent.
       autoAcceptDefault: runtime.autoAcceptDefault,
       autoAcceptBySession: runtime.autoAcceptBySession,
+      autoAcceptByProject: runtime.autoAcceptByProject,
       autoAcceptPaused: runtime.autoAcceptPaused,
       providerSettings: runtime.providerSettings,
       meshEnabled: runtime.meshEnabled,

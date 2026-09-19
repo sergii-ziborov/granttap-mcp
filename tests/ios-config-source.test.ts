@@ -7,12 +7,12 @@
  * fact that an unrelated config.set does not disturb auto-accept.
  */
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { handleConfigSet } from "../apps/bridge/src/monitor";
-import { loadRuntimeConfig } from "../apps/bridge/src/config";
+import { autoAcceptLevelFor, loadRuntimeConfig } from "../apps/bridge/src/config";
 
 function withConfigDir(t: { after: (fn: () => void) => void }): void {
   const dir = mkdtempSync(join(tmpdir(), "granttap-ios-config-"));
@@ -54,6 +54,50 @@ test("iOS sets and clears a per-session override", (t) => {
     createdAt: 0,
   });
   assert.equal(loadRuntimeConfig().autoAcceptBySession["chat-a"], undefined);
+});
+
+test("iOS sets and clears a per-project auto-accept", (t) => {
+  withConfigDir(t);
+  handleConfigSet({
+    type: "config.set",
+    autoAcceptProject: { projectId: "mesh-project", level: "safe" },
+    createdAt: 0,
+  });
+  assert.equal(loadRuntimeConfig().autoAcceptByProject["mesh-project"], "safe");
+
+  handleConfigSet({
+    type: "config.set",
+    autoAcceptProject: { projectId: "mesh-project", level: null },
+    createdAt: 0,
+  });
+  assert.equal(loadRuntimeConfig().autoAcceptByProject["mesh-project"], undefined);
+});
+
+test("a Project auto-accept covers chats bound in Mesh", (t) => {
+  withConfigDir(t);
+  handleConfigSet({
+    type: "config.set",
+    autoAcceptDefault: "ask",
+    autoAcceptProject: { projectId: "proj", level: "except_push" },
+    createdAt: 0,
+  });
+  writeFileSync(join(process.env.GRANTTAP_CONFIG_DIR!, "project-mesh.json"), JSON.stringify({
+    version: 1,
+    projects: [{
+      projectId: "proj", name: "GrantTap",
+      canonicalRepositoryId: "github.com/x/y", createdAt: 1,
+    }],
+    tasks: [{
+      taskId: "task", projectId: "proj", title: "Work", goal: "Ship",
+      state: "working", createdAt: 1, updatedAt: 1,
+    }],
+    executions: [{
+      taskId: "task", sessionId: "chat", provider: "cursor",
+      computerId: "mac", workspace: "/repo", startedAt: 1,
+    }],
+  }));
+  assert.equal(autoAcceptLevelFor("chat"), "except_push");
+  assert.equal(autoAcceptLevelFor("other"), "ask");
 });
 
 test("an unrelated config.set leaves auto-accept intact", (t) => {

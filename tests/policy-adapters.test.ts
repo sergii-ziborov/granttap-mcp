@@ -51,6 +51,18 @@ test("safe shell allowlist rejects chaining, writes, long input, and unknown com
   assert.equal(resolveAutoAcceptLevel({
     defaultLevel: "safe", bySession: { session: "full" }, sessionId: "session",
   }), "full");
+  assert.equal(resolveAutoAcceptLevel({
+    defaultLevel: "ask",
+    byProject: { project: "except_push" },
+    projectId: "project",
+  }), "except_push");
+  assert.equal(resolveAutoAcceptLevel({
+    defaultLevel: "ask",
+    bySession: { session: "safe" },
+    byProject: { project: "full" },
+    sessionId: "session",
+    projectId: "project",
+  }), "safe", "a chat override wins over the Project");
   assert.equal(resolveAutoAcceptLevel({}), "except_push");
 });
 

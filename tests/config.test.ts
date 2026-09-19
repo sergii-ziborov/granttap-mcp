@@ -53,6 +53,7 @@ test("gating can exclude exactly one chat without disabling every chat", async (
     // need the phone, so a sleeping device cannot stall the agent.
     autoAcceptDefault: "except_push",
     autoAcceptBySession: {},
+    autoAcceptByProject: {},
     autoAcceptPaused: false,
     sessionMcpDisabled: {},
     sessionSkillsDisabled: {},

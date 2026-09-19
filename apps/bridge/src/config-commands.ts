@@ -40,6 +40,7 @@ export function configMutationDigest(message: ConfigSet): string {
     includeSession: message.includeSession ?? null,
     autoAcceptDefault: message.autoAcceptDefault ?? null,
     autoAcceptSession: message.autoAcceptSession ?? null,
+    autoAcceptProject: message.autoAcceptProject ?? null,
     autoAcceptPaused: message.autoAcceptPaused ?? null,
     provider: message.provider ?? null,
     providerEnabled: message.providerEnabled ?? null,
@@ -91,6 +92,11 @@ function applyRuntimePatch(message: ConfigSet): void {
     const { sessionId, level } = message.autoAcceptSession;
     if (level == null) delete runtime.autoAcceptBySession[sessionId];
     else runtime.autoAcceptBySession[sessionId] = level;
+  }
+  if (message.autoAcceptProject) {
+    const { projectId, level } = message.autoAcceptProject;
+    if (level == null) delete runtime.autoAcceptByProject[projectId];
+    else runtime.autoAcceptByProject[projectId] = level;
   }
   if (message.provider && typeof message.providerEnabled === "boolean") {
     runtime.providerSettings = {

@@ -146,6 +146,7 @@ export const SessionsStatus = z.object({
   excludedSessions: z.array(z.string()).optional(),
   autoAcceptDefault: AutoAcceptLevel.optional(),
   autoAcceptBySession: z.record(AutoAcceptLevel).optional(),
+  autoAcceptByProject: z.record(AutoAcceptLevel).optional(),
   autoAcceptPaused: z.boolean().optional(),
   providerSettings: ProviderRuntimeSettings.optional(),
   meshEnabled: z.boolean().optional(),
@@ -166,6 +167,10 @@ export const ConfigSet = z.object({
   autoAcceptDefault: AutoAcceptLevel.nullish(),
   autoAcceptSession: z.object({
     sessionId: z.string(),
+    level: AutoAcceptLevel.nullable(),
+  }).nullish(),
+  autoAcceptProject: z.object({
+    projectId: z.string().trim().min(1).max(128),
     level: AutoAcceptLevel.nullable(),
   }).nullish(),
   autoAcceptPaused: z.boolean().nullish(),
