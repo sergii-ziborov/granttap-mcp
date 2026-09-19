@@ -1,7 +1,7 @@
 import { recordObservedWrite, writtenPaths } from "../../mesh/observed-writes";
 import { readFileSync, statSync } from "node:fs";
 import { basename, dirname } from "node:path";
-import { normalizeMcpServerName } from "../activity-helpers";
+import { normalizeMcpServerName, stripTranscriptMarkup } from "../activity-helpers";
 import { cursorTranscriptsRoot, recentLogs, safeParse, ts } from "../common";
 import {
   estimateTokens,
@@ -43,8 +43,7 @@ export function textBlocks(content: unknown): string[] {
 }
 
 function titleFrom(text: string): string | undefined {
-  const query = text.match(/<user_query>\s*([\s\S]*?)\s*<\/user_query>/i)?.[1] ?? text;
-  const clean = query.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const clean = stripTranscriptMarkup(text).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
   return clean ? clean.slice(0, 120) : undefined;
 }
 

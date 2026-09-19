@@ -27,13 +27,22 @@ function activityText(value: unknown, max = MAX_ACTIVITY_TEXT): string {
 /**
  * Cursor wraps turns in host tags. The phone was showing `<timestamp>` on the
  * agent's bubble after the real words arrived, and the person's query sat
- * inside `<user_query>`. Those marks are not the message.
+ * inside `<user_query>`. Those marks are not the message. An unclosed
+ * `<user_query>` still leaks the tag, so the wrapper is removed even when
+ * the host has not written the close yet.
  */
 export function stripTranscriptMarkup(value: unknown): string {
   let text = String(value ?? "");
   text = text.replace(/<timestamp\b[^>]*>[\s\S]*?<\/timestamp>/gi, "");
-  const query = /<user_query>\s*([\s\S]*?)\s*<\/user_query>/i.exec(text);
-  if (query?.[1] != null) text = query[1];
+  const closed = /<user_query\b[^>]*>\s*([\s\S]*?)\s*<\/user_query>/i.exec(text);
+  if (closed?.[1] != null) {
+    text = closed[1];
+  } else {
+    const open = /<user_query\b[^>]*>\s*/i.exec(text);
+    if (open) text = text.slice(open.index + open[0].length);
+  }
+  text = text.replace(/<\/?user_query\b[^>]*>/gi, "");
+  text = text.replace(/<\/?timestamp\b[^>]*>/gi, "");
   return text.replace(/^\s+|\s+$/g, "");
 }
 

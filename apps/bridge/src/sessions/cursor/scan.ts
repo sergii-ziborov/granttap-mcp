@@ -141,8 +141,8 @@ function addComposerSession(context: ScanContext, composer: ComposerRow): void {
   const session = aggregateChildThreads({
     sessionId: composer.id,
     agent: "cursor",
-    title: (composer.name || context.sidebar.get(composer.id) || root.titleFromUser || "")
-      .slice(0, 120) || undefined,
+    title: childTitle(composer.name || context.sidebar.get(composer.id) || root.titleFromUser)
+      ?.slice(0, 120),
     cwd: composer.cwd,
     state: composerState(composer.status, lastActivityAt),
     startedAt: Math.min(
@@ -173,7 +173,7 @@ function addOrphanSession(context: ScanContext, file: CursorLogFile): void {
   const child = childSummaries(sessionId, files, cwd, context.composers);
   const childLast = child.children.reduce((latest, item) => Math.max(latest, item.lastActivityAt), 0);
   const lastActivityAt = Math.max(file.mtimeMs, root.lastActivityAt, childLast);
-  const title = context.sidebar.get(sessionId) || root.titleFromUser;
+  const title = childTitle(context.sidebar.get(sessionId) || root.titleFromUser);
   const session = aggregateChildThreads({
     sessionId,
     agent: "cursor",

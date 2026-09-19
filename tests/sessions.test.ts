@@ -288,6 +288,7 @@ test("Codex tasks and visible activity are discovered from local rollouts", asyn
 import {
   harnessTaskNotification, harnessUserNotice, pushEntry, stripAttachmentNote, stripTranscriptMarkup, visibleUserText,
 } from "../apps/bridge/src/sessions/activity-helpers";
+import { childTitle } from "../apps/bridge/src/sessions/child-threads";
 
 test("a background-task notice the host wrote as a user turn is shown as status, not as the person's words", () => {
   const notice = [
@@ -347,13 +348,29 @@ test("Cursor timestamp and user_query marks are not the message", () => {
   ].join("\n");
   assert.equal(stripTranscriptMarkup(wrapped), "pin the last line while history loads");
   assert.equal(visibleUserText(wrapped), "pin the last line while history loads");
+  const unclosed = [
+    "<timestamp>Saturday, Sep 19, 2026, 10:08 PM (UTC+3)</timestamp>",
+    "<user_query>",
+    "also the user query is still in the tags",
+  ].join("\n");
+  assert.equal(stripTranscriptMarkup(unclosed), "also the user query is still in the tags");
+  assert.equal(visibleUserText(unclosed), "also the user query is still in the tags");
+  assert.equal(
+    stripTranscriptMarkup("<user_query id=\"turn\">attributed wrap</user_query>"),
+    "attributed wrap",
+  );
+  assert.doesNotMatch(stripTranscriptMarkup(unclosed), /user_query/);
+  assert.equal(childTitle("<user_query>\nname this chat\n</user_query>"), "name this chat");
+  assert.equal(childTitle("<user_query>\nstill open"), "still open");
   const out: import("../packages/protocol/schema").ActivityEntry[] = [];
   const seen = new Set<string>();
   pushEntry(out, seen, "s", "user", wrapped, 1, 0);
   pushEntry(out, seen, "s", "message", "<timestamp>Saturday, Sep 19, 2026, 5:11 PM (UTC+3)</timestamp>\nThe graph is the towers.", 2, 1);
+  pushEntry(out, seen, "s", "user", unclosed, 3, 2);
   assert.deepEqual(out.map((entry) => [entry.kind, entry.text]), [
     ["user", "pin the last line while history loads"],
     ["message", "The graph is the towers."],
+    ["user", "also the user query is still in the tags"],
   ]);
 });
 

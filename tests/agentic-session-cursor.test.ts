@@ -84,7 +84,7 @@ test("Cursor subagent transcript is grouped under its composer parent", async (t
   };
   insert(parentId, {
     composerId: parentId,
-    name: "Cursor parent",
+    name: "<user_query>Cursor parent</user_query>",
     lastUpdatedAt: now,
     createdAt: now - 1_000,
     status: "completed",
@@ -106,6 +106,8 @@ test("Cursor subagent transcript is grouped under its composer parent", async (t
   const scan = scanCursor();
   assert.deepEqual(scan.sessions.map((session) => session.sessionId), [parentId]);
   const parent = scan.sessions[0]!;
+  assert.equal(parent.title, "Cursor parent");
+  assert.doesNotMatch(parent.title ?? "", /user_query/);
   assert.equal(parent.childThreads?.[0]?.threadId, childId);
   assert.equal(parent.childThreads?.[0]?.title, "Cursor auth child");
   assert.ok(parent.tokensSession > 27, "Cursor estimates visible user text when usage is absent");
