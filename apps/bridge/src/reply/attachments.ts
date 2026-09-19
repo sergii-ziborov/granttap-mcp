@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import type { UserAttachment } from "../../../../packages/protocol/schema";
+import { MAX_USER_ATTACHMENTS, type UserAttachment } from "../../../../packages/protocol/schema";
 import type { ReplyResult } from "./types";
 
 type PreparedAttachments = { prompt: string; claudePrompt: string; images: string[] };
@@ -34,7 +34,7 @@ type StagedFile = { path: string; image: boolean; name: string };
 
 async function writeAttachments(directory: string, attachments: UserAttachment[]): Promise<StagedFile[]> {
   const files: StagedFile[] = [];
-  for (const [index, attachment] of attachments.slice(0, 5).entries()) {
+  for (const [index, attachment] of attachments.slice(0, MAX_USER_ATTACHMENTS).entries()) {
     const name = basename(attachment.name).replace(/[^\p{L}\p{N}._ -]/gu, "_") || `attachment-${index + 1}`;
     const bytes = Buffer.from(attachment.data, "base64");
     if (bytes.length > 6_000_000) throw new Error(`${name} is larger than 6 MB.`);

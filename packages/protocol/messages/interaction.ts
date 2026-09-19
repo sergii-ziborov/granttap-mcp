@@ -11,6 +11,9 @@ export type UserAttachment = z.infer<typeof UserAttachment>;
 /** Budget for attachments after the task and device encryption layers. */
 export const MAX_ATTACHMENT_BASE64_CHARS = 16_000_000;
 
+/** Photos, sketches and files on one message. The phone and the Mac share this. */
+export const MAX_USER_ATTACHMENTS = 10;
+
 /**
  * An attachment sent ahead of its message, as soon as it was picked, so the
  * message that follows can name it instead of carrying it.
@@ -43,9 +46,9 @@ export const UserMessage = z.object({
   cwd: z.string().max(4_096).optional(),
   requestId: z.string().optional(),
   sessionId: z.string().optional(),
-  attachments: z.array(UserAttachment).max(5).optional(),
+  attachments: z.array(UserAttachment).max(MAX_USER_ATTACHMENTS).optional(),
   /** Attachments that came ahead of this message, by id. */
-  attachmentRefs: z.array(UserAttachmentRef).max(5).optional(),
+  attachmentRefs: z.array(UserAttachmentRef).max(MAX_USER_ATTACHMENTS).optional(),
   preferredMcp: z.string().min(1).max(180).optional(),
   skill: z.string().min(1).max(180).optional(),
   model: z.string().min(1).max(120)
@@ -72,8 +75,8 @@ export const TaskCreate = z.object({
     .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/).optional(),
   instanceEpoch: z.string().trim().min(8).max(128).optional(),
   parentSessionId: z.string().trim().min(1).max(180).optional(),
-  attachments: z.array(UserAttachment).max(5).optional(),
-  attachmentRefs: z.array(UserAttachmentRef).max(5).optional(),
+  attachments: z.array(UserAttachment).max(MAX_USER_ATTACHMENTS).optional(),
+  attachmentRefs: z.array(UserAttachmentRef).max(MAX_USER_ATTACHMENTS).optional(),
   createdAt: z.number(),
 }).strict();
 export type TaskCreate = z.infer<typeof TaskCreate>;

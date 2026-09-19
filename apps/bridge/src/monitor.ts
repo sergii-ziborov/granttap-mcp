@@ -17,7 +17,7 @@ import type {
   UserAttachment,
   UserMessage,
 } from "../../../packages/protocol/schema";
-import { ATTACHMENT_MISSING_ERROR } from "../../../packages/protocol/schema";
+import { ATTACHMENT_MISSING_ERROR, MAX_USER_ATTACHMENTS } from "../../../packages/protocol/schema";
 import { pruneAttachments, storeAttachment, takeAttachment } from "./attachment-store";
 import {
   configDir,
@@ -772,7 +772,7 @@ export function resolveMessageAttachments(
     if (!stored) return { ok: false, missing: ref.name };
     attachments.push(stored);
   }
-  return { ok: true, attachments: attachments.slice(0, 5) };
+  return { ok: true, attachments: attachments.slice(0, MAX_USER_ATTACHMENTS) };
 }
 
 export async function handleUserMessage(

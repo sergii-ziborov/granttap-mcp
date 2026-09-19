@@ -4,7 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import type { Payload } from "../packages/protocol/schema";
-import { ATTACHMENT_MISSING_ERROR, Payload as PayloadSchema } from "../packages/protocol/schema";
+import {
+  ATTACHMENT_MISSING_ERROR,
+  MAX_USER_ATTACHMENTS,
+  Payload as PayloadSchema,
+  UserMessage,
+} from "../packages/protocol/schema";
 
 class FakeRelay {
   readonly room = "attachment-test-room";
@@ -103,6 +108,18 @@ process.stdout.write(JSON.stringify({ type: "end", sessionId: "grok-att" }) + "\
   >;
 
   assert.equal(resolveMessageAttachments({ attachments: [{ name: "a.txt", mimeType: "text/plain", data: "YQ==" }] }).ok, true);
+  const ten = Array.from({ length: MAX_USER_ATTACHMENTS }, (_, index) => ({
+    name: `shot-${index}.txt`, mimeType: "text/plain", data: "YQ==",
+  }));
+  assert.equal(UserMessage.parse({
+    type: "user.message", text: "ten", attachments: ten, createdAt: 1,
+  }).attachments?.length, MAX_USER_ATTACHMENTS);
+  assert.throws(() => UserMessage.parse({
+    type: "user.message", text: "eleven", attachments: [...ten, ten[0]], createdAt: 1,
+  }));
+  const tenResolved = resolveMessageAttachments({ attachments: ten });
+  assert.equal(tenResolved.ok, true);
+  if (tenResolved.ok) assert.equal(tenResolved.attachments.length, MAX_USER_ATTACHMENTS);
   const missing = resolveMessageAttachments({ attachmentRefs: [{ attachmentId: "nope", name: "gone.png", mimeType: "image/png" }] }, () => undefined);
   assert.deepEqual(missing, { ok: false, missing: "gone.png" });
 
