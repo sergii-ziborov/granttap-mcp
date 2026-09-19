@@ -27,7 +27,10 @@ function uniqueChildThreads(children: ChildThreadInfo[]): ChildThreadInfo[] {
   const byId = new Map<string, ChildThreadInfo>();
   for (const child of children) {
     const previous = byId.get(child.threadId);
-    if (!previous || child.lastActivityAt >= previous.lastActivityAt) {
+    if (!previous
+      || child.lastActivityAt > previous.lastActivityAt
+      || (child.lastActivityAt === previous.lastActivityAt
+        && child.tokensSession >= previous.tokensSession)) {
       byId.set(child.threadId, child);
     }
   }

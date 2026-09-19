@@ -116,3 +116,70 @@ test("Cursor subagent transcript is grouped under its composer parent", async (t
   assert.equal(activity.some((entry) => entry.kind === "tool"), true);
   assert.doesNotMatch(JSON.stringify(activity), /cursor private chain/);
 });
+
+test("Cursor Task-tool clones stay under the person chat, not as Working rows", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-cursor-task-fold-"));
+  const db = join(root, "state.vscdb");
+  execFileSync("sqlite3", [db, "CREATE TABLE cursorDiskKV (key TEXT PRIMARY KEY, value TEXT);"]);
+  const now = Date.now();
+  const insert = (id: string, value: unknown): void => {
+    const serialized = JSON.stringify(value).replace(/'/g, "''");
+    execFileSync("sqlite3", [db, `INSERT INTO cursorDiskKV VALUES('composerData:${id}','${serialized}');`]);
+  };
+  insert("chat-root", {
+    composerId: "chat-root",
+    name: "GrantTap MCP pairing",
+    lastUpdatedAt: now,
+    createdAt: now - 60_000,
+    status: "aborted",
+    unfinishedRunAt: now,
+    subagentComposerIds: ["listed-child"],
+    workspaceIdentifier: { uri: { fsPath: "/repo/granttap-mcp" } },
+  });
+  insert("listed-child", {
+    composerId: "listed-child",
+    name: "Inspect pairing",
+    lastUpdatedAt: now - 1_000,
+    createdAt: now - 50_000,
+    status: "completed",
+    subagentInfo: {
+      parentComposerId: "chat-root",
+      rootParentConversationId: "chat-root",
+      subagentTypeName: "explore",
+    },
+    workspaceIdentifier: { uri: { fsPath: "/repo/granttap-mcp" } },
+  });
+  insert("task-orphan-clone", {
+    composerId: "task-orphan-clone",
+    name: "Inspect pairing",
+    status: "completed",
+    subagentComposerIds: [],
+    subagentInfo: {
+      parentComposerId: "listed-child",
+      rootParentConversationId: "chat-root",
+      subagentTypeName: "generalPurpose",
+    },
+    workspaceIdentifier: { uri: { fsPath: "/repo/granttap-mcp" } },
+  });
+  insert("task-listed-child", {
+    composerId: "task-listed-child",
+    name: "Inspect pairing clone",
+    lastUpdatedAt: now - 500,
+    createdAt: now - 50_000,
+    status: "completed",
+    workspaceIdentifier: { uri: { fsPath: "/repo/granttap-mcp" } },
+  });
+  setEnv(t, "GRANTTAP_CURSOR_STATE_DB", db);
+  setEnv(t, "GRANTTAP_CURSOR_TRANSCRIPTS_DIR", join(root, "missing-transcripts"));
+  setEnv(t, "GRANTTAP_COMPOSER_CACHE_MS", "0");
+
+  const scan = scanCursor();
+  assert.deepEqual(scan.sessions.map((session) => session.sessionId), ["chat-root"]);
+  assert.equal(scan.sessions[0]?.state, "working");
+  const childIds = new Set(scan.sessions[0]?.childThreads?.map((child) => child.threadId));
+  assert.equal(childIds.has("listed-child"), true);
+  assert.equal(childIds.has("task-orphan-clone"), true);
+  assert.equal(childIds.has("task-listed-child"), true);
+  assert.equal(cursorRootSessionId("task-orphan-clone", db), "chat-root");
+  assert.equal(cursorRootSessionId("listed-child", db), "chat-root");
+});

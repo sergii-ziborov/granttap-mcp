@@ -48,6 +48,7 @@ test("Cursor composer rows normalize subagents, workspace URIs, and unreadable d
   insertComposer(db, "parent", {
     composerId: "parent", name: "  Parent composer  ", lastUpdatedAt: now, createdAt: now - 2_000,
     status: "completed", subagentComposerIds: JSON.stringify(["child", 7]),
+    subComposerIds: ["extra"],
     workspaceIdentifier: { uri: { path: "file:///repo/app" } },
     contextTokensUsed: 4_200, modelConfig: { modelName: "composer-1" },
   });
@@ -60,6 +61,15 @@ test("Cursor composer rows normalize subagents, workspace URIs, and unreadable d
     composerId: "plain", name: "Plain composer", lastUpdatedAt: now, createdAt: now,
     subagentComposerIds: [],
   });
+  insertComposer(db, "task-spawned", {
+    composerId: "task-spawned", name: "Spawned task", createdAt: now,
+    status: "completed",
+    subagentInfo: {
+      parentComposerId: "parent",
+      rootParentConversationId: "parent",
+      forkedFromComposerId: "parent",
+    },
+  });
 
   const rows = loadComposerCatalog(db);
   const parent = rows.find((row) => row.id === "parent");
@@ -67,9 +77,15 @@ test("Cursor composer rows normalize subagents, workspace URIs, and unreadable d
   assert.equal(parent?.name, "Parent composer");
   assert.equal(parent?.cwd, "/repo/app");
   assert.deepEqual(parent?.subagentIds, ["child"]);
+  assert.deepEqual(parent?.subComposerIds, ["extra"]);
   assert.equal(parent?.contextTokensUsed, 4_200);
   assert.equal(parent?.model, "composer-1");
   assert.deepEqual(child?.subagentIds, []);
+  const spawned = rows.find((row) => row.id === "task-spawned");
+  assert.equal(spawned?.parentComposerId, "parent");
+  assert.equal(spawned?.rootParentConversationId, "parent");
+  assert.equal(spawned?.forkedFromComposerId, "parent");
+  assert.equal(cursorRootSessionId("task-spawned", db), "parent");
   assert.equal(child?.isDraft, true);
   assert.equal(child?.isArchived, true);
   assert.equal(loadComposerCatalog(db), rows, "a warm catalog is reused inside its cache window");

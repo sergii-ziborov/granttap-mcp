@@ -2,7 +2,9 @@
 export { cursorActivity, cursorCapabilityUsage } from "./cursor/activity";
 export {
   CURSOR_COMPOSER_KEY_RANGE_SQL,
+  composerParentSets,
   cursorRootSessionId,
+  isNestedComposer,
   loadComposerCatalog,
   loadSidebarTitles,
 } from "./cursor/catalog";
