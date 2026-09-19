@@ -6,6 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 import {
   cursorRootSessionId,
+  isCursorTaskCloneId,
   loadComposerCatalog,
   loadSidebarTitles,
 } from "../apps/bridge/src/sessions/cursor/catalog";
@@ -100,4 +101,6 @@ test("Cursor composer rows normalize subagents, workspace URIs, and unreadable d
   await writeFile(broken, "not a sqlite database");
   assert.deepEqual(loadComposerCatalog(broken), []);
   assert.deepEqual(loadComposerCatalog(join(root, "missing.vscdb")), []);
+  assert.equal(isCursorTaskCloneId("task-3ef3af57-1111-4111-8111-1234567890ab"), true);
+  assert.equal(isCursorTaskCloneId("077ac587-8ac9-459c-b58a-8278f2767635"), false);
 });

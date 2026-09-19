@@ -4,6 +4,7 @@ export {
   CURSOR_COMPOSER_KEY_RANGE_SQL,
   composerParentSets,
   cursorRootSessionId,
+  isCursorTaskCloneId,
   isNestedComposer,
   loadComposerCatalog,
   loadSidebarTitles,

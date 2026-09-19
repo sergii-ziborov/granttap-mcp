@@ -202,6 +202,11 @@ export function composerParentSets(composers: ComposerRow[]): Map<string, Set<st
   return parentsByChild;
 }
 
+/** Cursor Task-tool composers are not their own chats. */
+export function isCursorTaskCloneId(sessionId: string | null | undefined): boolean {
+  return typeof sessionId === "string" && sessionId.trim().startsWith("task-");
+}
+
 /** Task-tool clones and catalog children are not their own chats. */
 export function isNestedComposer(composer: ComposerRow): boolean {
   return Boolean(
@@ -209,7 +214,7 @@ export function isNestedComposer(composer: ComposerRow): boolean {
     || composer.rootParentConversationId
     || composer.forkedFromComposerId
     || composer.isBestOfNSubcomposer
-    || composer.id.startsWith("task-"),
+    || isCursorTaskCloneId(composer.id),
   );
 }
 

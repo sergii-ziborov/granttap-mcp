@@ -18,6 +18,7 @@ import { formerComputerNames } from "./computer-identity";
 import { readIntegrationMap } from "./integration-map";
 import type { MeshStore } from "./store";
 import { syncProjectBinding } from "../engine/engine-projects";
+import { isCursorTaskCloneId } from "../sessions/cursor/catalog";
 
 export type RepositoryFacts = {
   root: string;
@@ -133,14 +134,17 @@ export function linkSessionsToProjects(
   // leftovers, not a second machine: their executions are over and their
   // bindings unavailable.
   store.retireComputerNames(computerId, formerNames);
+  // Task-tool clones are the parent chat's work. Linking them minted a Task
+  // per spawn, and the phone then kept those Tasks forever.
+  const visible = sessions.filter((session) => !isCursorTaskCloneId(session.sessionId));
   // A vanished session never says it ended, so sweep first: an execution left
   // open holds the Task, keeps its old title, and keeps its last state.
   store.closeVanishedExecutions(
     computerId,
-    new Set(sessions.map((session) => session.sessionId)),
+    new Set(visible.map((session) => session.sessionId)),
     new Set(sessions.flatMap((session) => provider(session.agent) ?? [])),
   );
-  return sessions.map((session) => {
+  return visible.map((session) => {
     const agent = provider(session.agent);
     const cwd = session.cwd?.trim();
     if (!agent || !cwd) return session;

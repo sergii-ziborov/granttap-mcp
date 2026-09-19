@@ -453,3 +453,48 @@ test("a duplicate on one computer is rejoined though it carries no execution", a
   assert.equal(snapshot?.tasks.length, 1, "one chat is one Task, execution or not");
   assert.equal(snapshot?.tasks[0]?.taskId, "task-old");
 });
+
+test("Cursor Task-tool clones are not kept as open mesh work", async () => {
+  const store = await freshStore();
+  const inspect = () => ({
+    root: "/repo", canonicalRepositoryId: "github.com/example/granttap", worktree: "/repo",
+  });
+  const parent: SessionInfo = {
+    sessionId: "077ac587-8ac9-459c-b58a-8278f2767635",
+    agent: "cursor", title: "GrantTap MCP configuration issues", cwd: "/repo",
+    state: "working", startedAt: now, lastActivityAt: now,
+    tokensSession: 11, tokensLastTurn: 2,
+  };
+  const clone: SessionInfo = {
+    sessionId: "task-3ef3af57-1111-4111-8111-1234567890ab",
+    agent: "cursor", title: "GrantTap MCP configuration issues", cwd: "/repo",
+    state: "working", startedAt: now, lastActivityAt: now,
+    tokensSession: 0, tokensLastTurn: 0,
+  };
+  store.upsertProject(project());
+  store.upsertTask({
+    taskId: "task-clone", projectId: "project",
+    title: clone.title ?? "GrantTap", goal: "Continue",
+    state: "working", ownerSessionId: clone.sessionId, createdAt: now, updatedAt: now,
+  });
+  store.linkExecution({
+    taskId: "task-clone", sessionId: clone.sessionId, provider: "cursor",
+    computerId: "MacBook", workspace: "/repo", startedAt: now,
+  });
+
+  const linked = linkSessionsToProjects(store, [parent, clone], "MacBook", inspect);
+  assert.deepEqual(linked.map((session) => session.sessionId), [parent.sessionId]);
+  assert.ok(linked[0]?.taskId);
+  const leftover = store.snapshot("project");
+  assert.equal(
+    leftover?.executions.some((item) => item.sessionId === clone.sessionId && item.endedAt == null),
+    false,
+    "a Task-tool clone is not current work",
+  );
+  const live = store.snapshot(linked[0]!.projectId ?? "project");
+  assert.equal(
+    live?.executions.some((item) => item.sessionId === parent.sessionId && item.endedAt == null),
+    true,
+    "the person chat stays the open execution",
+  );
+});
