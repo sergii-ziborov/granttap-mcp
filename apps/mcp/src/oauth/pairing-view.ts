@@ -8,6 +8,7 @@ import { recordPhoneSeen } from "../../../bridge/src/presence";
 import { relay, resetRelay } from "../create-server";
 import { buildConnectSnapshot } from "./connect-snapshot";
 import { watchMailboxClaim } from "./mailbox-claim";
+import { publishConnectRedirect, websiteOrigin } from "./website-session";
 import { isMachineConfigured } from "../pairing-status";
 import type { GrantTapOAuthProvider } from "../oauth-provider";
 import { isAllowedLoopbackOrigin, isWebsiteOrigin, WEBSITE_ORIGINS } from "./loopback-origin";
@@ -91,9 +92,20 @@ export function installPairingRoutes(app: Express, provider: GrantTapOAuthProvid
       const expiresAt = Date.now() + VIEW_TTL_MS;
       const stopWatch = watchMailboxClaim(pairing.httpBase, pairing.mailboxId, expiresAt, () => {
         recordPhoneSeen();
-        resetRelay();
-        void relay();
-        reloadPairingHelper();
+        if (pendingId) {
+          try {
+            const { redirectUrl } = provider.completeConsent(pendingId, true);
+            const site = websiteOrigin();
+            if (site) void publishConnectRedirect(site, pendingId, redirectUrl);
+          } catch {
+            // Already completed or expired. Still wake the room below.
+          }
+        }
+        setImmediate(() => {
+          resetRelay();
+          void relay();
+          reloadPairingHelper();
+        });
       });
       if (isWebsiteOrigin(origin)) {
         for (const view of views.values()) view.stopWatch?.();

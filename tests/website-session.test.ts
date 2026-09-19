@@ -12,7 +12,9 @@ import { createPairing, machineConfigPath, phonePairingPath, saveConfig } from "
 import { GrantTapOAuthProvider } from "../apps/mcp/src/oauth-provider";
 import {
   phoneScanApproves,
+  publishConnectError,
   publishConnectRequest,
+  publishConnectRequestRetry,
   readConnectRequest,
   resetConnectWatchers,
   watchConnectDecision,
@@ -150,7 +152,7 @@ test("helper publishes consent to the website and writes the Cursor redirect the
   assert.fail("website never received the Cursor redirect");
 });
 
-test("a seen phone is the Approve; the helper writes the coding-app redirect", async (t) => {
+test("a leftover seen phone does not skip /connect", async (t) => {
   const site = await listen();
   process.env.GRANTTAP_WEBSITE_ORIGIN = site.origin;
   t.after(async () => {
@@ -159,34 +161,18 @@ test("a seen phone is the Approve; the helper writes the coding-app redirect", a
     delete process.env.GRANTTAP_WEBSITE_ORIGIN;
   });
   const pendingId = "22222222-2222-4222-8222-222222222222";
-  let seen = false;
-  watchConnectDecision(site.origin, pendingId, () => ({
+  watchConnectDecision(site.origin, pendingId, {
     clientName: "Cursor",
     computerName: "mac.local",
     paired: true,
     roomPrefix: "abcd1234",
-    phones: [{
-      name: "iPhone",
-      status: seen ? "seen" as const : "paired" as const,
-      lastSeenAt: seen ? Date.now() : null,
-    }],
+    phones: [{ name: "iPhone", status: "seen", lastSeenAt: Date.now() }],
     providers: [],
-    relayStatus: "online" as const,
+    relayStatus: "online",
     mesh: { present: true, thisComputer: "mac.local", computers: ["mac.local"], openTasks: 1 },
-  }), () => ({ redirectUrl: "http://127.0.0.1:9/callback?code=x" }));
-  const started = Date.now();
-  while (Date.now() - started < 4_000) {
-    const row = site.store.get(pendingId);
-    if (row?.phones && Array.isArray(row.phones) && (row.phones[0] as { status?: string })?.status === "paired") {
-      seen = true;
-    }
-    if (typeof row?.redirectUrl === "string") {
-      assert.equal(row.redirectUrl, "http://127.0.0.1:9/callback?code=x");
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  assert.fail("QR scan never completed authorization");
+  }, () => ({ redirectUrl: "http://127.0.0.1:9/callback?code=x" }), { pollMs: 50 });
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  assert.equal(site.store.get(pendingId)?.redirectUrl, undefined);
 });
 
 test("a paired Mac still opens /connect so Reconnect stays available", async (t) => {
@@ -273,6 +259,74 @@ test("a hung website does not leave /authorize blank", async (t) => {
   } as AuthorizationParams, response);
   assert.ok(Date.now() - started < 800);
   assert.equal(new URL(location).pathname, "/connect");
+});
+
+test("a failed coding-app callback is written as an error on the website", async (t) => {
+  const site = await listen();
+  process.env.GRANTTAP_WEBSITE_ORIGIN = site.origin;
+  t.after(async () => {
+    resetConnectWatchers();
+    await site.close();
+    delete process.env.GRANTTAP_WEBSITE_ORIGIN;
+  });
+  const pendingId = "33333333-3333-4333-8333-333333333333";
+  site.store.set(pendingId, { decision: "approve" });
+  watchConnectDecision(site.origin, pendingId, {
+    clientName: "Cursor",
+    computerName: "mac.local",
+    paired: true,
+    roomPrefix: "abcd1234",
+    phones: [{ name: "iPhone", status: "paired", lastSeenAt: null }],
+    providers: [],
+    relayStatus: "online",
+    mesh: { present: false, thisComputer: "mac.local", computers: ["mac.local"], openTasks: 0 },
+  }, () => {
+    throw new Error("callback failed");
+  });
+  const started = Date.now();
+  while (Date.now() - started < 4_000) {
+    if (site.store.get(pendingId)?.error === "callback failed") return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.fail("website never received the callback error");
+});
+
+test("publishConnectRequestRetry gives up on a dead origin", async () => {
+  const ok = await publishConnectRequestRetry(
+    "http://127.0.0.1:1",
+    "44444444-4444-4444-8444-444444444444",
+    {
+      clientName: "Cursor",
+      computerName: "mac.local",
+      paired: false,
+      roomPrefix: "",
+      phones: [],
+      providers: [],
+      relayStatus: "unknown",
+      mesh: { present: false, thisComputer: "mac.local", computers: ["mac.local"], openTasks: 0 },
+    },
+    2,
+  );
+  assert.equal(ok, false);
+});
+
+test("readConnectRequest rejects a website 500", async (t) => {
+  const server = createServer((_req, res) => {
+    res.writeHead(500);
+    res.end();
+  });
+  const origin = await new Promise<string>((resolve) => {
+    server.listen(0, "127.0.0.1", () => {
+      const { port } = server.address() as AddressInfo;
+      resolve(`http://127.0.0.1:${port}`);
+    });
+  });
+  t.after(() => new Promise<void>((done) => server.close(() => done())));
+  await assert.rejects(
+    readConnectRequest(origin, "55555555-5555-4555-8555-555555555555"),
+    /request read failed \(500\)/,
+  );
+  await publishConnectError(origin, "55555555-5555-4555-8555-555555555555", "x".repeat(400));
 });
 
 test("only a seen phone counts as the QR-scan Approve", () => {

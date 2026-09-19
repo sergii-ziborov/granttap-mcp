@@ -112,20 +112,21 @@ export function watchConnectDecision(
   requestId: string,
   snapshot: ConnectSnapshot | (() => ConnectSnapshot),
   complete: (approve: boolean) => { redirectUrl: string },
+  options: { pollMs?: number } = {},
 ): void {
   const current = (): ConnectSnapshot => (typeof snapshot === "function" ? snapshot() : snapshot);
+  const pollMs = options.pollMs ?? 3_000;
   watchers.get(requestId)?.abort();
   const ac = new AbortController();
   watchers.set(requestId, ac);
   void (async () => {
     const deadline = Date.now() + PENDING_TTL_MS;
+    let lastBody = "";
     while (!ac.signal.aborted && Date.now() < deadline) {
       try {
         const live = current();
         const row = await readConnectRequest(origin, requestId);
-        if (!row) {
-          await publishConnectRequest(origin, requestId, live);
-        } else if (row.decision === "approve" || row.decision === "deny" || phoneScanApproves(live)) {
+        if (row?.decision === "approve" || row?.decision === "deny") {
           try {
             const { redirectUrl } = complete(row.decision !== "deny");
             await publishConnectRedirect(origin, requestId, redirectUrl);
@@ -137,13 +138,16 @@ export function watchConnectDecision(
             );
           }
           return;
-        } else {
+        }
+        const body = JSON.stringify(live);
+        if (!row || body !== lastBody) {
           await publishConnectRequest(origin, requestId, live);
+          lastBody = body;
         }
       } catch {
         // Keep retrying until TTL. Scan or Deny finishes consent.
       }
-      await sleep(1_000, ac.signal);
+      await sleep(pollMs, ac.signal);
     }
   })();
 }

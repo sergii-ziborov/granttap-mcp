@@ -142,6 +142,14 @@ test("unpaired computers mint distinct candidate rooms until the same iPhone uni
     phoneCfg: { ...first.phoneCfg, role: "phone" as const, pushAuth: "" },
     createdAt: Date.now(),
   }).type, "pairing.join");
+  assert.equal(PairingJoin.parse({
+    type: "pairing.join",
+    room: first.phoneCfg.room,
+    relayUrl: first.phoneCfg.relayUrl,
+    phonePublicKey: first.phoneCfg.myPublicKey,
+    phoneCfg: { ...first.phoneCfg, role: "phone" as const, pushAuth: null },
+    createdAt: Date.now(),
+  }).phoneCfg.pushAuth, undefined);
 });
 
 test("pairing failures do not persist a replacement", async (t) => {

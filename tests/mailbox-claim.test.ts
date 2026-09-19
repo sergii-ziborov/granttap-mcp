@@ -52,6 +52,57 @@ test("an empty mailbox that was never occupied is expiry, not a scan", async () 
   assert.equal(claimed, 0);
 });
 
+test("a dropped HEAD retries instead of treating the mailbox as gone", async () => {
+  const peeks: Array<"error" | "occupied" | "empty"> = ["error", "occupied", "empty"];
+  let claimed = 0;
+  const scheduled: Array<() => void> = [];
+  watchMailboxClaim(
+    "https://relay.example.test",
+    "ab".repeat(16),
+    Date.now() + 60_000,
+    () => { claimed += 1; },
+    {
+      peek: async () => peeks.shift() ?? "empty",
+      schedule: (callback) => {
+        scheduled.push(callback);
+        return 0 as unknown as ReturnType<typeof setTimeout>;
+      },
+    },
+  );
+  scheduled.shift()?.();
+  await Promise.resolve();
+  assert.equal(claimed, 0);
+  scheduled.shift()?.();
+  await Promise.resolve();
+  assert.equal(claimed, 0);
+  scheduled.shift()?.();
+  await Promise.resolve();
+  assert.equal(claimed, 1);
+});
+
+test("scan poll drops to 200ms once the mailbox is occupied", async () => {
+  const delays: number[] = [];
+  const scheduled: Array<() => void> = [];
+  watchMailboxClaim(
+    "https://relay.example.test",
+    "ab".repeat(16),
+    Date.now() + 60_000,
+    () => {},
+    {
+      peek: async () => "occupied",
+      schedule: (callback, delayMs) => {
+        delays.push(delayMs);
+        scheduled.push(callback);
+        return 0 as unknown as ReturnType<typeof setTimeout>;
+      },
+    },
+  );
+  assert.equal(delays[0], 0);
+  scheduled.shift()?.();
+  await Promise.resolve();
+  assert.equal(delays[1], 200);
+});
+
 test("an old relay without HEAD stops watching instead of treating 405 as a scan", async () => {
   let claimed = 0;
   const scheduled: Array<() => void> = [];

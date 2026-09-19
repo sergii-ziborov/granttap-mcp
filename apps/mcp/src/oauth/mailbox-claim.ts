@@ -1,6 +1,6 @@
 /** Detect that the phone fetched the one-time pairing mailbox. No keys here. */
 
-export type MailboxPeek = "occupied" | "empty" | "unsupported";
+export type MailboxPeek = "occupied" | "empty" | "unsupported" | "error";
 
 export async function peekPairingMailbox(httpBase: string, mailboxId: string): Promise<MailboxPeek> {
   let url: URL;
@@ -19,7 +19,7 @@ export async function peekPairingMailbox(httpBase: string, mailboxId: string): P
     if (response.ok) return "occupied";
     return "empty";
   } catch {
-    return "unsupported";
+    return "error";
   }
 }
 
@@ -28,6 +28,7 @@ export type WatchMailboxClaimOptions = {
   now?: () => number;
   schedule?: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
   intervalMs?: number;
+  occupiedIntervalMs?: number;
 };
 
 /**
@@ -44,22 +45,29 @@ export function watchMailboxClaim(
   const peek = options.peek ?? peekPairingMailbox;
   const now = options.now ?? Date.now;
   const schedule = options.schedule ?? setTimeout;
-  const intervalMs = options.intervalMs ?? 400;
+  const intervalMs = options.intervalMs ?? 2_000;
+  const occupiedIntervalMs = options.occupiedIntervalMs ?? 200;
   let stopped = false;
   let seenOccupied = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const delay = (): number => (seenOccupied ? occupiedIntervalMs : intervalMs);
 
   const tick = async (): Promise<void> => {
     if (stopped || now() >= expiresAt) return;
     const state = await peek(httpBase, mailboxId);
     if (stopped) return;
     if (state === "unsupported") return;
+    if (state === "error") {
+      if (!stopped && now() < expiresAt) timer = schedule(() => void tick(), delay());
+      return;
+    }
     if (state === "occupied") seenOccupied = true;
     else if (seenOccupied) {
       onClaimed();
       return;
     }
-    if (!stopped && now() < expiresAt) timer = schedule(() => void tick(), intervalMs);
+    if (!stopped && now() < expiresAt) timer = schedule(() => void tick(), delay());
   };
 
   timer = schedule(() => void tick(), 0);
