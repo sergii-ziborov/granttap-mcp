@@ -15,7 +15,15 @@ import { isAllowedLoopbackOrigin, isWebsiteOrigin, WEBSITE_ORIGINS } from "./loo
 
 const VIEW_TTL_MS = 15 * 60_000;
 type View = { qrDataUrl: string; manualToken: string; expiresAt: number; stopWatch?: () => void };
+const views = new Map<string, View>();
 let loopbackWatchStop: (() => void) | undefined;
+
+export function resetPairingWatches(): void {
+  loopbackWatchStop?.();
+  loopbackWatchStop = undefined;
+  for (const view of views.values()) view.stopWatch?.();
+  views.clear();
+}
 
 function escapeHtml(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;")
@@ -50,7 +58,6 @@ const button=document.getElementById('copy');try{await navigator.clipboard.write
 }
 
 export function installPairingRoutes(app: Express, provider: GrantTapOAuthProvider, issuerOrigin: string): void {
-  const views = new Map<string, View>();
   app.post("/oauth/pairing", async (req, res) => {
     res.set("Cache-Control", "no-store");
     try {

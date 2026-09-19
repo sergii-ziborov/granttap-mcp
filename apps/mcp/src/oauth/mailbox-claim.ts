@@ -29,6 +29,7 @@ export type WatchMailboxClaimOptions = {
   schedule?: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
   intervalMs?: number;
   occupiedIntervalMs?: number;
+  maxErrors?: number;
 };
 
 /**
@@ -47,8 +48,10 @@ export function watchMailboxClaim(
   const schedule = options.schedule ?? setTimeout;
   const intervalMs = options.intervalMs ?? 2_000;
   const occupiedIntervalMs = options.occupiedIntervalMs ?? 200;
+  const maxErrors = options.maxErrors ?? 8;
   let stopped = false;
   let seenOccupied = false;
+  let errors = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
 
   const delay = (): number => (seenOccupied ? occupiedIntervalMs : intervalMs);
@@ -59,9 +62,12 @@ export function watchMailboxClaim(
     if (stopped) return;
     if (state === "unsupported") return;
     if (state === "error") {
+      errors += 1;
+      if (errors >= maxErrors) return;
       if (!stopped && now() < expiresAt) timer = schedule(() => void tick(), delay());
       return;
     }
+    errors = 0;
     if (state === "occupied") seenOccupied = true;
     else if (seenOccupied) {
       onClaimed();

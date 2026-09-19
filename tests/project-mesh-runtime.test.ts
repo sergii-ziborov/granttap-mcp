@@ -262,6 +262,28 @@ test("handoffs for another computer and empty capsules are ignored", async () =>
   assert.equal(hostname().length > 0, true);
 });
 
+test("published snapshots stay inside the phone snapshot allowlist", async () => {
+  const repo = await gitRepository();
+  const run = await harness();
+  run.sessions.push(session(repo));
+  run.runtime.catalog(run.sessions);
+  const snaps = run.runtime.snapshots();
+  assert.ok(snaps.length > 0);
+  const allowed = new Set([
+    "type", "sessionId", "projectId", "project", "tasks", "executions",
+    "bindings", "peers", "skills", "incomplete", "execution", "modelCatalog",
+    "claims", "dependencies", "events", "generatedAt",
+  ]);
+  for (const snap of snaps) {
+    for (const key of Object.keys(snap)) {
+      assert.ok(allowed.has(key), `phone rejects unknown snapshot key ${key}`);
+    }
+    assert.ok(snap.modelCatalog, "monitor always attaches modelCatalog");
+    assert.equal(snap.modelCatalog?.[0]?.reason === "not_reported"
+      || (snap.modelCatalog?.[0]?.models.length ?? 0) > 0, true);
+  }
+});
+
 test("default entry points share one protected local mesh store", async () => {
   const config = await mkdtemp(join(tmpdir(), "granttap-mesh-default-runtime-"));
   process.env.GRANTTAP_CONFIG_DIR = config;

@@ -103,6 +103,36 @@ test("scan poll drops to 200ms once the mailbox is occupied", async () => {
   assert.equal(delays[1], 200);
 });
 
+test("repeated HEAD failures stop the watch instead of pinning the event loop", async () => {
+  let peeks = 0;
+  const scheduled: Array<() => void> = [];
+  watchMailboxClaim(
+    "https://relay.example.test",
+    "ab".repeat(16),
+    Date.now() + 60_000,
+    () => {},
+    {
+      maxErrors: 3,
+      peek: async () => {
+        peeks += 1;
+        return "error";
+      },
+      schedule: (callback) => {
+        scheduled.push(callback);
+        return 0 as unknown as ReturnType<typeof setTimeout>;
+      },
+    },
+  );
+  scheduled.shift()?.();
+  await Promise.resolve();
+  scheduled.shift()?.();
+  await Promise.resolve();
+  scheduled.shift()?.();
+  await Promise.resolve();
+  assert.equal(peeks, 3);
+  assert.equal(scheduled.length, 0);
+});
+
 test("an old relay without HEAD stops watching instead of treating 405 as a scan", async () => {
   let claimed = 0;
   const scheduled: Array<() => void> = [];

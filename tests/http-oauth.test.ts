@@ -102,11 +102,13 @@ test("HTTP MCP OAuth discovery matches Cursor Authorize requirements", async (t)
     ok: boolean;
     service: string;
     mcp: string;
+    phoneReachability: string;
   };
   assert.equal(healthJson.schema, "granttap.http-health.v1");
   assert.equal(healthJson.ok, true);
   assert.equal(healthJson.service, "granttap-mcp");
   assert.equal(healthJson.mcp, `${base}/mcp`);
+  assert.equal(healthJson.phoneReachability, "unknown");
 
   const pairingWithoutAuth = await fetch(`${base}/oauth/pairing`, { method: "POST" });
   assert.equal(pairingWithoutAuth.status, 400);

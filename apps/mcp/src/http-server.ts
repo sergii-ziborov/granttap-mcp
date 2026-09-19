@@ -16,11 +16,11 @@ import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import express from "express";
 import { createGrantTapServer, relay, resetRelay } from "./create-server";
 import { isAllowedLoopbackOrigin, isWebsiteOrigin } from "./oauth/loopback-origin";
-import { installPairingRoutes } from "./oauth/pairing-view";
+import { installPairingRoutes, resetPairingWatches } from "./oauth/pairing-view";
 import { GrantTapOAuthProvider } from "./oauth-provider";
 import { buildConnectSnapshot, publicClientName } from "./oauth/connect-snapshot";
 import { resetConnectWatchers } from "./oauth/website-session";
-import { isMachineConfigured } from "./pairing-status";
+import { isMachineConfigured, phoneReachability } from "./pairing-status";
 
 export const DEFAULT_HTTP_HOST = "127.0.0.1";
 export const DEFAULT_HTTP_PORT = 17342;
@@ -218,7 +218,7 @@ export async function startHttpMcpServer(options: ServeOptions = {}): Promise<{
       service: "granttap-mcp",
       paired: pairingKeysPresent,
       pairingKeysPresent,
-      phoneReachability: "unknown",
+      phoneReachability: phoneReachability(),
       mcp: mcpUrl.href,
     });
   });
@@ -240,6 +240,7 @@ export async function startHttpMcpServer(options: ServeOptions = {}): Promise<{
       }
       transports.clear();
       resetConnectWatchers();
+      resetPairingWatches();
       resetRelay();
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));

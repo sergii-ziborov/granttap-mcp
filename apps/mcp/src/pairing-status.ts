@@ -10,6 +10,15 @@ export type PairedPhone = {
   lastSeenAt: number | null;
 };
 
+export type PhoneReachability = "live" | "offline" | "unknown";
+
+/** healthz must not stay "unknown" when this Mac already has a pairing slot. */
+export function phoneReachability(phones: PairedPhone[] = listPairedPhones()): PhoneReachability {
+  const phone = phones[0];
+  if (!phone) return "unknown";
+  return phone.status === "seen" ? "live" : "offline";
+}
+
 /** Resolve the active config without configDir()'s legacy rename side effect. */
 export function readOnlyMachineConfigPath(): string {
   const overridden = process.env.GRANTTAP_CONFIG_DIR ?? process.env.NODVOX_CONFIG_DIR;

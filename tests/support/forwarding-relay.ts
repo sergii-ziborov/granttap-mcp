@@ -14,7 +14,17 @@ export async function forwardingRelay(): Promise<ForwardingRelay> {
     response.end();
   });
   const sockets = new Set<WebSocket>();
-  const wss = new WebSocketServer({ server: http });
+  const wss = new WebSocketServer({ noServer: true });
+  http.on("upgrade", (request, socket, head) => {
+    let path = "/";
+    try { path = new URL(request.url ?? "/", "http://relay.test").pathname; } catch { /* keep / */ }
+    if (path !== "/" && path !== "/ws") {
+      socket.write("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
+      socket.destroy();
+      return;
+    }
+    wss.handleUpgrade(request, socket, head, (ws) => wss.emit("connection", ws, request));
+  });
   wss.on("connection", (socket) => {
     sockets.add(socket);
     socket.on("close", () => sockets.delete(socket));
