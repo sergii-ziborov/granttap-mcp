@@ -37,9 +37,11 @@ test("the wire keeps the permission mode and effort a turn was sent with", () =>
   const parsed = UserMessage.parse({
     type: "user.message", text: "go", sessionId: "chat", createdAt: 1,
     model: "opus", permissionMode: "plan", effort: "high",
+    projectId: "project-a",
   });
   assert.equal(parsed.permissionMode, "plan");
   assert.equal(parsed.effort, "high");
+  assert.equal(parsed.projectId, "project-a");
 });
 
 test("a turn carries its permission mode and effort to the Claude CLI", async (t) => {

@@ -710,6 +710,7 @@ export async function handleTaskCreate(
   }
   const admitted = evaluateCreateTask({
     cwd: message.cwd, agent, model: message.model,
+    projectId: message.projectId,
     hostOnline: client.isConnected,
   });
   if (!admitted.ok) {
@@ -808,6 +809,7 @@ export async function handleUserMessage(
     if (requestedCwd) {
       const admitted = evaluateCreateTask({
         cwd: requestedCwd, agent, model: message.model,
+        projectId: message.projectId,
         hostOnline: client.isConnected,
       });
       if (!admitted.ok) {

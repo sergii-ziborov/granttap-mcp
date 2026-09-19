@@ -51,6 +51,8 @@ export const UserMessage = z.object({
   attachmentRefs: z.array(UserAttachmentRef).max(MAX_USER_ATTACHMENTS).optional(),
   preferredMcp: z.string().min(1).max(180).optional(),
   skill: z.string().min(1).max(180).optional(),
+  /** Project this new chat belongs to. Omitted on home compose and follow-ups. */
+  projectId: z.string().trim().min(1).max(180).optional(),
   model: z.string().min(1).max(120)
     .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/).optional(),
   // Spelled out as the CLI spells them. An unknown value is refused here rather
@@ -70,6 +72,8 @@ export const TaskCreate = z.object({
   operationId: z.string().trim().min(8).max(128),
   text: z.string().min(1).max(32_000),
   cwd: z.string().min(1).max(4_096),
+  /** When set, this host must already bind that folder to this Project. */
+  projectId: z.string().trim().min(1).max(180).optional(),
   agent: CodingAgent.optional(),
   model: z.string().min(1).max(120)
     .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/).optional(),

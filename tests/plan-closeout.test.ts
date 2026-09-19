@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { Payload } from "../packages/protocol/schema";
 import { applyConfigSet } from "../apps/bridge/src/config-commands";
-import { evaluateCreateTask } from "../apps/bridge/src/mesh/create-task";
+import { evaluateCreateTask, resolveCreateTaskProject } from "../apps/bridge/src/mesh/create-task";
 import {
   currentInstanceEpoch, pairingKeysPresent, recoverInstanceAfterRestore, remintInstanceEpoch,
 } from "../apps/bridge/src/instance-epoch";
@@ -174,7 +174,7 @@ test("M-02 affected recipients come from claims and dependencies and still need 
   assert.deepEqual(result.recipients.map((item) => item.sessionId).sort(), ["s1", "s2", "s3"]);
 });
 
-test("M-03/M-04 skill inventory hashes the same desired and actual rows", () => {
+test("M-03/M-04 skill inventory keeps desired names and reports actual unknown until observed", () => {
   const root = mkdtempSync(join(tmpdir(), "granttap-skills-"));
   mkdirSync(join(root, ".cursor", "skills", "demo"), { recursive: true });
   writeFileSync(
@@ -184,7 +184,8 @@ test("M-03/M-04 skill inventory hashes the same desired and actual rows", () => 
   const manifest = capabilityManifest([join(root, "src", "a.ts")]);
   assert.equal(manifest.desired[0]?.name, "demo");
   assert.equal(manifest.actual[0]?.name, "demo");
-  assert.equal(manifest.matched, true);
+  assert.equal(manifest.actual[0]?.state, "unknown");
+  assert.equal(manifest.matched, false);
   assert.equal(manifest.digest.length, 64);
 });
 
@@ -212,6 +213,36 @@ test("create-task refuses an unpublished workspace instead of guessing a host", 
   const refused = evaluateCreateTask({ cwd: "/no/such/workspace", agent: "codex" });
   assert.equal(refused.ok, false);
   if (!refused.ok) assert.equal(refused.reason, "unknown_workspace");
+});
+
+test("create-task with an explicit projectId uses only this host binding", () => {
+  const admitted = resolveCreateTaskProject({
+    requestedProjectId: "project-a",
+    endpointBinding: { projectId: "project-a" },
+    inferredProjectId: "project-other",
+  });
+  assert.equal(admitted.ok, true);
+  if (admitted.ok) assert.equal(admitted.projectId, "project-a");
+
+  const wrong = resolveCreateTaskProject({
+    requestedProjectId: "project-a",
+    endpointBinding: { projectId: "project-b" },
+  });
+  assert.equal(wrong.ok, false);
+  if (!wrong.ok) assert.equal(wrong.reason, "wrong_project");
+
+  const missing = resolveCreateTaskProject({
+    requestedProjectId: "project-a",
+    inferredProjectId: "project-a",
+  });
+  assert.equal(missing.ok, false);
+  if (!missing.ok) assert.equal(missing.reason, "no_project_binding");
+
+  const inferred = resolveCreateTaskProject({
+    inferredProjectId: "project-a",
+  });
+  assert.equal(inferred.ok, true);
+  if (inferred.ok) assert.equal(inferred.projectId, "project-a");
 });
 
 test("a restore without an epoch file mints a new authority", () => {
@@ -250,9 +281,11 @@ test("project.task.create is a distinct payload from user.message", () => {
     operationId: "create-01",
     text: "Fix pairing",
     cwd: "/tmp/repo",
+    projectId: "project-a",
     createdAt: 1,
   });
   assert.equal(created.type, "project.task.create");
+  if (created.type === "project.task.create") assert.equal(created.projectId, "project-a");
   const grant = Payload.parse({
     type: "project.execution.host-grant",
     projectId: "proj",
