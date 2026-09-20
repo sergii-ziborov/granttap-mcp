@@ -10,7 +10,7 @@ keeps each phone response tied to the exact originating chat and prompt.
 Install the supported CLI on this computer, then run:
 
 ```bash
-npm install -g https://github.com/sergii-ziborov/granttap-mcp/archive/04884afd79fd0b8e3136a5ee6a8a3105fc9ba9e3.tar.gz
+npm install -g https://github.com/sergii-ziborov/granttap-mcp/archive/81bfd51bd12b4667ed062f2e72f794a8daa47ec3.tar.gz
 granttap setup
 granttap status
 ```

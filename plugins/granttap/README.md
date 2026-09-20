@@ -13,7 +13,7 @@ iPhone and Apple Watch.
 Install the durable local GrantTap helper on each Mac or Windows computer you connect:
 
 ```bash
-npm install --global https://github.com/sergii-ziborov/granttap-mcp/archive/04884afd79fd0b8e3136a5ee6a8a3105fc9ba9e3.tar.gz
+npm install --global https://github.com/sergii-ziborov/granttap-mcp/archive/81bfd51bd12b4667ed062f2e72f794a8daa47ec3.tar.gz
 granttap setup
 ```
 
@@ -45,7 +45,7 @@ status, and confirmed Reconnect controls.
 Install the same local helper first, then install the plugin:
 
 ```bash
-npm install --global https://github.com/sergii-ziborov/granttap-mcp/archive/04884afd79fd0b8e3136a5ee6a8a3105fc9ba9e3.tar.gz
+npm install --global https://github.com/sergii-ziborov/granttap-mcp/archive/81bfd51bd12b4667ed062f2e72f794a8daa47ec3.tar.gz
 granttap setup
 claude plugin marketplace add sergii-ziborov/granttap-mcp
 claude plugin install granttap@granttap
@@ -66,7 +66,7 @@ Cloud Agents start that process. They cannot fetch `http://127.0.0.1`.
 ### Grok Build
 
 ```bash
-npm install --global https://github.com/sergii-ziborov/granttap-mcp/archive/04884afd79fd0b8e3136a5ee6a8a3105fc9ba9e3.tar.gz
+npm install --global https://github.com/sergii-ziborov/granttap-mcp/archive/81bfd51bd12b4667ed062f2e72f794a8daa47ec3.tar.gz
 granttap setup
 grok plugin marketplace add sergii-ziborov/granttap-mcp
 grok plugin install granttap --trust
