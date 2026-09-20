@@ -40,12 +40,12 @@ test("Cursor plugin is stdio so Cloud does not fetch loopback", () => {
     mcpServers: { granttap: { type?: string; url?: string } };
   };
   assert.equal(plugin.name, "granttap");
-  assert.equal(plugin.version, "0.1.10");
+  assert.equal(plugin.version, "0.1.11");
   assert.equal(plugin.logo, "assets/logo.svg");
   assert.equal(hosts.mcpServers.granttap.url, "http://127.0.0.1:17342/mcp");
   assert.equal(mcp.mcpServers.granttap.command, "node");
   assert.equal(mcp.mcpServers.granttap.args?.[0], "-e");
-  assert.match(mcp.mcpServers.granttap.args?.[1] ?? "", /granttap-mcp@0\.8\.18/);
+  assert.match(mcp.mcpServers.granttap.args?.[1] ?? "", /04884afd79fd0b8e3136a5ee6a8a3105fc9ba9e3\.tar\.gz/);
   assert.equal(mcp.mcpServers.granttap.url, undefined);
   assert.equal(existsSync(join(repositoryRoot, "cursor-plugin/.cursor-plugin/plugin.json")), true);
   assert.equal(existsSync(join(repositoryRoot, "cursor-plugin/mcp.json")), true);

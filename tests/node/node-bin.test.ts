@@ -37,12 +37,12 @@ test("ephemeral npx installs are detected on Unix and Windows cache paths", () =
   assert.equal(isEphemeralNpxInstall("C:\\Users\\Ada\\AppData\\Roaming\\npm\\node_modules\\granttap-mcp"), false);
 });
 
-test("Cursor plugin bootstrap is valid JavaScript and pins the published package", () => {
+test("Cursor plugin bootstrap is valid JavaScript and pins the verified runtime archive", () => {
   const path = join(import.meta.dirname, "../..", "cursor-plugin", "stdio-bootstrap.cjs");
   const checked = spawnSync(process.execPath, ["--check", path], { encoding: "utf8" });
   assert.equal(checked.status, 0, checked.stderr);
   const source = readFileSync(path, "utf8");
-  assert.match(source, /granttap-mcp@0\.8\.18/);
+  assert.match(source, /04884afd79fd0b8e3136a5ee6a8a3105fc9ba9e3\.tar\.gz/);
   assert.match(source, /ComSpec/);
   assert.match(source, /cmd\.exe/);
   assert.match(source, /where granttap-mcp/);
@@ -64,7 +64,7 @@ test("Cursor plugin MCP starts from a foreign cwd, unlike a relative bootstrap p
   // Cursor Cloud cannot fetch 127.0.0.1. The plugin is stdio; cwd must not matter.
   assert.equal(mcp.mcpServers.granttap.command, "node");
   assert.equal(mcp.mcpServers.granttap.args?.[0], "-e");
-  assert.match(mcp.mcpServers.granttap.args?.[1] ?? "", /granttap-mcp@0\.8\.18/);
+  assert.match(mcp.mcpServers.granttap.args?.[1] ?? "", /04884afd79fd0b8e3136a5ee6a8a3105fc9ba9e3\.tar\.gz/);
   assert.equal(mcp.mcpServers.granttap.url, undefined);
   assert.equal(mcp.mcpServers.granttap.type, undefined);
   assert.doesNotThrow(() => new Script(mcp.mcpServers.granttap.args?.[1] ?? ""));

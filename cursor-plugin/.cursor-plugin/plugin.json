@@ -1,7 +1,7 @@
 {
   "name": "granttap",
   "displayName": "GrantTap",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "The agent connects this computer in chat. Authorize in plugin settings opens the device window. Scan the QR in GrantTap — that scan authorizes. Device list and Add another stay there and in the GrantTap app.",
   "author": {
     "name": "GrantTap",

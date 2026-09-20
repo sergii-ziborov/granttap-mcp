@@ -8,7 +8,7 @@ const { spawn } = require("node:child_process");
 const { existsSync } = require("node:fs");
 const { dirname, join } = require("node:path");
 
-const PACKAGE = "granttap-mcp@0.8.18";
+const PACKAGE = "https://github.com/sergii-ziborov/granttap-mcp/archive/04884afd79fd0b8e3136a5ee6a8a3105fc9ba9e3.tar.gz";
 const windows = process.platform === "win32";
 const sibling = (name) => {
   const candidate = join(dirname(process.execPath), name);
