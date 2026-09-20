@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import {
+  createCodexSession,
   createCursorSession,
   createGrokSession,
   deliverToSession,
@@ -14,6 +15,35 @@ async function executable(root: string, name: string, source: string): Promise<s
   await writeFile(path, `#!/usr/bin/env node\n${source}\n`, { mode: 0o755 });
   return path;
 }
+
+test("phone delivery starts and resumes Codex with the selected CLI", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-codex-headless-"));
+  const bin = await executable(root, "codex.mjs", [
+    "const args = process.argv.slice(2);",
+    "const resumed = args[1] === 'resume';",
+    "const id = resumed ? 'existing-codex' : 'new-codex';",
+    "process.stdout.write(JSON.stringify({ type: 'thread.started', thread_id: id }) + '\\n');",
+    "process.stdout.write(JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: args.join('|') } }) + '\\n');",
+  ].join("\n"));
+  const previous = process.env.GRANTTAP_CODEX_BIN;
+  process.env.GRANTTAP_CODEX_BIN = bin;
+  t.after(() => previous == null
+    ? delete process.env.GRANTTAP_CODEX_BIN
+    : process.env.GRANTTAP_CODEX_BIN = previous);
+
+  const created = await createCodexSession("Start", root, 5_000);
+  assert.equal(created.ok, true);
+  if (!created.ok) return;
+  assert.equal(created.sessionId, "new-codex");
+  assert.match(created.text, /exec\|--json\|--skip-git-repo-check/);
+
+  const resumed = await deliverToSession({
+    sessionId: "existing-codex", agent: "codex", cwd: root, state: "idle",
+    startedAt: 1, lastActivityAt: 1, tokensSession: 0, tokensLastTurn: 0,
+  }, "Continue", 5_000);
+  assert.equal(resumed.ok, true);
+  if (resumed.ok) assert.match(resumed.text, /exec\|resume/);
+});
 
 test("Cursor new task and continuation use its persisted headless session", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "granttap-cursor-headless-"));

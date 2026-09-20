@@ -1,7 +1,6 @@
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
-
-const CODEX_BIN = process.env.GRANTTAP_CODEX_BIN ?? process.env.NODVOX_CODEX_BIN ?? "codex";
+import { resolveCodexBinary } from "./codex-bin";
 
 export type CompactResult = { ok: true } | { ok: false; error: string };
 
@@ -14,7 +13,7 @@ export function compactCodexSession(sessionId: string, timeoutMs = 240_000): Pro
   return new Promise((resolve) => {
     let child;
     try {
-      child = spawn(CODEX_BIN, ["app-server", "--listen", "stdio://"], {
+      child = spawn(resolveCodexBinary(), ["app-server", "--listen", "stdio://"], {
         stdio: ["pipe", "pipe", "pipe"],
       });
     } catch (error) {

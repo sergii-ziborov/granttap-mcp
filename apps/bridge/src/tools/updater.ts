@@ -15,6 +15,7 @@ import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import type { CodingAgent } from "../../../../packages/protocol/schema";
 import { compareVersions, executableOnPath, resolveClaudeBinary } from "../providers/claude-bin";
+import { resolveCodexBinary } from "../providers/codex-bin";
 import { resolveCursorAgentBin } from "../reply/process/cursor-agent-bin";
 import { askVersion, binaryVersion, forgetVersion, stripAnsi } from "./version";
 
@@ -121,10 +122,13 @@ export function updateArgv(
   }
 }
 
-function locate(agent: CodingAgent, env: NodeJS.ProcessEnv): string | undefined {
+function locate(agent: CodingAgent, env: NodeJS.ProcessEnv, home: string): string | undefined {
   switch (agent) {
     case "claude": return env.GRANTTAP_CLAUDE_BIN ?? env.NODVOX_CLAUDE_BIN ?? executableOnPath("claude", env);
-    case "codex": return env.GRANTTAP_CODEX_BIN ?? env.NODVOX_CODEX_BIN ?? executableOnPath("codex", env);
+    case "codex": {
+      const path = resolveCodexBinary(home, env);
+      return path.includes("/") ? (executable(path) ? path : undefined) : executableOnPath(path, env);
+    }
     case "cursor": {
       const bin = resolveCursorAgentBin(env);
       return bin.includes("/") ? (executable(bin) ? bin : undefined) : executableOnPath(bin, env);
@@ -138,7 +142,7 @@ export function inspectTool(
   env: NodeJS.ProcessEnv = process.env,
   home = homedir(),
 ): ToolStatus {
-  const path = locate(agent, env);
+  const path = locate(agent, env, home);
   const install = path ? installMethod(resolved(path)) : { method: "unknown" as const };
   const own = path ? binaryVersion(path) : undefined;
   const status: ToolStatus = {

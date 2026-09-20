@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { SessionInfo, UserAttachment } from "../../../../packages/protocol/schema";
 import type { CodingAgent } from "../../../../packages/protocol/schema";
 import { explainClaudeFailure, resolveClaudeBinary } from "../providers/claude-bin";
+import { resolveCodexBinary } from "../providers/codex-bin";
 import { configDir, isSessionPaused, loadRuntimeConfig, PAUSED_SESSION_REASON } from "../config";
 import { withAttachments } from "./payload/attachments";
 import { abortProcesses, runProcess } from "./process";
@@ -17,7 +18,6 @@ import {
 } from "./process/provider-headless";
 export type { DeliveryOptions, ReplyResult } from "./payload/types";
 
-const CODEX_BIN = process.env.GRANTTAP_CODEX_BIN ?? process.env.NODVOX_CODEX_BIN ?? "codex";
 export const GENERAL_WORKSPACE = "granttap:general";
 
 export function resolveAgentWorkspace(cwd: string | undefined, agent: CodingAgent): string {
@@ -250,7 +250,7 @@ function runCodex(
     session.sessionId, "--json", "-",
   ];
   return runProcess(
-    CODEX_BIN,
+    resolveCodexBinary(),
     args,
     session.cwd,
     timeoutMs,
@@ -274,5 +274,5 @@ function runCodexNew(
   // normal sandbox, approval, hooks, model, and auth configuration.
   const imageArgs = images.flatMap((path) => ["-i", path]);
   const args = ["exec", ...imageArgs, "--json", "--skip-git-repo-check", "-"];
-  return runProcess(CODEX_BIN, args, cwd, timeoutMs, parseCodexJsonl, text);
+  return runProcess(resolveCodexBinary(), args, cwd, timeoutMs, parseCodexJsonl, text);
 }

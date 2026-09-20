@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import type { SessionInfo } from "../../../../packages/protocol/schema";
+import { resolveCodexBinary } from "../providers/codex-bin";
 import type { CodexMcpRow, McpDescriptor, McpTransportConfig } from "./types";
 
 let codexCache: { at: number; rows: CodexMcpRow[] } | undefined;
@@ -43,7 +44,7 @@ function codexMcpDescriptors(): McpDescriptor[] {
 function codexMcpRows(): CodexMcpRow[] {
   if (codexCache && Date.now() - codexCache.at < CACHE_MS) return codexCache.rows;
   try {
-    const command = process.env.GRANTTAP_CODEX_BIN ?? process.env.NODVOX_CODEX_BIN ?? "codex";
+    const command = resolveCodexBinary();
     const output = execFileSync(command, ["mcp", "list", "--json"], {
       encoding: "utf8",
       timeout: 15_000,

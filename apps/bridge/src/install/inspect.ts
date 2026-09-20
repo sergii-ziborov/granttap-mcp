@@ -19,6 +19,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { resolveClaudeBinary } from "../providers/claude-bin";
+import { resolveCodexBinary } from "../providers/codex-bin";
 import { describeCommand, inspectTools, updatingTools } from "../tools/updater";
 import { resolveCursorAgentBin } from "../reply/process/cursor-agent-bin";
 import { homedir } from "node:os";
@@ -267,7 +268,7 @@ export function inspectCursorIntegration(): CursorIntegrationStatus {
 
 /** Read-only capability check used by phone/watch connection states. */
 export function inspectAgentIntegrations(): AgentIntegrationStatus[] {
-  const codex = process.env.GRANTTAP_CODEX_BIN ?? process.env.NODVOX_CODEX_BIN ?? "codex";
+  const codex = resolveCodexBinary();
   const claude = resolveClaudeBinary().path;
   const cursor = process.env.GRANTTAP_CURSOR_AGENT_BIN ?? resolveCursorAgentBin();
   const grok = process.env.GRANTTAP_GROK_BIN ?? "grok";
