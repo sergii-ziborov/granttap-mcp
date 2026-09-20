@@ -21,16 +21,16 @@ import type {
   OAuthClientInformationFull,
   OAuthTokens,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
-import { isMachineConfigured } from "./pairing-status";
-import { buildConnectSnapshot } from "./oauth/connect-snapshot";
-import { loadPending, PENDING_TTL_MS, savePending, type PendingAuth } from "./oauth/pending";
-import { GrantTapClientsStore, loadOAuthStore, saveOAuthStore } from "./oauth/store";
-import { wakePairingRoomAfterApprove } from "./oauth/after-consent";
+import { isMachineConfigured } from "./status/pairing-status";
+import { buildConnectSnapshot } from "./oauth/session/connect-snapshot";
+import { loadPending, PENDING_TTL_MS, savePending, type PendingAuth } from "./oauth/consent/pending";
+import { GrantTapClientsStore, loadOAuthStore, saveOAuthStore } from "./oauth/session/store";
+import { wakePairingRoomAfterApprove } from "./oauth/consent/after-consent";
 import {
   publishConnectRequestRetry,
   watchConnectDecision,
   websiteOrigin,
-} from "./oauth/website-session";
+} from "./oauth/consent/website-session";
 
 type StoredCode = {
   clientId: string;
@@ -44,7 +44,7 @@ type CompletedConsent = {
 };
 const CODE_TTL_MS = 5 * 60_000;
 const TOKEN_TTL_MS = 30 * 24 * 60 * 60_000; // 30 days
-export { GrantTapClientsStore } from "./oauth/store";
+export { GrantTapClientsStore } from "./oauth/session/store";
 
 export class GrantTapOAuthProvider implements OAuthServerProvider {
   readonly clientsStore = new GrantTapClientsStore();

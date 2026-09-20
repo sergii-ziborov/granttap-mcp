@@ -5,7 +5,7 @@ import { basename, isAbsolute, normalize, resolve } from "node:path";
 import type {
   CapabilityFingerprint,
   CapabilityKind,
-} from "../engine/engine-policy-types";
+} from "../engine/protocol/engine-policy-types";
 import { commandName } from "../sessions/telemetry";
 import { skillDefinitionPath } from "../capabilities/skills";
 

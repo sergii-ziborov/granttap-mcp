@@ -1,4 +1,4 @@
-import { startHttpMcpServer } from "../http-server";
+import { startHttpMcpServer } from "../http/http-server";
 
 async function serve(): Promise<void> {
   const started = await startHttpMcpServer();

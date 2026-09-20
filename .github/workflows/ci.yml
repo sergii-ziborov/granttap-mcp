@@ -19,6 +19,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - run: npm run inventory
+      - run: npm run structure -- --strict
       - run: node bin/granttap-mcp.mjs restrictions check .
       - run: npm run typecheck
       - run: npm audit --omit=dev --audit-level=high
@@ -50,5 +52,5 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: node --import tsx --test tests/windows-service.test.ts tests/windows-live.test.ts
+      - run: node --import tsx --test tests/windows/windows-service.test.ts tests/windows/windows-live.test.ts
       - run: npm run typecheck

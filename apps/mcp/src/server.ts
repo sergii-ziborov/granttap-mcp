@@ -3,10 +3,10 @@
  *
  * Cursor Settings → Authorize requires HTTP + OAuth instead:
  *   granttap internal serve
- * See apps/mcp/src/http-server.ts and docs/cursor-authorize.md.
+ * See apps/mcp/src/http/http-server.ts and docs/cursor-authorize.md.
  */
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { createGrantTapServer, relay } from "./create-server";
+import { createGrantTapServer, relay } from "./http/create-server";
 
 /**
  * Leave when the agent that started this server is gone.

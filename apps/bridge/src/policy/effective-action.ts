@@ -1,19 +1,19 @@
 import { isAbsolute, join, normalize } from "node:path";
 import { inspectRepository } from "../mesh/catalog";
-import { computerId } from "../mesh/computer-identity";
-import { localMeshStore } from "../mesh/local";
+import { computerId } from "../mesh/identity/computer";
+import { localMeshStore } from "../mesh/local-remote/local";
 import { evaluateWriteRestrictions } from "../mesh/restrictions";
-import { configDir } from "../config/paths";
-import { EngineClient } from "../engine/engine-client";
+import { configDir } from "../config/runtime/paths";
+import { EngineClient } from "../engine/runtime/engine-client";
 import type {
   CapabilityFingerprint,
   EnginePolicyDecision,
   PolicyEffect,
   PolicySource,
-} from "../engine/engine-policy-types";
-import { DEFAULT_ENGINE_POLICY_TIMEOUT_MS } from "../engine/engine-protocol";
-import { engineFeatureEnabled, type EngineClientLike } from "../engine/engine-supervisor";
-import { loadStoreState } from "../mesh/store-state";
+} from "../engine/protocol/engine-policy-types";
+import { DEFAULT_ENGINE_POLICY_TIMEOUT_MS } from "../engine/protocol/engine-protocol";
+import { engineFeatureEnabled, type EngineClientLike } from "../engine/runtime/engine-supervisor";
+import { loadStoreState } from "../mesh/store/state";
 import { capabilityFingerprint } from "./capability-fingerprint";
 import { governedRevision, rememberGovernedProject } from "./governed-projects";
 

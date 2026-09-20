@@ -3,7 +3,7 @@ import { existsSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { SessionState } from "../../../../../packages/protocol/schema";
-import { stateFor, WORKING_MS } from "../common";
+import { stateFor, WORKING_MS } from "../support/common";
 
 export type ComposerRow = {
   id: string;

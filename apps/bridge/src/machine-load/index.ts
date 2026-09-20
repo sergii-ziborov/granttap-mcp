@@ -3,10 +3,10 @@ import type {
   MachineLoad,
   SessionsStatus,
 } from "../../../../packages/protocol/schema";
-import { createDiskUsageSampler, type AgentDiskUsage } from "./disk-usage";
-import type { AgentProcessLoad } from "./process-sampler";
-import { sampleAgentProcesses } from "./process-sampler";
-import { providerScanCost, type ProviderScanSample } from "./scan-cost";
+import { createDiskUsageSampler, type AgentDiskUsage } from "./host/disk-usage";
+import type { AgentProcessLoad } from "./host/process-sampler";
+import { sampleAgentProcesses } from "./host/process-sampler";
+import { providerScanCost, type ProviderScanSample } from "./mcp/scan-cost";
 
 export type MonitorSelfLoad = {
   cpuPercent: number;

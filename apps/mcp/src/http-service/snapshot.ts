@@ -1,4 +1,4 @@
-import { insideTemporaryDirectory } from "../../../bridge/src/launchd-safety";
+import { insideTemporaryDirectory } from "../../../bridge/src/install/launchd-safety";
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
@@ -11,7 +11,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname } from "node:path";
-import { inspectWindowsTask, restoreWindowsTask, snapshotWindowsTask, windowsTaskName } from "../../../bridge/src/windows-service";
+import { inspectWindowsTask, restoreWindowsTask, snapshotWindowsTask, windowsTaskName } from "../../../bridge/src/install/windows-service";
 import {
   httpMcpLaunchAgentPath,
   isConfiguredHttpService,

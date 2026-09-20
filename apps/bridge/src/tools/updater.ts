@@ -14,8 +14,8 @@ import { accessSync, constants, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import type { CodingAgent } from "../../../../packages/protocol/schema";
-import { compareVersions, executableOnPath, resolveClaudeBinary } from "../claude-bin";
-import { resolveCursorAgentBin } from "../reply/cursor-agent-bin";
+import { compareVersions, executableOnPath, resolveClaudeBinary } from "../providers/claude-bin";
+import { resolveCursorAgentBin } from "../reply/process/cursor-agent-bin";
 import { askVersion, binaryVersion, forgetVersion, stripAnsi } from "./version";
 
 export const TOOL_NAMES: Record<CodingAgent, string> = {

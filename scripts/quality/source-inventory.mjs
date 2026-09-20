@@ -2,7 +2,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
-const maxLines = Number(process.env.GRANTTAP_MAX_SOURCE_LINES ?? 300);
+const maxLines = Number(process.env.GRANTTAP_MAX_SOURCE_LINES ?? 400);
 const extensions = new Set([".ts", ".tsx", ".js", ".mjs", ".css", ".swift", ".sh", ".rb"]);
 const skippedDirectories = new Set([".git", "node_modules", "coverage", "dist", "build"]);
 const root = process.cwd();

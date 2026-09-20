@@ -1,6 +1,6 @@
 import { appendFileSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { configDir } from "../config/paths";
+import { configDir } from "../config/runtime/paths";
 
 /**
  * What a Project rule refused, kept where the chat can show it.

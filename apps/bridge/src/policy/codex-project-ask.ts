@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
-import { configDir } from "../config/paths";
+import { configDir } from "../config/runtime/paths";
 
 const ASK_TTL_MS = 30_000;
 const MAX_MARKERS = 32;

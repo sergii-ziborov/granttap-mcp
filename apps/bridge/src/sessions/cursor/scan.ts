@@ -1,7 +1,7 @@
 import { basename } from "node:path";
 import type { ChildThreadInfo, SessionInfo } from "../../../../../packages/protocol/schema";
-import { aggregateChildThreads, childTitle } from "../child-threads";
-import { stateFor, TOKEN_WINDOW_MS, type Scan } from "../common";
+import { aggregateChildThreads, childTitle } from "../support/child-threads";
+import { stateFor, TOKEN_WINDOW_MS, type Scan } from "../support/common";
 import type { CapabilityObservation } from "../telemetry";
 import {
   composerActivityAt,
@@ -50,13 +50,14 @@ function childFromComposer(composer: ComposerRow, parentThreadId: string): Child
   };
 }
 
-function childSummaries(
-  sessionId: string,
-  files: CursorLogFile[],
-  cwd: string | undefined,
-  composers: Map<string, ComposerRow>,
-  descendants: ComposerRow[] = [],
-): { children: ChildThreadInfo[]; summaries: CursorTranscriptSummary[] } {
+function childSummaries(input: {
+  sessionId: string;
+  files: CursorLogFile[];
+  cwd: string | undefined;
+  composers: Map<string, ComposerRow>;
+  descendants?: ComposerRow[];
+}): { children: ChildThreadInfo[]; summaries: CursorTranscriptSummary[] } {
+  const { sessionId, files, cwd, composers, descendants = [] } = input;
   const groups = new Map<string, CursorLogFile[]>();
   for (const file of files) {
     if (!file.isSubagent || !file.threadId || isCursorTaskCloneId(file.threadId)) continue;
@@ -132,7 +133,9 @@ function addComposerSession(context: ScanContext, composer: ComposerRow): void {
     row.id !== composer.id
     && context.rootOf(row.id) === composer.id
     && !isCursorTaskCloneId(row.id));
-  const child = childSummaries(composer.id, files, composer.cwd, context.composers, descendants);
+  const child = childSummaries({
+    sessionId: composer.id, files, cwd: composer.cwd, composers: context.composers, descendants,
+  });
   const childLast = child.children.reduce((latest, item) => Math.max(latest, item.lastActivityAt), 0);
   const lastActivityAt = Math.max(
     composerActivityAt(composer), root.lastActivityAt, childLast,
@@ -170,7 +173,7 @@ function addOrphanSession(context: ScanContext, file: CursorLogFile): void {
   context.files.set(sessionId, files);
   const cwd = workspaceLabel(file.path);
   const root = transcriptSummary(sessionId, files.filter((item) => !item.isSubagent), sessionId, cwd);
-  const child = childSummaries(sessionId, files, cwd, context.composers);
+  const child = childSummaries({ sessionId, files, cwd, composers: context.composers });
   const childLast = child.children.reduce((latest, item) => Math.max(latest, item.lastActivityAt), 0);
   const lastActivityAt = Math.max(file.mtimeMs, root.lastActivityAt, childLast);
   const title = childTitle(context.sidebar.get(sessionId) || root.titleFromUser);

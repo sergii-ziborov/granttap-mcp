@@ -1,9 +1,9 @@
 import {
   inspectCursorOAuthReadiness,
   inspectProviderStatusSnapshot,
-} from "../provider-status";
+} from "../status/provider-status";
 import { inspectMonitorHelper } from "../../../bridge/src/install";
-import { isMachineConfigured } from "../pairing-status";
+import { isMachineConfigured } from "../status/pairing-status";
 
 const args = process.argv.slice(2);
 async function main(): Promise<void> {

@@ -2,7 +2,7 @@ import type { PeerConfig } from "../../packages/core/relay-client";
 import {
   saveGrokBotEndpoint,
   type GrokBotEndpointBundle,
-} from "../../apps/bridge/src/mesh/endpoint";
+} from "../../apps/bridge/src/mesh/identity/endpoint";
 
 /** Every scoped Mesh operation a Grok Bot credential may carry; never administrative. */
 export const GROK_BOT_OPERATIONS = [

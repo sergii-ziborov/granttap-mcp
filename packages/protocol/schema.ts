@@ -30,7 +30,7 @@ import {
 } from "./messages/mesh";
 import { MachineLoad } from "./messages/machine";
 import { PairingJoin } from "./messages/pairing-join";
-import { MeshInvocationPage, MeshInvocationQuery } from "./messages/mesh-invocations";
+import { MeshInvocationPage, MeshInvocationQuery } from "./messages/mesh/invocations";
 import {
   ProjectPolicyAck,
   ProjectPolicyRejected,
@@ -61,7 +61,7 @@ export * from "./messages/interaction";
 export * from "./messages/machine";
 export * from "./messages/pairing-join";
 export * from "./messages/mesh";
-export * from "./messages/mesh-invocations";
+export * from "./messages/mesh/invocations";
 export * from "./messages/primitives";
 export * from "./messages/project-policy";
 export * from "./messages/sessions";

@@ -1,10 +1,10 @@
 import { z } from "zod";
 import { hostname } from "node:os";
 import { loadConfig } from "../../../bridge/src/config";
-import { isMachineConfigured, listPairedPhones, readOnlyMachineConfigPath } from "../pairing-status";
-import { inspectProviderStatusSnapshot } from "../provider-status";
-import { packageVersion } from "../package-version";
-import { connectionRuntimeStatus } from "../mcp-tools/relay";
+import { isMachineConfigured, listPairedPhones, readOnlyMachineConfigPath } from "../status/pairing-status";
+import { inspectProviderStatusSnapshot } from "../status/provider-status";
+import { packageVersion } from "../status/package-version";
+import { connectionRuntimeStatus } from "../mcp-tools/connect/relay";
 import { beginEnrollment, cancelEnrollment, enrollmentIsOpen } from "./enrollment";
 
 export const connectionOutput = {

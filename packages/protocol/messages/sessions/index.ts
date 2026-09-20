@@ -1,0 +1,276 @@
+import { z } from "zod";
+import { CodingAgent } from "../primitives";
+import { ActivityEntry, McpServerInfo, SkillInfo } from "../capabilities";
+import {
+  AgentId,
+  AutoAcceptLevel,
+  CapabilityName,
+  CapabilitySessionId,
+} from "../primitives";
+
+export const SessionState = z.enum(["working", "waiting", "idle"]);
+export type SessionState = z.infer<typeof SessionState>;
+
+export const AgentAccess = z.enum(["read-only", "workspace", "full"]);
+export type AgentAccess = z.infer<typeof AgentAccess>;
+
+export const ChildThreadInfo = z.object({
+  threadId: z.string().max(256),
+  parentThreadId: z.string().max(256),
+  title: z.string().max(160).optional(),
+  agentName: z.string().max(160).optional(),
+  depth: z.number().int().min(1).max(16),
+  state: SessionState,
+  startedAt: z.number(),
+  lastActivityAt: z.number(),
+  tokensSession: z.number().nonnegative(),
+  tokensLastTurn: z.number().nonnegative(),
+});
+export type ChildThreadInfo = z.infer<typeof ChildThreadInfo>;
+
+export const SessionActivity = z.object({
+  type: z.literal("session.activity"),
+  sessionId: z.string(),
+  agent: AgentId,
+  state: SessionState,
+  /** Set when the entries are one agent conversation of the chat, not its window. */
+  threadId: z.string().max(256).optional(),
+  entries: z.array(ActivityEntry),
+  generatedAt: z.number(),
+});
+export type SessionActivity = z.infer<typeof SessionActivity>;
+
+export const SessionKeyGrant = z.object({
+  type: z.literal("session.key.grant"),
+  sessionId: z.string(),
+  key: z.string().min(43).max(44),
+  purpose: z.enum(["session", "task", "project"]).optional(),
+  createdAt: z.number(),
+});
+export type SessionKeyGrant = z.infer<typeof SessionKeyGrant>;
+
+export const SessionSealed = z.object({
+  type: z.literal("session.sealed"),
+  sessionId: z.string(),
+  nonce: z.string(),
+  box: z.string(),
+  createdAt: z.number(),
+});
+export type SessionSealed = z.infer<typeof SessionSealed>;
+
+export const SessionInfo = z.object({
+  sessionId: z.string(),
+  agent: AgentId,
+  projectId: z.string().max(128).optional(),
+  taskId: z.string().max(128).optional(),
+  computerId: z.string().max(128).optional(),
+  title: z.string().optional(),
+  cwd: z.string().optional(),
+  branch: z.string().optional(),
+  worktree: z.string().max(1_024).optional(),
+  model: z.string().optional(),
+  summary: z.string().optional(),
+  accessLevel: AgentAccess.optional(),
+  state: SessionState,
+  startedAt: z.number(),
+  lastActivityAt: z.number(),
+  tokensSession: z.number(),
+  tokensLastTurn: z.number(),
+  contextTokensUsed: z.number().optional(),
+  contextWindow: z.number().optional(),
+  mcpServers: z.array(McpServerInfo).optional(),
+  skills: z.array(SkillInfo).optional(),
+  childThreads: z.array(ChildThreadInfo).max(32).optional(),
+  shellAllowed: z.boolean().optional(),
+  /** Held from the phone: its tool calls are refused until it is resumed. */
+  paused: z.boolean().optional(),
+});
+export type SessionInfo = z.infer<typeof SessionInfo>;
+
+export const AgentIntegrationStatus = z.object({
+  agent: CodingAgent,
+  installed: z.boolean(),
+  hookConfigured: z.boolean(),
+  // The tool itself: which version answers on this computer, how it is kept
+  // current, and whether a newer copy already sits on the same disk.
+  version: z.string().trim().min(1).max(64).optional(),
+  updateCommand: z.string().trim().min(1).max(200).optional(),
+  newerOnThisMac: z.string().trim().min(1).max(64).optional(),
+  updating: z.boolean().optional(),
+});
+export type AgentIntegrationStatus = z.infer<typeof AgentIntegrationStatus>;
+
+/**
+ * The phone asks this computer to run one tool's own updater. The tool is the
+ * only choice the phone makes; the command is the helper's, fixed per install.
+ */
+export const ToolUpdate = z.object({
+  type: z.literal("tool.update"),
+  agent: CodingAgent,
+  requestId: z.string().trim().min(1).max(128),
+  createdAt: z.number(),
+});
+export type ToolUpdate = z.infer<typeof ToolUpdate>;
+
+export const ToolUpdateResult = z.object({
+  type: z.literal("tool.update.result"),
+  agent: CodingAgent,
+  requestId: z.string().trim().min(1).max(128),
+  ok: z.boolean(),
+  before: z.string().max(64).optional(),
+  after: z.string().max(64).optional(),
+  command: z.string().max(200).optional(),
+  message: z.string().max(1_000),
+  output: z.string().max(4_000).optional(),
+  createdAt: z.number(),
+});
+export type ToolUpdateResult = z.infer<typeof ToolUpdateResult>;
+
+export const ProviderRuntimeSettings = z.object({
+  claude: z.boolean(),
+  codex: z.boolean(),
+  cursor: z.boolean(),
+  grok: z.boolean(),
+}).strict();
+export type ProviderRuntimeSettings = z.infer<typeof ProviderRuntimeSettings>;
+
+export const SessionsStatus = z.object({
+  type: z.literal("sessions.status"),
+  machine: z.string(),
+  sessions: z.array(SessionInfo),
+  history: z.array(SessionInfo).max(200).optional(),
+  tokensRecent: z.number().optional(),
+  tokenWindowHours: z.number().optional(),
+  tokensAllTime: z.number().optional(),
+  gatingEnabled: z.boolean().optional(),
+  excludedSessions: z.array(z.string()).optional(),
+  autoAcceptDefault: AutoAcceptLevel.optional(),
+  autoAcceptBySession: z.record(AutoAcceptLevel).optional(),
+  autoAcceptByProject: z.record(AutoAcceptLevel).optional(),
+  autoAcceptPaused: z.boolean().optional(),
+  providerSettings: ProviderRuntimeSettings.optional(),
+  meshEnabled: z.boolean().optional(),
+  contextCompilerEnabled: z.boolean().optional(),
+  configRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
+  instanceEpoch: z.string().trim().min(8).max(128).optional(),
+  agents: z.array(AgentIntegrationStatus).optional(),
+  activities: z.array(SessionActivity).optional(),
+  generatedAt: z.number(),
+});
+export type SessionsStatus = z.infer<typeof SessionsStatus>;
+
+export const ConfigSet = z.object({
+  type: z.literal("config.set"),
+  enabled: z.boolean().optional(),
+  excludeSession: z.string().optional(),
+  includeSession: z.string().optional(),
+  autoAcceptDefault: AutoAcceptLevel.nullish(),
+  autoAcceptSession: z.object({
+    sessionId: z.string(),
+    level: AutoAcceptLevel.nullable(),
+  }).nullish(),
+  autoAcceptProject: z.object({
+    projectId: z.string().trim().min(1).max(128),
+    level: AutoAcceptLevel.nullable(),
+  }).nullish(),
+  autoAcceptPaused: z.boolean().nullish(),
+  provider: CodingAgent.optional(),
+  providerEnabled: z.boolean().optional(),
+  meshEnabled: z.boolean().optional(),
+  contextCompilerEnabled: z.boolean().optional(),
+  createdAt: z.number(),
+  operationId: z.string().trim().min(1).max(128).optional(),
+  baseRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
+  expiresAt: z.number().positive().optional(),
+  payloadDigest: z.string().regex(/^[0-9a-f]{64}$/i).optional(),
+  instanceEpoch: z.string().trim().min(8).max(128).optional(),
+}).strict().superRefine((value, ctx) => {
+  if ((value.provider == null) !== (value.providerEnabled == null)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: [value.provider == null ? "provider" : "providerEnabled"],
+      message: "provider and providerEnabled must be sent together",
+    });
+  }
+});
+export type ConfigSet = z.infer<typeof ConfigSet>;
+
+export const SessionAccessSet = z.object({
+  type: z.literal("session.access.set"),
+  sessionId: z.string(),
+  accessLevel: AgentAccess,
+  createdAt: z.number(),
+});
+export type SessionAccessSet = z.infer<typeof SessionAccessSet>;
+
+export const SessionMcpSet = z.object({
+  type: z.literal("session.mcp.set"),
+  sessionId: CapabilitySessionId,
+  serverName: CapabilityName,
+  allowed: z.boolean(),
+  createdAt: z.number(),
+});
+export type SessionMcpSet = z.infer<typeof SessionMcpSet>;
+
+export const SessionSkillSet = z.object({
+  type: z.literal("session.skill.set"),
+  sessionId: CapabilitySessionId,
+  skillName: CapabilityName,
+  allowed: z.boolean(),
+  createdAt: z.number(),
+});
+export type SessionSkillSet = z.infer<typeof SessionSkillSet>;
+
+export const SessionShellSet = z.object({
+  type: z.literal("session.shell.set"),
+  sessionId: CapabilitySessionId,
+  allowed: z.boolean(),
+  createdAt: z.number(),
+});
+export type SessionShellSet = z.infer<typeof SessionShellSet>;
+
+export const SessionCompact = z.object({
+  type: z.literal("session.compact"),
+  sessionId: z.string(),
+  createdAt: z.number(),
+});
+export type SessionCompact = z.infer<typeof SessionCompact>;
+
+export const SessionCompactResult = z.object({
+  type: z.literal("session.compact.result"),
+  sessionId: z.string(),
+  ok: z.boolean(),
+  message: z.string(),
+  createdAt: z.number(),
+});
+export type SessionCompactResult = z.infer<typeof SessionCompactResult>;
+
+/**
+ * Pause or resume one chat from the phone.
+ *
+ * A pause is enforced where the work happens: every tool call the chat makes
+ * is refused by the provider hook until the chat is resumed, and a delivery
+ * still running for it is stopped. Resuming lifts the hold; with `continue`
+ * the computer also asks the agent to carry on, so "start" is one tap.
+ */
+export const SessionControlAction = z.enum(["pause", "resume"]);
+export type SessionControlAction = z.infer<typeof SessionControlAction>;
+
+export const SessionControl = z.object({
+  type: z.literal("session.control"),
+  sessionId: CapabilitySessionId,
+  action: SessionControlAction,
+  continue: z.boolean().optional(),
+  createdAt: z.number(),
+}).strict();
+export type SessionControl = z.infer<typeof SessionControl>;
+
+export const SessionControlResult = z.object({
+  type: z.literal("session.control.result"),
+  sessionId: z.string(),
+  action: SessionControlAction,
+  ok: z.boolean(),
+  message: z.string().max(1_000),
+  createdAt: z.number(),
+}).strict();
+export type SessionControlResult = z.infer<typeof SessionControlResult>;

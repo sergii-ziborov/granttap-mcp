@@ -1,11 +1,11 @@
-import { refusesLiveLaunchd } from "../../../bridge/src/launchd-safety";
+import { refusesLiveLaunchd } from "../../../bridge/src/install/launchd-safety";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { isCursorHelperNode, resolveMonitorNodeBin, type InstallResult } from "../../../bridge/src/install";
 import { configDir, normalizeRelayUrl } from "../../../bridge/src/config";
-import { installWindowsTask } from "../../../bridge/src/windows-service";
+import { installWindowsTask } from "../../../bridge/src/install/windows-service";
 import { configuredCursorHttpMcpUrl } from "../cursor-config";
 import { HTTP_SERVICE_LABEL, httpMcpLaunchAgentPath, isEphemeralNpxInstall, packageRoot, xml } from "./common";
 import { inspectHttpMcpService, restoreHttpMcpServiceAfterFailure, snapshotHttpMcpService } from "./snapshot";

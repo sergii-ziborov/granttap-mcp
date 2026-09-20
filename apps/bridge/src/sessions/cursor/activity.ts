@@ -1,21 +1,22 @@
 import { readFileSync } from "node:fs";
 import type { ActivityEntry, ChildThreadInfo, SessionInfo } from "../../../../../packages/protocol/schema";
-import { classifyTool, estimateTokens, pushEntry, toolSummary } from "../activity-helpers";
-import { childEntryFields } from "../child-threads";
-import { safeParse, stateFor } from "../common";
+import { classifyTool, estimateTokens, pushEntry, toolSummary } from "../support/activity-helpers";
+import { childEntryFields } from "../support/child-threads";
+import { safeParse, stateFor } from "../support/common";
 import type { CapabilityObservation } from "../telemetry";
 import { cursorFiles, cursorUsage, scanCursor } from "./scan";
 import { textBlocks } from "./transcripts";
 
-function appendFileActivity(
-  out: ActivityEntry[],
-  seen: Set<string>,
-  sessionId: string,
-  file: string,
-  baseTime: number,
-  indexOffset: number,
-  child?: ChildThreadInfo,
-): void {
+function appendFileActivity(input: {
+  out: ActivityEntry[];
+  seen: Set<string>;
+  sessionId: string;
+  file: string;
+  baseTime: number;
+  indexOffset: number;
+  child?: ChildThreadInfo;
+}): void {
+  const { out, seen, sessionId, file, baseTime, indexOffset, child } = input;
   let lines: string[];
   try {
     lines = readFileSync(file, "utf8").split("\n");
@@ -35,31 +36,27 @@ function appendFileActivity(
       const text = textBlocks(item.message?.content).join("\n").trim();
       if (!text) return;
       const ordinal = indexOffset + index;
-      pushEntry(out, seen, sessionId, "user", text, createdAt, ordinal,
-        childFields, entryId(createdAt, ordinal));
+      pushEntry({ out: out, seen: seen, sessionId: sessionId, kind: "user", text: text, createdAt: createdAt, ordinal: ordinal, extras: childFields, idOverride: entryId(createdAt, ordinal) });
       return;
     }
     if (item.role !== "assistant") return;
     const content = item.message?.content;
     if (typeof content === "string") {
       const ordinal = indexOffset + index;
-      pushEntry(out, seen, sessionId, "message", content, createdAt, ordinal,
-        childFields, entryId(createdAt, ordinal));
+      pushEntry({ out: out, seen: seen, sessionId: sessionId, kind: "message", text: content, createdAt: createdAt, ordinal: ordinal, extras: childFields, idOverride: entryId(createdAt, ordinal) });
       return;
     }
     if (!Array.isArray(content)) return;
     content.forEach((block: any, blockIndex: number) => {
       const sequence = (indexOffset + index) * 100 + blockIndex;
       if (block?.type === "text" && typeof block.text === "string" && block.text.trim()) {
-        pushEntry(out, seen, sessionId, "message", block.text, createdAt, sequence,
-          childFields, entryId(createdAt, sequence));
+        pushEntry({ out: out, seen: seen, sessionId: sessionId, kind: "message", text: block.text, createdAt: createdAt, ordinal: sequence, extras: childFields, idOverride: entryId(createdAt, sequence) });
       } else if (block?.type === "tool_use") {
-        pushEntry(out, seen, sessionId, "tool", toolSummary(block.name, block.input),
-          createdAt, sequence, {
+        pushEntry({ out: out, seen: seen, sessionId: sessionId, kind: "tool", text: toolSummary(block.name, block.input), createdAt: createdAt, ordinal: sequence, extras: {
             ...childFields,
             ...classifyTool(block.name, block.input),
             estimatedContextTokens: estimateTokens(block.input),
-          }, entryId(createdAt, sequence));
+          }, idOverride: entryId(createdAt, sequence) });
       }
     });
   });
@@ -82,7 +79,10 @@ export function cursorActivity(session: SessionInfo): ActivityEntry[] {
       state: stateFor(base), startedAt: base, lastActivityAt: base,
       tokensSession: 0, tokensLastTurn: 0,
     } : undefined;
-    appendFileActivity(out, seen, session.sessionId, file.path, base, index * 10_000, child);
+    appendFileActivity({
+      out, seen, sessionId: session.sessionId, file: file.path,
+      baseTime: base, indexOffset: index * 10_000, child,
+    });
   });
   return out.sort((a, b) => a.createdAt - b.createdAt);
 }

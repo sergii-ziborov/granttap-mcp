@@ -33,31 +33,32 @@ let entry;
 if (command === "mcp") {
   entry = join(root, "apps", "mcp", "src", "server.ts");
 } else if (command === "setup") {
-  entry = join(root, "apps", "bridge", "src", "bin", "setup.ts");
+  entry = join(root, "apps", "bridge", "src", "bin", "cli", "setup.ts");
 } else if (command === "connect") {
-  entry = join(root, "apps", "bridge", "src", "bin", "connect.ts");
+  entry = join(root, "apps", "bridge", "src", "bin", "cli", "connect.ts");
 } else if (command === "status") {
   entry = join(root, "apps", "mcp", "src", "bin", "status.ts");
 } else if (command === "reset") {
-  entry = join(root, "apps", "bridge", "src", "bin", "reset.ts");
+  entry = join(root, "apps", "bridge", "src", "bin", "cli", "reset.ts");
 } else if (command === "cursor" && argument === "repair") {
   entry = join(root, "apps", "mcp", "src", "bin", "authorize.ts");
 } else if (command === "mesh" && argument === "connect") {
-  entry = join(root, "apps", "bridge", "src", "bin", "mesh-connect.ts");
+  entry = join(root, "apps", "bridge", "src", "bin", "cli", "mesh-connect.ts");
 } else if (command === "restrictions" && argument === "check") {
-  entry = join(root, "apps", "bridge", "src", "bin", "restrictions-check.ts");
+  entry = join(root, "apps", "bridge", "src", "bin", "runtime", "restrictions-check.ts");
 } else if (command === "internal" && argument === "mesh-mcp") {
-  entry = join(root, "apps", "mcp", "src", "mesh-stdio.ts");
+  entry = join(root, "apps", "mcp", "src", "mesh", "mesh-stdio.ts");
 } else if (command === "internal" && argument === "serve") {
   entry = join(root, "apps", "mcp", "src", "bin", "serve.ts");
 } else if (command === "internal" && argument === "authorize") {
   entry = join(root, "apps", "mcp", "src", "bin", "authorize.ts");
 } else if (command === "internal" && argument === "monitor") {
-  entry = join(root, "apps", "bridge", "src", "bin", "monitor.ts");
+  entry = join(root, "apps", "bridge", "src", "bin", "runtime", "monitor.ts");
 } else if (command === "internal" && argument === "hook" && [
   "claude", "claude-prompt", "codex", "codex-policy", "cursor", "cursor-after", "cursor-mcp",
 ].includes(commandArgs[1])) {
   const route = commandArgs[1];
+  const hookDir = route === "cursor-mcp" ? "runtime" : "hooks";
   const hookEntry = route === "codex-policy"
     ? "codex-policy-hook.ts"
     : route === "cursor-after"
@@ -65,7 +66,7 @@ if (command === "mcp") {
       : route === "cursor-mcp"
         ? "cursor-mcp-hook.ts"
         : `${route}-hook.ts`;
-  entry = join(root, "apps", "bridge", "src", "bin", hookEntry);
+  entry = join(root, "apps", "bridge", "src", "bin", hookDir, hookEntry);
 } else {
   process.stderr.write(usage);
   process.exit(1);

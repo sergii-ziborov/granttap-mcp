@@ -1,0 +1,231 @@
+import { execFileSync } from "node:child_process";
+import { basename } from "node:path";
+import type {
+  MeshProvider,
+  MeshTask,
+  Project,
+  SessionInfo,
+  TaskState,
+} from "../../../../../packages/protocol/schema";
+import {
+  canonicalRepositoryIdentity,
+  projectBindingIdentity,
+  projectIdentity,
+  sanitizedRepositoryRemote,
+  taskIdentity,
+} from "../identity";
+import { formerComputerNames } from "../identity/computer";
+import { readIntegrationMap } from "../observed/integration-map";
+import type { MeshStore } from "../store";
+import { syncProjectBinding } from "../../engine/runtime/engine-projects";
+import { isCursorTaskCloneId } from "../../sessions/cursor/catalog";
+
+export type RepositoryFacts = {
+  root: string;
+  canonicalRepositoryId: string;
+  baseRemote?: string;
+  worktree?: string;
+  revision?: string;
+};
+
+const repositoryCache = new Map<string, RepositoryFacts>();
+
+function git(cwd: string, args: string[]): string | undefined {
+  try {
+    return execFileSync("git", ["-C", cwd, ...args], {
+      encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 2_000,
+    }).trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Whether this checkout has anything a commit-based handoff would leave behind.
+ *
+ * `git status` rather than `git diff HEAD`, because an untracked file is work
+ * the Task Capsule cannot carry just as surely as a modified tracked one.
+ * `undefined` means the probe could not answer, which callers must not read as
+ * "clean".
+ */
+export function hasUncommittedWork(cwd: string): boolean | undefined {
+  try {
+    const status = execFileSync(
+      "git",
+      ["-C", cwd, "status", "--porcelain=v1", "--untracked-files=normal", "-z"],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 5_000,
+        maxBuffer: 4 * 1_024 * 1_024 },
+    );
+    return status.trim().length > 0;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The same reading in the explicit form a Task Capsule publishes. */
+export function workingTreeState(cwd: string): "clean" | "dirty" | "unknown" {
+  const uncommitted = hasUncommittedWork(cwd);
+  if (uncommitted === undefined) return "unknown";
+  return uncommitted ? "dirty" : "clean";
+}
+
+export function inspectRepository(cwd: string): RepositoryFacts {
+  const cached = repositoryCache.get(cwd);
+  if (cached) {
+    // Identity is stable for this checkout; HEAD is not. Keep a new reading
+    // instead of mutating a facts object already given to a caller.
+    const fresh = { ...cached, revision: git(cached.root, ["rev-parse", "HEAD"]) };
+    repositoryCache.set(cwd, fresh);
+    return fresh;
+  }
+  const root = git(cwd, ["rev-parse", "--show-toplevel"]) ?? cwd;
+  const rawRemote = git(root, ["remote", "get-url", "origin"]);
+  const baseRemote = rawRemote ? sanitizedRepositoryRemote(rawRemote) : undefined;
+  const facts = {
+    root,
+    baseRemote,
+    canonicalRepositoryId: canonicalRepositoryIdentity(rawRemote, root),
+    worktree: git(root, ["rev-parse", "--show-toplevel"]),
+    revision: git(root, ["rev-parse", "HEAD"]),
+  };
+  repositoryCache.set(cwd, facts);
+  return facts;
+}
+
+function provider(value: string): MeshProvider | undefined {
+  return ["claude", "codex", "cursor", "grok"].includes(value)
+    ? value as MeshProvider
+    : undefined;
+}
+
+/**
+ * What to call a Task in a list that spans machines.
+ *
+ * The chat's own title is what a person recognises. An agent summary is a
+ * paragraph about the work, and publishing it verbatim named Tasks with the
+ * opening message — so the same chat read one way in the list of live chats and
+ * another in the Project. Only its first line is a candidate for a name, and
+ * even that is the fallback.
+ */
+export function meshTaskTitle(session: SessionInfo, agent: string): string {
+  const named = session.title?.trim();
+  if (named) return named.slice(0, 160);
+  const opening = session.summary
+    ?.split("\n")
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
+  return (opening ?? `${agent} task`).slice(0, 160);
+}
+
+function taskState(session: SessionInfo): TaskState {
+  if (session.state === "waiting") return "needs_user";
+  if (session.state === "working") return "working";
+  return "planned";
+}
+
+export function linkSessionsToProjects(
+  store: MeshStore,
+  sessions: SessionInfo[],
+  computerId: string,
+  inspect: (cwd: string) => RepositoryFacts = inspectRepository,
+  formerNames: string[] = formerComputerNames(),
+): SessionInfo[] {
+  // Records kept under a name this computer used to go by are this computer's
+  // leftovers, not a second machine: their executions are over and their
+  // bindings unavailable.
+  store.retireComputerNames(computerId, formerNames);
+  // Task-tool clones are the parent chat's work. Linking them minted a Task
+  // per spawn, and the phone then kept those Tasks forever.
+  const visible = sessions.filter((session) => !isCursorTaskCloneId(session.sessionId));
+  // A vanished session never says it ended, so sweep first: an execution left
+  // open holds the Task, keeps its old title, and keeps its last state.
+  store.closeVanishedExecutions(
+    computerId,
+    new Set(visible.map((session) => session.sessionId)),
+    new Set(sessions.flatMap((session) => provider(session.agent) ?? [])),
+  );
+  return visible.map((session) => linkSession({ store, session, computerId, inspect }));
+}
+
+function linkSession(input: {
+  store: MeshStore;
+  session: SessionInfo;
+  computerId: string;
+  inspect: (cwd: string) => RepositoryFacts;
+}): SessionInfo {
+  const { store, session, computerId, inspect } = input;
+  const agent = provider(session.agent);
+  const cwd = session.cwd?.trim();
+  if (!agent || !cwd) return session;
+  const repository = inspect(cwd);
+  const projectId = store.projectIdForRepository(
+    repository.canonicalRepositoryId,
+    computerId,
+  ) ?? projectIdentity(repository.canonicalRepositoryId);
+  const knownProject = store.project(projectId);
+  const project = knownProject ?? {
+    projectId,
+    name: basename(repository.root) || "Project",
+    repositoryRoot: repository.root,
+    canonicalRepositoryId: repository.canonicalRepositoryId,
+    baseRemote: repository.baseRemote
+      ? sanitizedRepositoryRemote(repository.baseRemote)
+      : undefined,
+    createdAt: session.startedAt,
+  };
+  if (!knownProject) store.upsertProject(project);
+  const knownBinding = store.bindingForEndpoint(repository.canonicalRepositoryId, computerId);
+  const binding = {
+    bindingId: knownBinding?.bindingId
+      ?? projectBindingIdentity(projectId, computerId, repository.canonicalRepositoryId),
+    projectId,
+    endpointId: computerId,
+    repositoryId: repository.canonicalRepositoryId,
+    displayName: knownBinding?.displayName ?? (basename(repository.root) || "Repository"),
+    available: true,
+    revision: repository.revision,
+  };
+  try {
+    store.upsertBinding(binding);
+    store.recordIntegrationPeers(
+      projectId, repository.canonicalRepositoryId, readIntegrationMap(repository.root),
+    );
+    void syncProjectBinding(project, {
+      summary: binding,
+      localRoot: repository.root,
+      canonicalRemote: repository.baseRemote
+        ? sanitizedRepositoryRemote(repository.baseRemote)
+        : undefined,
+      lastSeenAt: session.lastActivityAt,
+    });
+  } catch {
+    // Reported as an absent binding rather than an absent Mesh.
+  }
+  const knownTask = store.taskForExecution(computerId, agent, session.sessionId);
+  const taskId = knownTask ?? taskIdentity(projectId, agent, session.sessionId);
+  const task: MeshTask = {
+    taskId,
+    projectId,
+    title: meshTaskTitle(session, agent),
+    goal: (session.summary ?? session.title ?? "Continue this coding task").slice(0, 1_000),
+    state: taskState(session),
+    ownerSessionId: session.sessionId,
+    createdAt: session.startedAt,
+    updatedAt: session.lastActivityAt,
+  };
+  store.upsertTask(task);
+  store.linkExecution({
+    taskId,
+    sessionId: session.sessionId,
+    provider: agent,
+    computerId,
+    workspace: cwd,
+    repositoryId: repository.canonicalRepositoryId,
+    activeAt: session.lastActivityAt,
+    branch: session.branch,
+    worktree: repository.worktree,
+    uncommitted: hasUncommittedWork(repository.worktree ?? cwd),
+    startedAt: session.startedAt,
+  });
+  return { ...session, projectId, taskId, computerId, worktree: repository.worktree };
+}

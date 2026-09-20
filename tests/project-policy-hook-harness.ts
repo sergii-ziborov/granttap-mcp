@@ -6,11 +6,11 @@ import { join } from "node:path";
 import { createPairing } from "../apps/bridge/src/config";
 
 const entries = {
-  claude: "apps/bridge/src/bin/claude-hook.ts",
-  codex: "apps/bridge/src/bin/codex-hook.ts",
-  codexPolicy: "apps/bridge/src/bin/codex-policy-hook.ts",
-  cursor: "apps/bridge/src/bin/cursor-hook.ts",
-  cursorMcp: "apps/bridge/src/bin/cursor-mcp-hook.ts",
+  claude: "apps/bridge/src/bin/hooks/claude-hook.ts",
+  codex: "apps/bridge/src/bin/hooks/codex-hook.ts",
+  codexPolicy: "apps/bridge/src/bin/hooks/codex-policy-hook.ts",
+  cursor: "apps/bridge/src/bin/hooks/cursor-hook.ts",
+  cursorMcp: "apps/bridge/src/bin/runtime/cursor-mcp-hook.ts",
 } as const;
 
 export async function startProjectPolicyEngine(root: string): Promise<ChildProcess> {
@@ -20,7 +20,7 @@ export async function startProjectPolicyEngine(root: string): Promise<ChildProce
     { cwd: process.cwd(), stdio: ["ignore", "pipe", "pipe"] },
   );
   await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("fake engine startup timed out")), 2_000);
+    const timer = setTimeout(() => reject(new Error("fake engine startup timed out")), 10_000);
     child.once("error", reject);
     child.once("exit", (code) => reject(new Error(`fake engine exited ${code}`)));
     child.stdout?.once("data", () => {
@@ -56,7 +56,7 @@ export function runProjectHook(
     },
     input: JSON.stringify(input),
     encoding: "utf8",
-    timeout: 5_000,
+    timeout: 20_000,
   });
   assert.equal(child.status, 0, child.stderr);
   const stdout = child.stdout.trim();

@@ -11,7 +11,7 @@
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
-import { configDir } from "../config/paths";
+import { configDir } from "../config/runtime/paths";
 
 const MAX_PROJECTS = 256;
 

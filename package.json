@@ -24,12 +24,13 @@
     "cursor:repair": "node bin/granttap-mcp.mjs cursor repair",
     "setup": "node bin/granttap-mcp.mjs setup",
     "status": "node bin/granttap-mcp.mjs status",
-    "test": "HOME=$(mktemp -d) GRANTTAP_SKIP_LAUNCHCTL=1 node --import tsx --test tests/*.test.ts",
-    "test:coverage": "HOME=$(mktemp -d) GRANTTAP_SKIP_LAUNCHCTL=1 c8 --all --extension .ts --extension .js --exclude '**/tests/**' --exclude 'scripts/**' --exclude 'packages/core/relay-client-types.ts' --exclude 'apps/bridge/src/capabilities/types.ts' --exclude 'apps/bridge/src/reply/types.ts' --exclude 'apps/bridge/src/mesh/runtime-dependencies.ts' --check-coverage --lines 95 --statements 95 --functions 95 --branches 85 node --import tsx --test tests/*.test.ts",
+    "test": "HOME=$(mktemp -d) GRANTTAP_SKIP_LAUNCHCTL=1 node scripts/quality/run-tests.mjs",
+    "test:coverage": "HOME=$(mktemp -d) GRANTTAP_SKIP_LAUNCHCTL=1 c8 --all --extension .ts --extension .js --exclude '**/tests/**' --exclude 'scripts/**' --exclude 'packages/core/relay-client-types.ts' --exclude 'apps/bridge/src/capabilities/types.ts' --exclude 'apps/bridge/src/reply/payload/types.ts' --exclude 'apps/bridge/src/mesh/runtime/dependencies.ts' --check-coverage --lines 95 --statements 95 --functions 95 --branches 85 node scripts/quality/run-tests.mjs",
     "inventory": "node scripts/quality/source-inventory.mjs",
+    "structure": "node scripts/quality/structure.mjs",
     "package:allowlist": "node scripts/quality/package-allowlist.mjs",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run package:allowlist && npm run test:coverage && npm run typecheck"
+    "prepublishOnly": "npm run inventory && npm run structure -- --strict && npm run package:allowlist && npm run test:coverage && npm run typecheck"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

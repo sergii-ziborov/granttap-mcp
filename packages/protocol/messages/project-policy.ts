@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Identifier, Label, MeshProvider } from "./mesh-endpoint";
+import { Identifier, Label, MeshProvider } from "./mesh/endpoint";
 
 export const ProjectCapabilityKind = z.enum([
   "agent", "mcp", "skill", "shell", "script", "file_write", "deploy", "network",

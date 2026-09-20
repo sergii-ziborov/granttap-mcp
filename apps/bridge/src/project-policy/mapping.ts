@@ -10,8 +10,8 @@ import type {
   EnginePolicyCoverage,
   EnginePolicyRule,
   EngineProjectPolicy,
-} from "../engine/engine-policy-protocol";
-import type { CapabilityFingerprint } from "../engine/engine-policy-types";
+} from "../engine/protocol/engine-policy-protocol";
+import type { CapabilityFingerprint } from "../engine/protocol/engine-policy-types";
 
 export function policyToEngine(policy: ProjectPolicy): EngineProjectPolicy {
   return {

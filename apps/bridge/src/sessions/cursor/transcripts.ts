@@ -1,8 +1,8 @@
-import { recordObservedWrite, writtenPaths } from "../../mesh/observed-writes";
+import { recordObservedWrite, writtenPaths } from "../../mesh/observed/writes";
 import { readFileSync, statSync } from "node:fs";
 import { basename, dirname } from "node:path";
-import { normalizeMcpServerName, stripTranscriptMarkup } from "../activity-helpers";
-import { cursorTranscriptsRoot, recentLogs, safeParse, ts } from "../common";
+import { normalizeMcpServerName, stripTranscriptMarkup } from "../support/activity-helpers";
+import { cursorTranscriptsRoot, recentLogs, safeParse, ts } from "../support/common";
 import {
   estimateTokens,
   observeCapability,
@@ -118,14 +118,15 @@ type SummaryAccumulator = CursorTranscriptSummary & {
   pending: Map<string, PendingCapabilityTool>;
 };
 
-function observeBlocks(
-  item: any,
-  file: CursorLogFile,
-  lineIndex: number,
-  rootSessionId: string,
-  cwd: string | undefined,
-  acc: SummaryAccumulator,
-): void {
+function observeBlocks(input: {
+  item: any;
+  file: CursorLogFile;
+  lineIndex: number;
+  rootSessionId: string;
+  cwd: string | undefined;
+  acc: SummaryAccumulator;
+}): void {
+  const { item, file, lineIndex, rootSessionId, cwd, acc } = input;
   const content = item.message?.content;
   if (!Array.isArray(content)) return;
   const sourceThreadId = file.threadId ?? rootSessionId;
@@ -193,7 +194,7 @@ function summarizeFile(
   for (const [lineIndex, line] of lines.entries()) {
     const item = safeParse(line);
     if (!item) continue;
-    observeBlocks(item, file, lineIndex, rootSessionId, cwd, acc);
+    observeBlocks({ item, file, lineIndex, rootSessionId, cwd, acc });
     if (!file.isSubagent) {
       if (!acc.titleFromUser && item.role === "user") {
         acc.titleFromUser = titleFrom(textBlocks(item.message?.content).join("\n"));

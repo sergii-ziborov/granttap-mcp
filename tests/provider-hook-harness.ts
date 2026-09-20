@@ -3,11 +3,11 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 
 export const HOOKS = {
-  claude: "apps/bridge/src/bin/claude-hook.ts",
-  codex: "apps/bridge/src/bin/codex-hook.ts",
-  codexPolicy: "apps/bridge/src/bin/codex-policy-hook.ts",
-  cursor: "apps/bridge/src/bin/cursor-hook.ts",
-  cursorMcp: "apps/bridge/src/bin/cursor-mcp-hook.ts",
+  claude: "apps/bridge/src/bin/hooks/claude-hook.ts",
+  codex: "apps/bridge/src/bin/hooks/codex-hook.ts",
+  codexPolicy: "apps/bridge/src/bin/hooks/codex-policy-hook.ts",
+  cursor: "apps/bridge/src/bin/hooks/cursor-hook.ts",
+  cursorMcp: "apps/bridge/src/bin/runtime/cursor-mcp-hook.ts",
 } as const;
 
 export function runHook(

@@ -6,7 +6,7 @@ import test from "node:test";
 import { completeEnrollment, currentEnrollment } from "../enrollment";
 import { ConnectionState } from "../state";
 import { createPairing, machineConfigPath, saveConfig } from "../../../../bridge/src/config";
-import { relay, resetRelay, connectionRuntimeStatus } from "../../mcp-tools/relay";
+import { relay, resetRelay, connectionRuntimeStatus } from "../../mcp-tools/connect/relay";
 import { RelayClient } from "../../../../../packages/core/relay-client";
 import { forwardingRelay, waitFor } from "../../../../../tests/support/forwarding-relay";
 
