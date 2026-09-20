@@ -183,5 +183,19 @@ export function meshBrief(snapshot: MeshSnapshot, taskId: string, now = Date.now
   for (const question of waiting.slice(-2)) {
     lines.push(`Still unanswered: ${compactText(question.payload.question ?? "", 160)}`);
   }
+  if (snapshot.restrictions && snapshot.restrictions.rules.length > 0) {
+    const count = snapshot.restrictions.rules.length;
+    const scope = snapshot.restrictions.scope === "sync_from_repo"
+      ? "synced from the repository"
+      : snapshot.restrictions.scope === "project_and_repo"
+        ? "on the Project and the repository"
+        : "on this Project";
+    lines.push(`Project restrictions: ${count} rule${count === 1 ? "" : "s"} ${scope}.`);
+  }
+  if (snapshot.environment && snapshot.environment.variables.length > 0) {
+    const names = snapshot.environment.variables.map((item) =>
+      item.secret ? `${item.key} (secret)` : item.key);
+    lines.push(`Project environment: ${names.join(", ")}.`);
+  }
   return lines;
 }

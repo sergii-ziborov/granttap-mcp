@@ -19,6 +19,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - run: node bin/granttap-mcp.mjs restrictions check .
       - run: npm run typecheck
       - run: npm audit --omit=dev --audit-level=high
       - run: npm pack --dry-run

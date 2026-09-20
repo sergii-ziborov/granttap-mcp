@@ -87,12 +87,75 @@ export const ProjectExecutionPolicy = z.object({
 });
 export type ProjectExecutionPolicy = z.infer<typeof ProjectExecutionPolicy>;
 
+/** Quality gates a Project can share with CI and its repository. */
+export const ProjectRestrictionKind = z.enum([
+  "max_file_lines", "max_function_lines", "max_file_bytes", "custom",
+]);
+export type ProjectRestrictionKind = z.infer<typeof ProjectRestrictionKind>;
+export const ProjectRestrictionScope = z.enum([
+  "project", "project_and_repo", "sync_from_repo",
+]);
+export type ProjectRestrictionScope = z.infer<typeof ProjectRestrictionScope>;
+export const ProjectRestrictionRule = z.object({
+  ruleId: Identifier,
+  kind: ProjectRestrictionKind,
+  limit: z.number().int().positive().max(1_000_000).optional(),
+  name: Label.optional(),
+  paths: z.array(z.string().trim().min(1).max(256)).max(16).optional(),
+  effect: z.enum(["ask", "deny"]).default("deny"),
+}).strict().superRefine((value, ctx) => {
+  if (value.kind !== "custom" && value.limit == null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom, path: ["limit"], message: "limit required",
+    });
+  }
+  if (value.kind === "custom" && !value.name) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom, path: ["name"], message: "custom needs a name",
+    });
+  }
+});
+export type ProjectRestrictionRule = z.infer<typeof ProjectRestrictionRule>;
+export const ProjectRestrictionSet = z.object({
+  projectId: Identifier,
+  revision: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  scope: ProjectRestrictionScope,
+  repositoryId: z.string().trim().min(1).max(512).optional(),
+  rules: z.array(ProjectRestrictionRule).max(32),
+  source: z.enum(["phone", "repo"]).default("phone"),
+}).strict();
+export type ProjectRestrictionSet = z.infer<typeof ProjectRestrictionSet>;
+
+/** Shared Project environment. Secret values travel under the Project key only. */
+export const ProjectEnvVar = z.object({
+  key: z.string().regex(/^[A-Z][A-Z0-9_]{0,127}$/),
+  value: z.string().max(4_096).optional(),
+  secret: z.boolean(),
+}).strict();
+export type ProjectEnvVar = z.infer<typeof ProjectEnvVar>;
+export const ProjectEnvironment = z.object({
+  projectId: Identifier,
+  revision: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  shareNonSecretsWithRepo: z.boolean().default(false),
+  variables: z.array(ProjectEnvVar).max(64),
+}).strict().superRefine((value, ctx) => {
+  const keys = new Set(value.variables.map((item) => item.key));
+  if (keys.size !== value.variables.length) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom, path: ["variables"], message: "duplicate env key",
+    });
+  }
+});
+export type ProjectEnvironment = z.infer<typeof ProjectEnvironment>;
+
 export const ProjectPolicy = z.object({
   projectId: Identifier,
   revision: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   enforcement: ProjectPolicyEnforcement,
   rules: z.array(ProjectPolicyRule).max(256),
   execution: ProjectExecutionPolicy.optional(),
+  restrictions: ProjectRestrictionSet.optional(),
+  environment: ProjectEnvironment.optional(),
 }).strict().superRefine((policy, ctx) => {
   const ids = new Set(policy.rules.map((rule) => rule.ruleId));
   if (ids.size !== policy.rules.length || policy.rules.some((rule) =>
@@ -104,6 +167,22 @@ export const ProjectPolicy = z.object({
   if (policy.execution && policy.execution.revision > policy.revision) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom, path: ["execution"], message: "execution revision ahead of policy",
+    });
+  }
+  if (policy.restrictions && (
+    policy.restrictions.projectId !== policy.projectId
+    || policy.restrictions.revision > policy.revision
+  )) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom, path: ["restrictions"], message: "restriction scope mismatch",
+    });
+  }
+  if (policy.environment && (
+    policy.environment.projectId !== policy.projectId
+    || policy.environment.revision > policy.revision
+  )) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom, path: ["environment"], message: "environment scope mismatch",
     });
   }
 });

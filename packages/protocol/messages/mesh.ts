@@ -8,7 +8,11 @@ import {
   MeshProvider,
   Path,
 } from "./mesh-endpoint";
-import { ProjectExecutionPolicy } from "./project-policy";
+import {
+  ProjectEnvironment,
+  ProjectExecutionPolicy,
+  ProjectRestrictionSet,
+} from "./project-policy";
 export * from "./mesh-endpoint";
 
 export const Project = z.object({
@@ -396,6 +400,8 @@ export const MeshSnapshot = z.object({
   skills: z.array(SharedSkill).max(64).optional(),
   incomplete: z.boolean().optional(),
   execution: ProjectExecutionPolicy.optional(),
+  restrictions: ProjectRestrictionSet.optional(),
+  environment: ProjectEnvironment.optional(),
   modelCatalog: z.array(EndpointModelCatalog).max(32).optional(),
   tasks: z.array(MeshTask).max(64),
   executions: z.array(ExecutionSessionLink).max(128),

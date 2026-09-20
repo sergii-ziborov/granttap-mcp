@@ -24,6 +24,13 @@ import { engineFeatureEnabled, type EngineClientLike } from "../engine/engine-su
 import { inspectAgentIntegrations } from "../install";
 import { rememberGovernedProject } from "../policy/governed-projects";
 import { loadExecutionPolicy, rememberExecutionPolicy } from "../mesh/execution-policy";
+import { localMeshStore } from "../mesh/local";
+import {
+  loadEnvironment,
+  rememberEnvironment,
+  redactEnvironment,
+} from "../mesh/project-env";
+import { loadRestrictions, rememberRestrictions } from "../mesh/restrictions";
 import { sendProjectPayload } from "../session-keys";
 import {
   acknowledgementFromEngine,
@@ -86,6 +93,16 @@ export function createProjectPolicyRuntime(deps: ProjectPolicyRuntimeDependencie
           : undefined,
         deps.endpointId(),
       );
+      persistMeshPolicyExtras(request.projectId, {
+        ...request.policy,
+        revision: applied.policy.revision,
+        restrictions: request.policy.restrictions
+          ? { ...request.policy.restrictions, revision: applied.policy.revision }
+          : undefined,
+        environment: request.policy.environment
+          ? { ...request.policy.environment, revision: applied.policy.revision }
+          : undefined,
+      });
       const targets = new Map(deps.providers().map((item) => [item.provider, item]));
       for (const target of [...targets.values()].sort((left, right) =>
         left.provider.localeCompare(right.provider))) {
@@ -181,17 +198,22 @@ export function createProjectPolicyRuntime(deps: ProjectPolicyRuntimeDependencie
 
   function withLocalExecution(policy: ProjectPolicy): ProjectPolicy {
     const execution = loadExecutionPolicy(policy.projectId);
-    if (!execution) return policy;
+    const restrictions = loadRestrictions(policy.projectId);
+    const environment = redactEnvironment(loadEnvironment(policy.projectId));
     return {
       ...policy,
-      execution: {
-        mode: execution.mode,
-        targetEndpointId: execution.targetEndpointId,
-        revision: execution.revision,
-        hostGrantId: execution.hostGrantId,
-        hostGrantStatus: execution.hostGrantStatus,
-        offlineBehavior: execution.offlineBehavior,
-      },
+      ...(execution ? {
+        execution: {
+          mode: execution.mode,
+          targetEndpointId: execution.targetEndpointId,
+          revision: execution.revision,
+          hostGrantId: execution.hostGrantId,
+          hostGrantStatus: execution.hostGrantStatus,
+          offlineBehavior: execution.offlineBehavior,
+        },
+      } : {}),
+      ...(restrictions ? { restrictions } : {}),
+      ...(environment ? { environment } : {}),
     };
   }
 
@@ -286,10 +308,27 @@ function defaultRuntime() {
   });
 }
 
+function projectRepositoryRoot(projectId: string): string | undefined {
+  try {
+    const snapshot = localMeshStore().snapshot(projectId);
+    return snapshot?.project.repositoryRoot
+      ?? snapshot?.bindings?.find((item) => item.localPathHint)?.localPathHint;
+  } catch {
+    return undefined;
+  }
+}
+
+function persistMeshPolicyExtras(projectId: string, policy: ProjectPolicy): void {
+  const root = projectRepositoryRoot(projectId);
+  rememberRestrictions(projectId, policy.restrictions, root);
+  rememberEnvironment(projectId, policy.environment, root);
+}
+
 export function handleProjectPolicySet(
   relay: RelayClient,
   request: ProjectPolicySet,
 ): Promise<boolean> {
+  persistMeshPolicyExtras(request.projectId, request.policy);
   if (!projectPolicyFeatureEnabled()) return Promise.resolve(false);
   return defaultRuntime().apply(relay, request);
 }

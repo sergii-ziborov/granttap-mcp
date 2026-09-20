@@ -1,5 +1,8 @@
 import { isAbsolute, join, normalize } from "node:path";
+import { inspectRepository } from "../mesh/catalog";
 import { computerId } from "../mesh/computer-identity";
+import { localMeshStore } from "../mesh/local";
+import { evaluateWriteRestrictions } from "../mesh/restrictions";
 import { configDir } from "../config/paths";
 import { EngineClient } from "../engine/engine-client";
 import type {
@@ -54,16 +57,49 @@ export function legacyGrantTapFlowAllowed(decision: EffectiveActionDecision): bo
   return decision.effect === "inherit" || decision.effect === "allow";
 }
 
+function projectIdFromCheckout(cwd: string | undefined, endpointId: string): string | undefined {
+  if (!cwd) return undefined;
+  try {
+    const repository = inspectRepository(cwd);
+    return localMeshStore().projectIdForRepository(repository.canonicalRepositoryId, endpointId);
+  } catch {
+    return undefined;
+  }
+}
+
 export async function evaluateEffectiveAction(
   input: EffectiveActionInput,
   options: EffectiveActionOptions = {},
 ): Promise<EffectiveActionDecision> {
   if (input.legacyDenyReason) return legacyDeny(input.legacyDenyReason);
   const env = options.env ?? process.env;
+  const endpointId = options.endpointId ?? computerId(env);
+  const restrictionProjectId = options.projectId
+    ?? meshProjectId(input, endpointId)
+    ?? projectIdFromCheckout(input.cwd, endpointId);
+  let restriction: ReturnType<typeof evaluateWriteRestrictions>;
+  try {
+    restriction = evaluateWriteRestrictions({
+      projectId: restrictionProjectId,
+      toolName: input.toolName,
+      toolInput: input.toolInput,
+      cwd: input.cwd,
+    });
+  } catch {
+    restriction = undefined;
+  }
+  if (restriction) {
+    return {
+      effect: restriction.effect,
+      source: "project",
+      reason: restriction.reason,
+      projectId: restrictionProjectId,
+      engineEvaluated: false,
+    };
+  }
   if (!projectPolicyFeatureEnabled(env)) return FALLBACK;
   const now = options.now ?? Date.now;
   const deadline = now() + DEFAULT_ENGINE_POLICY_TIMEOUT_MS;
-  const endpointId = options.endpointId ?? computerId(env);
   const ownedClient = options.client == null;
   const client = options.client ?? new EngineClient({ socketPath: join(configDir(), "engine.sock") });
   let projectId: string | undefined;

@@ -1,5 +1,22 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { computerId } from "../mesh/computer-identity";
+import { inspectRepository } from "../mesh/catalog";
+import { localMeshStore } from "../mesh/local";
+import { environmentProcessEnv, loadEnvironment } from "../mesh/project-env";
 import type { ReplyResult } from "./types";
+
+function projectEnvForCwd(cwd?: string): NodeJS.ProcessEnv {
+  if (!cwd) return {};
+  try {
+    const repository = inspectRepository(cwd);
+    const projectId = localMeshStore().projectIdForRepository(
+      repository.canonicalRepositoryId, computerId(),
+    );
+    return projectId ? environmentProcessEnv(loadEnvironment(projectId)) : {};
+  } catch {
+    return {};
+  }
+}
 
 /**
  * Deliveries still running, by the chat they run for, so a pause from the
@@ -52,7 +69,7 @@ export function runProcess(
         cwd,
         // A delivery is itself a prompt submission; the prompt hook must not
         // hand a background run the journal kept for the live session.
-        env: { ...process.env, GRANTTAP_DELIVERY: "1" },
+        env: { ...process.env, GRANTTAP_DELIVERY: "1", ...projectEnvForCwd(cwd) },
         stdio: [stdin == null ? "ignore" : "pipe", "pipe", "pipe"],
       });
     } catch (error) {

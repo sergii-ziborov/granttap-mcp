@@ -18,6 +18,7 @@ const usage = [
   "  granttap connect [--relay <url>]  Pair this computer with iPhone/Apple Watch",
   "  granttap reset [--yes]            Reset this computer's phone pairing",
   "  granttap mesh connect <invite>    Redeem a one-time Grok Bot Mesh invite",
+  "  granttap restrictions check [dir] Check files against Mesh / .granttap restrictions",
   "",
   "The legacy granttap-mcp command is an alias for granttap.",
   "",
@@ -43,6 +44,8 @@ if (command === "mcp") {
   entry = join(root, "apps", "mcp", "src", "bin", "authorize.ts");
 } else if (command === "mesh" && argument === "connect") {
   entry = join(root, "apps", "bridge", "src", "bin", "mesh-connect.ts");
+} else if (command === "restrictions" && argument === "check") {
+  entry = join(root, "apps", "bridge", "src", "bin", "restrictions-check.ts");
 } else if (command === "internal" && argument === "mesh-mcp") {
   entry = join(root, "apps", "mcp", "src", "mesh-stdio.ts");
 } else if (command === "internal" && argument === "serve") {
@@ -96,8 +99,8 @@ if (!preflight || !loader) {
   process.exit(1);
 }
 
-const forwardedArgs = ["connect", "status", "reset", "mesh", "setup"].includes(command)
-  ? (command === "mesh" ? commandArgs.slice(1) : commandArgs)
+const forwardedArgs = ["connect", "status", "reset", "mesh", "setup", "restrictions"].includes(command)
+  ? (command === "mesh" || command === "restrictions" ? commandArgs.slice(1) : commandArgs)
   : [];
 const child = spawn(
   process.execPath,

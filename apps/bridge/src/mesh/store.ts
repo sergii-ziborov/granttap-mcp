@@ -44,6 +44,8 @@ import { mergeSnapshotState } from "./snapshot-merge";
 import { selectSnapshotTasks } from "./snapshot-window";
 import { projectSharedSkills } from "../capabilities/skills";
 import { loadExecutionPolicy } from "./execution-policy";
+import { loadEnvironment, redactEnvironment } from "./project-env";
+import { loadRestrictions } from "./restrictions";
 
 export class MeshStore {
   private state: StoreState;
@@ -651,6 +653,8 @@ export class MeshStore {
       ...this.state.executions.filter((item) => taskIds.has(item.taskId)).map((item) => item.workspace),
     ]);
     const execution = loadExecutionPolicy(projectId);
+    const restrictions = loadRestrictions(projectId);
+    const environment = redactEnvironment(loadEnvironment(projectId));
     return MeshSnapshot.parse({
       type: "mesh.snapshot",
       sessionId: projectId,
@@ -670,6 +674,8 @@ export class MeshStore {
         hostGrantStatus: execution.hostGrantStatus,
         offlineBehavior: execution.offlineBehavior,
       } } : {}),
+      ...(restrictions ? { restrictions } : {}),
+      ...(environment ? { environment } : {}),
       tasks,
       executions: this.state.executions.filter((item) => taskIds.has(item.taskId)).slice(-128),
       claims: this.activeClaims().filter((item) => item.projectId === projectId && taskIds.has(item.taskId)).slice(-128),
