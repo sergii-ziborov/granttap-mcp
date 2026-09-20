@@ -42,7 +42,7 @@ test("Cursor plugin bootstrap is valid JavaScript and pins the verified runtime 
   const checked = spawnSync(process.execPath, ["--check", path], { encoding: "utf8" });
   assert.equal(checked.status, 0, checked.stderr);
   const source = readFileSync(path, "utf8");
-  assert.match(source, /04884afd79fd0b8e3136a5ee6a8a3105fc9ba9e3\.tar\.gz/);
+  assert.match(source, /https:\/\/github\.com\/sergii-ziborov\/granttap-mcp\/archive\/[0-9a-f]{40}\.tar\.gz/);
   assert.match(source, /ComSpec/);
   assert.match(source, /cmd\.exe/);
   assert.match(source, /where granttap-mcp/);
@@ -64,7 +64,10 @@ test("Cursor plugin MCP starts from a foreign cwd, unlike a relative bootstrap p
   // Cursor Cloud cannot fetch 127.0.0.1. The plugin is stdio; cwd must not matter.
   assert.equal(mcp.mcpServers.granttap.command, "node");
   assert.equal(mcp.mcpServers.granttap.args?.[0], "-e");
-  assert.match(mcp.mcpServers.granttap.args?.[1] ?? "", /04884afd79fd0b8e3136a5ee6a8a3105fc9ba9e3\.tar\.gz/);
+  const source = readFileSync(join(plugin, "stdio-bootstrap.cjs"), "utf8");
+  const archive = source.match(/https:\/\/github\.com\/sergii-ziborov\/granttap-mcp\/archive\/[0-9a-f]{40}\.tar\.gz/)?.[0];
+  assert.ok(archive, "the standalone bootstrap pins a Git commit archive");
+  assert.ok((mcp.mcpServers.granttap.args?.[1] ?? "").includes(archive));
   assert.equal(mcp.mcpServers.granttap.url, undefined);
   assert.equal(mcp.mcpServers.granttap.type, undefined);
   assert.doesNotThrow(() => new Script(mcp.mcpServers.granttap.args?.[1] ?? ""));

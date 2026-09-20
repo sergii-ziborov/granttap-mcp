@@ -45,7 +45,12 @@ test("Cursor plugin is stdio so Cloud does not fetch loopback", () => {
   assert.equal(hosts.mcpServers.granttap.url, "http://127.0.0.1:17342/mcp");
   assert.equal(mcp.mcpServers.granttap.command, "node");
   assert.equal(mcp.mcpServers.granttap.args?.[0], "-e");
-  assert.match(mcp.mcpServers.granttap.args?.[1] ?? "", /04884afd79fd0b8e3136a5ee6a8a3105fc9ba9e3\.tar\.gz/);
+  const bootstrap = mcp.mcpServers.granttap.args?.[1] ?? "";
+  const archive = bootstrap.match(/https:\/\/github\.com\/sergii-ziborov\/granttap-mcp\/archive\/[0-9a-f]{40}\.tar\.gz/)?.[0];
+  assert.ok(archive, "Cursor pins a Git commit archive");
+  for (const file of ["cursor-plugin/stdio-bootstrap.cjs", "cursor-plugin/README.md", "plugins/granttap/README.md"]) {
+    assert.ok(readFileSync(join(repositoryRoot, file), "utf8").includes(archive), `${file} uses the same archive`);
+  }
   assert.equal(mcp.mcpServers.granttap.url, undefined);
   assert.equal(existsSync(join(repositoryRoot, "cursor-plugin/.cursor-plugin/plugin.json")), true);
   assert.equal(existsSync(join(repositoryRoot, "cursor-plugin/mcp.json")), true);
