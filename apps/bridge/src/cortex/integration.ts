@@ -50,12 +50,18 @@ export async function projectCortexIntegration(
   if (!compilation) {
     return { ...loaded, state: "unavailable", detail: "Cortex context compilation failed" };
   }
-  const repositoryEvidenceMissing = (snapshot.bindings?.length ?? 0) > 0
-    && (snapshot.repositoryGraphs?.length ?? 0) === 0;
+  const graphs = observedRepositoryGraphs(snapshot.repositoryGraphs);
+  const observed = new Set(graphs.map((graph) => graph.repositoryId));
+  const repositoryEvidenceMissing = (snapshot.bindings ?? [])
+    .some((binding) => !observed.has(binding.repositoryId));
+  const repositoryEvidencePartial = graphs.some((graph) =>
+    graph.analysisStatus === "INCOMPLETE" || graph.truncated);
   return {
     ...loaded,
-    state: compilation.packet.requires_upstream || repositoryEvidenceMissing ? "degraded" : "succeeded",
-    detail: repositoryEvidenceMissing ? "Weavatrix repository analysis pending or unavailable" : undefined,
+    state: compilation.packet.requires_upstream || repositoryEvidenceMissing || repositoryEvidencePartial
+      ? "degraded" : "succeeded",
+    detail: repositoryEvidenceMissing ? "Weavatrix repository analysis pending or unavailable"
+      : repositoryEvidencePartial ? "Weavatrix repository analysis incomplete" : undefined,
     packet: packetStatus(compilation.packet),
   };
 }
@@ -89,11 +95,11 @@ export function cortexSnapshotEvidence(
     "project.restrictions", "project.policy", JSON.stringify(snapshot.restrictions),
     "critical", "verified", "exact_source", `policy:${snapshot.restrictions.revision}`,
   ));
-  if (snapshot.backbone) evidence.push(item(
+  if (snapshot.backbone?.head) evidence.push(item(
     "project.backbone", "weavatrix.backbone", JSON.stringify(snapshot.backbone),
     "high", "verified", "graph", snapshot.backbone.head,
   ));
-  for (const graph of snapshot.repositoryGraphs ?? []) evidence.push(item(
+  for (const graph of observedRepositoryGraphs(snapshot.repositoryGraphs)) evidence.push(item(
     `repository.${graph.repositoryId}`, "weavatrix.repository", JSON.stringify(graph),
     "high", "verified", "graph", graph.revision,
   ));
@@ -117,11 +123,11 @@ export function cortexScopedEvidence(view: ScopedMeshView): EngineContextEvidenc
     "project.restrictions", "project.policy", JSON.stringify(view.restrictions),
     "critical", "verified", "exact_source", `policy:${view.restrictions.revision}`,
   ));
-  if (view.backbone) evidence.push(item(
+  if (view.backbone?.head) evidence.push(item(
     "project.backbone", "weavatrix.backbone", JSON.stringify(view.backbone),
     "high", "verified", "graph", view.backbone.head,
   ));
-  for (const graph of view.repositoryGraphs ?? []) evidence.push(item(
+  for (const graph of observedRepositoryGraphs(view.repositoryGraphs)) evidence.push(item(
     `repository.${graph.repositoryId}`, "weavatrix.repository", JSON.stringify(graph),
     "high", "verified", "graph", graph.revision,
   ));
@@ -146,6 +152,11 @@ export function cortexScopedEvidence(view: ScopedMeshView): EngineContextEvidenc
     "task.identity", "project.task", taskId, "critical", "unverified", "inferred",
   ));
   return evidence;
+}
+
+function observedRepositoryGraphs(graphs: MeshSnapshot["repositoryGraphs"]): NonNullable<MeshSnapshot["repositoryGraphs"]> {
+  return (graphs ?? []).filter((graph) =>
+    graph.analysisStatus === "COMPLETE" || graph.analysisStatus === "INCOMPLETE");
 }
 
 function item(

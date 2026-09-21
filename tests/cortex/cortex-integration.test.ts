@@ -51,7 +51,8 @@ function snapshot(): MeshSnapshot {
     },
     repositoryGraphs: [{
       projectId: "project", repositoryId: "repo", revision: "content-head",
-      weavatrixVersion: "2.17.0", nodes: [], relations: [],
+      weavatrixVersion: "2.17.0", analysisId: "analysis", analysisStatus: "COMPLETE",
+      nodes: [], relations: [],
       totalNodes: 0, totalRelations: 0, truncated: false,
     }],
     tasks: [{
@@ -120,6 +121,16 @@ test("Cortex evidence keeps Project heads, policy, memory, and capability identi
   assert.equal(fromSnapshot[0]?.snapshot_id, "task:7");
   assert.equal(fromSnapshot[1]?.snapshot_id, "policy:3");
   assert.equal(fromSnapshot[3]?.snapshot_id, "content-head");
+  const unavailable = { ...value, repositoryGraphs: [{
+    ...value.repositoryGraphs![0]!, revision: "unverified", weavatrixVersion: "unknown",
+    analysisId: undefined, analysisStatus: "UNAVAILABLE" as const,
+    analysisErrorCode: "REPOSITORY_IDENTITY_MISMATCH", nodes: [], relations: [],
+    totalNodes: 0, totalRelations: 0,
+  }] };
+  assert.equal(cortexSnapshotEvidence(unavailable, "task")
+    .some((item) => item.id === "repository.repo"), false);
+  assert.equal(cortexScopedEvidence(view(unavailable))
+    .some((item) => item.id === "repository.repo"), false);
 
   const scoped = cortexScopedEvidence(view(value));
   assert.deepEqual(scoped.slice(-3).map((item) => item.id), [
@@ -189,6 +200,29 @@ test("Project Cortex reports disabled, unavailable, loaded, degraded, and succee
   });
   assert.equal(noRepositoryReport.state, "degraded");
   assert.equal(noRepositoryReport.detail, "Weavatrix repository analysis pending or unavailable");
+  const brokenRepositoryReport = await projectCortexIntegration({
+    ...value, bindings: [{
+      bindingId: "mac-repo", projectId: "project", endpointId: "mac",
+      repositoryId: "repo", displayName: "GrantTap", available: true,
+    }], repositoryGraphs: [{
+      ...value.repositoryGraphs![0]!, analysisStatus: "UNAVAILABLE",
+      analysisErrorCode: "REPOSITORY_IDENTITY_MISMATCH", nodes: [], relations: [],
+      totalNodes: 0, totalRelations: 0,
+    }],
+  }, "mac", {
+    provenance, compile: async () => ({ ...await compile(), packet: {
+      ...(await compile()).packet, requires_upstream: false,
+    } }),
+  });
+  assert.equal(brokenRepositoryReport.state, "degraded");
+  const partialRepositoryReport = await projectCortexIntegration({
+    ...value, repositoryGraphs: [{ ...value.repositoryGraphs![0]!, analysisStatus: "INCOMPLETE" }],
+  }, "mac", {
+    provenance, compile: async () => ({ ...await compile(), packet: {
+      ...(await compile()).packet, requires_upstream: false,
+    } }),
+  });
+  assert.equal(partialRepositoryReport.state, "degraded");
 });
 
 test("a scoped generic client receives the same Cortex compilation input", async (t) => {
