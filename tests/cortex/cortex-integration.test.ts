@@ -120,6 +120,7 @@ test("Cortex evidence keeps Project heads, policy, memory, and capability identi
   ]);
   assert.equal(fromSnapshot[0]?.snapshot_id, "task:7");
   assert.equal(fromSnapshot[1]?.snapshot_id, "policy:3");
+  assert.equal(fromSnapshot[2]?.state, "unverified", "a Backbone summary can contain declared relations");
   assert.equal(fromSnapshot[3]?.snapshot_id, "content-head");
   const unavailable = { ...value, repositoryGraphs: [{
     ...value.repositoryGraphs![0]!, revision: "unverified", weavatrixVersion: "unknown",
@@ -135,6 +136,9 @@ test("Cortex evidence keeps Project heads, policy, memory, and capability identi
   const scoped = cortexScopedEvidence(view(value));
   assert.deepEqual(scoped.slice(-3).map((item) => item.id), [
     "project.skills", "project.mcp", "project.capability_requests",
+  ]);
+  assert.deepEqual(scoped.slice(-3).map((item) => item.state), [
+    "unverified", "unverified", "unverified",
   ]);
   assert.equal(cortexSnapshotEvidence({ ...value, tasks: [], events: [] }, "missing").length, 3);
   const empty = view({ ...value, tasks: [], events: [], backbone: undefined, repositoryGraphs: [] });

@@ -97,7 +97,7 @@ export function cortexSnapshotEvidence(
   ));
   if (snapshot.backbone?.head) evidence.push(item(
     "project.backbone", "weavatrix.backbone", JSON.stringify(snapshot.backbone),
-    "high", "verified", "graph", snapshot.backbone.head,
+    "high", "unverified", "graph", snapshot.backbone.head,
   ));
   for (const graph of observedRepositoryGraphs(snapshot.repositoryGraphs)) evidence.push(item(
     `repository.${graph.repositoryId}`, "weavatrix.repository", JSON.stringify(graph),
@@ -125,7 +125,7 @@ export function cortexScopedEvidence(view: ScopedMeshView): EngineContextEvidenc
   ));
   if (view.backbone?.head) evidence.push(item(
     "project.backbone", "weavatrix.backbone", JSON.stringify(view.backbone),
-    "high", "verified", "graph", view.backbone.head,
+    "high", "unverified", "graph", view.backbone.head,
   ));
   for (const graph of observedRepositoryGraphs(view.repositoryGraphs)) evidence.push(item(
     `repository.${graph.repositoryId}`, "weavatrix.repository", JSON.stringify(graph),
@@ -137,15 +137,15 @@ export function cortexScopedEvidence(view: ScopedMeshView): EngineContextEvidenc
   ));
   if (view.skills?.length) evidence.push(item(
     "project.skills", "mesh.capabilities", JSON.stringify(view.skills),
-    "normal", "verified", "exact_source", `mesh:${view.generatedAt}`,
+    "normal", "unverified", "exact_source", `mesh:${view.generatedAt}`,
   ));
   if (view.mcpServers?.length) evidence.push(item(
     "project.mcp", "mesh.capabilities", JSON.stringify(view.mcpServers),
-    "normal", "verified", "exact_source", `mesh:${view.generatedAt}`,
+    "normal", "unverified", "exact_source", `mesh:${view.generatedAt}`,
   ));
   if (view.capabilityRequests?.length) evidence.push(item(
     "project.capability_requests", "mesh.capabilities",
-    JSON.stringify(view.capabilityRequests), "normal", "verified", "exact_source",
+    JSON.stringify(view.capabilityRequests), "normal", "unverified", "exact_source",
     `mesh:${view.generatedAt}`,
   ));
   if (evidence.length === 0) evidence.push(item(
