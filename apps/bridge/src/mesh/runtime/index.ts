@@ -39,6 +39,7 @@ import { localMeshStore } from "../local-remote/local";
 import { createHandoffWorktree, repositoryHasCommit } from "./worktree";
 import { fetchRevision, pushBranch } from "../local-remote/remote";
 import { projectSessionCapabilityInventory, projectExecutionCapabilitySessions } from "./capabilities";
+import { deduplicateNativeSessions } from "./capabilities/session-discovery";
 
 export type { MeshRuntimeDependencies };
 
@@ -46,11 +47,7 @@ export type { MeshRuntimeDependencies };
 export type MeshPayloadOrigin = "relay" | "agent";
 
 function discoveredSessions(): SessionInfo[] {
-  const byId = new Map<string, SessionInfo>();
-  for (const session of [...scanSessions().sessions, ...scanSessionHistory()]) {
-    byId.set(session.sessionId, session);
-  }
-  return [...byId.values()];
+  return deduplicateNativeSessions(scanSessionHistory(), scanSessions().sessions);
 }
 
 const defaultDependencies: MeshRuntimeDependencies = {
