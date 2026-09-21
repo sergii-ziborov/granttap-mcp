@@ -14,6 +14,7 @@ import {
   projectBackbone, projectRepositoryGraphs, waitForProjectBindingSync,
 } from "../../engine/runtime/engine-projects";
 import { projectCortexIntegration } from "../../cortex/integration";
+import { projectKnowledge, queueProjectKnowledgeSync } from "../../engine/runtime/engine-memory";
 import { configDir } from "../../config";
 import {
   createClaudeSession,
@@ -247,14 +248,21 @@ export function requestProjectCapability(input: ProjectCapabilityRequestSet): bo
 export async function meshSnapshotsWithEngine(): Promise<MeshSnapshot[]> {
   return Promise.all(meshSnapshots().map(async (snapshot) => {
     await waitForProjectBindingSync(snapshot.projectId);
-    const [backbone, repositoryGraphs] = await Promise.all([
+    queueProjectKnowledgeSync(snapshot);
+    const [backbone, repositoryGraphs, knowledge] = await Promise.all([
       projectBackbone(snapshot.projectId),
       projectRepositoryGraphs(snapshot.projectId, snapshot.bindings ?? [], {
         background: true,
         priority: snapshot.tasks.reduce((latest, task) => Math.max(latest, task.updatedAt), 0),
       }),
+      projectKnowledge(snapshot.projectId),
     ]);
-    const enriched = { ...snapshot, backbone, repositoryGraphs };
+    const sharedKnowledge = knowledge?.filter((item) => item.visibility === "project");
+    if (sharedKnowledge) localMeshStore().cacheKnowledge(snapshot.projectId, sharedKnowledge);
+    const memoryRows = new Map((snapshot.knowledge ?? []).map((item) => [item.recordId, item]));
+    for (const item of sharedKnowledge ?? []) memoryRows.set(item.recordId, item);
+    const enriched = { ...snapshot, backbone, repositoryGraphs,
+      knowledge: [...memoryRows.values()].sort((a, b) => b.recordedAt - a.recordedAt).slice(0, 16) };
     const cortex = await projectCortexIntegration(enriched);
     return {
       ...enriched,

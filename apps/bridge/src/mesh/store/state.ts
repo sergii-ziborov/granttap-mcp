@@ -9,6 +9,7 @@ import {
   ProjectBindingSummary,
   ResourceClaim,
   TaskDependency,
+  ProjectKnowledgeRecord,
   type ExecutionSessionLink as ExecutionValue,
   type HandoffReceipt as ReceiptValue,
   type IntegrationPeer as IntegrationPeerValue,
@@ -18,6 +19,7 @@ import {
   type ProjectBindingSummary as BindingValue,
   type ResourceClaim as ResourceClaimValue,
   type TaskDependency as DependencyValue,
+  type ProjectKnowledgeRecord as KnowledgeValue,
 } from "../../../../../packages/protocol/schema";
 import { lstatSync, readFileSync } from "node:fs";
 import { z } from "zod";
@@ -62,6 +64,7 @@ export type StoreState = {
   claims: ResourceClaimValue[];
   dependencies: DependencyValue[];
   events: MeshEventValue[];
+  knowledge: KnowledgeValue[];
   receipts: ReceiptValue[];
   migrations: CapsuleMigration[];
   releasedClaims: ReleasedClaim[];
@@ -69,7 +72,7 @@ export type StoreState = {
 
 const EMPTY: StoreState = {
   version: 1, projects: [], bindings: [], peers: [], tasks: [], executions: [], claims: [],
-  dependencies: [], events: [], receipts: [], migrations: [], releasedClaims: [],
+  dependencies: [], events: [], knowledge: [], receipts: [], migrations: [], releasedClaims: [],
 };
 
 export const MAX_STORE_PEERS = 256;
@@ -130,6 +133,9 @@ export function readStoreState(path: string): StoreLoad {
         claims: parsedArray(value.claims, ResourceClaim),
         dependencies: parsedArray(value.dependencies, TaskDependency),
         events: parsedArray(value.events, MeshEvent),
+        knowledge: parsedArray(value.knowledge, ProjectKnowledgeRecord)
+          .filter((item) => projects.some((project) => project.projectId === item.projectId))
+          .slice(-256),
         receipts: parsedArray(value.receipts, HandoffReceipt),
         migrations: parsedArray(value.migrations, CapsuleMigration).slice(-MAX_STORE_MIGRATIONS),
         releasedClaims: parsedArray(value.releasedClaims, ReleasedClaim).slice(-MAX_RELEASED_CLAIMS),

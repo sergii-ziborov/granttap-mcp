@@ -14,6 +14,7 @@ import {
   TaskDependency,
 } from "./tasks";
 import { MeshEvent } from "./events";
+import { ProjectKnowledgeRecord } from "./knowledge";
 
 export const IntegrationVia = z.enum(["database", "kafka", "api"]);
 export type IntegrationVia = z.infer<typeof IntegrationVia>;
@@ -235,6 +236,7 @@ export const MeshSnapshot = z.object({
   backbone: ProjectBackbone.optional(),
   repositoryGraphs: z.array(ProjectRepositoryGraph).max(64).optional(),
   cortex: z.array(ProjectCortexIntegration).max(32).optional(),
+  knowledge: z.array(ProjectKnowledgeRecord).max(32).optional(),
   tasks: z.array(MeshTask).max(64),
   executions: z.array(ExecutionSessionLink).max(128),
   claims: z.array(ResourceClaim).max(128),
@@ -289,6 +291,12 @@ export const MeshSnapshot = z.object({
   if ((value.repositoryGraphs?.length ?? 0) !== graphRepositories.size
     || value.repositoryGraphs?.some((item) => item.projectId !== value.projectId)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["repositoryGraphs"], message: "invalid repository graph scope" });
+  }
+  const knowledgeIds = new Set(value.knowledge?.map((item) => item.recordId));
+  if ((value.knowledge?.length ?? 0) !== knowledgeIds.size
+    || value.knowledge?.some((item) => item.projectId !== value.projectId
+      || item.visibility !== "project")) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["knowledge"], message: "invalid knowledge scope" });
   }
   const bindingIds = new Set(value.bindings?.map((binding) => binding.bindingId));
   const bindingKeys = new Set(value.bindings?.map(

@@ -43,6 +43,7 @@ export type ScopedMeshView = {
   restrictions?: MeshSnapshot["restrictions"];
   environment?: MeshSnapshot["environment"];
   cortex?: NonNullable<MeshSnapshot["cortex"]>;
+  knowledge?: NonNullable<MeshSnapshot["knowledge"]>;
   /** Other Tasks working right now on the far side of this Task's repository. */
   otherSide: OtherSideRow[];
   dependencies: MeshSnapshot["dependencies"];
@@ -118,6 +119,8 @@ export function scopedMeshView(
     restrictions: snapshot.restrictions,
     environment: snapshot.environment,
     cortex: snapshot.cortex ?? [],
+    knowledge: snapshot.knowledge?.filter((item) => item.taskId === capability.taskId
+      || item.visibility === "project"),
     otherSide: otherSide(snapshot, capability.taskId),
     dependencies: snapshot.dependencies,
     events: scopedEvents(snapshot, capability),

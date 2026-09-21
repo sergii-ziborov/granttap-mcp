@@ -1,4 +1,5 @@
 import { parseInvocationResult } from "../engine-invocation-protocol";
+import { parseMemoryResult } from "../engine-memory-protocol";
 import { parsePolicyResult } from "../engine-policy-protocol";
 import {
   ENGINE_PROTOCOL_VERSION,
@@ -47,7 +48,8 @@ function parseResult(value: unknown): EngineResult {
   else if (operation === "context.compiled") {
     return { operation, compilation: parseContextCompilation(result.compilation) };
   }
-  else if (!parsePolicyResult(result, invalidResult)
+  else if (!parseMemoryResult(result, invalidResult)
+    && !parsePolicyResult(result, invalidResult)
     && !parseInvocationResult(result, invalidResult)) {
     throw new EngineProtocolError("engine result operation is unsupported");
   }

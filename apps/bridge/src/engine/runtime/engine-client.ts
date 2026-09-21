@@ -201,6 +201,8 @@ function expectedResultOperation(
   if (operation === "context.compile_project") return "context.compiled";
   if (operation === "invocation.observe") return "invocation.observed";
   if (operation === "invocation.history") return "invocation.history";
+  if (operation === "memory.record") return "memory.recorded";
+  if (operation === "memory.history") return "memory.history";
   if (operation === "policy.get") return "policy.found";
   if (operation === "policy.apply") return "policy.applied";
   if (operation === "policy.coverage") return "policy.coverage";

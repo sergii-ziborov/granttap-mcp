@@ -109,7 +109,15 @@ export function cortexSnapshotEvidence(
     `repository.${graph.repositoryId}`, "weavatrix.repository", JSON.stringify(graph),
     "high", "verified", "graph", graph.revision,
   ));
-  for (const event of snapshot.events.filter((value) => value.taskId === taskId).slice(-32)) {
+  const knowledge = (snapshot.knowledge ?? []).filter((record) =>
+    record.taskId === taskId || record.visibility === "project").slice(0, 16);
+  for (const record of knowledge) evidence.push(item(
+    `knowledge.${record.recordId}`, "weavatrix.memory", JSON.stringify(record),
+    "high", "unverified", "memory", `memory:${record.streamVersion}`,
+  ));
+  const recorded = new Set(knowledge.map((record) => record.sourceRef));
+  for (const event of snapshot.events.filter((value) => value.taskId === taskId
+    && !recorded.has(value.eventId)).slice(-32)) {
     evidence.push(item(
       `event.${event.eventId}`, "mesh.event", JSON.stringify(event),
       "normal", "unverified", "memory", `event:${event.createdAt}`,
@@ -137,7 +145,13 @@ export function cortexScopedEvidence(view: ScopedMeshView): EngineContextEvidenc
     `repository.${graph.repositoryId}`, "weavatrix.repository", JSON.stringify(graph),
     "high", "verified", "graph", graph.revision,
   ));
-  for (const event of view.events.slice(-32)) evidence.push(item(
+  const knowledge = (view.knowledge ?? []).slice(0, 16);
+  for (const record of knowledge) evidence.push(item(
+    `knowledge.${record.recordId}`, "weavatrix.memory", JSON.stringify(record),
+    "high", "unverified", "memory", `memory:${record.streamVersion}`,
+  ));
+  const recorded = new Set(knowledge.map((record) => record.sourceRef));
+  for (const event of view.events.filter((value) => !recorded.has(value.eventId)).slice(-32)) evidence.push(item(
     `event.${event.eventId}`, "mesh.event", JSON.stringify(event),
     "normal", "unverified", "memory", `event:${event.createdAt}`,
   ));

@@ -29,11 +29,11 @@ type Collection = Exclude<keyof StoreState, "version">;
 
 const COLLECTIONS: Collection[] = [
   "projects", "bindings", "peers", "tasks", "executions", "claims", "dependencies", "events",
-  "receipts", "migrations", "releasedClaims",
+  "knowledge", "receipts", "migrations", "releasedClaims",
 ];
 const BOUNDS: Partial<Record<Collection, number>> = {
   peers: MAX_STORE_PEERS, events: 512, receipts: 256, migrations: MAX_STORE_MIGRATIONS,
-  releasedClaims: MAX_RELEASED_CLAIMS,
+  knowledge: 256, releasedClaims: MAX_RELEASED_CLAIMS,
 };
 /**
  * A write takes milliseconds, so a lock held for seconds belongs to a
@@ -53,6 +53,7 @@ function rowKey(name: Collection, item: unknown): string {
     case "claims": return row.claimId ?? "";
     case "dependencies": return [row.taskId, row.dependsOnTaskId].join("\0");
     case "events": return row.eventId ?? "";
+    case "knowledge": return [row.projectId, row.recordId].join("\0");
     case "receipts": return row.capsuleHash ?? "";
     case "migrations": return row.capsuleHashFrom ?? "";
     case "releasedClaims": return row.claimId ?? "";
@@ -129,6 +130,7 @@ export function applyStoreDelta(disk: StoreState, delta: StoreDelta): StoreState
 function settle(name: Collection, theirs: unknown, ours: unknown): unknown {
   if (name === "tasks") return preferTask(theirs as TaskValue, ours as TaskValue);
   if (name === "executions") return preferExecution(theirs as ExecutionValue, ours as ExecutionValue);
+  if (name === "knowledge") return theirs;
   return ours;
 }
 

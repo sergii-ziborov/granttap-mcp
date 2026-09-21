@@ -38,5 +38,14 @@ export function mergeSnapshotState(state: StoreState, input: SnapshotValue): voi
     (item) => `${item.taskId}\0${item.dependsOnTaskId}`,
   );
   candidate.events = mergeBy(candidate.events, snapshot.events, (item) => item.eventId).slice(-512);
+  for (const incoming of snapshot.knowledge ?? []) {
+    const known = candidate.knowledge.find((item) => item.projectId === incoming.projectId
+      && item.recordId === incoming.recordId);
+    if (known && JSON.stringify(known) !== JSON.stringify(incoming)) {
+      throw new Error("Project knowledge identity conflict");
+    }
+  }
+  candidate.knowledge = mergeBy(candidate.knowledge, snapshot.knowledge ?? [],
+    (item) => `${item.projectId}\0${item.recordId}`).slice(-256);
   Object.assign(state, candidate);
 }

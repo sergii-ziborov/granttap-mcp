@@ -28,6 +28,7 @@ export type {
   InvocationPhase,
   InvocationSource,
 } from "./engine-invocation-protocol";
+export type { KnowledgePage, KnowledgeRecord, KnowledgeRecordInput } from "./engine-memory-protocol";
 export type {
   CapabilityFingerprint,
   CapabilityKind,

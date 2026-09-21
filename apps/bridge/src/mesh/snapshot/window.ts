@@ -52,6 +52,8 @@ export function projectScopedSnapshot(
     claims: snapshot.claims.filter((item) => ids.has(item.taskId)),
     dependencies: snapshot.dependencies.filter((item) => ids.has(item.taskId)),
     events: snapshot.events.filter((item) => ids.has(item.taskId)),
+    knowledge: snapshot.knowledge?.filter((item) => ids.has(item.taskId)
+      || item.visibility === "project"),
   });
 }
 

@@ -360,6 +360,8 @@ export class MeshStore extends MeshStoreBase {
       claims: this.activeClaims().filter((item) => item.projectId === projectId && taskIds.has(item.taskId)).slice(-128),
       dependencies: this.state.dependencies.filter((item) => taskIds.has(item.taskId)).slice(-128),
       events: this.eventsForProject(projectId).filter((event) => taskIds.has(event.taskId)),
+      knowledge: this.state.knowledge.filter((item) => item.projectId === projectId)
+        .slice(-16).reverse(),
       generatedAt: this.now(),
     });
   }
@@ -370,6 +372,18 @@ export class MeshStore extends MeshStoreBase {
     // A released claim does not come back with a snapshot that still has it.
     const at = this.now();
     this.state.claims = this.state.claims.filter((claim) => !this.isReleased(claim.claimId, at));
+    this.save();
+  }
+
+  cacheKnowledge(projectId: string, records: NonNullable<SnapshotValue["knowledge"]>): void {
+    this.sync();
+    const incoming = records.filter((item) => item.projectId === projectId
+      && item.visibility === "project");
+    if (incoming.length === 0) return;
+    const known = new Set(this.state.knowledge.map((item) => `${item.projectId}\0${item.recordId}`));
+    const fresh = incoming.filter((item) => !known.has(`${item.projectId}\0${item.recordId}`));
+    if (fresh.length === 0) return;
+    this.state.knowledge = [...this.state.knowledge, ...fresh].slice(-256);
     this.save();
   }
 }

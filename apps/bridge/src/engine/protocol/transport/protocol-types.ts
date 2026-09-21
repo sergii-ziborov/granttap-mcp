@@ -6,6 +6,7 @@ import type {
   InvocationEngineOperation,
   InvocationEngineResult,
 } from "../engine-invocation-protocol";
+import type { MemoryEngineOperation, MemoryEngineResult } from "../engine-memory-protocol";
 import { ENGINE_PROTOCOL_VERSION } from "./protocol-base";
 
 export type ProjectBindingRole = "primary" | "dependency" | "supporting";
@@ -81,7 +82,7 @@ export type EngineContextCompilation = {
   };
 };
 
-export type EngineOperation = EnginePolicyOperation | InvocationEngineOperation
+export type EngineOperation = EnginePolicyOperation | InvocationEngineOperation | MemoryEngineOperation
   | { operation: "engine.ping" }
   | { operation: "engine.version" }
   | { operation: "project.resolve"; input: {
@@ -106,7 +107,7 @@ export type EngineRequest = {
   request_id: string;
 } & EngineOperation;
 
-export type EngineResult = EnginePolicyResult | InvocationEngineResult
+export type EngineResult = EnginePolicyResult | InvocationEngineResult | MemoryEngineResult
   | { operation: "engine.pong"; engine_version: string }
   | { operation: "engine.version"; engine_version: string;
     protocol_version: typeof ENGINE_PROTOCOL_VERSION; cortex_version: string;

@@ -4,6 +4,7 @@
  */
 import type { ScopedMeshView } from "../snapshot/scoped-view";
 import { compileMeshContext } from "./packet";
+import { projectKnowledge } from "../../engine/runtime/engine-memory";
 
 export type ProjectContextMode = "compact" | "full" | "legacy";
 
@@ -43,6 +44,8 @@ export type CompactProjectContext = {
   events: CompactContextEvent[];
   eventsCut: ContextCut;
   decisions: CompactContextEvent[];
+  knowledge?: NonNullable<ScopedMeshView["knowledge"]>;
+  knowledgeCut?: ContextCut;
   claims: Array<{ resource: string; owner: string; taskId: string }>;
   claimsCut: ContextCut;
   expand: { full: string; map: string };
@@ -87,6 +90,7 @@ export function renderCompactProjectContext(
     taskId: claim.taskId,
   }));
   const shownClaims = claims.slice(0, COMPACT_LIMIT);
+  const knowledge = view.knowledge ?? [];
   return {
     schema: "granttap.project-context.compact.v1",
     mode: "compact",
@@ -117,6 +121,11 @@ export function renderCompactProjectContext(
     events: shownEvents,
     eventsCut: cut(events.length, shownEvents.length, expand.full, "compact event window"),
     decisions: decisions.slice(-COMPACT_LIMIT),
+    ...(knowledge.length > 0 ? {
+      knowledge: knowledge.slice(0, COMPACT_LIMIT),
+      knowledgeCut: cut(knowledge.length, Math.min(knowledge.length, COMPACT_LIMIT),
+        expand.full, "compact knowledge window"),
+    } : {}),
     claims: shownClaims,
     claimsCut: cut(claims.length, shownClaims.length, expand.full, "compact claim window"),
     expand,
@@ -127,12 +136,17 @@ export function renderCompactProjectContext(
 export async function renderProjectContext(
   view: ScopedMeshView, mode: ProjectContextMode,
 ): Promise<unknown> {
-  const contextPacket = await compileMeshContext(view);
-  if (mode === "compact") return { ...renderCompactProjectContext(view), contextPacket };
+  const local = await projectKnowledge(view.project.projectId, view.execution.taskId);
+  const records = new Map((view.knowledge ?? []).map((item) => [item.recordId, item]));
+  for (const item of local ?? []) records.set(item.recordId, item);
+  const scoped = { ...view, knowledge: [...records.values()]
+    .sort((a, b) => b.recordedAt - a.recordedAt).slice(0, 32) };
+  const contextPacket = await compileMeshContext(scoped);
+  if (mode === "compact") return { ...renderCompactProjectContext(scoped), contextPacket };
   if (mode === "legacy") {
-    return { schema: "granttap.mesh-scope.legacy.v2", mode: "legacy", view, contextPacket };
+    return { schema: "granttap.mesh-scope.legacy.v2", mode: "legacy", view: scoped, contextPacket };
   }
-  return { ...view, mode: "full", contextPacket };
+  return { ...scoped, mode: "full", contextPacket };
 }
 
 export function parseProjectContextMode(value: string | undefined): ProjectContextMode {
