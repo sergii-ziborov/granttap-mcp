@@ -19,6 +19,7 @@ import {
 } from "./support/activity-helpers";
 import {
   MAX_HISTORY,
+  MAX_FILES,
   MAX_LIVE,
   TOKEN_WINDOW_HOURS,
   TOKEN_WINDOW_MS,
@@ -120,11 +121,12 @@ function pickWithReserve(
   );
 }
 
-function scanCatalog(): { all: SessionInfo[]; tokensRecent: number } {
+function scanCatalog(): { all: SessionInfo[]; tokensRecent: number; sourceLimited: boolean } {
   const scans = providerScans();
   return {
     all: sortedUniqueSessions(scans),
     tokensRecent: scans.reduce((sum, scan) => sum + scan.tokensRecent, 0),
+    sourceLimited: scans.some((scan) => scan.sessions.length >= MAX_FILES),
   };
 }
 
@@ -142,6 +144,17 @@ export function scanSessions(): { sessions: SessionInfo[]; tokensRecent: number 
 /** Bounded local history. Nested provider threads stay metadata on their parent. */
 export function scanSessionHistory(): SessionInfo[] {
   return pickWithReserve(scanCatalog().all, Math.min(MAX_HISTORY, 200), 40);
+}
+
+/** The UI asks for older catalog rows only when its History list reaches the end. */
+export function scanSessionHistoryForPaging(): { sessions: SessionInfo[]; sourceLimited: boolean } {
+  const scan = scanCatalog();
+  return {
+    sessions: scan.all.sort((left, right) =>
+      right.lastActivityAt - left.lastActivityAt || left.sessionId.localeCompare(right.sessionId)
+    ),
+    sourceLimited: scan.sourceLimited,
+  };
 }
 
 function activityForSession(session: SessionInfo): ActivityEntry[] {

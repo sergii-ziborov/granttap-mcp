@@ -105,6 +105,9 @@ function parseRepositoryGraph(value: unknown): void {
   requireBoundedString(graph.repository_id, "repository_id", 512);
   requireBoundedString(graph.revision, "graph revision", 512);
   requireBoundedString(graph.weavatrix_version, "Weavatrix version", 64);
+  requireOptionalString(graph.analysis_id, "analysis_id", 128);
+  if (graph.analysis_status != null && graph.analysis_status !== "COMPLETE"
+    && graph.analysis_status !== "INCOMPLETE") invalidResult();
   if (!Array.isArray(graph.nodes) || graph.nodes.length > 256
     || !Array.isArray(graph.relations) || graph.relations.length > 512
     || !Number.isSafeInteger(graph.total_nodes) || Number(graph.total_nodes) < 0
@@ -121,6 +124,9 @@ function parseRepositoryGraph(value: unknown): void {
     requireBoundedString(relation.source, "graph relation source", 512);
     requireBoundedString(relation.target, "graph relation target", 512);
     requireBoundedString(relation.relation, "graph relation kind", 64);
+    if (relation.evidence_count != null
+      && (!Number.isSafeInteger(relation.evidence_count)
+        || Number(relation.evidence_count) < 0)) invalidResult();
   }
 }
 

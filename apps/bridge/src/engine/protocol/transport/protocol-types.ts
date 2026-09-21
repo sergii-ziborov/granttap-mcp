@@ -37,8 +37,10 @@ export type EngineRepositoryGraph = {
   repository_id: string;
   revision: string;
   weavatrix_version: string;
+  analysis_id?: string | null;
+  analysis_status?: "COMPLETE" | "INCOMPLETE";
   nodes: Array<{ id: string; kind: string; label: string }>;
-  relations: Array<{ source: string; target: string; relation: string }>;
+  relations: Array<{ source: string; target: string; relation: string; evidence_count?: number }>;
   total_nodes: number;
   total_relations: number;
   truncated: boolean;

@@ -127,6 +127,8 @@ export const ProjectRepositoryGraph = z.object({
   repositoryId: z.string().trim().min(1).max(512),
   revision: z.string().trim().min(1).max(512),
   weavatrixVersion: z.string().trim().min(1).max(64),
+  analysisId: z.string().trim().min(1).max(128).optional(),
+  analysisStatus: z.enum(["COMPLETE", "INCOMPLETE"]).optional(),
   nodes: z.array(z.object({
     id: z.string().trim().min(1).max(512),
     kind: z.string().trim().min(1).max(64),
@@ -136,6 +138,7 @@ export const ProjectRepositoryGraph = z.object({
     source: z.string().trim().min(1).max(512),
     target: z.string().trim().min(1).max(512),
     relation: z.string().trim().min(1).max(64),
+    evidenceCount: z.number().int().nonnegative().optional(),
   }).strict()).max(512),
   totalNodes: z.number().int().nonnegative(),
   totalRelations: z.number().int().nonnegative(),

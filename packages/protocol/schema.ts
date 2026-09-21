@@ -54,6 +54,8 @@ import {
   SessionShellSet,
   SessionSkillSet,
   SessionsStatus,
+  SessionsHistoryQuery,
+  SessionsHistoryPage,
 } from "./messages/sessions";
 
 export * from "./messages/approvals";
@@ -115,6 +117,8 @@ export const Payload = z.union([
   SessionKeyGrant,
   SessionSealed,
   SessionsStatus,
+  SessionsHistoryQuery,
+  SessionsHistoryPage,
   ConfigSet,
   SessionAccessSet,
   SessionMcpSet,

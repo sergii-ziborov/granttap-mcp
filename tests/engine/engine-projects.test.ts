@@ -135,8 +135,9 @@ test("repository graph maps full Weavatrix analysis for each unique binding", as
       graph: {
         project_id: input.input.project_id,
         repository_id: input.input.repository_id,
-        revision: "revision", weavatrix_version: "2.17.0",
-        nodes: [{ id: "src", kind: "module", label: "src" }],
+        revision: "revision", weavatrix_version: "2.17.1",
+        analysis_id: "a".repeat(64), analysis_status: "COMPLETE",
+        nodes: [{ id: "src", kind: "component", label: "src" }],
         relations: [], total_nodes: 1, total_relations: 0, truncated: false,
       },
     };
@@ -146,7 +147,9 @@ test("repository graph maps full Weavatrix analysis for each unique binding", as
   });
   assert.equal(graphs.length, 1);
   assert.equal(graphs[0]?.repositoryId, local.summary.repositoryId);
-  assert.equal(graphs[0]?.weavatrixVersion, "2.17.0");
+  assert.equal(graphs[0]?.weavatrixVersion, "2.17.1");
+  assert.equal(graphs[0]?.analysisStatus, "COMPLETE");
+  assert.equal(graphs[0]?.nodes[0]?.kind, "component");
 });
 
 test("repository graphs stay inside the Mesh snapshot wire budget", async () => {

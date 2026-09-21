@@ -166,6 +166,28 @@ export const SessionsStatus = z.object({
 });
 export type SessionsStatus = z.infer<typeof SessionsStatus>;
 
+/** Bounded, authenticated history pagination on the existing paired room. */
+export const SessionsHistoryQuery = z.object({
+  type: z.literal("sessions.history.query"),
+  requestId: z.string().uuid(),
+  cursor: z.string().min(1).max(512).optional(),
+  limit: z.number().int().min(1).max(40),
+  createdAt: z.number(),
+}).strict();
+export type SessionsHistoryQuery = z.infer<typeof SessionsHistoryQuery>;
+
+export const SessionsHistoryPage = z.object({
+  type: z.literal("sessions.history.page"),
+  requestId: z.string().uuid(),
+  sessions: z.array(SessionInfo).max(40),
+  nextCursor: z.string().min(1).max(512).optional(),
+  hasMore: z.boolean(),
+  sourceLimited: z.boolean().optional(),
+  resetRequired: z.boolean().optional(),
+  generatedAt: z.number(),
+}).strict();
+export type SessionsHistoryPage = z.infer<typeof SessionsHistoryPage>;
+
 export const ConfigSet = z.object({
   type: z.literal("config.set"),
   enabled: z.boolean().optional(),

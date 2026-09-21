@@ -23,10 +23,8 @@ export type LocalProjectBinding = {
 };
 
 let sharedClient: EngineClient | undefined;
-const MAX_REPOSITORY_GRAPH_CACHE = 128;
 const MAX_REPOSITORY_GRAPH_WIRE_BYTES = 128 * 1_024;
 const MAX_SINGLE_GRAPH_WIRE_BYTES = 48 * 1_024;
-const repositoryGraphCache = new Map<string, ProjectRepositoryGraph>();
 
 export async function syncProjectBinding(
   project: Project,
@@ -70,7 +68,6 @@ export async function syncProjectBinding(
 export function closeProjectEngineClient(): void {
   sharedClient?.close();
   sharedClient = undefined;
-  repositoryGraphCache.clear();
 }
 
 export async function projectBackbone(
@@ -157,9 +154,6 @@ export async function projectRepositoryGraphs(
   const repositories = [...new Map(bindings.map((item) => [item.repositoryId, item])).values()].slice(0, 64);
   const graphs = await Promise.all(repositories.map(async (binding) => {
     const repositoryId = binding.repositoryId;
-    const cacheKey = binding.revision ? `${projectId}\0${repositoryId}\0${binding.revision}` : undefined;
-    const cached = options.client == null && cacheKey ? repositoryGraphCache.get(cacheKey) : undefined;
-    if (cached) return cached;
     try {
       const result = await client.request({
         operation: "graph.analyze_repository", input: {
@@ -168,19 +162,19 @@ export async function projectRepositoryGraphs(
       }, { timeoutMs: 30_000 });
       if (result.operation !== "graph.repository") return undefined;
       const graph = result.graph;
-      const mapped = {
+      const mapped: ProjectRepositoryGraph = {
         projectId: graph.project_id, repositoryId: graph.repository_id,
         revision: graph.revision, weavatrixVersion: graph.weavatrix_version,
-        nodes: graph.nodes, relations: graph.relations,
+        analysisId: graph.analysis_id ?? undefined,
+        analysisStatus: graph.analysis_status,
+        nodes: graph.nodes,
+        relations: graph.relations.map((edge) => ({
+          source: edge.source, target: edge.target, relation: edge.relation,
+          evidenceCount: edge.evidence_count,
+        })),
         totalNodes: graph.total_nodes, totalRelations: graph.total_relations,
         truncated: graph.truncated,
-      } satisfies ProjectRepositoryGraph;
-      if (options.client == null && cacheKey) {
-        if (repositoryGraphCache.size >= MAX_REPOSITORY_GRAPH_CACHE) {
-          repositoryGraphCache.delete(repositoryGraphCache.keys().next().value!);
-        }
-        repositoryGraphCache.set(cacheKey, mapped);
-      }
+      };
       return mapped;
     } catch { return undefined; }
   }));
