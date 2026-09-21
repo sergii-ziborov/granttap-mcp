@@ -3,7 +3,9 @@ import {
   codexChildSource,
   codexSummaryCache,
   effectiveCodexUsage,
+  observedCodexWorktree,
   readCodexLogWindow,
+  workdirsFromCodexCall,
   type CodexCandidate,
   type CodexChildSource,
 } from "./shared";
@@ -29,9 +31,11 @@ type CodexParseState = {
   tokensLastTurn: number;
   contextTokensUsed?: number;
   contextWindow?: number;
+  workdirs: string[];
 };
 
 function applyCodexLine(d: any, state: CodexParseState): void {
+  state.workdirs.push(...workdirsFromCodexCall(d));
   const t = ts(d.timestamp);
   if (t) {
     if (!state.startedAt || t < state.startedAt) state.startedAt = t;
@@ -125,7 +129,10 @@ export function parseCodexFile(file: string): CodexCandidate | undefined {
   } catch {
     return undefined;
   }
-  const state: CodexParseState = { sessionId: "", startedAt: 0, lastActivityAt: 0, tokensSession: 0, tokensLastTurn: 0 };
+  const state: CodexParseState = {
+    sessionId: "", startedAt: 0, lastActivityAt: 0,
+    tokensSession: 0, tokensLastTurn: 0, workdirs: [],
+  };
   for (const line of lines) {
     if (!line) continue;
     const d = safeParse(line);
@@ -140,6 +147,7 @@ export function parseCodexFile(file: string): CodexCandidate | undefined {
     agent: "codex",
     title: state.title,
     cwd: state.cwd,
+    worktree: state.cwd ? observedCodexWorktree(state.cwd, state.workdirs) : undefined,
     branch: state.branch,
     model: state.model,
     summary: state.summary,

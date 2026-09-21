@@ -157,11 +157,11 @@ function linkSession(input: {
   const agent = provider(session.agent);
   const cwd = session.cwd?.trim();
   if (!agent || !cwd) return session;
-  const repository = inspect(cwd);
-  const projectId = store.projectIdForRepository(
-    repository.canonicalRepositoryId,
-    computerId,
-  ) ?? projectIdentity(repository.canonicalRepositoryId);
+  const repository = inspect(session.worktree ?? cwd);
+  const knownTaskId = store.taskForExecution(computerId, agent, session.sessionId);
+  const projectId = (knownTaskId ? store.task(knownTaskId)?.projectId : undefined)
+    ?? store.projectIdForRepository(repository.canonicalRepositoryId, computerId)
+    ?? projectIdentity(repository.canonicalRepositoryId);
   const knownProject = store.project(projectId);
   const project = knownProject ?? {
     projectId,
@@ -201,8 +201,7 @@ function linkSession(input: {
   } catch {
     // Reported as an absent binding rather than an absent Mesh.
   }
-  const knownTask = store.taskForExecution(computerId, agent, session.sessionId);
-  const taskId = knownTask ?? taskIdentity(projectId, agent, session.sessionId);
+  const taskId = knownTaskId ?? taskIdentity(projectId, agent, session.sessionId);
   const task: MeshTask = {
     taskId,
     projectId,

@@ -197,6 +197,11 @@ export class MeshStoreBase {
     return this.state.projects.find((item) => item.projectId === projectId);
   }
 
+  task(taskId: string): TaskValue | undefined {
+    this.sync();
+    return this.state.tasks.find((item) => item.taskId === taskId);
+  }
+
   upsertBinding(input: BindingValue): void {
     this.sync();
     const result = updateBinding(this.state, input);
