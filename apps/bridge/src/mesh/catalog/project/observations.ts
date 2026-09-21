@@ -53,6 +53,13 @@ function mcpObservation(
     server.name.toLowerCase() === request.name.toLowerCase()
       && server.endpointId === endpointId);
   if (candidates.length === 0) return { state: "not_found" };
+  if (!request.artifactDigest) {
+    const digests = new Set(candidates.map((server) => server.configDigest).filter(Boolean));
+    if (digests.size > 1) return { state: "version_conflict" };
+    if (digests.size === 1 && candidates.some((server) => !server.configDigest)) {
+      return { state: "unsupported" };
+    }
+  }
   const found = request.artifactDigest
     ? candidates.filter((server) => server.configDigest === request.artifactDigest)
     : candidates;

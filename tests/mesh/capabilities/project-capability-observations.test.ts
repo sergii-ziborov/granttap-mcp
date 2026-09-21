@@ -93,3 +93,20 @@ test("a pinned MCP request requires the exact reported configuration digest", ()
   });
   assert.equal(selected[0]?.state, "configured");
 });
+
+test("an unpinned MCP name cannot certify different native implementations", () => {
+  const base = { name: "weavatrix", endpointId: "mac",
+    configuredEnabled: true, allowed: true, sessionIds: [] };
+  const request = { projectId: "project", requestId: "unpinned", kind: "mcp" as const,
+    name: "weavatrix", requestedAt: 1 };
+  const state = (first?: string, second?: string) => projectCapabilityObservations({
+    projectId: "project", endpointId: "mac", bound: true, requests: [request],
+    skills: [], now: 2, mcpServers: [
+      { ...base, provider: "codex" as const, configDigest: first },
+      { ...base, provider: "cursor" as const, configDigest: second },
+    ],
+  })[0]?.state;
+  assert.equal(state("a".repeat(64), "b".repeat(64)), "version_conflict");
+  assert.equal(state("a".repeat(64), undefined), "unsupported");
+  assert.equal(state("a".repeat(64), "a".repeat(64)), "configured");
+});
