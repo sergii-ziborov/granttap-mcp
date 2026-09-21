@@ -1,7 +1,7 @@
-import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { mcpConfigDigest } from "../capabilities";
 
 const MAX_CONFIG_BYTES = 1024 * 1024;
 const MAX_TOOL_INPUT_BYTES = 64 * 1024;
@@ -173,9 +173,7 @@ export function resolveCursorMcpCapability(
   return {
     server,
     transport: boundedString(descriptor.url) ? "remote" : "stdio",
-    configHash: createHash("sha256")
-      .update(JSON.stringify(canonical(descriptor)))
-      .digest("hex"),
+    configHash: mcpConfigDigest(descriptor),
   };
 }
 
@@ -184,15 +182,4 @@ export function cursorConversationId(input: CursorMcpHookInput): string | null {
   return typeof value === "string" && value.trim() && value.trim().length <= 256
     ? value.trim()
     : null;
-}
-
-function canonical(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonical);
-  if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value as Record<string, unknown>)
-      .filter(([, item]) => item !== undefined)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, item]) => [key, canonical(item)]));
-  }
-  return value;
 }

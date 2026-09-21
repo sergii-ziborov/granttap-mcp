@@ -5,6 +5,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import type { Implementation } from "@modelcontextprotocol/sdk/types.js";
 import type { McpServerInfo } from "../../../../packages/protocol/schema";
 import type { McpDescriptor, ServerMetadata } from "./types";
+import { mcpConfigDigest } from "./descriptors";
 
 const metadataCache = new Map<string, { at: number; value?: ServerMetadata }>();
 const metadataPending = new Map<string, Promise<void>>();
@@ -32,15 +33,7 @@ export function cachedMetadata(descriptor: McpDescriptor): ServerMetadata | unde
 }
 
 function descriptorKey(descriptor: McpDescriptor): string {
-  const transport = descriptor.transport;
-  return JSON.stringify([
-    descriptor.name,
-    transport?.type,
-    transport?.url,
-    transport?.command,
-    transport?.args,
-    transport?.cwd,
-  ]);
+  return JSON.stringify([descriptor.name, mcpConfigDigest(descriptor.transport)]);
 }
 
 async function probeMetadata(descriptor: McpDescriptor): Promise<ServerMetadata | undefined> {

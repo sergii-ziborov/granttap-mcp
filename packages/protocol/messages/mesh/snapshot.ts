@@ -62,6 +62,7 @@ export const ProjectMcpServer = z.object({
   allowed: z.boolean(),
   authStatus: z.string().trim().min(1).max(80).optional(),
   version: z.string().trim().min(1).max(80).optional(),
+  configDigest: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   metadataSource: z.literal("mcp").optional(),
   // Empty means native configuration was observed without an open execution.
   sessionIds: z.array(Identifier).max(64),

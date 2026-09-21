@@ -20,6 +20,7 @@ test("a bound workspace reports configured MCP before any native chat exists", (
   assert.deepEqual(review?.sessionIds, []);
   assert.equal(review?.configuredEnabled, true);
   assert.equal(review?.version, undefined);
+  assert.match(review?.configDigest ?? "", /^[a-f0-9]{64}$/);
 });
 
 test("same MCP name with different native commands across Project workspaces conflicts", (t) => {
@@ -36,6 +37,7 @@ test("same MCP name with different native commands across Project workspaces con
   const index = rows.find((row) => row.name === "project-index");
   assert.equal(index?.authStatus, "conflict");
   assert.equal(index?.version, undefined);
+  assert.equal(index?.configDigest, undefined);
 });
 
 test("different native implementations stay in conflict, not silently available", () => {

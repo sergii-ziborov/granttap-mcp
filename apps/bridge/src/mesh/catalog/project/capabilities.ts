@@ -22,6 +22,7 @@ export function projectMcpServers(
       const key = JSON.stringify([
         session.computerId, provider, server.name,
         server.version ?? null, server.authStatus ?? null,
+        server.configDigest ?? null,
       ]);
       const current = catalog.get(key);
       if (current) {
@@ -39,6 +40,7 @@ export function projectMcpServers(
           allowed: server.allowed,
           authStatus: server.authStatus,
           version: server.version,
+          ...(server.configDigest ? { configDigest: server.configDigest } : {}),
           metadataSource: server.metadataSource,
           sessionIds: new Set([session.sessionId]),
         });

@@ -69,3 +69,27 @@ test("one initialized provider does not certify another provider with the same M
     { ...base, provider: "cursor", metadataSource: "mcp", version: "3" },
   ])?.state, "version_conflict");
 });
+
+test("a pinned MCP request requires the exact reported configuration digest", () => {
+  const digest = "a".repeat(64);
+  const server = { name: "review", provider: "cursor" as const, endpointId: "mac",
+    configuredEnabled: true, allowed: true, sessionIds: [] };
+  const input = { projectId: "project", endpointId: "mac", bound: true,
+    requests: [{ projectId: "project", requestId: "pinned", kind: "mcp" as const,
+      name: "review", artifactDigest: digest, requestedAt: 1 }],
+    skills: [], now: 2 };
+  const observe = (configDigest?: string) => projectCapabilityObservations({
+    ...input, mcpServers: [{ ...server, configDigest }],
+  })[0]?.state;
+  assert.equal(observe(digest), "configured");
+  assert.equal(observe("b".repeat(64)), "version_conflict");
+  assert.equal(observe(), "unsupported");
+  const selected = projectCapabilityObservations({
+    ...input, mcpServers: [
+      { ...server, configDigest: digest },
+      { ...server, provider: "codex", configDigest: "b".repeat(64),
+        metadataSource: "mcp", authStatus: "credential_missing" },
+    ],
+  });
+  assert.equal(selected[0]?.state, "configured");
+});

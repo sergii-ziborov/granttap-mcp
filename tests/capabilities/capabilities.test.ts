@@ -76,9 +76,13 @@ test("task capabilities expose configured MCP servers plus global and repository
     else process.env.HOME = previousHome;
   });
 
-  const { mcpServersForSession, refreshMcpMetadataForSession, workspaceSkills } = await import(
+  const { mcpServersForSession, mcpConfigDigest,
+    refreshMcpMetadataForSession, workspaceSkills } = await import(
     `../../apps/bridge/src/capabilities/index.ts?test=${Date.now()}`
   );
+  const configDigest = mcpConfigDigest({
+    type: "stdio", command: process.execPath, args: [mcpStub],
+  });
   const session = {
     sessionId: "task-a",
     agent: "codex",
@@ -101,6 +105,7 @@ test("task capabilities expose configured MCP servers plus global and repository
       configuredEnabled: true,
       allowed: false,
       authStatus: "bearer_token",
+      configDigest,
     },
   ]);
   await refreshMcpMetadataForSession(session);
@@ -109,6 +114,7 @@ test("task capabilities expose configured MCP servers plus global and repository
     configuredEnabled: true,
     allowed: false,
     authStatus: "bearer_token",
+    configDigest,
     title: "GitHub MCP",
     websiteUrl: "https://example.test/mcp",
     version: "9.1.0",

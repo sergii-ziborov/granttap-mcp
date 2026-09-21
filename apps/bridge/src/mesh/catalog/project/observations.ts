@@ -49,17 +49,23 @@ function skillObservation(
 function mcpObservation(
   request: ProjectCapabilityRequest, servers: ProjectMcpServer[], endpointId: string,
 ): Pick<ProjectCapabilityObservation, "state" | "version" | "artifactDigest"> {
-  const found = servers.filter((server) =>
+  const candidates = servers.filter((server) =>
     server.name.toLowerCase() === request.name.toLowerCase()
       && server.endpointId === endpointId);
-  if (found.length === 0) return { state: "not_found" };
+  if (candidates.length === 0) return { state: "not_found" };
+  const found = request.artifactDigest
+    ? candidates.filter((server) => server.configDigest === request.artifactDigest)
+    : candidates;
+  if (found.length === 0) {
+    return { state: candidates.every((server) => !server.configDigest)
+      ? "unsupported" : "version_conflict" };
+  }
   if (found.some((server) => server.authStatus === "conflict")
     || new Set(found.map((server) => server.version).filter(Boolean)).size > 1) {
     return { state: "version_conflict" };
   }
   const version = found.every((server) => server.version === found[0]?.version)
     ? found[0]?.version : undefined;
-  if (request.artifactDigest) return { state: "unsupported", version };
   if (request.version && found.some((server) => server.version !== request.version)) {
     return { state: "version_conflict", version };
   }

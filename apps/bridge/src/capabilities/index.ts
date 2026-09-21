@@ -1,8 +1,9 @@
 import type { McpServerInfo, SessionInfo } from "../../../../packages/protocol/schema";
-import { descriptorsForProvider, descriptorsForSession } from "./descriptors";
+import { descriptorsForProvider, descriptorsForSession, mcpConfigDigest } from "./descriptors";
 import { cachedMetadata, refreshDescriptorMetadata } from "./metadata";
 
 export { projectSharedSkills, workspaceSkills } from "./skills";
+export { mcpConfigDigest } from "./descriptors";
 
 /** Resolve real MCP initialization metadata and cache it for a session. */
 export async function refreshMcpMetadataForSession(session: SessionInfo): Promise<void> {
@@ -27,10 +28,12 @@ function mcpServersFromDescriptors(
   const denied = new Set(disabled);
   return descriptors.map((descriptor) => {
     const configuredEnabled = descriptor.configuredEnabled;
+    const configDigest = mcpConfigDigest(descriptor.transport);
     const base: McpServerInfo = {
       name: descriptor.name,
       configuredEnabled,
       allowed: configuredEnabled && !denied.has(descriptor.name),
+      ...(configDigest ? { configDigest } : {}),
       ...(descriptor.authStatus ? { authStatus: descriptor.authStatus } : {}),
     };
     const metadata = cachedMetadata(descriptor);

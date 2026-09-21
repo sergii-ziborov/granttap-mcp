@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -8,6 +9,23 @@ import type { CodexMcpRow, McpDescriptor, McpTransportConfig } from "./types";
 
 let codexCache: { at: number; rows: CodexMcpRow[] } | undefined;
 const CACHE_MS = 30_000;
+
+/** Stable identity of one native MCP configuration, including its transport. */
+export function mcpConfigDigest(config: unknown): string | undefined {
+  if (!config || typeof config !== "object" || Array.isArray(config)) return undefined;
+  return createHash("sha256").update(JSON.stringify(canonical(config))).digest("hex");
+}
+
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+      .filter(([, item]) => item !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => [key, canonical(item)]));
+  }
+  return value;
+}
 
 export function descriptorsForSession(session: SessionInfo): McpDescriptor[] {
   return descriptorsForProvider(session.agent, session.cwd);
