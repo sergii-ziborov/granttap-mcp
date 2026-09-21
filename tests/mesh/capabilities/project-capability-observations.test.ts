@@ -92,6 +92,21 @@ test("a pinned MCP request requires the exact reported configuration digest", ()
     ],
   });
   assert.equal(selected[0]?.state, "configured");
+  assert.equal(selected[0]?.artifactDigest, digest);
+});
+
+test("MCP result reports the observed native digest even when a pin differs", () => {
+  const observed = "c".repeat(64);
+  const result = projectCapabilityObservations({
+    projectId: "project", endpointId: "mac", bound: true,
+    requests: [{ projectId: "project", requestId: "pinned", kind: "mcp",
+      name: "review", artifactDigest: "a".repeat(64), requestedAt: 1 }],
+    skills: [], now: 2,
+    mcpServers: [{ name: "review", provider: "codex", endpointId: "mac",
+      configuredEnabled: true, allowed: true, configDigest: observed, sessionIds: [] }],
+  });
+  assert.equal(result[0]?.state, "version_conflict");
+  assert.equal(result[0]?.artifactDigest, observed);
 });
 
 test("an unpinned MCP name cannot certify different native implementations", () => {

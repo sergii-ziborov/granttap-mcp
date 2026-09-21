@@ -53,8 +53,9 @@ function mcpObservation(
     server.name.toLowerCase() === request.name.toLowerCase()
       && server.endpointId === endpointId);
   if (candidates.length === 0) return { state: "not_found" };
+  const digests = new Set(candidates.map((server) => server.configDigest).filter(Boolean));
+  const artifactDigest = digests.size === 1 ? [...digests][0] : undefined;
   if (!request.artifactDigest) {
-    const digests = new Set(candidates.map((server) => server.configDigest).filter(Boolean));
     if (digests.size > 1) return { state: "version_conflict" };
     if (digests.size === 1 && candidates.some((server) => !server.configDigest)) {
       return { state: "unsupported" };
@@ -65,26 +66,27 @@ function mcpObservation(
     : candidates;
   if (found.length === 0) {
     return { state: candidates.every((server) => !server.configDigest)
-      ? "unsupported" : "version_conflict" };
+      ? "unsupported" : "version_conflict", artifactDigest };
   }
+  const selectedDigest = request.artifactDigest ?? artifactDigest;
   if (found.some((server) => server.authStatus === "conflict")
     || new Set(found.map((server) => server.version).filter(Boolean)).size > 1) {
-    return { state: "version_conflict" };
+    return { state: "version_conflict", artifactDigest: selectedDigest };
   }
   const version = found.every((server) => server.version === found[0]?.version)
     ? found[0]?.version : undefined;
   if (request.version && found.some((server) => server.version !== request.version)) {
-    return { state: "version_conflict", version };
+    return { state: "version_conflict", version, artifactDigest: selectedDigest };
   }
   if (found.some((server) => !server.configuredEnabled || !server.allowed)) {
-    return { state: "unsupported", version };
+    return { state: "unsupported", version, artifactDigest: selectedDigest };
   }
   if (found.some((server) => ["not_authenticated", "unauthorized", "credential_missing"]
     .includes(server.authStatus ?? ""))) {
-    return { state: "credential_missing", version };
+    return { state: "credential_missing", version, artifactDigest: selectedDigest };
   }
   return {
     state: found.every((server) => server.metadataSource === "mcp") ? "initialized" : "configured",
-    version,
+    version, artifactDigest: selectedDigest,
   };
 }
