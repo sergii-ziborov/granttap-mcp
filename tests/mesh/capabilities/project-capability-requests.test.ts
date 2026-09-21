@@ -57,7 +57,10 @@ test("Project MCP inventory reflects observed endpoint sessions and never promot
     }] }),
     session("native-b", { projectId: undefined, mcpServers: [{
       name: "github", configuredEnabled: true, allowed: true,
-      title: "GitHub", authStatus: "ready",
+      title: "GitHub", authStatus: "ready", version: "2.4.0", metadataSource: "mcp",
+    }] }),
+    session("native-c", { mcpServers: [{
+      name: "github", configuredEnabled: true, allowed: true,
     }] }),
     session("foreign", { projectId: "other", computerId: "mac-b", mcpServers: [{
       name: "github", configuredEnabled: true, allowed: true,
@@ -76,17 +79,31 @@ test("Project MCP inventory reflects observed endpoint sessions and never promot
     }] }),
   ];
   const inventory = projectMcpServers(sessions, "project", new Set(["native-b"]));
-  assert.equal(inventory.length, 3);
+  assert.equal(inventory.length, 4);
   assert.deepEqual(inventory[0], {
     name: "github", provider: "claude", endpointId: "mac-a",
     configuredEnabled: true, allowed: false, authStatus: undefined,
-    title: undefined, sessionIds: ["other-provider"],
+    title: undefined, version: undefined, metadataSource: undefined,
+    sessionIds: ["other-provider"],
   });
   assert.deepEqual(inventory[1], {
     name: "github", provider: "codex", endpointId: "mac-a",
-    configuredEnabled: true, allowed: true, authStatus: "ready",
-    title: "GitHub", sessionIds: ["native-a", "native-b"],
+    configuredEnabled: false, allowed: false, authStatus: undefined,
+    title: undefined, version: undefined, metadataSource: undefined,
+    sessionIds: ["native-a", "native-c"],
   });
-  assert.equal(inventory[2]?.endpointId, "mac-b");
+  assert.deepEqual(inventory[2], {
+    name: "github", provider: "codex", endpointId: "mac-a",
+    configuredEnabled: true, allowed: true, authStatus: "ready",
+    title: "GitHub", version: "2.4.0", metadataSource: "mcp",
+    sessionIds: ["native-b"],
+  });
+  assert.equal(inventory[3]?.endpointId, "mac-b");
+  assert.equal(Payload.safeParse({
+    type: "mesh.snapshot", sessionId: "project", projectId: "project",
+    project: { projectId: "project", name: "P", canonicalRepositoryId: "repo", createdAt: 1 },
+    tasks: [], executions: [], claims: [], dependencies: [], events: [],
+    mcpServers: [inventory[2]], generatedAt: 1,
+  }).success, true);
   assert.deepEqual(projectMcpServers([session("empty")], "project", new Set()), []);
 });

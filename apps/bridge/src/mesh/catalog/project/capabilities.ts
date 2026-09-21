@@ -20,14 +20,16 @@ export function projectMcpServers(
     if (!PROVIDERS.has(session.agent) || !session.computerId) continue;
     for (const server of session.mcpServers ?? []) {
       const provider = session.agent as MeshProvider;
-      const key = `${session.computerId}\0${provider}\0${server.name}`;
+      const key = JSON.stringify([
+        session.computerId, provider, server.name,
+        server.version ?? null, server.authStatus ?? null,
+      ]);
       const current = catalog.get(key);
       if (current) {
         current.sessionIds.add(session.sessionId);
-        current.configuredEnabled ||= server.configuredEnabled;
-        current.allowed ||= server.allowed;
+        current.configuredEnabled &&= server.configuredEnabled;
+        current.allowed &&= server.allowed;
         current.title ??= server.title;
-        current.authStatus ??= server.authStatus;
       } else {
         catalog.set(key, {
           name: server.name,
@@ -37,6 +39,8 @@ export function projectMcpServers(
           configuredEnabled: server.configuredEnabled,
           allowed: server.allowed,
           authStatus: server.authStatus,
+          version: server.version,
+          metadataSource: server.metadataSource,
           sessionIds: new Set([session.sessionId]),
         });
       }
@@ -46,6 +50,6 @@ export function projectMcpServers(
     ...server,
     sessionIds: [...server.sessionIds].sort().slice(0, 64),
   })).sort((left, right) =>
-    `${left.endpointId}\0${left.provider}\0${left.name}`
-      .localeCompare(`${right.endpointId}\0${right.provider}\0${right.name}`));
+    `${left.endpointId}\0${left.provider}\0${left.name}\0${left.version ?? ""}`
+      .localeCompare(`${right.endpointId}\0${right.provider}\0${right.name}\0${right.version ?? ""}`));
 }

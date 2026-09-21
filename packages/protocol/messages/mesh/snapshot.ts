@@ -60,6 +60,8 @@ export const ProjectMcpServer = z.object({
   configuredEnabled: z.boolean(),
   allowed: z.boolean(),
   authStatus: z.string().trim().min(1).max(80).optional(),
+  version: z.string().trim().min(1).max(80).optional(),
+  metadataSource: z.literal("mcp").optional(),
   sessionIds: z.array(Identifier).min(1).max(64),
 }).strict();
 export type ProjectMcpServer = z.infer<typeof ProjectMcpServer>;
