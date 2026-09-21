@@ -7,6 +7,8 @@ import {
 } from "../../apps/bridge/src/engine/runtime/engine-projects";
 import type { EngineClientLike } from "../../apps/bridge/src/engine/runtime/engine-supervisor";
 import type { EngineOperation, EngineResult } from "../../apps/bridge/src/engine/protocol/engine-protocol";
+import { EngineRemoteError } from "../../apps/bridge/src/engine/protocol/transport/protocol-base";
+import { ProjectRepositoryGraph as ProjectRepositoryGraphSchema } from "../../packages/protocol/schema";
 
 const project = {
   projectId: "applydjinn",
@@ -181,6 +183,39 @@ test("repository graph maps full Weavatrix analysis for each unique binding", as
   assert.equal(graphs[0]?.weavatrixVersion, "2.17.1");
   assert.equal(graphs[0]?.analysisStatus, "COMPLETE");
   assert.equal(graphs[0]?.nodes[0]?.kind, "component");
+});
+
+test("stale checkout binding reports a graph failure without fabricating architecture", async () => {
+  const client = fakeClient(async () => {
+    throw new EngineRemoteError("REPOSITORY_IDENTITY_MISMATCH", "bound checkout changed");
+  });
+  const graphs = await projectRepositoryGraphs("identity-project", [local.summary], {
+    env: { GRANTTAP_ENGINE_ENABLED: "1" }, client,
+  });
+  assert.deepEqual(graphs.map((graph) => ({
+    status: graph.analysisStatus, code: graph.analysisErrorCode,
+    nodes: graph.nodes.length, relations: graph.relations.length,
+  })), [{
+    status: "UNAVAILABLE", code: "REPOSITORY_IDENTITY_MISMATCH", nodes: 0, relations: 0,
+  }]);
+  assert.equal(ProjectRepositoryGraphSchema.safeParse(graphs[0]).success, true);
+  assert.equal(ProjectRepositoryGraphSchema.safeParse({
+    ...graphs[0], nodes: [{ id: "invented", kind: "component", label: "Invented" }],
+  }).success, false);
+});
+
+test("Engine transport failure is reported as unavailable graph evidence", async () => {
+  const client = fakeClient(async () => { throw new Error("transport closed"); });
+  const [graph] = await projectRepositoryGraphs("offline-engine", [local.summary], {
+    env: { GRANTTAP_ENGINE_ENABLED: "1" }, client,
+  });
+  assert.equal(graph?.analysisStatus, "UNAVAILABLE");
+  assert.equal(graph?.analysisErrorCode, "ENGINE_UNAVAILABLE");
+  assert.deepEqual(graph?.nodes, []);
+  assert.equal(ProjectRepositoryGraphSchema.safeParse(graph).success, true);
+  assert.equal(ProjectRepositoryGraphSchema.safeParse({
+    ...graph, analysisErrorCode: undefined,
+  }).success, false);
 });
 
 test("background Mesh graph enrichment does not block snapshots or duplicate analysis", async () => {

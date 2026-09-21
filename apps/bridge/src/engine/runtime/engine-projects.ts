@@ -5,6 +5,7 @@ import type {
 } from "../../../../../packages/protocol/schema";
 import { configDir } from "../../config/runtime/paths";
 import { EngineClient } from "./engine-client";
+import { EngineRemoteError } from "../protocol/transport/protocol-base";
 import { engineFeatureEnabled, type EngineClientLike } from "./engine-supervisor";
 import { sanitizedRepositoryRemote } from "../../mesh/identity";
 import type { ProjectBackbone } from "../../../../../packages/protocol/schema";
@@ -215,7 +216,21 @@ async function analyzeRepositoryGraph(
       totalNodes: graph.total_nodes, totalRelations: graph.total_relations,
       truncated: graph.truncated,
     };
-  } catch { return undefined; }
+  } catch (error) {
+    const known = new Set([
+      "REPOSITORY_IDENTITY_MISMATCH", "REPOSITORY_IDENTITY_UNVERIFIED",
+      "REPOSITORY_NOT_BOUND", "REPOSITORY_NOT_LOCAL", "WEAVATRIX_REPOSITORY_REQUIRED",
+      "WEAVATRIX_ANALYSIS_FAILED", "WEAVATRIX_ANALYSIS_PANICKED",
+      "WEAVATRIX_ARCHITECTURE_FAILED", "WEAVATRIX_REPORT_INVALID",
+    ]);
+    const code = error instanceof EngineRemoteError && known.has(error.code)
+      ? error.code : "ENGINE_UNAVAILABLE";
+    return {
+      projectId, repositoryId, revision: "unverified", weavatrixVersion: "unknown",
+      analysisStatus: "UNAVAILABLE", analysisErrorCode: code,
+      nodes: [], relations: [], totalNodes: 0, totalRelations: 0, truncated: false,
+    };
+  }
 }
 
 function boundRepositoryGraphs(graphs: ProjectRepositoryGraph[]): ProjectRepositoryGraph[] {

@@ -128,7 +128,8 @@ export const ProjectRepositoryGraph = z.object({
   revision: z.string().trim().min(1).max(512),
   weavatrixVersion: z.string().trim().min(1).max(64),
   analysisId: z.string().trim().min(1).max(128).optional(),
-  analysisStatus: z.enum(["COMPLETE", "INCOMPLETE"]).optional(),
+  analysisStatus: z.enum(["COMPLETE", "INCOMPLETE", "UNAVAILABLE"]).optional(),
+  analysisErrorCode: z.string().regex(/^[A-Z_]{2,64}$/).optional(),
   nodes: z.array(z.object({
     id: z.string().trim().min(1).max(512),
     kind: z.string().trim().min(1).max(64),
@@ -143,7 +144,16 @@ export const ProjectRepositoryGraph = z.object({
   totalNodes: z.number().int().nonnegative(),
   totalRelations: z.number().int().nonnegative(),
   truncated: z.boolean(),
-}).strict();
+}).strict().superRefine((value, ctx) => {
+  if (value.analysisStatus !== "UNAVAILABLE") return;
+  if (!value.analysisErrorCode || value.nodes.length || value.relations.length
+    || value.totalNodes || value.totalRelations) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom, path: ["analysisStatus"],
+      message: "unavailable graph cannot contain architecture evidence",
+    });
+  }
+});
 export type ProjectRepositoryGraph = z.infer<typeof ProjectRepositoryGraph>;
 
 export const CortexPacketStatus = z.object({
