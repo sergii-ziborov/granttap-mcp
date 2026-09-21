@@ -1,9 +1,9 @@
-import { createHash } from "node:crypto";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { SharedSkill, SkillInfo } from "../../../../packages/protocol/schema";
 import { ancestors } from "./descriptors";
+import { skillBundleDigest } from "./skill-bundle";
 
 /** Skills available globally and along the task's repository path. */
 export function workspaceSkills(cwd: string | undefined): SkillInfo[] {
@@ -32,11 +32,7 @@ export function skillDefinitionPath(name: string, cwd: string | undefined): stri
 }
 
 function skillRoots(cwd: string | undefined): string[] {
-  const roots = [
-    join(homedir(), ".cursor", "skills-cursor"),
-    join(homedir(), ".agents", "skills"),
-    join(homedir(), ".claude", "skills"),
-  ];
+  const roots: string[] = [];
   if (cwd) {
     for (const directory of ancestors(cwd)) {
       roots.push(
@@ -46,6 +42,11 @@ function skillRoots(cwd: string | undefined): string[] {
       );
     }
   }
+  roots.push(
+    join(homedir(), ".cursor", "skills-cursor"),
+    join(homedir(), ".agents", "skills"),
+    join(homedir(), ".claude", "skills"),
+  );
   return roots;
 }
 
@@ -81,18 +82,28 @@ function frontmatter(path: string): SkillInfo | undefined {
 }
 
 /** Project-local SKILL.md rows for a Mesh snapshot. Global home catalogs stay off this list. */
-export function projectSharedSkills(paths: Array<string | undefined>): SharedSkill[] {
+export function projectSharedSkills(
+  paths: Array<string | undefined>, endpointId?: string,
+): SharedSkill[] {
   const found = new Map<string, SharedSkill>();
   for (const path of paths) {
     if (!path) continue;
-    for (const directory of ancestors(path)) {
+    for (const directory of projectDirectories(path)) {
       for (const root of [
         join(directory, ".agents", "skills"),
         join(directory, ".claude", "skills"),
         join(directory, ".cursor", "skills"),
       ]) {
         for (const skill of sharedSkillsIn(root)) {
-          if (!found.has(skill.name)) found.set(skill.name, skill);
+          if (endpointId) skill.endpointId = endpointId;
+          const prior = found.get(skill.name);
+          if (!prior) found.set(skill.name, skill);
+          else if (prior.state !== "conflict" && prior.digest !== skill.digest) {
+            found.set(skill.name, {
+              name: skill.name, endpointId, state: "conflict",
+              source: "multiple project workspaces",
+            });
+          }
         }
       }
     }
@@ -100,9 +111,19 @@ export function projectSharedSkills(paths: Array<string | undefined>): SharedSki
   return [...found.values()].sort((left, right) => left.name.localeCompare(right.name)).slice(0, 64);
 }
 
+function projectDirectories(path: string): string[] {
+  const directories = ancestors(path);
+  const repository = directories.findIndex((directory) => existsSync(join(directory, ".git")));
+  // A missing Git boundary is not permission to walk into home Skills.
+  return repository < 0 ? directories.slice(0, 1) : directories.slice(0, repository + 1);
+}
+
 function sharedSkillsIn(root: string): SharedSkill[] {
   let entries: string[];
   try {
+    // A repository-local catalog must not redirect into a home or unrelated
+    // Project through a symlinked .agents/.claude/.cursor directory.
+    if (!lstatSync(dirname(root)).isDirectory() || !lstatSync(root).isDirectory()) return [];
     entries = readdirSync(root);
   } catch {
     return [];
@@ -118,13 +139,14 @@ function sharedSkillsIn(root: string): SharedSkill[] {
     }
     const skill = readSkillFile(join(directory, "SKILL.md"));
     if (!skill) continue;
+    const digest = skillBundleDigest(join(directory, "SKILL.md"));
     skills.push({
       name: skill.name,
       description: clipSkillText(skill.description, 500),
       version: clipSkillText(skill.version, 64),
-      digest: skill.digest,
-      source: clipSkillText(root, 240),
-      state: "installed",
+      digest,
+      source: "project-workspace",
+      state: digest ? "discovered" : "unknown",
     });
   }
   return skills;
@@ -140,7 +162,6 @@ function readSkillFile(path: string): {
   name: string;
   description?: string;
   version?: string;
-  digest: string;
 } | undefined {
   try {
     const body = readFileSync(path, "utf8");
@@ -156,7 +177,6 @@ function readSkillFile(path: string): {
       name: name.slice(0, 160),
       description: clipSkillText(description, 500),
       version: clipSkillText(version, 64),
-      digest: createHash("sha256").update(body).digest("hex"),
     };
   } catch {
     return undefined;

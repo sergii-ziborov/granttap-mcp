@@ -135,7 +135,7 @@ version: 1.2.0
   const skills = projectSharedSkills([root]);
   assert.equal(skills[0]?.name, "release-check");
   assert.equal(skills[0]?.version, "1.2.0");
-  assert.equal(skills[0]?.state, "installed");
+  assert.equal(skills[0]?.state, "discovered");
   assert.match(skills[0]?.digest ?? "", /^[a-f0-9]{64}$/);
   const store = new MeshStore(join(root, "mesh.json"), () => now);
   store.upsertProject({
@@ -171,4 +171,20 @@ description: ${"x".repeat(600)}
   store.upsertTask(task("task", "working", now));
   const snapshot = store.snapshot("project");
   assert.equal(snapshot?.skills?.[0]?.description?.length, 500);
+});
+
+test("a Project snapshot never scans another endpoint's workspace as local skills", async () => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-mesh-remote-skill-"));
+  const workspace = join(root, "remote-workspace");
+  await mkdir(join(workspace, ".agents", "skills", "private"), { recursive: true });
+  await writeFile(join(workspace, ".agents", "skills", "private", "SKILL.md"),
+    "---\nname: private\n---\nSecret local workspace\n");
+  const store = new MeshStore(join(root, "mesh.json"), () => now);
+  store.upsertProject({ projectId: "project", name: "Project",
+    canonicalRepositoryId: "repo", createdAt: now });
+  store.upsertBinding({ bindingId: "remote", projectId: "project", endpointId: "other-mac",
+    repositoryId: "repo", displayName: "Remote", localPathHint: workspace,
+    available: true });
+  assert.equal(store.snapshot("project", "this-mac")?.skills, undefined);
+  assert.equal(store.snapshot("project", "other-mac")?.skills?.[0]?.name, "private");
 });

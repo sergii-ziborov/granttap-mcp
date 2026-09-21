@@ -182,7 +182,7 @@ test("M-03/M-04 skill inventory keeps desired names and reports actual unknown u
     join(root, ".cursor", "skills", "demo", "SKILL.md"),
     "---\nname: demo\ndescription: demo skill\n---\nbody\n",
   );
-  const manifest = capabilityManifest([join(root, "src", "a.ts")]);
+  const manifest = capabilityManifest([root]);
   assert.equal(manifest.desired[0]?.name, "demo");
   assert.equal(manifest.actual[0]?.name, "demo");
   assert.equal(manifest.actual[0]?.state, "unknown");

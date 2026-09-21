@@ -32,7 +32,6 @@ import { loadEnvironment, redactEnvironment } from "../context/env";
 import { loadRestrictions } from "../restrictions";
 import { MeshStoreBase } from "./base";
 import {
-  mergeProjectCapabilityRequests,
   projectCapabilityRequests,
 } from "../catalog/project/requests";
 
@@ -307,7 +306,7 @@ export class MeshStore extends MeshStoreBase {
     this.save();
   }
 
-  snapshot(projectId: string): SnapshotValue | undefined {
+  snapshot(projectId: string, localEndpointId?: string): SnapshotValue | undefined {
     this.sync();
     const project = this.state.projects.find((item) => item.projectId === projectId);
     if (!project) return undefined;
@@ -316,11 +315,19 @@ export class MeshStore extends MeshStoreBase {
     const taskIds = new Set(tasks.map((task) => task.taskId));
     const peers = this.state.peers.filter((item) => item.projectId === projectId).slice(0, 64);
     const bindings = this.state.bindings.filter((item) => item.projectId === projectId).slice(0, 64);
+    // Paths from another endpoint are evidence of a binding, never local
+    // directories to scan or a local capability installation.
+    const verifiedRoot = localEndpointId == null || bindings.some((binding) =>
+      binding.endpointId === localEndpointId && binding.localPathHint === project.repositoryRoot)
+      ? project.repositoryRoot : undefined;
     const skills = projectSharedSkills([
-      project.repositoryRoot,
-      ...bindings.map((binding) => binding.localPathHint),
-      ...this.state.executions.filter((item) => taskIds.has(item.taskId)).map((item) => item.workspace),
-    ]);
+      verifiedRoot,
+      ...bindings.filter((binding) => binding.endpointId === localEndpointId)
+        .map((binding) => binding.localPathHint),
+      ...this.state.executions.filter((item) =>
+        taskIds.has(item.taskId) && item.computerId === localEndpointId)
+        .map((item) => item.workspace),
+    ], localEndpointId);
     const execution = loadExecutionPolicy(projectId);
     const restrictions = loadRestrictions(projectId);
     const environment = redactEnvironment(loadEnvironment(projectId));
@@ -360,7 +367,6 @@ export class MeshStore extends MeshStoreBase {
   mergeSnapshot(input: SnapshotValue): void {
     this.sync();
     mergeSnapshotState(this.state, input);
-    mergeProjectCapabilityRequests(input.capabilityRequests ?? []);
     // A released claim does not come back with a snapshot that still has it.
     const at = this.now();
     this.state.claims = this.state.claims.filter((claim) => !this.isReleased(claim.claimId, at));

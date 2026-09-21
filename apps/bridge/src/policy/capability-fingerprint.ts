@@ -8,6 +8,7 @@ import type {
 } from "../engine/protocol/engine-policy-types";
 import { commandName } from "../sessions/telemetry";
 import { skillDefinitionPath } from "../capabilities/skills";
+import { skillBundleDigest } from "../capabilities/skill-bundle";
 
 export type ActionFingerprintInput = {
   provider: "claude" | "codex" | "cursor" | "grok";
@@ -39,7 +40,7 @@ export function capabilityFingerprint(input: ActionFingerprintInput): Capability
   const skill = skillName(tool, input.toolInput);
   if (skill) {
     const definition = skillDefinitionPath(skill, input.cwd);
-    const contentHash = definition ? artifactHash(definition) : undefined;
+    const contentHash = definition ? skillBundleDigest(definition) : undefined;
     return { ...fingerprint("skill", skill, input.provider, "skill"),
       ...(contentHash ? { script_hash: contentHash, confidence: "exact" as const } : {}) };
   }

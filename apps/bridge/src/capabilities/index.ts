@@ -1,5 +1,5 @@
 import type { McpServerInfo, SessionInfo } from "../../../../packages/protocol/schema";
-import { descriptorsForSession } from "./descriptors";
+import { descriptorsForProvider, descriptorsForSession } from "./descriptors";
 import { cachedMetadata, refreshDescriptorMetadata } from "./metadata";
 
 export { projectSharedSkills, workspaceSkills } from "./skills";
@@ -11,7 +11,19 @@ export async function refreshMcpMetadataForSession(session: SessionInfo): Promis
 
 export function mcpServersForSession(session: SessionInfo, disabled: string[]): McpServerInfo[] {
   const descriptors = descriptorsForSession(session);
-  void Promise.all(descriptors.map(refreshDescriptorMetadata));
+  return mcpServersFromDescriptors(descriptors, disabled);
+}
+
+export function mcpServersForProvider(
+  provider: string, cwd: string | undefined,
+): McpServerInfo[] {
+  return mcpServersFromDescriptors(descriptorsForProvider(provider, cwd), [], false);
+}
+
+function mcpServersFromDescriptors(
+  descriptors: ReturnType<typeof descriptorsForSession>, disabled: string[], probe = true,
+): McpServerInfo[] {
+  if (probe) void Promise.all(descriptors.map(refreshDescriptorMetadata));
   const denied = new Set(disabled);
   return descriptors.map((descriptor) => {
     const configuredEnabled = descriptor.configuredEnabled;

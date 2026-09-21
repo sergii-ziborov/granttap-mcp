@@ -6,7 +6,6 @@ import test from "node:test";
 import { Payload } from "../../../packages/protocol/schema";
 import {
   loadProjectCapabilityRequests,
-  mergeProjectCapabilityRequests,
   saveProjectCapabilityRequest,
 } from "../../../apps/bridge/src/mesh/catalog/project/requests";
 import { projectMcpServers } from "../../../apps/bridge/src/mesh/catalog/project/capabilities";
@@ -33,13 +32,16 @@ test("a Project capability request is scoped, durable, and converges by identity
   assert.equal(wire.type, "project.capability.request");
   if (wire.type !== "project.capability.request") return;
   saveProjectCapabilityRequest(wire);
-  mergeProjectCapabilityRequests([
-    { projectId: "project", kind: "skill", name: "RELEASE", version: "1.1.0", requestedAt: 9 },
-    { projectId: "project", kind: "mcp", name: "github", requestedAt: 11 },
-  ]);
+  saveProjectCapabilityRequest({ ...wire, requestId: "older", name: "RELEASE",
+    version: "1.1.0", requestedAt: 9 });
+  saveProjectCapabilityRequest({ ...wire, requestId: "mcp", kind: "mcp",
+    name: "github", requestedAt: 11 });
   const stored = loadProjectCapabilityRequests();
   assert.equal(stored.length, 2);
   assert.equal(stored.find((item) => item.kind === "skill")?.version, "1.2.0");
+  assert.equal(stored.find((item) => item.kind === "skill")?.requestId, "request-1");
+  assert.throws(() => saveProjectCapabilityRequest({ ...wire, version: "2.0.0" }),
+    /request ID reused/);
   assert.throws(() => Payload.parse({ ...wire, sessionId: "other" }));
 });
 
@@ -78,8 +80,8 @@ test("Project MCP inventory reflects observed endpoint sessions and never promot
       name: "github", configuredEnabled: true, allowed: true,
     }] }),
   ];
-  const inventory = projectMcpServers(sessions, "project", new Set(["native-b"]));
-  assert.equal(inventory.length, 4);
+  const inventory = projectMcpServers(sessions, "project");
+  assert.equal(inventory.length, 3);
   assert.deepEqual(inventory[0], {
     name: "github", provider: "claude", endpointId: "mac-a",
     configuredEnabled: true, allowed: false, authStatus: undefined,
@@ -92,18 +94,13 @@ test("Project MCP inventory reflects observed endpoint sessions and never promot
     title: undefined, version: undefined, metadataSource: undefined,
     sessionIds: ["native-a", "native-c"],
   });
-  assert.deepEqual(inventory[2], {
-    name: "github", provider: "codex", endpointId: "mac-a",
-    configuredEnabled: true, allowed: true, authStatus: "ready",
-    title: "GitHub", version: "2.4.0", metadataSource: "mcp",
-    sessionIds: ["native-b"],
-  });
-  assert.equal(inventory[3]?.endpointId, "mac-b");
+  assert.equal(inventory[2]?.endpointId, "mac-b");
+  assert.equal(inventory.some((row) => row.sessionIds.includes("native-b")), false);
   assert.equal(Payload.safeParse({
     type: "mesh.snapshot", sessionId: "project", projectId: "project",
     project: { projectId: "project", name: "P", canonicalRepositoryId: "repo", createdAt: 1 },
     tasks: [], executions: [], claims: [], dependencies: [], events: [],
-    mcpServers: [inventory[2]], generatedAt: 1,
+    mcpServers: [inventory[0]], generatedAt: 1,
   }).success, true);
-  assert.deepEqual(projectMcpServers([session("empty")], "project", new Set()), []);
+  assert.deepEqual(projectMcpServers([session("empty")], "project"), []);
 });

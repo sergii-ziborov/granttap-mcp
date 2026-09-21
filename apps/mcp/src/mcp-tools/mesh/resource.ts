@@ -6,6 +6,7 @@ import {
   readScopedMap,
   readScopedMesh,
 } from "./current";
+import { readScopedSkill } from "./skills/resource";
 
 export { sessionFromEnvironment, sessionBindingFromEnvironment } from "./session-env";
 export const MAP_URI = "granttap://mesh/map";
@@ -53,5 +54,15 @@ export function registerMeshResource(server: McpServer): void {
       mimeType: "text/markdown",
     },
     async (uri, { capability }) => readScopedMap(uri, capability ?? ""),
+  );
+  server.registerResource(
+    "project-skill-bundle-scoped",
+    new ResourceTemplate("granttap://mesh/{capability}/skills/{skill}", { list: undefined }),
+    {
+      title: "GrantTap Project Skill (scoped)",
+      description: "This execution's verified Project SKILL.md; reading does not authorize tools or scripts.",
+      mimeType: "text/markdown",
+    },
+    async (uri, { capability, skill }) => readScopedSkill(uri, capability ?? "", skill ?? ""),
   );
 }

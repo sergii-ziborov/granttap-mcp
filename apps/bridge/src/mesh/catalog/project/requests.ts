@@ -15,8 +15,8 @@ function path(): string {
   return join(configDir(), "project-capability-requests.json");
 }
 
-function key(value: Pick<RequestValue, "projectId" | "kind" | "name">): string {
-  return `${value.projectId}\0${value.kind}\0${value.name.toLowerCase()}`;
+function key(value: Pick<RequestValue, "projectId" | "kind" | "name" | "targetEndpointId">): string {
+  return `${value.projectId}\0${value.kind}\0${value.name.toLowerCase()}\0${value.targetEndpointId ?? ""}`;
 }
 
 export function loadProjectCapabilityRequests(): RequestValue[] {
@@ -40,23 +40,28 @@ export function saveProjectCapabilityRequest(input: RequestSetValue): RequestVal
   const request = ProjectCapabilityRequestSet.parse(input);
   const value: RequestValue = {
     projectId: request.projectId,
+    requestId: request.requestId,
     kind: request.kind,
     name: request.name,
     source: request.source,
     version: request.version,
+    artifactDigest: request.artifactDigest,
+    targetEndpointId: request.targetEndpointId,
     requestedAt: request.requestedAt,
   };
   saveMerged([value]);
   return value;
 }
 
-export function mergeProjectCapabilityRequests(input: RequestValue[]): void {
-  saveMerged(input.map((item) => ProjectCapabilityRequest.parse(item)));
-}
-
 function saveMerged(input: RequestValue[]): void {
-  const byKey = new Map(loadProjectCapabilityRequests().map((item) => [key(item), item]));
+  const existing = loadProjectCapabilityRequests();
+  const byKey = new Map(existing.map((item) => [key(item), item]));
   for (const item of input) {
+    const reused = [...existing, ...byKey.values()].find((prior) =>
+      item.requestId && prior.requestId === item.requestId);
+    if (reused && JSON.stringify(reused) !== JSON.stringify(item)) {
+      throw new Error("Project capability request ID reused with different content");
+    }
     const held = byKey.get(key(item));
     if (!held || item.requestedAt >= held.requestedAt) byKey.set(key(item), item);
   }

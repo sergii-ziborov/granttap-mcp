@@ -28,7 +28,9 @@ import { sendMeshPayload } from "../../host/session-keys";
 import { linkSessionsToProjects, workingTreeState } from "../catalog";
 import { catalogFromSessions } from "../catalog/models";
 import { projectMcpServers } from "../catalog/project/capabilities";
+import { configuredProjectMcpServers, mergeConfiguredMcpServers } from "../catalog/project/configured-mcp";
 import { saveProjectCapabilityRequest } from "../catalog/project/requests";
+import { projectCapabilityObservations } from "../catalog/project/observations";
 import { computerId } from "../identity/computer";
 import { createCheckpoint } from "../admin/checkpoint";
 import { buildTaskCapsule } from "../admin/capsule";
@@ -161,25 +163,48 @@ export function createMeshRuntime(deps: MeshRuntimeDependencies) {
       const sessions = deps.sessions();
       const models = catalogFromSessions(deps.computer(), sessions);
       return store.projectIds().flatMap((projectId) => {
-        const snapshot = store.snapshot(projectId);
+        const snapshot = store.snapshot(projectId, deps.computer());
         if (!snapshot) return [];
-        const executionIds = new Set(snapshot.executions.map((item) => item.sessionId));
         const linked = projectExecutionCapabilitySessions(
           snapshot, sessions, deps.computer(), deps.capabilityInventory,
         );
-        const mcpServers = projectMcpServers(linked, projectId, executionIds);
+        const reported = projectMcpServers(
+          linked.filter((session) => session.computerId === deps.computer()),
+          projectId,
+        );
+        const workspaces = (snapshot.bindings ?? [])
+          .filter((binding) => binding.endpointId === deps.computer()
+            && binding.available && binding.localPathHint)
+          .map((binding) => binding.localPathHint!);
+        const mcpServers = mergeConfiguredMcpServers(
+          configuredProjectMcpServers(deps.computer(), workspaces), reported,
+        );
+        const capabilityObservations = projectCapabilityObservations({
+          projectId, endpointId: deps.computer(), bound: workspaces.length > 0,
+          requests: snapshot.capabilityRequests ?? [], skills: snapshot.skills ?? [],
+          mcpServers, now: deps.now(),
+        });
         return [{
           ...snapshot,
+          publisherEndpointId: deps.computer(),
           mcpServers: mcpServers.length > 0 ? mcpServers : undefined,
+          capabilityObservations: capabilityObservations.length > 0
+            ? capabilityObservations : undefined,
           modelCatalog: models.models.length > 0 || models.reason ? [models] : undefined,
         }];
       });
     },
     requestCapability(input: ProjectCapabilityRequestSet): boolean {
       const project = deps.store().snapshot(input.projectId)?.project;
-      if (!project || input.sessionId !== input.projectId) return false;
-      saveProjectCapabilityRequest(input);
-      return true;
+      const age = deps.now() - input.requestedAt;
+      if (!project || input.sessionId !== input.projectId
+        || age > 24 * 60 * 60_000 || age < -5 * 60_000) return false;
+      try {
+        saveProjectCapabilityRequest(input);
+        return true;
+      } catch {
+        return false;
+      }
     },
     async handle(
       client: RelayClient,

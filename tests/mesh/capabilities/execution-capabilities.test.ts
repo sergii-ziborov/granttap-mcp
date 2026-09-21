@@ -12,14 +12,15 @@ test("native capability inventory is attributed only to an exact local execution
   const snapshot = {
     projectId: "project-a",
     executions: [
-      { sessionId: "shared-native-id", provider: "codex", computerId: "local" },
+      { sessionId: "shared-native-id", provider: "codex", computerId: "local", workspace: "/repo" },
       { sessionId: "shared-native-id", provider: "claude", computerId: "remote" },
     ],
   } as MeshSnapshot;
   const linked = projectExecutionCapabilitySessions(snapshot, [
-    localSession,
+    { ...localSession, cwd: "/repo" },
     { ...localSession, agent: "claude" },
     { ...localSession, projectId: "project-b" },
+    { ...localSession, cwd: "/other" },
   ], "local", (session) => ({
     ...session, mcpServers: [{ name: "configured", configuredEnabled: true, allowed: true }],
   }));

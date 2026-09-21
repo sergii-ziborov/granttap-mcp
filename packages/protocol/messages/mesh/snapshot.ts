@@ -39,10 +39,11 @@ export type IntegrationPeer = z.infer<typeof IntegrationPeer>;
  * One SKILL.md the Project catalog published. Presence is not permission;
  * Governance is the only authority for what may run.
  */
-export const SharedSkillState = z.enum(["installed", "available", "used", "unknown"]);
+export const SharedSkillState = z.enum(["discovered", "installed", "available", "used", "conflict", "unknown"]);
 export type SharedSkillState = z.infer<typeof SharedSkillState>;
 export const SharedSkill = z.object({
   name: z.string().trim().min(1).max(160),
+  endpointId: Identifier.optional(),
   description: z.string().trim().min(1).max(500).optional(),
   version: z.string().trim().min(1).max(64).optional(),
   digest: z.string().trim().min(1).max(128).optional(),
@@ -62,16 +63,20 @@ export const ProjectMcpServer = z.object({
   authStatus: z.string().trim().min(1).max(80).optional(),
   version: z.string().trim().min(1).max(80).optional(),
   metadataSource: z.literal("mcp").optional(),
-  sessionIds: z.array(Identifier).min(1).max(64),
+  // Empty means native configuration was observed without an open execution.
+  sessionIds: z.array(Identifier).max(64),
 }).strict();
 export type ProjectMcpServer = z.infer<typeof ProjectMcpServer>;
 
 export const ProjectCapabilityRequest = z.object({
   projectId: Identifier,
+  requestId: Identifier.optional(),
   kind: z.enum(["skill", "mcp"]),
   name: Label,
   source: z.string().trim().min(1).max(512).optional(),
   version: z.string().trim().min(1).max(128).optional(),
+  artifactDigest: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  targetEndpointId: Identifier.optional(),
   requestedAt: z.number().nonnegative(),
 }).strict();
 export type ProjectCapabilityRequest = z.infer<typeof ProjectCapabilityRequest>;
@@ -86,6 +91,20 @@ export const ProjectCapabilityRequestSet = ProjectCapabilityRequest.extend({
   }
 });
 export type ProjectCapabilityRequestSet = z.infer<typeof ProjectCapabilityRequestSet>;
+
+export const ProjectCapabilityObservation = z.object({
+  projectId: Identifier,
+  requestId: Identifier,
+  endpointId: Identifier,
+  state: z.enum([
+    "needs_binding", "not_found", "discovered", "configured", "initialized",
+    "credential_missing", "version_conflict", "unsupported",
+  ]),
+  version: z.string().trim().min(1).max(128).optional(),
+  artifactDigest: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  observedAt: z.number().nonnegative(),
+}).strict();
+export type ProjectCapabilityObservation = z.infer<typeof ProjectCapabilityObservation>;
 
 export const AdvertisedModel = z.object({
   modelId: z.string().trim().min(1).max(160),
@@ -191,12 +210,14 @@ export const MeshSnapshot = z.object({
   type: z.literal("mesh.snapshot"),
   sessionId: Identifier,
   projectId: Identifier,
+  publisherEndpointId: Identifier.optional(),
   project: Project,
   bindings: z.array(ProjectBindingSummary).max(64).optional(),
   peers: z.array(IntegrationPeer).max(64).optional(),
   skills: z.array(SharedSkill).max(64).optional(),
   mcpServers: z.array(ProjectMcpServer).max(128).optional(),
   capabilityRequests: z.array(ProjectCapabilityRequest).max(128).optional(),
+  capabilityObservations: z.array(ProjectCapabilityObservation).max(128).optional(),
   incomplete: z.boolean().optional(),
   execution: ProjectExecutionPolicy.optional(),
   restrictions: ProjectRestrictionSet.optional(),
@@ -215,23 +236,40 @@ export const MeshSnapshot = z.object({
   if (value.sessionId !== value.projectId || value.project.projectId !== value.projectId) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["sessionId"], message: "project scope mismatch" });
   }
+  if (value.publisherEndpointId && (
+    value.skills?.some((item) => item.endpointId !== value.publisherEndpointId)
+    || value.mcpServers?.some((item) => item.endpointId !== value.publisherEndpointId)
+    || value.capabilityObservations?.some((item) => item.endpointId !== value.publisherEndpointId)
+  )) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["publisherEndpointId"], message: "inventory publisher mismatch" });
+  }
   const taskIds = new Set(value.tasks.map((task) => task.taskId));
-  const skillNames = new Set(value.skills?.map((skill) => skill.name));
+  const skillNames = new Set(value.skills?.map((skill) => `${skill.endpointId ?? ""}\0${skill.name}`));
   if ((value.skills?.length ?? 0) !== skillNames.size) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["skills"], message: "duplicate skill name" });
   }
   const mcpKeys = new Set(value.mcpServers?.map(
-    (server) => `${server.endpointId}\0${server.provider}\0${server.name}`,
+    (server) => JSON.stringify([
+      server.endpointId, server.provider, server.name,
+      server.version ?? null, server.authStatus ?? null,
+    ]),
   ));
   if ((value.mcpServers?.length ?? 0) !== mcpKeys.size) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["mcpServers"], message: "duplicate MCP server" });
   }
   const requestKeys = new Set(value.capabilityRequests?.map(
-    (item) => `${item.kind}\0${item.name.toLowerCase()}`,
+    (item) => `${item.kind}\0${item.name.toLowerCase()}\0${item.targetEndpointId ?? ""}`,
   ));
   if ((value.capabilityRequests?.length ?? 0) !== requestKeys.size
     || value.capabilityRequests?.some((item) => item.projectId !== value.projectId)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["capabilityRequests"], message: "invalid capability request scope" });
+  }
+  const observations = value.capabilityObservations ?? [];
+  const observationKeys = new Set(observations.map((item) =>
+    `${item.requestId}\0${item.endpointId}`));
+  if (observationKeys.size !== observations.length
+    || observations.some((item) => item.projectId !== value.projectId)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["capabilityObservations"], message: "invalid capability observation scope" });
   }
   const cortexEndpoints = new Set(value.cortex?.map((item) => item.endpointId));
   if ((value.cortex?.length ?? 0) !== cortexEndpoints.size

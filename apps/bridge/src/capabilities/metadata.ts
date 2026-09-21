@@ -27,7 +27,8 @@ export async function refreshDescriptorMetadata(descriptor: McpDescriptor): Prom
 }
 
 export function cachedMetadata(descriptor: McpDescriptor): ServerMetadata | undefined {
-  return metadataCache.get(descriptorKey(descriptor))?.value;
+  const cached = metadataCache.get(descriptorKey(descriptor));
+  return cached && Date.now() - cached.at <= SUCCESS_TTL_MS ? cached.value : undefined;
 }
 
 function descriptorKey(descriptor: McpDescriptor): string {

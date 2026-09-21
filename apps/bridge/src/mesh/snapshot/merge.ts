@@ -14,9 +14,10 @@ export function mergeSnapshotState(state: StoreState, input: SnapshotValue): voi
   }
   // repositoryRoot is an endpoint-local path. A snapshot from another
   // computer cannot replace this endpoint's verified checkout binding.
-  const project = existing?.repositoryRoot
-    ? { ...snapshot.project, repositoryRoot: existing.repositoryRoot }
-    : snapshot.project;
+  const project = {
+    ...snapshot.project,
+    repositoryRoot: existing?.repositoryRoot,
+  };
   candidate.projects = mergeBy(candidate.projects, [project], (item) => item.projectId);
   for (const binding of snapshot.bindings ?? []) {
     candidate.bindings = upsertBinding(candidate, binding).bindings;

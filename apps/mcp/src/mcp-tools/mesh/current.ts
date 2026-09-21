@@ -16,7 +16,8 @@ export const MESH_URI = "granttap://mesh/current";
 export const SCOPE_HINT =
   "Project Mesh reads are scoped to one execution. In Claude Code, read "
   + "granttap://mesh/map. Elsewhere, call notify to receive this session's "
-  + "granttap://mesh/<capability> URI, then read that URI.";
+  + "granttap://mesh/<capability> URI, then read that URI. A verified Project "
+  + "SKILL.md can be read at granttap://mesh/<capability>/skills/<skill-name>.";
 
 export function json(uri: string, value: unknown) {
   return {

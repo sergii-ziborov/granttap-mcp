@@ -10,9 +10,13 @@ let codexCache: { at: number; rows: CodexMcpRow[] } | undefined;
 const CACHE_MS = 30_000;
 
 export function descriptorsForSession(session: SessionInfo): McpDescriptor[] {
-  if (session.agent === "codex") return codexMcpDescriptors();
-  if (session.agent === "claude") return claudeMcpDescriptors(session.cwd);
-  if (session.agent === "cursor") return cursorMcpDescriptors(session.cwd);
+  return descriptorsForProvider(session.agent, session.cwd);
+}
+
+export function descriptorsForProvider(provider: string, cwd: string | undefined): McpDescriptor[] {
+  if (provider === "codex") return codexMcpDescriptors();
+  if (provider === "claude") return claudeMcpDescriptors(cwd);
+  if (provider === "cursor") return cursorMcpDescriptors(cwd);
   return [];
 }
 

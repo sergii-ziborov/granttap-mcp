@@ -1,4 +1,5 @@
 import type { MeshSnapshot, SessionInfo } from "../../../../../../packages/protocol/schema";
+import { resolve } from "node:path";
 
 /** Native scans omit Mesh identity; bind them only to exact local executions. */
 export function projectExecutionCapabilitySessions(
@@ -19,6 +20,8 @@ export function projectExecutionCapabilitySessions(
     for (const execution of bySession.get(session.sessionId) ?? []) {
       if (execution.provider !== session.agent) continue;
       if (session.computerId && session.computerId !== execution.computerId) continue;
+      if (session.cwd && execution.workspace && ![execution.workspace, execution.worktree]
+        .some((path) => path && resolve(path) === resolve(session.cwd!))) continue;
       const local = execution.computerId === localComputer;
       if (!local && !session.computerId) continue;
       const linked = {

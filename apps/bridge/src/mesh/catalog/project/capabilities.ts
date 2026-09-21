@@ -12,11 +12,10 @@ type MutableServer = Omit<ProjectMcpServer, "sessionIds"> & { sessionIds: Set<st
 export function projectMcpServers(
   sessions: SessionInfo[],
   projectId: string,
-  executionIds: Set<string>,
 ): ProjectMcpServer[] {
   const catalog = new Map<string, MutableServer>();
   for (const session of sessions) {
-    if (session.projectId !== projectId && !executionIds.has(session.sessionId)) continue;
+    if (session.projectId !== projectId) continue;
     if (!PROVIDERS.has(session.agent) || !session.computerId) continue;
     for (const server of session.mcpServers ?? []) {
       const provider = session.agent as MeshProvider;

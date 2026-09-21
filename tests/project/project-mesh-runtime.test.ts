@@ -270,9 +270,10 @@ test("published snapshots stay inside the phone snapshot allowlist", async () =>
   const snaps = run.runtime.snapshots();
   assert.ok(snaps.length > 0);
   const allowed = new Set([
-    "type", "sessionId", "projectId", "project", "tasks", "executions",
+    "type", "sessionId", "projectId", "publisherEndpointId", "project", "tasks", "executions",
     "bindings", "peers", "skills", "incomplete", "execution", "restrictions",
-    "environment", "modelCatalog", "mcpServers", "capabilityRequests", "backbone", "cortex",
+    "environment", "modelCatalog", "mcpServers", "capabilityRequests",
+    "capabilityObservations", "backbone", "repositoryGraphs", "cortex",
     "claims", "dependencies", "events", "generatedAt",
   ]);
   for (const snap of snaps) {
