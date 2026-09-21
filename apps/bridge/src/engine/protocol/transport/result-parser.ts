@@ -6,6 +6,7 @@ import {
   EngineRemoteError,
 } from "./protocol-base";
 import type {
+  EngineContextCompilation,
   EngineResult,
   EngineWireObject,
   ProjectBindingRole,
@@ -43,7 +44,9 @@ function parseResult(value: unknown): EngineResult {
   else if (operation === "project.binding_upserted") parseBinding(result.binding);
   else if (operation === "graph.backbone") parseBackbone(result.backbone);
   else if (operation === "graph.repository") parseRepositoryGraph(result.graph);
-  else if (operation === "context.compiled") parseContextCompilation(result.compilation);
+  else if (operation === "context.compiled") {
+    return { operation, compilation: parseContextCompilation(result.compilation) };
+  }
   else if (!parsePolicyResult(result, invalidResult)
     && !parseInvocationResult(result, invalidResult)) {
     throw new EngineProtocolError("engine result operation is unsupported");
@@ -76,13 +79,30 @@ function parseBindings(value: unknown): void {
   value.forEach(parseBinding);
 }
 
-function parseContextCompilation(value: unknown): void {
+function parseContextCompilation(value: unknown): EngineContextCompilation {
   const compilation = requireObject(value, "context compilation");
   requireBoundedString(compilation.project_id, "project_id", 128);
   requireBoundedString(compilation.task_id, "task_id", 128);
   requireBoundedString(compilation.cortex_version, "Cortex version", 64);
   requireBoundedString(compilation.cortex_revision, "Cortex revision", 64);
-  const packet = requireObject(compilation.packet, "context packet");
+  const wirePacket = requireObject(compilation.packet, "context packet");
+  const packet: EngineWireObject = { ...wirePacket };
+  const aliases = [
+    ["includedIds", "included_ids"], ["omittedIds", "omitted_ids"],
+    ["rawEstimatedTokens", "raw_estimated_tokens"],
+    ["selectedEstimatedTokens", "selected_estimated_tokens"],
+    ["omittedEstimatedTokens", "omitted_estimated_tokens"],
+    ["requiresUpstream", "requires_upstream"],
+    ["deduplicatedLines", "deduplicated_lines"],
+    ["deduplicatedEstimatedTokens", "deduplicated_estimated_tokens"],
+    ["packetId", "packet_id"], ["snapshotId", "snapshot_id"],
+  ] as const;
+  for (const [libraryField, protocolField] of aliases) {
+    if (!Object.hasOwn(wirePacket, libraryField)) continue;
+    if (Object.hasOwn(wirePacket, protocolField)) invalidResult();
+    packet[protocolField] = wirePacket[libraryField];
+    delete packet[libraryField];
+  }
   requireBoundedString(packet.content, "context packet content", 1_048_576);
   for (const field of ["included_ids", "omitted_ids"] as const) {
     if (!Array.isArray(packet[field]) || packet[field].length > 256
@@ -97,6 +117,7 @@ function parseContextCompilation(value: unknown): void {
   if (typeof packet.requires_upstream !== "boolean") invalidResult();
   requireOptionalString(packet.packet_id, "packet_id", 128);
   requireOptionalString(packet.snapshot_id, "snapshot_id", 512);
+  return { ...compilation, packet } as EngineContextCompilation;
 }
 
 function parseRepositoryGraph(value: unknown): void {
