@@ -1,7 +1,7 @@
 import { basename } from "node:path";
 import type { ChildThreadInfo, SessionInfo } from "../../../../../packages/protocol/schema";
 import { aggregateChildThreads, childTitle } from "../support/child-threads";
-import { stateFor, TOKEN_WINDOW_MS, type Scan } from "../support/common";
+import { MAX_FILES, stateFor, TOKEN_WINDOW_MS, type Scan } from "../support/common";
 import type { CapabilityObservation } from "../telemetry";
 import {
   composerActivityAt,
@@ -220,9 +220,10 @@ function rootComposerId(
   return sessionId;
 }
 
-export function scanCursor(): Scan {
+export function scanCursor(maxFiles = MAX_FILES): Scan {
   const composers = loadComposerCatalog();
-  const snapshot = cursorLogSnapshot();
+  const listed = cursorLogSnapshot(maxFiles + 1);
+  const snapshot = listed.slice(0, maxFiles);
   const parentsByChild = composerParentSets(composers);
   const byId = new Map(composers.map((composer) => [composer.id, composer]));
   const subagents = new Set<string>();
@@ -242,5 +243,8 @@ export function scanCursor(): Scan {
   for (const file of snapshot) addOrphanSession(context, file);
   filesBySession = context.files;
   usageBySession = context.usage;
-  return { sessions: context.sessions, tokensRecent: context.tokensRecent };
+  return {
+    sessions: context.sessions, tokensRecent: context.tokensRecent,
+    sourceLimited: listed.length > maxFiles,
+  };
 }

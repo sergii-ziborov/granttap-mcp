@@ -7,11 +7,12 @@ import {
 } from "./shared";
 import { parseCodexFile } from "./parse";
 import { assembleCodexScan } from "./assemble";
-import { recentLogs, codexSessionsRoot, type Scan } from "../../support/common";
+import { recentLogs, codexSessionsRoot, MAX_FILES, type Scan } from "../../support/common";
 
-export function scanCodex(): Scan {
+export function scanCodex(maxFiles = MAX_FILES): Scan {
   const root = codexSessionsRoot();
-  const files = recentLogs(root, 5);
+  const listed = recentLogs(root, 5, maxFiles + 1);
+  const files = listed.slice(0, maxFiles);
   const activeFiles = new Set(files);
   const seenSessionIds = new Set<string>();
   const candidates: CodexCandidate[] = [];
@@ -28,5 +29,5 @@ export function scanCodex(): Scan {
   for (const file of codexSummaryCache.keys()) {
     if (!activeFiles.has(file)) codexSummaryCache.delete(file);
   }
-  return assembleCodexScan(candidates);
+  return { ...assembleCodexScan(candidates), sourceLimited: listed.length > maxFiles };
 }

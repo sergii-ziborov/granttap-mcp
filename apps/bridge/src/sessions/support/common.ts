@@ -14,16 +14,18 @@ export const LIVE_MS = 6 * 60 * 60 * 1000;
 export const TOKEN_WINDOW_MS = 12 * 60 * 60 * 1000;
 export const HISTORY_RETENTION_MS = 180 * 24 * 60 * 60 * 1000;
 export const TOKEN_WINDOW_HOURS = TOKEN_WINDOW_MS / (60 * 60 * 1000);
-/** Don't read the whole world — cap the scan. */
-// The wire history is capped at 200 chats. Reading more than 200 logs per
-// provider adds startup latency without making another row reachable.
+/** Monitor's regular scan stays bounded; History expands its source on demand. */
 export const MAX_FILES = 200;
 export const MAX_LIVE = 40;
 /** Keep every agent visible in Active even when another provider floods. */
 export const LIVE_RESERVE_PER_AGENT = 10;
 export const MAX_HISTORY = 320;
 
-export type Scan = { sessions: import("../../../../../packages/protocol/schema").SessionInfo[]; tokensRecent: number };
+export type Scan = {
+  sessions: import("../../../../../packages/protocol/schema").SessionInfo[];
+  tokensRecent: number;
+  sourceLimited?: boolean;
+};
 
 /**
  * Log-age states only. "waiting" means blocked on the user (approval / ask) and
@@ -64,7 +66,7 @@ export function ts(value: unknown): number {
 }
 
 /** Every recent *.jsonl under a root, newest first. */
-export function recentLogs(root: string, depth = 4): string[] {
+export function recentLogs(root: string, depth = 4, limit = MAX_FILES): string[] {
   const out: { path: string; mtime: number }[] = [];
   const walk = (dir: string, level: number): void => {
     if (level > depth) return;
@@ -89,7 +91,7 @@ export function recentLogs(root: string, depth = 4): string[] {
     }
   };
   walk(root, 0);
-  return out.sort((a, b) => b.mtime - a.mtime).slice(0, MAX_FILES).map((f) => f.path);
+  return out.sort((a, b) => b.mtime - a.mtime).slice(0, limit).map((f) => f.path);
 }
 
 export function claudeProjectsRoot(): string {

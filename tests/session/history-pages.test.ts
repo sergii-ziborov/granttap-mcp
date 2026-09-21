@@ -42,3 +42,14 @@ test("a capped provider scan reports an incomplete historical source", () => {
   assert.equal(page.hasMore, false);
   assert.equal(page.sourceLimited, true);
 });
+
+test("the same native session id in two providers keeps both History rows", () => {
+  const first = session(1);
+  const second = { ...first, agent: "claude" as const };
+  const page = historyPage({ ...query(), limit: 1 }, [first, second]);
+  assert.equal(page.hasMore, true);
+  const next = historyPage({ ...query(page.nextCursor), limit: 1 }, [first, second]);
+  assert.equal(next.resetRequired, undefined);
+  assert.notEqual(page.sessions[0]?.agent, next.sessions[0]?.agent);
+  assert.equal(next.hasMore, false);
+});

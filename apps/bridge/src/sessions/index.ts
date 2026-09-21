@@ -53,6 +53,10 @@ export { MAX_ACTIVITY_ENTRIES, MAX_ACTIVITY_TEXT, TOKEN_WINDOW_HOURS };
 
 type ProviderScan = ReturnType<typeof scanClaude>;
 
+function sessionKey(session: SessionInfo): string {
+  return `${session.agent}\0${session.sessionId}`;
+}
+
 function emptyScan(): ProviderScan {
   return { sessions: [], tokensRecent: 0 };
 }
@@ -61,7 +65,7 @@ function emptyScan(): ProviderScan {
  * Explicit provider roots isolate fixtures and diagnostics from real user logs.
  * In normal operation (no overrides) every installed provider is scanned.
  */
-function providerScans(): ProviderScan[] {
+function providerScans(maxFiles = MAX_FILES): ProviderScan[] {
   const enabled = loadRuntimeConfig().providerSettings;
   const explicit = {
     claude: Boolean(process.env.GRANTTAP_CLAUDE_PROJECTS_DIR || process.env.NODVOX_CLAUDE_PROJECTS_DIR),
@@ -72,22 +76,23 @@ function providerScans(): ProviderScan[] {
   const isolated = Object.values(explicit).some(Boolean);
   return [
     enabled.claude && (!isolated || explicit.claude)
-      ? timedProviderScan("claude", scanClaude) : emptyScan(),
+      ? timedProviderScan("claude", () => scanClaude(maxFiles)) : emptyScan(),
     enabled.codex && (!isolated || explicit.codex)
-      ? timedProviderScan("codex", scanCodex) : emptyScan(),
+      ? timedProviderScan("codex", () => scanCodex(maxFiles)) : emptyScan(),
     enabled.cursor && (!isolated || explicit.cursor)
-      ? timedProviderScan("cursor", scanCursor) : emptyScan(),
+      ? timedProviderScan("cursor", () => scanCursor(maxFiles)) : emptyScan(),
     enabled.grok && (!isolated || explicit.grok)
-      ? timedProviderScan("grok", scanGrok) : emptyScan(),
+      ? timedProviderScan("grok", () => scanGrok(maxFiles)) : emptyScan(),
   ];
 }
 
 function sortedUniqueSessions(scans: ProviderScan[]): SessionInfo[] {
   const merged = new Map<string, SessionInfo>();
   for (const session of scans.flatMap((scan) => scan.sessions)) {
-    const previous = merged.get(session.sessionId);
+    const key = sessionKey(session);
+    const previous = merged.get(key);
     if (!previous || session.lastActivityAt >= previous.lastActivityAt) {
-      merged.set(session.sessionId, session);
+      merged.set(key, session);
     }
   }
   const rank = { working: 0, waiting: 1, idle: 2 } as const;
@@ -108,25 +113,25 @@ function pickWithReserve(
   for (const agent of agents) {
     for (const session of candidates.filter((item) => item.agent === agent).slice(0, reservePerAgent)) {
       if (picked.size >= limit) break;
-      picked.set(session.sessionId, session);
+      picked.set(sessionKey(session), session);
     }
   }
   for (const session of candidates) {
     if (picked.size >= limit) break;
-    picked.set(session.sessionId, session);
+    picked.set(sessionKey(session), session);
   }
-  const order = new Map(candidates.map((session, index) => [session.sessionId, index]));
+  const order = new Map(candidates.map((session, index) => [sessionKey(session), index]));
   return [...picked.values()].sort(
-    (a, b) => (order.get(a.sessionId) ?? 0) - (order.get(b.sessionId) ?? 0),
+    (a, b) => (order.get(sessionKey(a)) ?? 0) - (order.get(sessionKey(b)) ?? 0),
   );
 }
 
-function scanCatalog(): { all: SessionInfo[]; tokensRecent: number; sourceLimited: boolean } {
-  const scans = providerScans();
+function scanCatalog(maxFiles = MAX_FILES): { all: SessionInfo[]; tokensRecent: number; sourceLimited: boolean } {
+  const scans = providerScans(maxFiles);
   return {
     all: sortedUniqueSessions(scans),
     tokensRecent: scans.reduce((sum, scan) => sum + scan.tokensRecent, 0),
-    sourceLimited: scans.some((scan) => scan.sessions.length >= MAX_FILES),
+    sourceLimited: scans.some((scan) => scan.sourceLimited === true),
   };
 }
 
@@ -147,11 +152,13 @@ export function scanSessionHistory(): SessionInfo[] {
 }
 
 /** The UI asks for older catalog rows only when its History list reaches the end. */
-export function scanSessionHistoryForPaging(): { sessions: SessionInfo[]; sourceLimited: boolean } {
-  const scan = scanCatalog();
+export function scanSessionHistoryForPaging(maxFiles = MAX_FILES): { sessions: SessionInfo[]; sourceLimited: boolean } {
+  const scan = scanCatalog(maxFiles);
   return {
     sessions: scan.all.sort((left, right) =>
-      right.lastActivityAt - left.lastActivityAt || left.sessionId.localeCompare(right.sessionId)
+      right.lastActivityAt - left.lastActivityAt
+      || left.agent.localeCompare(right.agent)
+      || left.sessionId.localeCompare(right.sessionId)
     ),
     sourceLimited: scan.sourceLimited,
   };

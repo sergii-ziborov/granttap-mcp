@@ -74,20 +74,21 @@ function cursorLogFile(path: string): CursorLogFile | undefined {
 }
 
 const CURSOR_LOG_INDEX_CACHE_MS = 1_000;
-let snapshotCache: { root: string; walkedAt: number; files: CursorLogFile[] } | undefined;
+let snapshotCache: { root: string; limit?: number; walkedAt: number; files: CursorLogFile[] } | undefined;
 
-export function cursorLogSnapshot(): CursorLogFile[] {
+export function cursorLogSnapshot(limit?: number): CursorLogFile[] {
   const root = cursorTranscriptsRoot();
   const now = Date.now();
-  if (snapshotCache?.root === root && now - snapshotCache.walkedAt < CURSOR_LOG_INDEX_CACHE_MS) {
+  if (snapshotCache?.root === root && snapshotCache.limit === limit
+      && now - snapshotCache.walkedAt < CURSOR_LOG_INDEX_CACHE_MS) {
     const files = snapshotCache.files.map((file) => cursorLogFile(file.path))
       .filter((file): file is CursorLogFile => file != null);
-    snapshotCache = { root, walkedAt: snapshotCache.walkedAt, files };
+    snapshotCache = { root, limit, walkedAt: snapshotCache.walkedAt, files };
     return files;
   }
-  const files = recentLogs(root, 6).map(cursorLogFile)
+  const files = recentLogs(root, 6, limit).map(cursorLogFile)
     .filter((file): file is CursorLogFile => file != null);
-  snapshotCache = { root, walkedAt: now, files };
+  snapshotCache = { root, limit, walkedAt: now, files };
   return files;
 }
 

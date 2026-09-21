@@ -39,7 +39,7 @@ type ParsedLog = {
 let activityBySession = new Map<string, ActivityEntry[]>();
 let usageBySession = new Map<string, CapabilityObservation[]>();
 
-function recentSummaries(root: string): string[] {
+function recentSummaries(root: string, limit: number): string[] {
   const found: Array<{ path: string; mtime: number }> = [];
   const walk = (dir: string, depth: number): void => {
     if (depth > 3) return;
@@ -56,7 +56,7 @@ function recentSummaries(root: string): string[] {
     }
   };
   walk(root, 0);
-  return found.sort((a, b) => b.mtime - a.mtime).slice(0, MAX_FILES).map((item) => item.path);
+  return found.sort((a, b) => b.mtime - a.mtime).slice(0, limit).map((item) => item.path);
 }
 
 function textBlocks(content: unknown): string[] {
@@ -129,12 +129,13 @@ function parseSummary(path: string): Summary | null {
   try { return JSON.parse(readFileSync(path, "utf8")) as Summary; } catch { return null; }
 }
 
-export function scanGrok(): Scan {
+export function scanGrok(maxFiles = MAX_FILES): Scan {
   const sessions: SessionInfo[] = [];
   const activities = new Map<string, ActivityEntry[]>();
   const usages = new Map<string, CapabilityObservation[]>();
   let tokensRecent = 0;
-  for (const path of recentSummaries(grokSessionsRoot())) {
+  const listed = recentSummaries(grokSessionsRoot(), maxFiles + 1);
+  for (const path of listed.slice(0, maxFiles)) {
     const summary = parseSummary(path);
     if (!summary) continue;
     const directory = dirname(path);
@@ -164,7 +165,7 @@ export function scanGrok(): Scan {
   }
   activityBySession = activities;
   usageBySession = usages;
-  return { sessions, tokensRecent };
+  return { sessions, tokensRecent, sourceLimited: listed.length > maxFiles };
 }
 
 export function grokActivity(session: SessionInfo): ActivityEntry[] {
