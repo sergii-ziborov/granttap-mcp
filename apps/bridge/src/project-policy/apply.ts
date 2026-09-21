@@ -10,6 +10,7 @@ import { rememberGovernedProject } from "../policy/governed-projects";
 import { loadExecutionPolicy, rememberExecutionPolicy } from "../mesh/runtime/execution-policy";
 import { localMeshStore } from "../mesh/local-remote/local";
 import {
+  assertProjectEnvironmentKeys,
   loadEnvironment,
   rememberEnvironment,
   redactEnvironment,
@@ -46,6 +47,7 @@ function projectRepositoryRoot(projectId: string): string | undefined {
 }
 
 export function persistMeshPolicyExtras(projectId: string, policy: ProjectPolicy): void {
+  assertProjectEnvironmentKeys(policy.environment);
   const root = projectRepositoryRoot(projectId);
   rememberRestrictions(projectId, policy.restrictions, root);
   rememberEnvironment(projectId, policy.environment, root);
@@ -163,6 +165,7 @@ export async function applyPolicy(
 ): Promise<boolean> {
   rememberGovernedProject(request.projectId, request.policy.revision, deps.now());
   try {
+    assertProjectEnvironmentKeys(request.policy.environment);
     const applied = await deps.client.request({
       operation: "policy.apply",
       input: {

@@ -7,6 +7,20 @@ import { writePrivateFile } from "../../config/access/write-private";
 
 type StoreFile = { environments: ProjectEnvironment[] };
 
+const PROTECTED_KEYS = new Set([
+  "HOME", "PATH", "SHELL", "USER", "LOGNAME", "TMPDIR", "NODE_OPTIONS",
+]);
+
+function protectedRuntimeKey(key: string): boolean {
+  return PROTECTED_KEYS.has(key)
+    || /^(GRANTTAP_|NODVOX_|XDG_|DYLD_|LD_|OPENAI_|ANTHROPIC_|CODEX_|CLAUDE_|CURSOR_|GROK_)/.test(key);
+}
+
+export function assertProjectEnvironmentKeys(environment: ProjectEnvironment | undefined): void {
+  const item = environment?.variables.find((variable) => protectedRuntimeKey(variable.key));
+  if (item) throw new Error(`invalid Project environment: protected runtime key ${item.key}`);
+}
+
 export function projectEnvPath(): string {
   return join(configDir(), "project-env.json");
 }
@@ -47,7 +61,10 @@ export function mergeEnvironment(
     variables: incoming.variables.map((item) => {
       if (item.value != null) return item;
       const prior = kept.get(item.key);
-      return prior?.value != null ? { ...item, value: prior.value } : item;
+      if (prior?.value == null) return item;
+      // A redacted secret has no value on the wire. Changing only its flag
+      // cannot turn the stored secret into a public Project value.
+      return { ...item, secret: prior.secret || item.secret, value: prior.value };
     }),
   };
 }
@@ -62,6 +79,7 @@ export function rememberEnvironment(
     saveAll(others);
     return undefined;
   }
+  assertProjectEnvironmentKeys(environment);
   const stored = mergeEnvironment({ ...environment, projectId }, loadEnvironment(projectId));
   if (stored.shareNonSecretsWithRepo && repositoryRoot) {
     writeRepoEnv(repositoryRoot, stored.variables);
@@ -88,14 +106,16 @@ export function environmentProcessEnv(
 ): NodeJS.ProcessEnv {
   const out: NodeJS.ProcessEnv = {};
   for (const item of environment?.variables ?? []) {
-    if (item.value != null && item.value !== "") out[item.key] = item.value;
+    if (!protectedRuntimeKey(item.key) && item.value != null && item.value !== "") {
+      out[item.key] = item.value;
+    }
   }
   return out;
 }
 
 export function writeRepoEnv(root: string, variables: ProjectEnvVar[]): void {
   const lines = variables
-    .filter((item) => !item.secret && item.value != null)
+    .filter((item) => !protectedRuntimeKey(item.key) && !item.secret && item.value != null)
     .sort((left, right) => left.key.localeCompare(right.key))
     .map((item) => `${item.key}=${escapeEnv(item.value ?? "")}`);
   const path = repoEnvPath(root);

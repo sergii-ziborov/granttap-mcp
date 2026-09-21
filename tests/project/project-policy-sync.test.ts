@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import type { RelayClient } from "../../packages/core/relay-client";
 import { governedRevision } from "../../apps/bridge/src/policy/governed-projects";
+import { loadEnvironment } from "../../apps/bridge/src/mesh/context/env";
 
 // An applied or refused edit teaches the computer that the Project is
 // governed; that memory lives in the config dir, which stays the test's own.
@@ -29,6 +30,7 @@ import {
 import {
   createProjectPolicyRuntime,
   enforcementCoverageFor,
+  handleProjectPolicySet,
   projectPolicyFeatureEnabled,
 } from "../../apps/bridge/src/project-policy/runtime";
 
@@ -166,6 +168,23 @@ test("Project policy rollout requires both engine and governance flags", () => {
   assert.equal(projectPolicyFeatureEnabled({
     GRANTTAP_ENGINE_ENABLED: "1", GRANTTAP_PROJECT_POLICY_ENABLED: "TRUE",
   }), true);
+});
+
+test("unsupported policy transport cannot export Project environment", async () => {
+  const previous = process.env.GRANTTAP_PROJECT_POLICY_ENABLED;
+  process.env.GRANTTAP_PROJECT_POLICY_ENABLED = "false";
+  try {
+    const request = policySet();
+    request.policy.environment = {
+      projectId: "project", revision: 1, shareNonSecretsWithRepo: false,
+      variables: [{ key: "PUBLIC_URL", value: "https://example.test", secret: false }],
+    };
+    assert.equal(await handleProjectPolicySet({} as RelayClient, request), false);
+    assert.equal(loadEnvironment("project"), undefined);
+  } finally {
+    if (previous == null) delete process.env.GRANTTAP_PROJECT_POLICY_ENABLED;
+    else process.env.GRANTTAP_PROJECT_POLICY_ENABLED = previous;
+  }
 });
 
 test("a policy set is applied, acknowledged per provider, and projected to phone", async () => {

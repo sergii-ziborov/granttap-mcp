@@ -8,7 +8,7 @@ import { EngineClient } from "../engine/runtime/engine-client";
 import { engineFeatureEnabled } from "../engine/runtime/engine-supervisor";
 import { inspectAgentIntegrations } from "../install";
 import { sendProjectPayload } from "../host/session-keys";
-import { applyPolicy, persistMeshPolicyExtras, publishOne } from "./apply";
+import { applyPolicy, publishOne } from "./apply";
 import type { ProjectPolicyRuntimeDependencies } from "./types";
 
 export type { ProjectPolicyRuntimeDependencies } from "./types";
@@ -55,7 +55,6 @@ export function handleProjectPolicySet(
   relay: RelayClient,
   request: ProjectPolicySet,
 ): Promise<boolean> {
-  persistMeshPolicyExtras(request.projectId, request.policy);
   if (!projectPolicyFeatureEnabled()) return Promise.resolve(false);
   return defaultRuntime().apply(relay, request);
 }

@@ -186,6 +186,18 @@ test("subscribe republishes rich catalog detail and session.events can fetch it 
   await waitFor(() => relay.sent.filter((payload) => payload.type === "sessions.status").length > beforeRefresh);
   const refreshed = relay.sent.filter((payload): payload is SessionsStatus => payload.type === "sessions.status").at(-1);
   assert.ok(refreshed?.history);
+  const pageRequestId = "00000000-0000-4000-8000-000000000009";
+  assert.equal(await relay.receive({
+    type: "sessions.history.query", requestId: pageRequestId,
+    limit: 40, createdAt: Date.now(),
+  }), true);
+  const page = relay.sent.find((payload) =>
+    payload.type === "sessions.history.page" && payload.requestId === pageRequestId);
+  assert.equal(page?.type, "sessions.history.page");
+  if (page?.type === "sessions.history.page") {
+    assert.ok(page.sessions.some((item) => item.sessionId === sessionId));
+    assert.equal(page.hasMore, false);
+  }
 
   let statusCount = relay.sent.filter((payload) => payload.type === "sessions.status").length;
   assert.equal(await relay.receive({

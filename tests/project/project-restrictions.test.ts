@@ -138,6 +138,35 @@ test("a later env set without a secret value keeps the value already held", () =
   assert.equal(next?.variables[0]?.value, "kept");
 });
 
+test("redacted secret cannot be declassified by changing only its flag", () => {
+  isolate();
+  rememberEnvironment("proj", {
+    projectId: "proj", revision: 1, shareNonSecretsWithRepo: false,
+    variables: [{ key: "API_TOKEN", value: "held", secret: true }],
+  });
+  const next = rememberEnvironment("proj", {
+    projectId: "proj", revision: 2, shareNonSecretsWithRepo: false,
+    variables: [{ key: "API_TOKEN", secret: false }],
+  });
+  assert.equal(next?.variables[0]?.secret, true);
+  assert.equal(redactEnvironment(next)?.variables[0]?.value, undefined);
+});
+
+test("Project environment cannot override host runtime and provider routing", () => {
+  isolate();
+  for (const key of ["HOME", "PATH", "NODE_OPTIONS", "GRANTTAP_ENGINE_SOCKET", "OPENAI_API_KEY"]) {
+    assert.throws(() => rememberEnvironment("proj", {
+      projectId: "proj", revision: 1, shareNonSecretsWithRepo: false,
+      variables: [{ key, value: "override", secret: false }],
+    }), /protected runtime key/);
+  }
+  assert.equal(loadEnvironment("proj"), undefined);
+  assert.deepEqual(environmentProcessEnv({
+    projectId: "legacy", revision: 1, shareNonSecretsWithRepo: false,
+    variables: [{ key: "PATH", value: "legacy", secret: false }],
+  }), {});
+});
+
 test("path globs, byte limits, and summaries cover the rest of the gate", () => {
   isolate();
   assert.equal(pathMatches("src/a.ts", "src/*.ts"), true);
