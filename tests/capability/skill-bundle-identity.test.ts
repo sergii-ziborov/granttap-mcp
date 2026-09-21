@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { skillBundleDigest } from "../../apps/bridge/src/capabilities/skill-bundle";
-import { projectSharedSkills, skillDefinitionPath } from "../../apps/bridge/src/capabilities/skills";
+import {
+  projectSharedSkills, projectSkillDefinitionPath, skillDefinitionPath,
+} from "../../apps/bridge/src/capabilities/skills";
 import { capabilityFingerprint } from "../../apps/bridge/src/policy/capability-fingerprint";
 
 test("a skill script or reference changes the Project digest and action fingerprint", async () => {
@@ -19,6 +21,9 @@ test("a skill script or reference changes the Project digest and action fingerpr
   assert.equal(capabilityFingerprint({
     provider: "claude", cwd: root, toolName: "Skill", toolInput: { skill: "release-check" },
   }).script_hash, first);
+  assert.equal(capabilityFingerprint({
+    provider: "claude", cwd: root, toolName: "Skill", toolInput: { skill: "release-check" },
+  }).origin, "project-skill");
   await writeFile(join(skill, "scripts", "verify.sh"), "exit 1\n");
   const changedScript = projectSharedSkills([root])[0]?.digest;
   assert.notEqual(changedScript, first);
@@ -42,6 +47,10 @@ test("a Project skill takes precedence over a home skill with the same name", as
   try {
     process.env.HOME = home;
     assert.equal(skillDefinitionPath("release-check", root), local);
+    assert.equal(projectSkillDefinitionPath("release-check", root), local);
+    await rm(local);
+    assert.equal(skillDefinitionPath("release-check", root), global);
+    assert.equal(projectSkillDefinitionPath("release-check", root), undefined);
   } finally {
     if (oldHome === undefined) delete process.env.HOME;
     else process.env.HOME = oldHome;

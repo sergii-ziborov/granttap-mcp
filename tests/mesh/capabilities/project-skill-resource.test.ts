@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -44,4 +44,16 @@ test("a scoped MCP client reads the verified Project SKILL.md only", (t) => {
   assert.match(foreign.contents[0]!.text, /available":false/);
   const missing = readScopedSkill(uri, token, "missing");
   assert.match(missing.contents[0]!.text, /available":false/);
+  const priorHome = process.env.HOME;
+  t.after(() => {
+    if (priorHome == null) delete process.env.HOME;
+    else process.env.HOME = priorHome;
+  });
+  process.env.HOME = join(root, "home");
+  const homeBundle = join(process.env.HOME, ".agents", "skills", "review");
+  mkdirSync(homeBundle, { recursive: true });
+  writeFileSync(join(homeBundle, "SKILL.md"), "---\nname: review\n---\nReview this Project.\n");
+  rmSync(join(bundle, "SKILL.md"));
+  const shadowed = readScopedSkill(uri, token, "review");
+  assert.match(shadowed.contents[0]!.text, /available":false/);
 });

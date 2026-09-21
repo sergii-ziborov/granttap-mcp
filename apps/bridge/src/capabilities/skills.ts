@@ -31,6 +31,32 @@ export function skillDefinitionPath(name: string, cwd: string | undefined): stri
   return undefined;
 }
 
+/** Resolve only a bound workspace's Skill, never a same-named home Skill. */
+export function projectSkillDefinitionPath(name: string, cwd: string | undefined): string | undefined {
+  if (!cwd) return undefined;
+  for (const directory of projectDirectories(cwd)) {
+    for (const root of [
+      join(directory, ".agents", "skills"),
+      join(directory, ".claude", "skills"),
+      join(directory, ".cursor", "skills"),
+    ]) {
+      let entries: string[];
+      try {
+        if (!lstatSync(dirname(root)).isDirectory() || !lstatSync(root).isDirectory()) continue;
+        entries = readdirSync(root);
+      } catch { continue; }
+      for (const entry of entries) {
+        if (entry.startsWith(".")) continue;
+        const definition = join(root, entry, "SKILL.md");
+        if (frontmatter(definition)?.name === name && skillBundleDigest(definition)) {
+          return definition;
+        }
+      }
+    }
+  }
+  return undefined;
+}
+
 function skillRoots(cwd: string | undefined): string[] {
   const roots: string[] = [];
   if (cwd) {

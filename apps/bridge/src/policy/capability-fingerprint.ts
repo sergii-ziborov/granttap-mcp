@@ -7,7 +7,7 @@ import type {
   CapabilityKind,
 } from "../engine/protocol/engine-policy-types";
 import { commandName } from "../sessions/telemetry";
-import { skillDefinitionPath } from "../capabilities/skills";
+import { projectSkillDefinitionPath, skillDefinitionPath } from "../capabilities/skills";
 import { skillBundleDigest } from "../capabilities/skill-bundle";
 
 export type ActionFingerprintInput = {
@@ -39,9 +39,11 @@ export function capabilityFingerprint(input: ActionFingerprintInput): Capability
 
   const skill = skillName(tool, input.toolInput);
   if (skill) {
-    const definition = skillDefinitionPath(skill, input.cwd);
+    const projectDefinition = projectSkillDefinitionPath(skill, input.cwd);
+    const definition = projectDefinition ?? skillDefinitionPath(skill, input.cwd);
     const contentHash = definition ? skillBundleDigest(definition) : undefined;
-    return { ...fingerprint("skill", skill, input.provider, "skill"),
+    return { ...fingerprint("skill", skill, input.provider,
+      projectDefinition ? "project-skill" : "skill"),
       ...(contentHash ? { script_hash: contentHash, confidence: "exact" as const } : {}) };
   }
   if (WRITE_TOOLS.has(normalized)) {

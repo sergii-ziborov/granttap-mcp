@@ -1,6 +1,6 @@
 import { lstatSync, readFileSync } from "node:fs";
 import { skillBundleDigest } from "../../../../../bridge/src/capabilities/skill-bundle";
-import { skillDefinitionPath } from "../../../../../bridge/src/capabilities/skills";
+import { projectSkillDefinitionPath } from "../../../../../bridge/src/capabilities/skills";
 import { isMeshEnabled } from "../../../../../bridge/src/config/runtime";
 import { computerId } from "../../../../../bridge/src/mesh/identity/computer";
 import {
@@ -25,7 +25,7 @@ export function readScopedSkill(
   if (!resolved || !scope || scope.execution.taskId !== resolved.taskId
     || scope.snapshot.projectId !== resolved.projectId
     || scope.execution.computerId !== computerId()) return unavailable(uri);
-  const definition = skillDefinitionPath(name, scope.execution.workspace);
+  const definition = projectSkillDefinitionPath(name, scope.execution.workspace);
   if (!definition) return unavailable(uri);
   const digest = skillBundleDigest(definition);
   const snapshot = localMeshStore().snapshot(resolved.projectId, computerId());
