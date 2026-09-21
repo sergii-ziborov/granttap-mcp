@@ -2,6 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { allowedModelIds, catalogFromSessions } from "../../apps/bridge/src/mesh/catalog/models";
 
+test("synthetic provider placeholders are not advertised as selectable models", () => {
+  const catalog = catalogFromSessions("mac", [
+    { agent: "claude", computerId: "mac", model: "<synthetic>" },
+    { agent: "claude", computerId: "mac", model: "claude-opus-5" },
+  ], 10);
+  assert.deepEqual(catalog.models.map((item) => item.modelId), ["claude-opus-5"]);
+});
+
 test("two machines keep separate model catalogs", () => {
   const macA = catalogFromSessions("mac-a", [
     { agent: "claude", computerId: "mac-a", model: "sonnet", lastActivityAt: 10 },

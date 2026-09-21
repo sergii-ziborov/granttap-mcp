@@ -31,7 +31,8 @@ import {
 import { handleTaskCreate } from "./task-create";
 import { handleUserMessage } from "./user-message";
 import { publishSessionEvents } from "./catalog";
-import { publishHistoryPage } from "./history-pages";
+import { publishHistoryPage } from "../history/pages";
+import { requestProjectGraphRefresh } from "../graph-refresh";
 
 export async function handleMonitorMessage(
   client: RelayClient,
@@ -74,6 +75,7 @@ export async function handleMonitorMessage(
       // Pull-to-refresh must include a newly scanned history snapshot; otherwise
       // a phone that cleared local state can receive an apparently empty tick.
       void publish(true).catch(() => {});
+      if (payload.graphProjectId && loadRuntimeConfig().meshEnabled) requestProjectGraphRefresh(client, payload.graphProjectId);
       return true;
     } else if (payload.type === "sessions.history.query") {
       await publishHistoryPage(client, payload);

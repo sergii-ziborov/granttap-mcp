@@ -235,6 +235,50 @@ export async function meshSnapshotsWithEngine(): Promise<MeshSnapshot[]> {
   }));
 }
 
+/** A person's explicit Graph refresh bypasses background job backoff. */
+type GraphAnalysisDependencies = {
+  snapshots: typeof meshSnapshots;
+  wait: typeof waitForProjectBindingSync;
+  backbone: typeof projectBackbone;
+  graphs: typeof projectRepositoryGraphs;
+  send: (client: RelayClient, snapshot: MeshSnapshot) => Promise<void>;
+};
+
+const graphAnalysisDependencies: GraphAnalysisDependencies = {
+  snapshots: meshSnapshots,
+  wait: waitForProjectBindingSync,
+  backbone: projectBackbone,
+  graphs: projectRepositoryGraphs,
+  send: (client, snapshot) => sendMeshPayload(client, snapshot, "phone", {
+    ttlMs: 60_000, reliable: true,
+  }),
+};
+
+export async function analyzeProjectGraphNow(
+  client: RelayClient, projectId: string,
+  dependencies: GraphAnalysisDependencies = graphAnalysisDependencies,
+): Promise<boolean> {
+  const snapshot = dependencies.snapshots().find((item) => item.projectId === projectId);
+  if (!snapshot) return false;
+  await dependencies.wait(projectId);
+  const current = dependencies.snapshots().find((item) => item.projectId === projectId);
+  if (!current) return false;
+  const [backbone, repositoryGraphs] = await Promise.all([
+    dependencies.backbone(projectId),
+    dependencies.graphs(projectId, current.bindings ?? [], { background: false }),
+  ]);
+  const reports = repositoryGraphs.length > 0 ? repositoryGraphs : [{
+    projectId, repositoryId: current.project.canonicalRepositoryId,
+    revision: "unverified", weavatrixVersion: "unknown",
+    analysisStatus: "UNAVAILABLE" as const, analysisErrorCode: "REPOSITORY_NOT_BOUND",
+    nodes: [], relations: [], totalNodes: 0, totalRelations: 0, truncated: false,
+  }];
+  await dependencies.send(client, {
+    ...current, backbone, repositoryGraphs: reports, generatedAt: Date.now(),
+  });
+  return true;
+}
+
 export function handleMeshPayload(
   client: RelayClient,
   payload: MeshEvent | MeshSnapshot,

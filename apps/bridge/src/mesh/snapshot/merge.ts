@@ -8,7 +8,16 @@ import { MAX_STORE_PEERS, type StoreState } from "../store/state";
 export function mergeSnapshotState(state: StoreState, input: SnapshotValue): void {
   const snapshot = MeshSnapshot.parse(input);
   const candidate = structuredClone(state);
-  candidate.projects = mergeBy(candidate.projects, [snapshot.project], (item) => item.projectId);
+  const existing = candidate.projects.find((item) => item.projectId === snapshot.projectId);
+  if (existing && existing.canonicalRepositoryId !== snapshot.project.canonicalRepositoryId) {
+    throw new Error("Project identity conflict");
+  }
+  // repositoryRoot is an endpoint-local path. A snapshot from another
+  // computer cannot replace this endpoint's verified checkout binding.
+  const project = existing?.repositoryRoot
+    ? { ...snapshot.project, repositoryRoot: existing.repositoryRoot }
+    : snapshot.project;
+  candidate.projects = mergeBy(candidate.projects, [project], (item) => item.projectId);
   for (const binding of snapshot.bindings ?? []) {
     candidate.bindings = upsertBinding(candidate, binding).bindings;
   }

@@ -30,13 +30,16 @@ export async function projectCortexIntegration(
   const config = loadRuntimeConfig().cortexByProject[projectId] ?? defaultCortexConfig();
   const checkedAt = (dependencies.now ?? Date.now)();
   const base = { projectId, endpointId, enabled: config.enabled, maxTokens: config.maxTokens, checkedAt };
-  if (!config.enabled) return { ...base, state: "disabled" };
   const provenance = await (dependencies.provenance ?? projectEngineProvenance)();
   const loaded = {
     ...base,
     version: provenance?.cortexVersion,
     revision: provenance?.cortexRevision,
     weavatrixVersion: provenance?.weavatrixVersion,
+  };
+  if (!config.enabled) return {
+    ...loaded, state: "disabled",
+    detail: provenance ? "Cortex is disabled for this Project" : "Engine version not reported",
   };
   if (!provenance) {
     return { ...loaded, state: "unavailable", detail: "GrantTap Engine is unavailable" };
@@ -46,6 +49,8 @@ export async function projectCortexIntegration(
   const compilation = await (dependencies.compile ?? compileProjectContext)({
     projectId, taskId: task.taskId, maxTokens: config.maxTokens,
     evidence: cortexSnapshotEvidence(snapshot, task.taskId),
+    targetRepositoryId: snapshot.bindings?.find((binding) => binding.endpointId === endpointId
+      && binding.available)?.repositoryId,
   });
   if (!compilation) {
     return { ...loaded, state: "unavailable", detail: "Cortex context compilation failed" };
@@ -78,6 +83,7 @@ export async function cortexContextForView(
     taskId: view.task?.taskId ?? view.execution.taskId,
     maxTokens: config.maxTokens,
     evidence: cortexScopedEvidence(view),
+    targetRepositoryId: view.execution.repositoryId,
   });
 }
 

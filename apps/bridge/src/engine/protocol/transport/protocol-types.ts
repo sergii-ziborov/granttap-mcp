@@ -90,6 +90,7 @@ export type EngineOperation = EnginePolicyOperation | InvocationEngineOperation
   } }
   | { operation: "context.compile_project"; input: {
     project_id: string; task_id: string; max_tokens: number; evidence: EngineContextEvidence[];
+    target_repository_id?: string;
   } }
   | { operation: "project.upsert_binding"; input: {
     project: EngineProject; binding: EngineProjectBinding;

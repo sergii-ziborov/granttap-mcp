@@ -73,6 +73,12 @@ export function collapseSplitChats(
     if (scopes?.size === 1) claim([...scopes][0]!, task.taskId);
   }
   if (rewritten.size === 0) return state;
+  return applyChatRewrites(state, rewritten, maxMigrations);
+}
+
+function applyChatRewrites(
+  state: StoreState, rewritten: Map<string, string>, maxMigrations: number,
+): StoreState {
   // A Task chosen as a winner early can be dropped later, so a rewrite is
   // followed to its end rather than applied once.
   const target = (taskId: string): string => {

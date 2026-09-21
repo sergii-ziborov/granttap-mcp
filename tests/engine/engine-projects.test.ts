@@ -138,6 +138,7 @@ test("Engine provenance names linked Cortex and Weavatrix library builds", async
 test("Project context calls the linked Cortex Engine operation", async () => {
   const client = fakeClient(async (input) => {
     if (input.operation !== "context.compile_project") throw new Error("unexpected operation");
+    assert.equal(input.input.target_repository_id, local.summary.repositoryId);
     return { operation: "context.compiled", compilation: {
       project_id: input.input.project_id, task_id: input.input.task_id,
       cortex_version: "0.1.0", cortex_revision: "a".repeat(40),
@@ -151,6 +152,7 @@ test("Project context calls the linked Cortex Engine operation", async () => {
   });
   const compiled = await compileProjectContext({
     projectId: "applydjinn", taskId: "task", maxTokens: 512,
+    targetRepositoryId: local.summary.repositoryId,
     evidence: [{
       id: "goal", source: "project.task", content: "Ship", priority: "critical",
       state: "unverified", derivation: "plan",

@@ -17,7 +17,7 @@ export function catalogFromSessions(
     if (session.computerId && session.computerId !== endpointId) continue;
     const provider = providerOf(session.agent);
     const modelId = session.model?.trim();
-    if (!provider || !modelId) continue;
+    if (!provider || !modelId || /^<[^>]+>$/.test(modelId)) continue;
     const key = `${provider}\0${modelId}`;
     models.set(key, {
       modelId,

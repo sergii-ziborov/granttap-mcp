@@ -190,6 +190,22 @@ test("repository bindings attach several repos and computers to one logical Proj
   }), /binding conflict/i);
 });
 
+test("remote snapshots cannot replace a local checkout or Project repository identity", async () => {
+  const store = await storeAt();
+  store.upsertProject({ ...project(), repositoryRoot: "/verified-local-checkout" });
+  const incoming: MeshSnapshot = {
+    type: "mesh.snapshot", sessionId: "project", projectId: "project",
+    project: { ...project(), repositoryRoot: "/sender-only-path" },
+    tasks: [], executions: [], claims: [], dependencies: [], events: [], generatedAt: now,
+  };
+  store.mergeSnapshot(incoming);
+  assert.equal(store.project("project")?.repositoryRoot, "/verified-local-checkout");
+  assert.throws(() => store.mergeSnapshot({
+    ...incoming, project: { ...incoming.project, canonicalRepositoryId: "github.com/other/repo" },
+  }), /Project identity conflict/);
+  assert.equal(store.project("project")?.canonicalRepositoryId, project().canonicalRepositoryId);
+});
+
 test("binding restore and remote merge reject cross-Project identity poisoning", async () => {
   const valid = {
     bindingId: "binding", projectId: "project", endpointId: "MacBook",

@@ -154,6 +154,14 @@ test("Project Cortex reports disabled, unavailable, loaded, degraded, and succee
   isolate(t);
   const value = snapshot();
   assert.equal((await projectCortexIntegration(value, "mac", { now: () => 10 })).state, "disabled");
+  const disabled = await projectCortexIntegration(value, "mac", {
+    provenance: async () => ({
+      engineVersion: "0.1.0", cortexVersion: "0.1.0", cortexRevision: "revision",
+      weavatrixVersion: "2.17.0",
+    }), now: () => 10,
+  });
+  assert.equal(disabled.weavatrixVersion, "2.17.0",
+    "turning Cortex off for this Project must not hide the loaded Weavatrix build");
 
   saveRuntimeConfig({ cortexByProject: { project: { enabled: true, maxTokens: 4_096 } } });
   assert.equal((await projectCortexIntegration(value, "mac", {
@@ -204,6 +212,20 @@ test("Project Cortex reports disabled, unavailable, loaded, degraded, and succee
   });
   assert.equal(noRepositoryReport.state, "degraded");
   assert.equal(noRepositoryReport.detail, "Weavatrix repository analysis pending or unavailable");
+  let targetedRepository: string | undefined;
+  await projectCortexIntegration({
+    ...value, bindings: [{
+      bindingId: "mac-repo", projectId: "project", endpointId: "mac",
+      repositoryId: "repo", displayName: "GrantTap", available: true,
+    }],
+  }, "mac", {
+    provenance,
+    compile: async (input) => {
+      targetedRepository = input.targetRepositoryId;
+      return { ...await compile(), packet: { ...(await compile()).packet, requires_upstream: false } };
+    },
+  });
+  assert.equal(targetedRepository, "repo");
   const brokenRepositoryReport = await projectCortexIntegration({
     ...value, bindings: [{
       bindingId: "mac-repo", projectId: "project", endpointId: "mac",
@@ -236,10 +258,13 @@ test("a scoped generic client receives the same Cortex compilation input", async
   assert.equal(await cortexContextForView(scoped), undefined);
   saveRuntimeConfig({ cortexByProject: { project: { enabled: true, maxTokens: 2_048 } } });
   let received = 0;
+  let targetedRepository: string | undefined;
   const compiled = await cortexContextForView(scoped, { compile: async (input) => {
     received = input.evidence.length;
+    targetedRepository = input.targetRepositoryId;
     return undefined;
   } });
   assert.equal(compiled, undefined);
   assert.ok(received >= 8);
+  assert.equal(targetedRepository, "repo");
 });

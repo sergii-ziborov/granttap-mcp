@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { historyPage } from "../../apps/bridge/src/monitor/handlers/history-pages";
+import { historyPage } from "../../apps/bridge/src/monitor/history/pages";
 import { Payload, type SessionInfo, type SessionsHistoryQuery } from "../../packages/protocol/schema";
 
 const requestId = "00000000-0000-4000-8000-000000000001";

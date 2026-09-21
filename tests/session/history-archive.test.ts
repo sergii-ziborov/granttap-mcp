@@ -4,7 +4,7 @@ import { mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { scanSessionHistoryForPaging } from "../../apps/bridge/src/sessions";
-import { historyPage, publishHistoryPage } from "../../apps/bridge/src/monitor/handlers/history-pages";
+import { historyPage, publishHistoryPage } from "../../apps/bridge/src/monitor/history/pages";
 import type { RelayClient } from "../../packages/core/relay-client";
 import type { SessionsHistoryPage } from "../../packages/protocol/schema";
 

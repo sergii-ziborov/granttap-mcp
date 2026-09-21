@@ -154,6 +154,7 @@ export async function compileProjectContext(
     taskId: string;
     maxTokens: number;
     evidence: EngineContextEvidence[];
+    targetRepositoryId?: string;
   },
   options: { env?: NodeJS.ProcessEnv; client?: EngineClientLike } = {},
 ): Promise<EngineContextCompilation | undefined> {
@@ -166,8 +167,9 @@ export async function compileProjectContext(
         task_id: input.taskId,
         max_tokens: input.maxTokens,
         evidence: input.evidence,
+        target_repository_id: input.targetRepositoryId,
       },
-    }, { timeoutMs: 5_000 });
+    }, { timeoutMs: input.targetRepositoryId ? 30_000 : 5_000 });
     return result.operation === "context.compiled" ? result.compilation : undefined;
   } catch { return undefined; }
 }
