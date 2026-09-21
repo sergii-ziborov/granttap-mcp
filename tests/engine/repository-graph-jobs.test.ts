@@ -22,7 +22,8 @@ test("repository analyses run one at a time and reuse only fresh results", async
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(jobs.read("second", async () => "wrong"), "graph-2");
   now = 101;
-  assert.equal(jobs.read("first", async () => "graph-1-new"), undefined);
+  assert.equal(jobs.read("first", async () => "graph-1-new"), "graph-1");
+  assert.equal(jobs.read("first", async () => "wrong"), "graph-1");
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(jobs.read("first", async () => "wrong"), "graph-1-new");
 });

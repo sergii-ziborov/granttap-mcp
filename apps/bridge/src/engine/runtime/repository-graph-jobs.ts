@@ -19,7 +19,7 @@ export class RepositoryGraphJobs<T> {
 
   read(key: string, run: () => Promise<T | undefined>, priority = 0): T | undefined {
     const previous = this.entries.get(key);
-    if (previous?.pending) return undefined;
+    if (previous?.pending) return previous.value;
     if (previous && this.now() < previous.retryAt) return previous.value;
     if (this.queue.length >= this.capacity) return undefined;
     if (!previous && this.entries.size >= this.capacity * 2) {
@@ -27,11 +27,11 @@ export class RepositoryGraphJobs<T> {
       if (!oldest) return undefined;
       this.entries.delete(oldest);
     }
-    this.entries.set(key, { retryAt: 0, pending: true });
+    this.entries.set(key, { value: previous?.value, retryAt: 0, pending: true });
     const before = this.queue.findIndex((job) => job.priority < priority);
     this.queue.splice(before < 0 ? this.queue.length : before, 0, { key, run, priority });
     void this.drain();
-    return undefined;
+    return previous?.value;
   }
 
   private async drain(): Promise<void> {
