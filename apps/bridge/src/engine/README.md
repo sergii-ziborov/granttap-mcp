@@ -10,6 +10,11 @@ legacy hook behavior when the engine is disabled or unavailable.
 `engine-projects.ts` forwards only bounded local Project/binding records when
 the rollout flag is enabled. Absolute roots stay on the local IPC connection;
 the encrypted Mesh projection omits them by default.
+Mesh snapshot enrichment queues Weavatrix repository analysis through
+`repository-graph-jobs.ts`. One analysis runs at a time, repeated snapshot
+ticks reuse a fresh bounded report, and failed analyses back off. An absent
+report leaves the graph unavailable and Cortex degraded; it does not block
+policy IPC or turn a repository label into an architecture result.
 Claude, Codex, and Cursor hooks can evaluate the engine's local Project
 Governance policy only when both `GRANTTAP_ENGINE_ENABLED` and
 `GRANTTAP_PROJECT_POLICY_ENABLED` are enabled. Project `DENY` and `ASK` precede

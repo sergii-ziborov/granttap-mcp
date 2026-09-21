@@ -176,6 +176,19 @@ test("Project Cortex reports disabled, unavailable, loaded, degraded, and succee
     compile: async (input) => ({ ...await compile(), packet: { ...(await compile()).packet, requires_upstream: false } }),
   });
   assert.equal(succeeded.state, "succeeded");
+  const noRepositoryReport = await projectCortexIntegration({
+    ...value, bindings: [{
+      bindingId: "mac-repo", projectId: "project", endpointId: "mac",
+      repositoryId: "repo", displayName: "GrantTap", available: true,
+    }], repositoryGraphs: [],
+  }, "mac", {
+    provenance,
+    compile: async () => ({ ...await compile(), packet: {
+      ...(await compile()).packet, requires_upstream: false,
+    } }),
+  });
+  assert.equal(noRepositoryReport.state, "degraded");
+  assert.equal(noRepositoryReport.detail, "Weavatrix repository analysis pending or unavailable");
 });
 
 test("a scoped generic client receives the same Cortex compilation input", async (t) => {

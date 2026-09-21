@@ -50,9 +50,12 @@ export async function projectCortexIntegration(
   if (!compilation) {
     return { ...loaded, state: "unavailable", detail: "Cortex context compilation failed" };
   }
+  const repositoryEvidenceMissing = (snapshot.bindings?.length ?? 0) > 0
+    && (snapshot.repositoryGraphs?.length ?? 0) === 0;
   return {
     ...loaded,
-    state: compilation.packet.requires_upstream ? "degraded" : "succeeded",
+    state: compilation.packet.requires_upstream || repositoryEvidenceMissing ? "degraded" : "succeeded",
+    detail: repositoryEvidenceMissing ? "Weavatrix repository analysis pending or unavailable" : undefined,
     packet: packetStatus(compilation.packet),
   };
 }

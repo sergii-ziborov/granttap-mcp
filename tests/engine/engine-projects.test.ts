@@ -183,6 +183,31 @@ test("repository graph maps full Weavatrix analysis for each unique binding", as
   assert.equal(graphs[0]?.nodes[0]?.kind, "component");
 });
 
+test("background Mesh graph enrichment does not block snapshots or duplicate analysis", async () => {
+  const projectId = "background-graph-test";
+  let finish: (value: EngineResult) => void = () => undefined;
+  let requests = 0;
+  const pending = new Promise<EngineResult>((resolve) => { finish = resolve; });
+  const client = fakeClient(async (input) => {
+    assert.equal(input.operation, "graph.analyze_repository");
+    requests++;
+    return pending;
+  });
+  const options = { env: { GRANTTAP_ENGINE_ENABLED: "1" }, client, background: true };
+  assert.deepEqual(await projectRepositoryGraphs(projectId, [local.summary], options), []);
+  assert.deepEqual(await projectRepositoryGraphs(projectId, [local.summary], options), []);
+  assert.equal(requests, 1);
+  finish({ operation: "graph.repository", graph: {
+    project_id: projectId, repository_id: local.summary.repositoryId,
+    revision: "revision", weavatrix_version: "2.17.2",
+    nodes: [], relations: [], total_nodes: 0, total_relations: 0, truncated: false,
+  } });
+  await new Promise((resolve) => setImmediate(resolve));
+  const reports = await projectRepositoryGraphs(projectId, [local.summary], options);
+  assert.equal(reports[0]?.weavatrixVersion, "2.17.2");
+  assert.equal(requests, 1);
+});
+
 test("repository graphs stay inside the Mesh snapshot wire budget", async () => {
   const nodes = Array.from({ length: 256 }, (_, index) => ({
     id: `node-${index}-${"x".repeat(180)}`, kind: "module", label: `Module ${index} ${"y".repeat(120)}`,

@@ -13,6 +13,7 @@ import type {
   EngineContextCompilation,
   EngineContextEvidence,
 } from "../protocol/engine-protocol";
+import { RepositoryGraphJobs } from "./repository-graph-jobs";
 
 export type LocalProjectBinding = {
   summary: ProjectBindingSummary;
@@ -26,6 +27,7 @@ let sharedClient: EngineClient | undefined;
 const pendingBindingSyncs = new Map<string, Promise<boolean>>();
 const MAX_REPOSITORY_GRAPH_WIRE_BYTES = 128 * 1_024;
 const MAX_SINGLE_GRAPH_WIRE_BYTES = 48 * 1_024;
+const repositoryGraphJobs = new RepositoryGraphJobs<ProjectRepositoryGraph>();
 
 export async function syncProjectBinding(
   project: Project,
@@ -172,38 +174,46 @@ export async function compileProjectContext(
 export async function projectRepositoryGraphs(
   projectId: string,
   bindings: ProjectBindingSummary[],
-  options: { env?: NodeJS.ProcessEnv; client?: EngineClientLike } = {},
+  options: { env?: NodeJS.ProcessEnv; client?: EngineClientLike; background?: boolean } = {},
 ): Promise<ProjectRepositoryGraph[]> {
   if (!engineFeatureEnabled(options.env ?? process.env)) return [];
   const client = options.client ?? defaultClient();
   const repositories = [...new Map(bindings.map((item) => [item.repositoryId, item])).values()].slice(0, 64);
-  const graphs = await Promise.all(repositories.map(async (binding) => {
-    const repositoryId = binding.repositoryId;
-    try {
-      const result = await client.request({
-        operation: "graph.analyze_repository", input: {
-          project_id: projectId, repository_id: repositoryId,
-        },
-      }, { timeoutMs: 30_000 });
-      if (result.operation !== "graph.repository") return undefined;
-      const graph = result.graph;
-      const mapped: ProjectRepositoryGraph = {
-        projectId: graph.project_id, repositoryId: graph.repository_id,
-        revision: graph.revision, weavatrixVersion: graph.weavatrix_version,
-        analysisId: graph.analysis_id ?? undefined,
-        analysisStatus: graph.analysis_status,
-        nodes: graph.nodes,
-        relations: graph.relations.map((edge) => ({
-          source: edge.source, target: edge.target, relation: edge.relation,
-          evidenceCount: edge.evidence_count,
-        })),
-        totalNodes: graph.total_nodes, totalRelations: graph.total_relations,
-        truncated: graph.truncated,
-      };
-      return mapped;
-    } catch { return undefined; }
-  }));
+  const graphs = options.background
+    ? repositories.map((binding) => repositoryGraphJobs.read(
+      JSON.stringify([projectId, binding.repositoryId, binding.revision]),
+      () => analyzeRepositoryGraph(client, projectId, binding.repositoryId, 120_000),
+    ))
+    : await Promise.all(repositories.map((binding) =>
+      analyzeRepositoryGraph(client, projectId, binding.repositoryId, 30_000)));
   return boundRepositoryGraphs(graphs.filter((item): item is ProjectRepositoryGraph => item != null));
+}
+
+async function analyzeRepositoryGraph(
+  client: EngineClientLike, projectId: string, repositoryId: string, timeoutMs: number,
+): Promise<ProjectRepositoryGraph | undefined> {
+  try {
+    const result = await client.request({
+      operation: "graph.analyze_repository", input: {
+        project_id: projectId, repository_id: repositoryId,
+      },
+    }, { timeoutMs });
+    if (result.operation !== "graph.repository") return undefined;
+    const graph = result.graph;
+    return {
+      projectId: graph.project_id, repositoryId: graph.repository_id,
+      revision: graph.revision, weavatrixVersion: graph.weavatrix_version,
+      analysisId: graph.analysis_id ?? undefined,
+      analysisStatus: graph.analysis_status,
+      nodes: graph.nodes,
+      relations: graph.relations.map((edge) => ({
+        source: edge.source, target: edge.target, relation: edge.relation,
+        evidenceCount: edge.evidence_count,
+      })),
+      totalNodes: graph.total_nodes, totalRelations: graph.total_relations,
+      truncated: graph.truncated,
+    };
+  } catch { return undefined; }
 }
 
 function boundRepositoryGraphs(graphs: ProjectRepositoryGraph[]): ProjectRepositoryGraph[] {

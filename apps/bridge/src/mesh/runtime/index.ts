@@ -221,7 +221,7 @@ export async function meshSnapshotsWithEngine(): Promise<MeshSnapshot[]> {
     await waitForProjectBindingSync(snapshot.projectId);
     const [backbone, repositoryGraphs] = await Promise.all([
       projectBackbone(snapshot.projectId),
-      projectRepositoryGraphs(snapshot.projectId, snapshot.bindings ?? []),
+      projectRepositoryGraphs(snapshot.projectId, snapshot.bindings ?? [], { background: true }),
     ]);
     const enriched = { ...snapshot, backbone, repositoryGraphs };
     const cortex = await projectCortexIntegration(enriched);

@@ -1,0 +1,52 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { RepositoryGraphJobs } from "../../apps/bridge/src/engine/runtime/repository-graph-jobs";
+
+test("repository analyses run one at a time and reuse only fresh results", async () => {
+  let now = 0;
+  let finishFirst: (value: string) => void = () => undefined;
+  let finishSecond: (value: string) => void = () => undefined;
+  const first = new Promise<string>((resolve) => { finishFirst = resolve; });
+  const second = new Promise<string>((resolve) => { finishSecond = resolve; });
+  const jobs = new RepositoryGraphJobs<string>(() => now, 100, 500);
+  let started = 0;
+  assert.equal(jobs.read("first", () => { started++; return first; }), undefined);
+  assert.equal(jobs.read("first", () => { started++; return first; }), undefined);
+  assert.equal(jobs.read("second", () => { started++; return second; }), undefined);
+  assert.equal(started, 1);
+  finishFirst("graph-1");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(started, 2);
+  assert.equal(jobs.read("first", async () => "wrong"), "graph-1");
+  finishSecond("graph-2");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(jobs.read("second", async () => "wrong"), "graph-2");
+  now = 101;
+  assert.equal(jobs.read("first", async () => "graph-1-new"), undefined);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(jobs.read("first", async () => "wrong"), "graph-1-new");
+});
+
+test("failed analysis backs off and bounded queue retries later", async () => {
+  let now = 0;
+  let finish: (value: string) => void = () => undefined;
+  const blocked = new Promise<string>((resolve) => { finish = resolve; });
+  const jobs = new RepositoryGraphJobs<string>(() => now, 100, 500, 1);
+  let attempts = 0;
+  jobs.read("running", () => blocked);
+  jobs.read("queued", async () => "queued-result");
+  assert.equal(jobs.read("overflow", async () => "overflow-result"), undefined);
+  finish("ready");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(jobs.read("overflow", async () => { attempts++; return undefined; }), undefined);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(attempts, 1);
+  now = 499;
+  jobs.read("overflow", async () => { attempts++; return "ready"; });
+  assert.equal(attempts, 1);
+  now = 500;
+  jobs.read("overflow", async () => { attempts++; return "ready"; });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(attempts, 2);
+  assert.equal(jobs.read("overflow", async () => "wrong"), "ready");
+});
