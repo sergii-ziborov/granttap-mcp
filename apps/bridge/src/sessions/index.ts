@@ -273,8 +273,9 @@ export function scanCapabilityUsage(
   const totals = createCapabilityTotals();
   const seenSessions = new Set<string>();
   for (const session of sessions) {
-    if (seenSessions.has(session.sessionId)) continue;
-    seenSessions.add(session.sessionId);
+    const nativeScope = `${session.agent}\0${session.sessionId}`;
+    if (seenSessions.has(nativeScope)) continue;
+    seenSessions.add(nativeScope);
     const observations =
       session.agent === "claude" ? claudeCapabilityUsage(session)
         : session.agent === "codex" ? codexCapabilityUsage(session)
