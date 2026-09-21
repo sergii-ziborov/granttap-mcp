@@ -5,7 +5,9 @@ export class RepositoryGraphJobs<T> {
     retryAt: number;
     pending: boolean;
   }>();
-  private readonly queue: Array<{ key: string; run: () => Promise<T | undefined> }> = [];
+  private readonly queue: Array<{
+    key: string; run: () => Promise<T | undefined>; priority: number;
+  }> = [];
   private running = false;
 
   constructor(
@@ -15,7 +17,7 @@ export class RepositoryGraphJobs<T> {
     private readonly capacity = 32,
   ) {}
 
-  read(key: string, run: () => Promise<T | undefined>): T | undefined {
+  read(key: string, run: () => Promise<T | undefined>, priority = 0): T | undefined {
     const previous = this.entries.get(key);
     if (previous?.pending) return undefined;
     if (previous && this.now() < previous.retryAt) return previous.value;
@@ -26,7 +28,8 @@ export class RepositoryGraphJobs<T> {
       this.entries.delete(oldest);
     }
     this.entries.set(key, { retryAt: 0, pending: true });
-    this.queue.push({ key, run });
+    const before = this.queue.findIndex((job) => job.priority < priority);
+    this.queue.splice(before < 0 ? this.queue.length : before, 0, { key, run, priority });
     void this.drain();
     return undefined;
   }

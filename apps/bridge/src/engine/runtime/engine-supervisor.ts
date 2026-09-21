@@ -109,7 +109,8 @@ export class EngineSupervisor {
   }
 
   private async waitUntilHealthy(): Promise<EngineHealth | undefined> {
-    for (const delayMs of [10, 20, 40, 80]) {
+    // A signed local binary may need time to load its registry on a busy host.
+    for (const delayMs of [25, 50, 100, 200, 400, 800, 1_000]) {
       await delay(delayMs);
       const health = await this.ping();
       if (health) return health;

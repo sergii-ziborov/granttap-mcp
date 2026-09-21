@@ -50,3 +50,16 @@ test("failed analysis backs off and bounded queue retries later", async () => {
   assert.equal(attempts, 2);
   assert.equal(jobs.read("overflow", async () => "wrong"), "ready");
 });
+
+test("recent Project analysis goes ahead of older queued Projects", async () => {
+  let finish: (value: string) => void = () => undefined;
+  const blocked = new Promise<string>((resolve) => { finish = resolve; });
+  const jobs = new RepositoryGraphJobs<string>();
+  const order: string[] = [];
+  jobs.read("running", () => blocked);
+  jobs.read("old", async () => { order.push("old"); return "old"; }, 1);
+  jobs.read("recent", async () => { order.push("recent"); return "recent"; }, 10);
+  finish("running");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(order, ["recent", "old"]);
+});

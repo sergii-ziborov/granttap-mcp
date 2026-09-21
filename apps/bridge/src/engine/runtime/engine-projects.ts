@@ -174,7 +174,8 @@ export async function compileProjectContext(
 export async function projectRepositoryGraphs(
   projectId: string,
   bindings: ProjectBindingSummary[],
-  options: { env?: NodeJS.ProcessEnv; client?: EngineClientLike; background?: boolean } = {},
+  options: { env?: NodeJS.ProcessEnv; client?: EngineClientLike; background?: boolean;
+    priority?: number } = {},
 ): Promise<ProjectRepositoryGraph[]> {
   if (!engineFeatureEnabled(options.env ?? process.env)) return [];
   const client = options.client ?? defaultClient();
@@ -183,6 +184,7 @@ export async function projectRepositoryGraphs(
     ? repositories.map((binding) => repositoryGraphJobs.read(
       JSON.stringify([projectId, binding.repositoryId, binding.revision]),
       () => analyzeRepositoryGraph(client, projectId, binding.repositoryId, 120_000),
+      options.priority ?? 0,
     ))
     : await Promise.all(repositories.map((binding) =>
       analyzeRepositoryGraph(client, projectId, binding.repositoryId, 30_000)));

@@ -143,6 +143,38 @@ test("supervisor verifies, launches, reaches health, and stops its child", async
   }
 });
 
+test("a slow but healthy Engine is not killed during its first registry load", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "granttap-engine-slow-"));
+  const binary = join(directory, "granttap-engine");
+  const contents = Buffer.from("slow engine fixture");
+  await writeFile(binary, contents, { mode: 0o700 });
+  const checksum = createHash("sha256").update(contents).digest("hex");
+  let launchedAt = Number.POSITIVE_INFINITY;
+  let killed = false;
+  const child = Object.assign(new EventEmitter(), {
+    exitCode: null, signalCode: null,
+    kill: () => { killed = true; queueMicrotask(() => child.emit("exit", 0, null)); return true; },
+  }) as unknown as ChildProcess;
+  const supervisor = new EngineSupervisor({
+    env: { GRANTTAP_ENGINE_ENABLED: "1", GRANTTAP_ENGINE_BINARY: binary,
+      GRANTTAP_ENGINE_SHA256: checksum },
+    client: fakeClient(async () => {
+      if (!Number.isFinite(launchedAt) || Date.now() - launchedAt < 260) {
+        throw new Error("Engine still loading its registry");
+      }
+      return { operation: "engine.pong", engine_version: "0.1.0" };
+    }),
+    launch: () => { launchedAt = Date.now(); return child; },
+  });
+  try {
+    assert.equal((await supervisor.ensureAvailable()).state, "healthy");
+    assert.equal(killed, false);
+    await supervisor.stop();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("failed launch enters bounded backoff", async () => {
   let now = 100;
   const supervisor = new EngineSupervisor({
