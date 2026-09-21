@@ -17,7 +17,7 @@ import {
 import { formerComputerNames } from "../identity/computer";
 import { readIntegrationMap } from "../observed/integration-map";
 import type { MeshStore } from "../store";
-import { syncProjectBinding } from "../../engine/runtime/engine-projects";
+import { queueProjectBindingSync } from "../../engine/runtime/engine-projects";
 import { isCursorTaskCloneId } from "../../sessions/cursor/catalog";
 
 export type RepositoryFacts = {
@@ -190,7 +190,7 @@ function linkSession(input: {
     store.recordIntegrationPeers(
       projectId, repository.canonicalRepositoryId, readIntegrationMap(repository.root),
     );
-    void syncProjectBinding(project, {
+    void queueProjectBindingSync(project, {
       summary: binding,
       localRoot: repository.root,
       canonicalRemote: repository.baseRemote

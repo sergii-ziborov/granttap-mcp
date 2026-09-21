@@ -23,6 +23,7 @@ export type LocalProjectBinding = {
 };
 
 let sharedClient: EngineClient | undefined;
+const pendingBindingSyncs = new Map<string, Promise<boolean>>();
 const MAX_REPOSITORY_GRAPH_WIRE_BYTES = 128 * 1_024;
 const MAX_SINGLE_GRAPH_WIRE_BYTES = 48 * 1_024;
 
@@ -58,11 +59,35 @@ export async function syncProjectBinding(
           last_seen_at: local.lastSeenAt,
         },
       },
-    }, { timeoutMs: 250 });
+    }, { timeoutMs: 1_500 });
     return result.operation === "project.binding_upserted";
   } catch {
     return false;
   }
+}
+
+/** Keep the current repository admission visible until graph enrichment begins. */
+export function queueProjectBindingSync(
+  project: Project,
+  local: LocalProjectBinding,
+  options: { env?: NodeJS.ProcessEnv; client?: EngineClientLike } = {},
+): Promise<boolean> {
+  const key = JSON.stringify([project.projectId, local.summary.bindingId]);
+  const pending = pendingBindingSyncs.get(key);
+  if (pending) return pending;
+  const request = syncProjectBinding(project, local, options);
+  pendingBindingSyncs.set(key, request);
+  void request.finally(() => {
+    if (pendingBindingSyncs.get(key) === request) pendingBindingSyncs.delete(key);
+  });
+  return request;
+}
+
+export async function waitForProjectBindingSync(projectId: string): Promise<void> {
+  const requests = [...pendingBindingSyncs].filter(([key]) =>
+    JSON.parse(key)[0] === projectId
+  ).map(([, request]) => request);
+  await Promise.all(requests.map((request) => request.catch(() => false)));
 }
 
 export function closeProjectEngineClient(): void {

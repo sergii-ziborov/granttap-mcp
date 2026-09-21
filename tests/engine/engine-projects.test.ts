@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   compileProjectContext, projectBackbone, projectEngineProvenance,
-  projectRepositoryGraphs, syncProjectBinding,
+  projectRepositoryGraphs, queueProjectBindingSync, syncProjectBinding,
+  waitForProjectBindingSync,
 } from "../../apps/bridge/src/engine/runtime/engine-projects";
 import type { EngineClientLike } from "../../apps/bridge/src/engine/runtime/engine-supervisor";
 import type { EngineOperation, EngineResult } from "../../apps/bridge/src/engine/protocol/engine-protocol";
@@ -61,6 +62,36 @@ test("Project binding sync preserves legacy behavior when IPC fails", async () =
   assert.equal(await syncProjectBinding(project, local, {
     env: { GRANTTAP_ENGINE_ENABLED: "true" }, client,
   }), false);
+});
+
+test("graph enrichment waits for one in-flight repository admission", async () => {
+  let finish: (value: EngineResult) => void = () => undefined;
+  let calls = 0;
+  const client = fakeClient(async () => {
+    calls += 1;
+    return new Promise<EngineResult>((resolve) => { finish = resolve; });
+  });
+  const options = { env: { GRANTTAP_ENGINE_ENABLED: "1" }, client };
+  const first = queueProjectBindingSync(project, local, options);
+  const duplicate = queueProjectBindingSync(project, local, options);
+  assert.equal(first, duplicate);
+  let ready = false;
+  const enrichment = waitForProjectBindingSync(project.projectId).then(() => { ready = true; });
+  await Promise.resolve();
+  assert.equal(ready, false);
+  finish({ operation: "project.binding_upserted", binding: {
+    binding_id: local.summary.bindingId,
+    project_id: local.summary.projectId,
+    endpoint_id: local.summary.endpointId,
+    repository_id: local.summary.repositoryId,
+    local_root: local.localRoot,
+    local_alias: local.summary.displayName,
+    role: "primary", last_seen_at: local.lastSeenAt,
+  } });
+  assert.equal(await first, true);
+  await enrichment;
+  assert.equal(ready, true);
+  assert.equal(calls, 1);
 });
 
 test("Project Backbone maps the Rust wire result without repository contents", async () => {

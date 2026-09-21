@@ -10,7 +10,9 @@ import type {
   SessionInfo,
   TaskCapsule,
 } from "../../../../../packages/protocol/schema";
-import { projectBackbone, projectRepositoryGraphs } from "../../engine/runtime/engine-projects";
+import {
+  projectBackbone, projectRepositoryGraphs, waitForProjectBindingSync,
+} from "../../engine/runtime/engine-projects";
 import { projectCortexIntegration } from "../../cortex/integration";
 import { configDir } from "../../config";
 import {
@@ -216,6 +218,7 @@ export function requestProjectCapability(input: ProjectCapabilityRequestSet): bo
 
 export async function meshSnapshotsWithEngine(): Promise<MeshSnapshot[]> {
   return Promise.all(meshSnapshots().map(async (snapshot) => {
+    await waitForProjectBindingSync(snapshot.projectId);
     const [backbone, repositoryGraphs] = await Promise.all([
       projectBackbone(snapshot.projectId),
       projectRepositoryGraphs(snapshot.projectId, snapshot.bindings ?? []),
