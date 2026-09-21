@@ -42,6 +42,7 @@ import { createHandoffWorktree, repositoryHasCommit } from "./worktree";
 import { fetchRevision, pushBranch } from "../local-remote/remote";
 import { projectSessionCapabilityInventory, projectExecutionCapabilitySessions } from "./capabilities";
 import { deduplicateNativeSessions } from "./capabilities/session-discovery";
+import { refreshLocalGraphBindings } from "./graph/binding-sync";
 
 export type { MeshRuntimeDependencies };
 
@@ -266,6 +267,7 @@ export async function meshSnapshotsWithEngine(): Promise<MeshSnapshot[]> {
 type GraphAnalysisDependencies = {
   snapshots: typeof meshSnapshots;
   wait: typeof waitForProjectBindingSync;
+  sync?: typeof refreshLocalGraphBindings;
   backbone: typeof projectBackbone;
   graphs: typeof projectRepositoryGraphs;
   send: (client: RelayClient, snapshot: MeshSnapshot) => Promise<void>;
@@ -274,6 +276,7 @@ type GraphAnalysisDependencies = {
 const graphAnalysisDependencies: GraphAnalysisDependencies = {
   snapshots: meshSnapshots,
   wait: waitForProjectBindingSync,
+  sync: refreshLocalGraphBindings,
   backbone: projectBackbone,
   graphs: projectRepositoryGraphs,
   send: (client, snapshot) => sendMeshPayload(client, snapshot, "phone", {
@@ -290,6 +293,7 @@ export async function analyzeProjectGraphNow(
   await dependencies.wait(projectId);
   const current = dependencies.snapshots().find((item) => item.projectId === projectId);
   if (!current) return false;
+  if (dependencies.sync) await dependencies.sync(current);
   const [backbone, repositoryGraphs] = await Promise.all([
     dependencies.backbone(projectId),
     dependencies.graphs(projectId, current.bindings ?? [], { background: false }),

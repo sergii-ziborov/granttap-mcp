@@ -152,6 +152,14 @@ export const ProjectRepositoryGraph = z.object({
   analysisId: z.string().trim().min(1).max(128).optional(),
   analysisStatus: z.enum(["COMPLETE", "INCOMPLETE", "UNAVAILABLE"]).optional(),
   analysisErrorCode: z.string().regex(/^[A-Z_]{2,64}$/).optional(),
+  architectureHypotheses: z.array(z.object({
+    name: z.string().trim().min(1).max(64),
+    dimension: z.string().trim().min(1).max(64),
+    status: z.enum(["SUPPORTED", "CANDIDATE", "CONTRADICTED", "INSUFFICIENT_EVIDENCE"]),
+    evidence: z.array(z.string().max(240)).max(16),
+    contradictions: z.array(z.string().max(240)).max(16),
+    unknowns: z.array(z.string().max(160)).max(4),
+  }).strict()).max(8).optional(),
   nodes: z.array(z.object({
     id: z.string().trim().min(1).max(512),
     kind: z.string().trim().min(1).max(64),

@@ -129,6 +129,23 @@ function parseRepositoryGraph(value: unknown): void {
   requireOptionalString(graph.analysis_id, "analysis_id", 128);
   if (graph.analysis_status != null && graph.analysis_status !== "COMPLETE"
     && graph.analysis_status !== "INCOMPLETE") invalidResult();
+  if (graph.architecture_hypotheses != null) {
+    if (!Array.isArray(graph.architecture_hypotheses)
+      || graph.architecture_hypotheses.length > 8) invalidResult();
+    for (const value of graph.architecture_hypotheses) {
+      const item = requireObject(value, "architecture hypothesis");
+      requireBoundedString(item.name, "architecture name", 64);
+      requireBoundedString(item.dimension, "architecture dimension", 64);
+      if (!["SUPPORTED", "CANDIDATE", "CONTRADICTED", "INSUFFICIENT_EVIDENCE"]
+        .includes(String(item.status))) invalidResult();
+      for (const [key, count, length] of [
+        ["evidence", 16, 240], ["contradictions", 16, 240], ["unknowns", 4, 160],
+      ] as const) {
+        if (!Array.isArray(item[key]) || item[key].length > count) invalidResult();
+        for (const text of item[key]) requireBoundedString(text, key, length);
+      }
+    }
+  }
   if (!Array.isArray(graph.nodes) || graph.nodes.length > 256
     || !Array.isArray(graph.relations) || graph.relations.length > 512
     || !Number.isSafeInteger(graph.total_nodes) || Number(graph.total_nodes) < 0

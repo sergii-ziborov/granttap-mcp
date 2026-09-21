@@ -172,6 +172,11 @@ test("repository graph maps full Weavatrix analysis for each unique binding", as
         repository_id: input.input.repository_id,
         revision: "revision", weavatrix_version: "2.17.1",
         analysis_id: "a".repeat(64), analysis_status: "COMPLETE",
+        architecture_hypotheses: [{
+          name: "onion", dimension: "dependency_direction", status: "SUPPORTED",
+          evidence: ["outer_implements_core: src/infra/mod.rs → src/domain/mod.rs (implements)"],
+          contradictions: [], unknowns: ["static edges do not prove runtime composition"],
+        }],
         nodes: [{ id: "src", kind: "component", label: "src" }],
         relations: [], total_nodes: 1, total_relations: 0, truncated: false,
       },
@@ -185,6 +190,8 @@ test("repository graph maps full Weavatrix analysis for each unique binding", as
   assert.equal(graphs[0]?.weavatrixVersion, "2.17.1");
   assert.equal(graphs[0]?.analysisStatus, "COMPLETE");
   assert.equal(graphs[0]?.nodes[0]?.kind, "component");
+  assert.equal(graphs[0]?.architectureHypotheses?.[0]?.name, "onion");
+  assert.equal(graphs[0]?.architectureHypotheses?.[0]?.status, "SUPPORTED");
 });
 
 test("stale checkout binding reports a graph failure without fabricating architecture", async () => {

@@ -64,6 +64,11 @@ test("response parser accepts every Rust v1 result", () => {
       graph: {
         project_id: "project", repository_id: "repo", revision: "revision",
         weavatrix_version: "2.17.0", total_nodes: 2, total_relations: 1,
+        architecture_hypotheses: [{
+          name: "onion", dimension: "dependency_direction", status: "CANDIDATE",
+          evidence: ["application_to_core: src/application → src/domain (imports)"],
+          contradictions: [], unknowns: ["implementation not resolved"],
+        }],
         truncated: false,
         nodes: [
           { id: "repo", kind: "repository", label: "Repo" },
@@ -188,6 +193,16 @@ test("response parser rejects malformed and incompatible wire values", () => {
         project_id: "project", repository_id: "repo", revision: "revision",
         weavatrix_version: "2.17.0", total_nodes: 1, total_relations: 0,
         truncated: false, nodes: [{}], relations: [],
+      },
+    }),
+    response({
+      operation: "graph.repository",
+      graph: {
+        project_id: "project", repository_id: "repo", revision: "revision",
+        weavatrix_version: "2.17.4", total_nodes: 0, total_relations: 0,
+        truncated: false, nodes: [], relations: [],
+        architecture_hypotheses: [{ name: "onion", dimension: "dependency_direction",
+          status: "CERTAIN", evidence: [], contradictions: [], unknowns: [] }],
       },
     }),
     response({

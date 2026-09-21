@@ -62,7 +62,7 @@ export async function syncProjectBinding(
           last_seen_at: local.lastSeenAt,
         },
       },
-    }, { timeoutMs: 1_500 });
+    }, { timeoutMs: 5_000 });
     return result.operation === "project.binding_upserted";
   } catch {
     return false;
@@ -210,6 +210,7 @@ async function analyzeRepositoryGraph(
       revision: graph.revision, weavatrixVersion: graph.weavatrix_version,
       analysisId: graph.analysis_id ?? undefined,
       analysisStatus: graph.analysis_status,
+      architectureHypotheses: graph.architecture_hypotheses,
       nodes: graph.nodes,
       relations: graph.relations.map((edge) => ({
         source: edge.source, target: edge.target, relation: edge.relation,

@@ -39,6 +39,11 @@ export type EngineRepositoryGraph = {
   weavatrix_version: string;
   analysis_id?: string | null;
   analysis_status?: "COMPLETE" | "INCOMPLETE";
+  architecture_hypotheses?: Array<{
+    name: string; dimension: string;
+    status: "SUPPORTED" | "CANDIDATE" | "CONTRADICTED" | "INSUFFICIENT_EVIDENCE";
+    evidence: string[]; contradictions: string[]; unknowns: string[];
+  }>;
   nodes: Array<{ id: string; kind: string; label: string }>;
   relations: Array<{ source: string; target: string; relation: string; evidence_count?: number }>;
   total_nodes: number;
