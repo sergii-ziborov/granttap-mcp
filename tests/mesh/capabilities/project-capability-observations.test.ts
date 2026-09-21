@@ -48,3 +48,24 @@ test("MCP configuration, initialization, and missing credentials remain distinct
   assert.equal(state([{ ...server, authStatus: "not_authenticated" }]), "credential_missing");
   assert.equal(state([]), "not_found");
 });
+
+test("one initialized provider does not certify another provider with the same MCP name", () => {
+  const base = { name: "weavatrix", endpointId: "mac",
+    configuredEnabled: true, allowed: true, sessionIds: [] };
+  const request = { projectId: "project", requestId: "weavatrix-1", kind: "mcp" as const,
+    name: "weavatrix", requestedAt: 1 };
+  const observe = (mcpServers: Array<typeof base & {
+    provider: "codex" | "cursor"; metadataSource?: "mcp"; version?: string;
+  }>) => projectCapabilityObservations({
+    projectId: "project", endpointId: "mac", bound: true, requests: [request],
+    skills: [], mcpServers, now: 2,
+  })[0];
+  assert.equal(observe([
+    { ...base, provider: "codex", metadataSource: "mcp", version: "2" },
+    { ...base, provider: "cursor", version: "2" },
+  ])?.state, "configured");
+  assert.equal(observe([
+    { ...base, provider: "codex", metadataSource: "mcp", version: "2" },
+    { ...base, provider: "cursor", metadataSource: "mcp", version: "3" },
+  ])?.state, "version_conflict");
+});

@@ -57,19 +57,21 @@ function mcpObservation(
     || new Set(found.map((server) => server.version).filter(Boolean)).size > 1) {
     return { state: "version_conflict" };
   }
-  const server = found[0]!;
-  if (request.artifactDigest) return { state: "unsupported", version: server.version };
-  if (request.version && server.version && request.version !== server.version) {
-    return { state: "version_conflict", version: server.version };
+  const version = found.every((server) => server.version === found[0]?.version)
+    ? found[0]?.version : undefined;
+  if (request.artifactDigest) return { state: "unsupported", version };
+  if (request.version && found.some((server) => server.version !== request.version)) {
+    return { state: "version_conflict", version };
   }
-  if (!server.configuredEnabled || !server.allowed) {
-    return { state: "unsupported", version: server.version };
+  if (found.some((server) => !server.configuredEnabled || !server.allowed)) {
+    return { state: "unsupported", version };
   }
-  if (["not_authenticated", "unauthorized", "credential_missing"].includes(server.authStatus ?? "")) {
-    return { state: "credential_missing", version: server.version };
+  if (found.some((server) => ["not_authenticated", "unauthorized", "credential_missing"]
+    .includes(server.authStatus ?? ""))) {
+    return { state: "credential_missing", version };
   }
   return {
-    state: server.metadataSource === "mcp" ? "initialized" : "configured",
-    version: server.version,
+    state: found.every((server) => server.metadataSource === "mcp") ? "initialized" : "configured",
+    version,
   };
 }
