@@ -182,6 +182,7 @@ function linkSession(input: {
     endpointId: computerId,
     repositoryId: repository.canonicalRepositoryId,
     displayName: knownBinding?.displayName ?? (basename(repository.root) || "Repository"),
+    localPathHint: repository.root,
     available: true,
     revision: repository.revision,
   };

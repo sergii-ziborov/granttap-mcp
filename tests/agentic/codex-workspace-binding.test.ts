@@ -44,6 +44,9 @@ test("a discovered Git checkout binds to the existing Task and Project", () => {
     tokensSession: 0, tokensLastTurn: 0,
   };
   const first = linkSessionsToProjects(store, [session], "mac", inspectRepository, [])[0]!;
+  const skill = join(repo, ".agents", "skills", "review");
+  mkdirSync(skill, { recursive: true });
+  writeFileSync(join(skill, "SKILL.md"), "---\nname: review\ndescription: Review changes\n---\nReview code.\n");
   const linked = linkSessionsToProjects(store, [{ ...session, worktree: repo }],
     "mac", inspectRepository, [])[0]!;
   assert.equal(linked.taskId, first.taskId);
@@ -52,7 +55,10 @@ test("a discovered Git checkout binds to the existing Task and Project", () => {
   assert.equal(snapshot?.tasks.filter((task) => task.taskId === first.taskId).length, 1);
   assert.ok(snapshot?.bindings?.some((binding) =>
     binding.repositoryId === inspectRepository(repo).canonicalRepositoryId
-      && binding.revision === inspectRepository(repo).revision));
+      && binding.revision === inspectRepository(repo).revision
+      && binding.localPathHint === inspectRepository(repo).root));
   assert.ok(snapshot?.executions.some((execution) => execution.taskId === first.taskId
     && execution.repositoryId === inspectRepository(repo).canonicalRepositoryId));
+  assert.ok(store.snapshot(first.projectId!, "mac")?.skills?.some((item) =>
+    item.name === "review" && item.endpointId === "mac" && item.digest));
 });
