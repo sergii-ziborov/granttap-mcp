@@ -16,6 +16,8 @@ type WorktreeResult = NonNullable<ReturnType<typeof createHandoffWorktree>>;
 export type MeshRuntimeDependencies = {
   store: () => MeshStore;
   sessions: () => SessionInfo[];
+  /** Observed native configuration for a session on this endpoint. */
+  capabilityInventory?: (session: SessionInfo) => SessionInfo;
   computer: () => string;
   now: () => number;
   eventId: () => string;

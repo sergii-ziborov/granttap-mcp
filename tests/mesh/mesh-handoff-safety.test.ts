@@ -104,6 +104,23 @@ test("a clean checkout still hands off and reports its committed state", async (
   assert.equal(request.payload.capsule?.dirtyDiffHash, undefined);
 });
 
+test("Project snapshot includes observed MCP configuration for linked executions", async () => {
+  const repo = await gitRepository(false);
+  const run = await harness({
+    capabilityInventory: (session) => ({
+      ...session,
+      mcpServers: [{ name: "weavatrix", configuredEnabled: true, allowed: true }],
+    }),
+  });
+  run.sessions.push(sourceSession(repo));
+  run.sessions[0] = run.runtime.catalog(run.sessions)[0]!;
+  const projectId = run.sessions[0]!.projectId!;
+  const snapshot = run.runtime.snapshots().find((item) => item.projectId === projectId);
+  assert.equal(snapshot?.mcpServers?.[0]?.name, "weavatrix");
+  assert.equal(snapshot?.mcpServers?.[0]?.provider, "claude");
+  assert.deepEqual(snapshot?.mcpServers?.[0]?.sessionIds, ["claude-source"]);
+});
+
 test("a target without the commit says so instead of failing generically", async () => {
   const run = await harness({ hasCommit: () => false });
   run.store.upsertProject({

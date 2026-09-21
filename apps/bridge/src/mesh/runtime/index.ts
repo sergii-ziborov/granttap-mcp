@@ -38,6 +38,7 @@ import type { MeshRuntimeDependencies } from "./dependencies";
 import { localMeshStore } from "../local-remote/local";
 import { createHandoffWorktree, repositoryHasCommit } from "./worktree";
 import { fetchRevision, pushBranch } from "../local-remote/remote";
+import { projectSessionCapabilityInventory, projectExecutionCapabilitySessions } from "./capabilities";
 
 export type { MeshRuntimeDependencies };
 
@@ -55,6 +56,7 @@ function discoveredSessions(): SessionInfo[] {
 const defaultDependencies: MeshRuntimeDependencies = {
   store: localMeshStore,
   sessions: discoveredSessions,
+  capabilityInventory: projectSessionCapabilityInventory,
   computer: () => computerId(),
   now: Date.now,
   eventId: randomUUID,
@@ -165,7 +167,10 @@ export function createMeshRuntime(deps: MeshRuntimeDependencies) {
         const snapshot = store.snapshot(projectId);
         if (!snapshot) return [];
         const executionIds = new Set(snapshot.executions.map((item) => item.sessionId));
-        const mcpServers = projectMcpServers(sessions, projectId, executionIds);
+        const linked = projectExecutionCapabilitySessions(
+          snapshot, sessions, deps.computer(), deps.capabilityInventory,
+        );
+        const mcpServers = projectMcpServers(linked, projectId, executionIds);
         return [{
           ...snapshot,
           mcpServers: mcpServers.length > 0 ? mcpServers : undefined,

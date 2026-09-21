@@ -11,7 +11,9 @@ const CACHE_MS = 30_000;
 
 export function descriptorsForSession(session: SessionInfo): McpDescriptor[] {
   if (session.agent === "codex") return codexMcpDescriptors();
-  return claudeMcpDescriptors(session.cwd);
+  if (session.agent === "claude") return claudeMcpDescriptors(session.cwd);
+  if (session.agent === "cursor") return cursorMcpDescriptors(session.cwd);
+  return [];
 }
 
 export function ancestors(cwd: string): string[] {
@@ -65,6 +67,21 @@ function claudeMcpDescriptors(cwd: string | undefined): McpDescriptor[] {
   appendConfiguredServers(config.mcpServers, configs);
   if (cwd) {
     for (const dir of ancestors(cwd)) {
+      appendConfiguredServers(jsonFile(join(dir, ".mcp.json")).mcpServers, configs);
+    }
+  }
+  return [...configs.entries()]
+    .map(([name, transport]) => ({ name, configuredEnabled: true, transport }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function cursorMcpDescriptors(cwd: string | undefined): McpDescriptor[] {
+  const cursorDir = process.env.GRANTTAP_CURSOR_DIR ?? join(homedir(), ".cursor");
+  const configs = new Map<string, McpTransportConfig>();
+  appendConfiguredServers(jsonFile(join(cursorDir, "mcp.json")).mcpServers, configs);
+  if (cwd) {
+    for (const dir of ancestors(cwd)) {
+      appendConfiguredServers(jsonFile(join(dir, ".cursor", "mcp.json")).mcpServers, configs);
       appendConfiguredServers(jsonFile(join(dir, ".mcp.json")).mcpServers, configs);
     }
   }

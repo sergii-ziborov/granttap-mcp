@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import type { SessionInfo } from "../../packages/protocol/schema";
 
 test("task capabilities expose configured MCP servers plus global and repository skills", async (t) => {
   const dir = await mkdtemp(join(tmpdir(), "granttap-capabilities-"));
@@ -124,4 +125,35 @@ test("task capabilities expose configured MCP servers plus global and repository
     { name: "global-check", description: "Check every task on this machine." },
     { name: "release-check", description: "Verify a release before publishing." },
   ]);
+});
+
+test("Cursor inventory reads Cursor config and never borrows Claude or Grok servers", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-cursor-inventory-"));
+  const home = join(root, "home");
+  const cursor = join(home, ".cursor");
+  await mkdir(cursor, { recursive: true });
+  await writeFile(join(home, ".claude.json"), JSON.stringify({
+    mcpServers: { claudeOnly: { command: "claude-server" } },
+  }));
+  await writeFile(join(cursor, "mcp.json"), JSON.stringify({
+    mcpServers: { cursorOnly: { command: "cursor-server" } },
+  }));
+  const previousHome = process.env.HOME;
+  const previousCursor = process.env.GRANTTAP_CURSOR_DIR;
+  process.env.HOME = home;
+  process.env.GRANTTAP_CURSOR_DIR = cursor;
+  t.after(() => {
+    if (previousHome == null) delete process.env.HOME;
+    else process.env.HOME = previousHome;
+    if (previousCursor == null) delete process.env.GRANTTAP_CURSOR_DIR;
+    else process.env.GRANTTAP_CURSOR_DIR = previousCursor;
+  });
+  const { descriptorsForSession } = await import("../../apps/bridge/src/capabilities/descriptors");
+  const session = { sessionId: "one", agent: "cursor", state: "idle",
+    startedAt: 1, lastActivityAt: 1, tokensSession: 0, tokensLastTurn: 0,
+  } as SessionInfo;
+  assert.deepEqual(descriptorsForSession(session).map((item) => item.name), ["cursorOnly"]);
+  assert.deepEqual(descriptorsForSession({ ...session, agent: "claude" }).map((item) => item.name),
+    ["claudeOnly"]);
+  assert.deepEqual(descriptorsForSession({ ...session, agent: "grok" }), []);
 });
