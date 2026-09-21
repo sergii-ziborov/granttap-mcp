@@ -1,10 +1,7 @@
 /**
- * Auto-accept is configured from iOS only.
- *
- * The phone is the single source of truth: it sends `config.set`, the Mac
- * monitor persists it, and the hooks only ever read the stored level. This
- * pins that write path — default, pause, and a per-session override, plus the
- * fact that an unrelated config.set does not disturb auto-accept.
+ * The phone sends scoped auto-accept choices through `config.set`; the Mac
+ * persists them, and hooks read the Project decision for Mesh executions.
+ * Legacy machine defaults continue to apply only to standalone chats.
  */
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -117,6 +114,48 @@ test("a Mesh chat never inherits the machine auto-accept default", (t) => {
   }));
   assert.equal(autoAcceptLevelFor("mesh-chat"), "ask");
   assert.equal(autoAcceptLevelFor("standalone-chat"), "full");
+});
+
+test("an ambiguous native session ID cannot borrow another Project's auto-accept", (t) => {
+  withConfigDir(t);
+  handleConfigSet({ type: "config.set", autoAcceptDefault: "full", createdAt: 0 });
+  handleConfigSet({ type: "config.set", autoAcceptProject: { projectId: "one", level: "full" }, createdAt: 0 });
+  writeFileSync(join(process.env.GRANTTAP_CONFIG_DIR!, "project-mesh.json"), JSON.stringify({
+    version: 1,
+    projects: ["one", "two"].map((projectId) => ({ projectId, name: projectId, createdAt: 1 })),
+    tasks: ["one", "two"].map((projectId) => ({
+      taskId: `task-${projectId}`, projectId, title: "Work", goal: "Ship",
+      state: "working", createdAt: 1, updatedAt: 1,
+    })),
+    executions: ["one", "two"].map((projectId) => ({
+      taskId: `task-${projectId}`, sessionId: "reused-native-id", provider: "claude",
+      computerId: projectId, workspace: "/repo", startedAt: 1,
+    })),
+  }));
+  assert.equal(autoAcceptLevelFor("reused-native-id"), "ask");
+});
+
+test("a reused native ID across providers cannot borrow a session override", (t) => {
+  withConfigDir(t);
+  handleConfigSet({ type: "config.set", autoAcceptProject: { projectId: "one", level: "full" }, createdAt: 0 });
+  writeFileSync(join(process.env.GRANTTAP_CONFIG_DIR!, "project-mesh.json"), JSON.stringify({
+    version: 1,
+    projects: [{ projectId: "one", name: "One", createdAt: 1 }],
+    tasks: ["a", "b"].map((id) => ({ taskId: id, projectId: "one", title: id,
+      goal: id, state: "working", createdAt: 1, updatedAt: 1 })),
+    executions: ["claude", "codex"].map((provider, index) => ({
+      taskId: index === 0 ? "a" : "b", sessionId: "reused-native-id", provider,
+      computerId: "mac", workspace: "/repo", startedAt: index + 1,
+    })),
+  }));
+  assert.equal(autoAcceptLevelFor("reused-native-id"), "ask");
+});
+
+test("unreadable Mesh state fails auto-accept closed", (t) => {
+  withConfigDir(t);
+  handleConfigSet({ type: "config.set", autoAcceptDefault: "full", createdAt: 0 });
+  writeFileSync(join(process.env.GRANTTAP_CONFIG_DIR!, "project-mesh.json"), "{invalid");
+  assert.equal(autoAcceptLevelFor("possibly-mesh-chat"), "ask");
 });
 
 test("an unrelated config.set leaves auto-accept intact", (t) => {

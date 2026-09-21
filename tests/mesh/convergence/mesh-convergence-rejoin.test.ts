@@ -25,6 +25,9 @@ test("a chat already split across two Tasks is rejoined when the store loads", a
   const path = join(root, "mesh.json");
   // What a machine renamed by its network left behind: one chat, two Tasks,
   // and an execution under a computer that will never report again.
+  await writeFile(join(root, "computer.json"), JSON.stringify({
+    computerId: "Mac.lan", names: ["Mac.lan", "Serhiis-MacBook-Pro.local"], createdAt: now,
+  }));
   await writeFile(path, JSON.stringify({
     version: 1,
     projects: [project()],

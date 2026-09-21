@@ -13,7 +13,7 @@ import {
   shouldAutoAllow,
   type AutoAcceptLevel,
 } from "../../policy";
-import { loadStoreState } from "../../mesh/store/state";
+import { readStoreState } from "../../mesh/store/state";
 import {
   parseCortexByProject,
   type CortexProjectConfig,
@@ -213,21 +213,32 @@ export function saveRuntimeConfig(cfg: Partial<RuntimeConfig>): void {
   writePrivateFile(runtimeConfigPath(), JSON.stringify(merged, null, 2) + "\n");
 }
 
-function projectIdForSession(sessionId: string | null | undefined): string | undefined {
+function projectIdForSession(sessionId: string | null | undefined): string | null | undefined {
   if (!sessionId) return undefined;
   try {
-    const state = loadStoreState(join(configDir(), "project-mesh.json"));
-    const execution = state.executions.find((item) => item.sessionId === sessionId);
-    if (!execution) return undefined;
-    return state.tasks.find((item) => item.taskId === execution.taskId)?.projectId;
+    const loaded = readStoreState(join(configDir(), "project-mesh.json"));
+    if (loaded.status !== "ok" && loaded.status !== "missing") return null;
+    const state = loaded.state;
+    const executions = state.executions.filter((item) => item.sessionId === sessionId);
+    if (executions.length === 0) return undefined;
+    const routes = executions.map((execution) => {
+      const matches = state.tasks.filter((item) => item.taskId === execution.taskId);
+      const projectId = matches.length === 1 ? matches[0]!.projectId : undefined;
+      return projectId ? JSON.stringify([
+        projectId, execution.provider, execution.computerId, execution.workspace, execution.sessionId,
+      ]) : null;
+    });
+    if (routes.some((route) => route == null) || new Set(routes).size !== 1) return null;
+    return state.tasks.find((item) => item.taskId === executions[0]!.taskId)?.projectId ?? null;
   } catch {
-    return undefined;
+    return null;
   }
 }
 
 export function autoAcceptLevelFor(sessionId: string | null | undefined): AutoAcceptLevel {
   const cfg = loadRuntimeConfig();
   const projectId = projectIdForSession(sessionId);
+  if (projectId === null) return "ask";
   return resolveAutoAcceptLevel({
     paused: cfg.autoAcceptPaused,
     // A Mesh execution without an explicit Project level must fail closed.

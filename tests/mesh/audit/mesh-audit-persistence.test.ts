@@ -75,6 +75,9 @@ test("a change not yet written is laid over what another process wrote, when the
 test("a receipt written before a Task was rejoined still names its capsule", async () => {
   const root = await mkdtemp(join(tmpdir(), "granttap-audit-receipt-"));
   const path = join(root, "mesh.json");
+  await writeFile(join(root, "computer.json"), JSON.stringify({
+    computerId: "Mac.lan", names: ["Mac.lan", "Serhiis-MacBook-Pro.local"], createdAt: now,
+  }));
   const requested = capsule({ taskId: "task-new" });
   const oldHash = capsuleHash(requested);
   const request = event("req", "HANDOFF_REQUEST", { capsule: requested }, {
@@ -234,6 +237,9 @@ test("the runtime rejoins a split chat exactly as the shared fixture says the ph
   assert.equal(capsuleHash(request.payload.capsule!), expected.originalCapsuleHash, "the fixture's hash is this runtime's hash");
   const root = await mkdtemp(join(tmpdir(), "granttap-audit-fixture-"));
   const path = join(root, "mesh.json");
+  await writeFile(join(root, "computer.json"), JSON.stringify({
+    computerId: "Mac.lan", names: ["Mac.lan", "Serhiis-MacBook-Pro.local"], createdAt: now,
+  }));
   await writeFile(path, JSON.stringify({
     version: 1, projects: [input.project], bindings: [], tasks: input.tasks, executions: input.executions,
     claims: input.claims, dependencies: input.dependencies, events: input.events,

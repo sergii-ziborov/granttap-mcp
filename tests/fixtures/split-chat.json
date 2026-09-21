@@ -1,5 +1,5 @@
 {
-  "description": "One chat published as two Tasks by a computer renamed by its network. Both the runtime and the phone must rejoin it the same way: the older Task survives, every reference inside every event moves with it, a dependency between the two halves disappears, and a receipt that named the old capsule hash names the new one.",
+  "description": "One chat published as two Tasks on the same endpoint. Both the runtime and the phone rejoin only this proven scope: the older Task survives, references move, and the receipt names the rewritten capsule hash.",
   "input": {
     "type": "mesh.snapshot",
     "sessionId": "project",
@@ -12,7 +12,7 @@
     ],
     "executions": [
       { "taskId": "task-old", "sessionId": "chat", "provider": "claude", "computerId": "Mac.lan", "workspace": "/repo", "startedAt": 1800000000000 },
-      { "taskId": "task-new", "sessionId": "chat", "provider": "claude", "computerId": "Serhiis-MacBook-Pro.local", "workspace": "/repo", "startedAt": 1800000005000 }
+      { "taskId": "task-new", "sessionId": "chat", "provider": "claude", "computerId": "Mac.lan", "workspace": "/repo", "startedAt": 1800000005000 }
     ],
     "claims": [
       { "claimId": "c-new", "projectId": "project", "taskId": "task-new", "ownerSessionId": "chat", "resource": "src/auth/**", "mode": "claim", "createdAt": 1800000000000, "expiresAt": 1900000000000 }

@@ -176,6 +176,9 @@ test("a store file that cannot be read is set aside, never written over", async 
 test("a rejoined chat carries its events and dependencies to the surviving Task", async () => {
   const root = await mkdtemp(join(tmpdir(), "granttap-audit-rejoin-"));
   const path = join(root, "mesh.json");
+  await writeFile(join(root, "computer.json"), JSON.stringify({
+    computerId: "Mac.lan", names: ["Mac.lan", "Serhiis-MacBook-Pro.local"], createdAt: now,
+  }));
   const scoped = (taskId: string) => ({ ...claim("c-new"), taskId });
   await writeFile(path, JSON.stringify({
     version: 1,
