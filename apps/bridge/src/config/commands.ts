@@ -46,6 +46,7 @@ export function configMutationDigest(message: ConfigSet): string {
     providerEnabled: message.providerEnabled ?? null,
     meshEnabled: message.meshEnabled ?? null,
     contextCompilerEnabled: message.contextCompilerEnabled ?? null,
+    cortexIntegration: message.cortexIntegration ?? null,
   };
   return createHash("sha256").update(JSON.stringify(body)).digest("hex");
 }
@@ -107,6 +108,13 @@ function applyRuntimePatch(message: ConfigSet): void {
   if (typeof message.meshEnabled === "boolean") runtime.meshEnabled = message.meshEnabled;
   if (typeof message.contextCompilerEnabled === "boolean") {
     runtime.contextCompilerEnabled = message.contextCompilerEnabled;
+  }
+  if (message.cortexIntegration) {
+    const value = message.cortexIntegration;
+    runtime.cortexByProject[value.projectId] = {
+      enabled: value.enabled,
+      maxTokens: value.maxTokens,
+    };
   }
   saveRuntimeConfig(runtime);
 }

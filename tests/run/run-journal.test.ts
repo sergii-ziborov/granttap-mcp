@@ -114,7 +114,7 @@ test("the map reads as a page and the brief as the few lines that matter to one 
   assert.match(map, /- \*\*Consume refund events\*\* — working; codex on mac-a in payment-worker — task progress: Phone: «fold it» → done/);
   assert.match(map, /- \*\*Old idea\*\* — working\n/, "no live execution, no computer");
   assert.match(map, /## Editing now\n\n- `apps\/api`: Add refunds to the API \(seen editing apps\/api\/src\/refunds\.ts\); Consume refund events \(claimed apps\/api\/src\/events\.ts\)/);
-  assert.match(map, /## Other side\n\n- payments-api produces payment\.completed → payment-worker \(kafka\) — Add refunds to the API, Consume refund events working across it/);
+  assert.match(map, /## Repository topology\n\n- payments-api produces payment\.completed → payment-worker \(kafka, legacy\)/);
   assert.match(map, /## Dependencies\n\n- \(none\)/);
   assert.match(map, /## Recent\n\n- \d\d:\d\d Consume refund events — task progress: Phone: «fold it»/);
 
@@ -129,7 +129,7 @@ test("the map reads as a page and the brief as the few lines that matter to one 
 
   const empty = meshMap({ ...snapshot, tasks: [], executions: [], claims: [], dependencies: [], events: [], peers: undefined }, at);
   assert.match(empty, /_0 Tasks · 0 active in the last hour/);
-  assert.match(empty, /- \(none\)\n\n## Editing now\n\n- \(nothing claimed\)\n\n## Other side\n\n- \(no integration map; commit a WEAVATRIX\.md/);
+  assert.match(empty, /- \(none\)\n\n## Editing now\n\n- \(nothing claimed\)\n\n## Repository topology\n\n- \(Engine topology has not been observed yet\)/);
   assert.match(empty, /## Recent\n\n- \(quiet\)/);
 });
 
@@ -313,4 +313,3 @@ test("a chat that has not done anything for an hour is idle, not live, in the ma
     "Also active in this Project within the hour: Add refunds to the API (payments-api, 5 min ago). 1 other chat here is open but idle.",
   );
 });
-

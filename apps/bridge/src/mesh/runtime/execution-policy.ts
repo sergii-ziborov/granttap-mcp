@@ -24,8 +24,7 @@ function loadAll(): StoredExecutionPolicy[] {
 
 function saveAll(policies: StoredExecutionPolicy[]): void {
   writePrivateFile(executionPoliciesPath(), `${JSON.stringify({ policies }, null, 2)}\n`);
-  setRequireFreshCommands(policies.some((item) =>
-    item.mode === "pinned" && item.hostGrantStatus === "applied"));
+  setRequireFreshCommands(policies.some((item) => item.mode === "pinned"));
 }
 
 export function loadExecutionPolicy(projectId: string): StoredExecutionPolicy | undefined {
@@ -37,17 +36,26 @@ export function rememberExecutionPolicy(
   execution: ProjectExecutionPolicy | undefined,
   localEndpointId: string,
 ): StoredExecutionPolicy | undefined {
-  const policies = loadAll().filter((item) => item.projectId !== projectId);
+  const all = loadAll();
+  const current = all.find((item) => item.projectId === projectId);
+  const policies = all.filter((item) => item.projectId !== projectId);
   if (!execution) {
     saveAll(policies);
     return undefined;
   }
   const localHost = execution.mode === "pinned" && execution.targetEndpointId === localEndpointId;
+  const sameGrant = localHost
+    && current?.mode === "pinned"
+    && current.targetEndpointId === execution.targetEndpointId
+    && current.revision === execution.revision
+    && (current.hostGrantStatus === "applied" || current.hostGrantStatus === "unavailable");
   const stored: StoredExecutionPolicy = {
     ...execution,
     projectId,
-    hostGrantStatus: localHost ? "applied" : execution.mode === "pinned" ? "pending" : "none",
-    hostGrantId: localHost ? execution.hostGrantId ?? `grant:${localEndpointId}` : execution.hostGrantId,
+    hostGrantStatus: execution.mode === "pinned"
+      ? sameGrant ? current.hostGrantStatus : "pending"
+      : "none",
+    hostGrantId: sameGrant ? current.hostGrantId : undefined,
   };
   saveAll([...policies, stored]);
   return stored;
@@ -99,7 +107,11 @@ export function applyHostGrant(
     return current;
   }
   if (current.revision !== revision) return current;
-  const next: StoredExecutionPolicy = { ...current, hostGrantStatus: grant };
+  const next: StoredExecutionPolicy = {
+    ...current,
+    hostGrantStatus: grant,
+    hostGrantId: grant === "applied" ? current.hostGrantId ?? `grant:${localEndpointId}` : current.hostGrantId,
+  };
   const others = loadAll().filter((item) => item.projectId !== projectId);
   saveAll([...others, next]);
   return next;

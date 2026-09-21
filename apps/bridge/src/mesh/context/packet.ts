@@ -1,42 +1,54 @@
-/**
- * Compact Mesh context for the calling Task.
- *
- * This is GrantTap's own packet, compiled inside Mesh. Cortex Loom may later
- * feed evidence into the same shape as a library. It is not an MCP server.
- */
+import { cortexContextForView } from "../../cortex/integration";
+import { loadRuntimeConfig } from "../../config/runtime";
 import type { ScopedMeshView } from "../snapshot/scoped-view";
 
 export type MeshContextPacket = {
-  schema: "granttap.mesh-context.v1";
-  taskId: string | null;
-  title: string | null;
-  state: string | null;
-  claims: string[];
-  neighbours: string[];
-  events: string[];
-  otherSide: string[];
+  schema: "granttap.mesh-context.v2";
+  taskId: string;
+  state: "disabled" | "unavailable" | "succeeded" | "degraded";
+  compiler: "cortex-context";
+  version?: string;
+  revision?: string;
+  packetId?: string;
+  snapshotId?: string;
+  content?: string;
+  included?: string[];
+  omitted?: string[];
+  rawEstimatedTokens?: number;
+  selectedEstimatedTokens?: number;
+  omittedEstimatedTokens?: number;
+  deduplicatedLines?: number;
+  requiresUpstream?: boolean;
 };
 
-const MAX_ITEMS = 12;
-const MAX_CHARS = 160;
-
-function clip(value: string): string {
-  const text = value.replace(/\s+/g, " ").trim();
-  return text.length <= MAX_CHARS ? text : `${text.slice(0, MAX_CHARS - 1)}…`;
-}
-
-export function compileMeshContext(view: ScopedMeshView): MeshContextPacket {
+/** Compile the permitted Task evidence through the linked Cortex library. */
+export async function compileMeshContext(view: ScopedMeshView): Promise<MeshContextPacket> {
+  const taskId = view.task?.taskId ?? view.execution.taskId;
+  const enabled = loadRuntimeConfig().cortexByProject[view.project.projectId]?.enabled === true;
+  if (!enabled) return {
+    schema: "granttap.mesh-context.v2", taskId, state: "disabled", compiler: "cortex-context",
+  };
+  const compilation = await cortexContextForView(view);
+  if (!compilation) return {
+    schema: "granttap.mesh-context.v2", taskId, state: "unavailable", compiler: "cortex-context",
+  };
+  const packet = compilation.packet;
   return {
-    schema: "granttap.mesh-context.v1",
-    taskId: view.task?.taskId ?? view.execution.taskId ?? null,
-    title: view.task?.title ? clip(view.task.title) : null,
-    state: view.task?.state ?? null,
-    claims: view.claims.slice(0, MAX_ITEMS).map((claim) => clip(claim.resource)),
-    neighbours: view.neighbours.slice(0, MAX_ITEMS).map((row) =>
-      clip(`${row.kind} ${row.claim.resource}`)),
-    events: view.events.slice(-MAX_ITEMS).map((event) =>
-      clip(`${event.eventType}${event.payload.summary ? `: ${event.payload.summary}` : ""}`)),
-    otherSide: view.otherSide.slice(0, MAX_ITEMS).map((row) =>
-      clip(`${row.repositoryId} ${row.title}`)),
+    schema: "granttap.mesh-context.v2",
+    taskId,
+    state: packet.requires_upstream ? "degraded" : "succeeded",
+    compiler: "cortex-context",
+    version: compilation.cortex_version,
+    revision: compilation.cortex_revision,
+    packetId: packet.packet_id ?? undefined,
+    snapshotId: packet.snapshot_id ?? undefined,
+    content: packet.content,
+    included: packet.included_ids,
+    omitted: packet.omitted_ids,
+    rawEstimatedTokens: packet.raw_estimated_tokens,
+    selectedEstimatedTokens: packet.selected_estimated_tokens,
+    omittedEstimatedTokens: packet.omitted_estimated_tokens,
+    deduplicatedLines: packet.deduplicated_lines,
+    requiresUpstream: packet.requires_upstream,
   };
 }

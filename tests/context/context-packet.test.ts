@@ -71,18 +71,16 @@ function view(overrides: Partial<ScopedMeshView> = {}): ScopedMeshView {
   };
 }
 
-test("Mesh compiles its own bounded packet without an MCP compiler", () => {
-  const packet = compileMeshContext(view());
-  assert.equal(packet.schema, "granttap.mesh-context.v1");
+test("Mesh exposes Cortex library status without an MCP compiler", async () => {
+  const packet = await compileMeshContext(view());
+  assert.equal(packet.schema, "granttap.mesh-context.v2");
   assert.equal(packet.taskId, "task-1");
-  assert.equal(packet.title, "Pair without Cursor console settings");
-  assert.equal(packet.state, "working");
-  assert.deepEqual(packet.claims, ["apps/mcp/src/cursor-config.ts"]);
-  assert.deepEqual(packet.events, ["TASK_PROGRESS: Removed the user HTTP MCP entry"]);
-  assert.deepEqual(packet.otherSide, ["granttap-ios-public iOS pairing card"]);
+  assert.equal(packet.state, "disabled");
+  assert.equal(packet.compiler, "cortex-context");
+  assert.equal(packet.content, undefined);
 });
 
-test("compact context keeps event ids and question text without a second full copy", () => {
+test("compact context keeps event ids and question text with compiler provenance", async () => {
   const blocked = view({
     events: [{
       type: "mesh.event",
@@ -104,14 +102,14 @@ test("compact context keeps event ids and question text without a second full co
   assert.equal(compact.repository.worktree, "/tmp/repo");
   assert.equal(compact.expand.full, "granttap://mesh/current?mode=full");
   assert.ok(!("packet" in compact));
-  const full = renderProjectContext(blocked, "full") as { mode: string; events: unknown[] };
+  const full = await renderProjectContext(blocked, "full") as { mode: string; events: unknown[] };
   assert.equal(full.mode, "full");
   assert.ok(!("packet" in full));
   const json = JSON.stringify(compact);
-  assert.ok(json.length < JSON.stringify({ ...blocked, packet: compileMeshContext(blocked) }).length);
+  assert.ok(json.length < JSON.stringify(blocked).length);
 });
 
-test("broadcast plans a distinct result for each recipient", () => {
+test("broadcast plans a distinct result for each recipient", async () => {
   const planned = planBroadcast([
     { executionId: "offline", canWrite: true, paused: false, online: false },
     { executionId: "paused", canWrite: true, paused: true, online: true },
@@ -123,7 +121,7 @@ test("broadcast plans a distinct result for each recipient", () => {
   assert.equal(retryable(planned[3]!), false);
   assert.equal(parseProjectContextMode(undefined), "compact");
   assert.equal(parseProjectContextMode("full"), "full");
-  const legacy = renderProjectContext(view(), "legacy") as { mode: string; packet?: unknown };
+  const legacy = await renderProjectContext(view(), "legacy") as { mode: string; contextPacket?: unknown };
   assert.equal(legacy.mode, "legacy");
-  assert.ok(legacy.packet);
+  assert.ok(legacy.contextPacket);
 });

@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import {
   capabilityFingerprint,
   carriesCoAuthorship,
+  deployPhrase,
   mcpCapabilityFingerprint,
+  networkCommand,
 } from "../../apps/bridge/src/policy/capability-fingerprint";
 import {
   evaluateEffectiveAction,
@@ -241,6 +243,65 @@ test("capability fingerprints classify without retaining raw arguments", () => {
   assert.equal(configuredMcp.confidence, "exact");
   assert.equal(configuredMcp.config_hash, "a".repeat(64));
   assert.equal(mcpCapabilityFingerprint("cursor", {}).confidence, "unknown");
+});
+
+test("capability fingerprints bound malformed identities and cover every public capability family", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "granttap-fingerprint-matrix-"));
+  const script = join(root, "verify.sh");
+  const directory = join(root, "folder.sh");
+  const link = join(root, "linked.sh");
+  writeFileSync(script, "#!/bin/sh\ntrue\n");
+  mkdirSync(directory);
+  symlinkSync(script, link);
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  const families = [
+    ["Write", "file_write"], ["WebFetch", "network"], ["Task", "agent"],
+    ["provider/exec_command", "shell"], [undefined, "agent"],
+  ] as const;
+  for (const [toolName, kind] of families) {
+    assert.equal(capabilityFingerprint({ provider: "codex", toolName }).kind, kind);
+  }
+  assert.equal(capabilityFingerprint({
+    provider: "codex", toolName: `mcp__${"x".repeat(200)}__call`,
+  }).display_name, "Unknown MCP");
+  assert.equal(capabilityFingerprint({ provider: "codex", toolName: "Skill" }).kind, "agent");
+  assert.equal(capabilityFingerprint({ provider: "codex", toolName: "Skill(release)" }).display_name,
+    "release");
+  assert.equal(capabilityFingerprint({ provider: "codex", toolName: "Skill__\u0001" }).kind, "agent");
+
+  for (const command of [script, link, directory, join(root, "missing.sh")]) {
+    const result = capabilityFingerprint({
+      provider: "codex", cwd: root, toolName: "shell", toolInput: { command },
+    });
+    assert.equal(result.kind, "script");
+    assert.equal(result.display_name, command.split("/").at(-1));
+  }
+  assert.equal(capabilityFingerprint({
+    provider: "codex", cwd: root, toolName: "shell", toolInput: { command: ["bash", "verify.sh"] },
+  }).kind, "script");
+  assert.equal(capabilityFingerprint({
+    provider: "codex", cwd: "relative", toolName: "shell", toolInput: { command: "node ./run.js" },
+  }).executable_path_hash, undefined);
+  assert.equal(capabilityFingerprint({
+    provider: "codex", toolName: "shell", toolInput: { command: "'./quoted.sh'" },
+  }).display_name, "quoted.sh");
+
+  const configs = [
+    [{}, "unknown"],
+    [{ serverName: "github" }, "name_only"],
+    [{ serverName: "github", transport: "stdio" }, "strong"],
+    [{ serverName: "github", configHash: "A".repeat(64) }, "exact"],
+    [{ serverName: "\u0001", transport: "x".repeat(200), configHash: "no" }, "unknown"],
+  ] as const;
+  for (const [evidence, confidence] of configs) {
+    assert.equal(mcpCapabilityFingerprint("codex", evidence).confidence, confidence);
+  }
+  assert.equal(deployPhrase("RELEASE now"), "release");
+  assert.equal(deployPhrase("build only"), undefined);
+  assert.equal(networkCommand("rsync -a source target"), "rsync");
+  assert.equal(networkCommand("local command"), undefined);
+  assert.equal(carriesCoAuthorship("git merge x -m 'Generated with Claude'"), true);
 });
 
 function policyClient(effect: "allow" | "ask" | "deny"): EngineClientLike {

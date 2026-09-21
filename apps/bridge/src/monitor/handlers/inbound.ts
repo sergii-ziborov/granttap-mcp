@@ -6,7 +6,11 @@ import { handleToolUpdate } from "../../tools/update-handler";
 import { loadRuntimeConfig } from "../../config";
 import { localMeshStore } from "../../mesh/local-remote/local";
 import { sendProjectPayload } from "../../host/session-keys";
-import { handleMeshPayload, prepareMeshHandoff } from "../../mesh/runtime";
+import {
+  handleMeshPayload,
+  prepareMeshHandoff,
+  requestProjectCapability,
+} from "../../mesh/runtime";
 import { releaseClaimByPerson, releaseResult } from "../../mesh/admin";
 import { handleInvocationQuery } from "../../engine/invocation/query";
 import { applyPairingJoin } from "../../pairing";
@@ -95,16 +99,13 @@ export async function handleMonitorMessage(
       void publish().catch(() => {});
       return true;
     } else if (payload.type === "tool.update") {
-      // Minutes long, so the relay loop does not wait on it: the phone sees
-      // `updating` in the next status and the result when it lands.
-      void handleToolUpdate(
-        (result) => client.send(result, "phone", { ttlMs: 15 * 60_000 }),
-        payload,
-      ).catch(() => {}).finally(() => { void publish().catch(() => {}); });
-      void publish().catch(() => {});
-      return true;
+      return handleInboundToolUpdate(client, payload, publish);
     } else if (payload.type === "project.policy.set" && loadRuntimeConfig().meshEnabled) {
       return handleProjectPolicySet(client, payload);
+    } else if (payload.type === "project.capability.request" && loadRuntimeConfig().meshEnabled) {
+      const accepted = requestProjectCapability(payload);
+      if (accepted) void publish().catch(() => {});
+      return accepted;
     } else if (payload.type === "mesh.invocation.query" && loadRuntimeConfig().meshEnabled) {
       return handleInvocationQuery(client, payload);
     } else if ((payload.type === "mesh.event" || payload.type === "mesh.snapshot")
@@ -126,6 +127,19 @@ export async function handleMonitorMessage(
       return true;
     }
     return false;
+}
+
+function handleInboundToolUpdate(
+  client: RelayClient, payload: Extract<Payload, { type: "tool.update" }>,
+  publish: (forceHistory?: boolean) => Promise<void>,
+): boolean {
+  // Minutes long, so the relay loop does not wait on it. The phone sees the
+  // intermediate status and the result when the update lands.
+  void handleToolUpdate(
+    (result) => client.send(result, "phone", { ttlMs: 15 * 60_000 }), payload,
+  ).catch(() => {}).finally(() => { void publish().catch(() => {}); });
+  void publish().catch(() => {});
+  return true;
 }
 
 function handleInboundPairingJoin(payload: Extract<Payload, { type: "pairing.join" }>): boolean {

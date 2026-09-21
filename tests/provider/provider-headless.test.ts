@@ -31,11 +31,11 @@ test("phone delivery starts and resumes Codex with the selected CLI", async (t) 
     ? delete process.env.GRANTTAP_CODEX_BIN
     : process.env.GRANTTAP_CODEX_BIN = previous);
 
-  const created = await createCodexSession("Start", root, 5_000);
+  const created = await createCodexSession("Start", root, 5_000, [], "gpt-project");
   assert.equal(created.ok, true);
   if (!created.ok) return;
   assert.equal(created.sessionId, "new-codex");
-  assert.match(created.text, /exec\|--json\|--skip-git-repo-check/);
+  assert.match(created.text, /exec\|-m\|gpt-project\|--json\|--skip-git-repo-check/);
 
   const resumed = await deliverToSession({
     sessionId: "existing-codex", agent: "codex", cwd: root, state: "idle",
@@ -59,17 +59,18 @@ test("Cursor new task and continuation use its persisted headless session", asyn
     ? delete process.env.GRANTTAP_CURSOR_AGENT_BIN
     : process.env.GRANTTAP_CURSOR_AGENT_BIN = previous);
 
-  const created = await createCursorSession("Implement", root, 5_000);
+  const created = await createCursorSession("Implement", root, 5_000, [], "composer-project");
   assert.equal(created.ok, true);
   if (!created.ok) return;
   assert.equal(created.sessionId, "cursor-new");
-  assert.match(created.text, /-p\|--output-format\|json\|Implement/);
+  assert.match(created.text, /-p\|--model\|composer-project\|--output-format\|json\|Implement/);
   const resumed = await deliverToSession({
     sessionId: "cursor-existing", agent: "cursor", cwd: root, state: "idle",
     startedAt: 1, lastActivityAt: 1, tokensSession: 0, tokensLastTurn: 0,
-  }, "Continue", 5_000);
+  }, "Continue", 5_000, [], { model: "composer-project" });
   assert.equal(resumed.ok, true);
   if (resumed.ok) assert.match(resumed.text, /--resume\|cursor-existing/);
+  if (resumed.ok) assert.match(resumed.text, /--model\|composer-project/);
 });
 
 test("Grok Build new task fixes an identity and continuation resumes it", async (t) => {
@@ -90,16 +91,22 @@ test("Grok Build new task fixes an identity and continuation resumes it", async 
     ? delete process.env.GRANTTAP_GROK_BIN
     : process.env.GRANTTAP_GROK_BIN = previous);
 
-  const created = await createGrokSession("Verify", root, 5_000);
+  const created = await createGrokSession("Verify", root, 5_000, [], "grok-project");
   assert.equal(created.ok, true);
   if (!created.ok) return;
   assert.match(created.sessionId ?? "", /^[0-9a-f-]{36}$/);
   assert.match(created.text, /--no-auto-update\|--cwd/);
   assert.match(created.text, /--output-format\|streaming-json/);
+  assert.match(created.text, /--model\|grok-project/);
   const resumed = await deliverToSession({
     sessionId: "grok-existing", agent: "grok", cwd: root, state: "idle",
     startedAt: 1, lastActivityAt: 1, tokensSession: 0, tokensLastTurn: 0,
-  }, "Continue", 5_000);
+  }, "Continue", 5_000, [], {
+    model: "grok-project", permissionMode: "manual", effort: "high",
+  });
   assert.equal(resumed.ok, true);
   if (resumed.ok) assert.match(resumed.text, /--resume\|grok-existing/);
+  if (resumed.ok) assert.match(resumed.text, /--model\|grok-project/);
+  if (resumed.ok) assert.match(resumed.text, /--permission-mode\|default/);
+  if (resumed.ok) assert.match(resumed.text, /--reasoning-effort\|high/);
 });

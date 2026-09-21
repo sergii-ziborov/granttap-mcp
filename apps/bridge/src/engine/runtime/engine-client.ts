@@ -196,6 +196,9 @@ function expectedResultOperation(
   if (operation === "project.get") return "project.found";
   if (operation === "project.list_bindings") return "project.bindings";
   if (operation === "project.upsert_binding") return "project.binding_upserted";
+  if (operation === "graph.get_backbone") return "graph.backbone";
+  if (operation === "graph.analyze_repository") return "graph.repository";
+  if (operation === "context.compile_project") return "context.compiled";
   if (operation === "invocation.observe") return "invocation.observed";
   if (operation === "invocation.history") return "invocation.history";
   if (operation === "policy.get") return "policy.found";

@@ -61,6 +61,8 @@ function withLocalExecution(policy: ProjectPolicy): ProjectPolicy {
       execution: {
         mode: execution.mode,
         targetEndpointId: execution.targetEndpointId,
+        defaultProvider: execution.defaultProvider,
+        defaultModel: execution.defaultModel,
         revision: execution.revision,
         hostGrantId: execution.hostGrantId,
         hostGrantStatus: execution.hostGrantStatus,

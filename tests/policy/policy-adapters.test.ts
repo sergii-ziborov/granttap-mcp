@@ -63,6 +63,14 @@ test("safe shell allowlist rejects chaining, writes, long input, and unknown com
     sessionId: "session",
     projectId: "project",
   }), "safe", "a chat override wins over the Project");
+  assert.equal(resolveAutoAcceptLevel({
+    defaultLevel: "full", byProject: { project: "ask" },
+    bySession: { session: "full" }, sessionId: "session", projectId: "project",
+  }), "ask", "a legacy session override cannot enlarge Project automation");
+  assert.equal(resolveAutoAcceptLevel({
+    defaultLevel: "full", byProject: { project: "except_push" },
+    bySession: { session: "except_destructive" }, sessionId: "session", projectId: "project",
+  }), "except_push", "an override cannot silently allow push");
   assert.equal(resolveAutoAcceptLevel({}), "except_push");
 });
 

@@ -63,10 +63,11 @@ export function createCodexSession(
   cwd?: string,
   timeoutMs = 240_000,
   attachments: UserAttachment[] = [],
+  model?: string,
 ): Promise<ReplyResult> {
   const workspace = resolveAgentWorkspace(cwd, "codex");
   return queued("__new_codex_task__", () => withAttachments(attachments, text, (prepared) =>
-    runCodexNew(prepared.prompt, workspace, timeoutMs, prepared.images),
+    runCodexNew(prepared.prompt, workspace, timeoutMs, prepared.images, model),
   ));
 }
 
@@ -76,10 +77,11 @@ export function createClaudeSession(
   cwd?: string,
   timeoutMs = 240_000,
   attachments: UserAttachment[] = [],
+  model?: string,
 ): Promise<ReplyResult> {
   const workspace = resolveAgentWorkspace(cwd, "claude");
   return queued("__new_claude_task__", () => withAttachments(attachments, text, (prepared) =>
-    runClaudeNew(prepared.claudePrompt, workspace, timeoutMs),
+    runClaudeNew(prepared.claudePrompt, workspace, timeoutMs, model),
   ));
 }
 
@@ -88,10 +90,11 @@ export function createCursorSession(
   cwd?: string,
   timeoutMs = 240_000,
   attachments: UserAttachment[] = [],
+  model?: string,
 ): Promise<ReplyResult> {
   const workspace = resolveAgentWorkspace(cwd, "cursor");
   return queued("__new_cursor_task__", () => withAttachments(attachments, text, (prepared) =>
-    runCursorNew(prepared.claudePrompt, workspace, timeoutMs),
+    runCursorNew(prepared.claudePrompt, workspace, timeoutMs, model),
   ));
 }
 
@@ -100,10 +103,11 @@ export function createGrokSession(
   cwd?: string,
   timeoutMs = 240_000,
   attachments: UserAttachment[] = [],
+  model?: string,
 ): Promise<ReplyResult> {
   const workspace = resolveAgentWorkspace(cwd, "grok");
   return queued("__new_grok_task__", () => withAttachments(attachments, text, (prepared) =>
-    runGrokNew(prepared.claudePrompt, workspace, timeoutMs),
+    runGrokNew(prepared.claudePrompt, workspace, timeoutMs, model),
   ));
 }
 
@@ -127,8 +131,8 @@ function runDelivery(
   const routed = routingPrompt(session, text, options);
   if (session.agent === "claude") return runClaude(session, routed, timeoutMs, options);
   if (session.agent === "codex") return runCodex(session, routed, timeoutMs, images, options);
-  if (session.agent === "cursor") return runCursorResume(session, routed, timeoutMs);
-  if (session.agent === "grok") return runGrokResume(session, routed, timeoutMs);
+  if (session.agent === "cursor") return runCursorResume(session, routed, timeoutMs, options.model);
+  if (session.agent === "grok") return runGrokResume(session, routed, timeoutMs, options);
   return Promise.resolve({ ok: false, error: `unknown agent: ${session.agent}` });
 }
 
@@ -171,8 +175,10 @@ function runClaude(
   }, undefined, session.sessionId);
 }
 
-function runClaudeNew(text: string, cwd: string, timeoutMs: number): Promise<ReplyResult> {
-  const args = ["-p", "--output-format", "json", text];
+function runClaudeNew(
+  text: string, cwd: string, timeoutMs: number, model?: string,
+): Promise<ReplyResult> {
+  const args = ["-p", ...(model ? ["--model", model] : []), "--output-format", "json", text];
   const claude = resolveClaudeBinary();
   return runProcess(claude.path, args, cwd, timeoutMs, (stdout) => {
     try {
@@ -269,10 +275,12 @@ function runCodexNew(
   cwd: string,
   timeoutMs: number,
   images: string[] = [],
+  model?: string,
 ): Promise<ReplyResult> {
   // This is the supported non-interactive Codex path. It preserves the user's
   // normal sandbox, approval, hooks, model, and auth configuration.
   const imageArgs = images.flatMap((path) => ["-i", path]);
-  const args = ["exec", ...imageArgs, "--json", "--skip-git-repo-check", "-"];
+  const args = ["exec", ...(model ? ["-m", model] : []), ...imageArgs,
+    "--json", "--skip-git-repo-check", "-"];
   return runProcess(resolveCodexBinary(), args, cwd, timeoutMs, parseCodexJsonl, text);
 }

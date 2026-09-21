@@ -21,10 +21,8 @@ export const IntegrationRelation = z.enum(["produces", "consumes", "calls", "cal
 export type IntegrationRelation = z.infer<typeof IntegrationRelation>;
 
 /**
- * One edge of the integration map a bound repository keeps in its
- * `WEAVATRIX.md`: the other repository on the far side of a database, a topic,
- * or an API, as that repository states it. Only stated edges travel; nothing is
- * inferred on the way.
+ * Legacy compatibility edge. The verified Rust Engine Backbone is the
+ * authoritative topology whenever it is available.
  */
 export const IntegrationPeer = z.object({
   projectId: Identifier,
@@ -53,6 +51,40 @@ export const SharedSkill = z.object({
 }).strict();
 export type SharedSkill = z.infer<typeof SharedSkill>;
 
+/** One MCP server actually advertised by a Project execution. */
+export const ProjectMcpServer = z.object({
+  name: Label,
+  title: Label.optional(),
+  provider: MeshProvider,
+  endpointId: Identifier,
+  configuredEnabled: z.boolean(),
+  allowed: z.boolean(),
+  authStatus: z.string().trim().min(1).max(80).optional(),
+  sessionIds: z.array(Identifier).min(1).max(64),
+}).strict();
+export type ProjectMcpServer = z.infer<typeof ProjectMcpServer>;
+
+export const ProjectCapabilityRequest = z.object({
+  projectId: Identifier,
+  kind: z.enum(["skill", "mcp"]),
+  name: Label,
+  source: z.string().trim().min(1).max(512).optional(),
+  version: z.string().trim().min(1).max(128).optional(),
+  requestedAt: z.number().nonnegative(),
+}).strict();
+export type ProjectCapabilityRequest = z.infer<typeof ProjectCapabilityRequest>;
+
+export const ProjectCapabilityRequestSet = ProjectCapabilityRequest.extend({
+  type: z.literal("project.capability.request"),
+  sessionId: Identifier,
+  requestId: Identifier,
+}).strict().superRefine((value, ctx) => {
+  if (value.sessionId !== value.projectId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["sessionId"], message: "project scope mismatch" });
+  }
+});
+export type ProjectCapabilityRequestSet = z.infer<typeof ProjectCapabilityRequestSet>;
+
 export const AdvertisedModel = z.object({
   modelId: z.string().trim().min(1).max(160),
   provider: MeshProvider,
@@ -72,6 +104,74 @@ export const EndpointModelCatalog = z.object({
 }).strict();
 export type EndpointModelCatalog = z.infer<typeof EndpointModelCatalog>;
 
+export const ProjectBackbone = z.object({
+  projectId: Identifier,
+  head: z.string().trim().min(1).max(128).optional(),
+  nodes: z.array(z.object({
+    kind: z.string().trim().min(1).max(64),
+    identity: z.string().trim().min(1).max(512),
+    displayName: Label,
+  }).strict()).max(512),
+  relations: z.array(z.object({
+    source: z.string().trim().min(1).max(512),
+    target: z.string().trim().min(1).max(512),
+    relation: z.string().trim().min(1).max(64),
+    evidenceCount: z.number().int().nonnegative(),
+  }).strict()).max(1_024),
+  pendingCandidateCount: z.number().int().nonnegative(),
+}).strict();
+export type ProjectBackbone = z.infer<typeof ProjectBackbone>;
+
+export const ProjectRepositoryGraph = z.object({
+  projectId: Identifier,
+  repositoryId: z.string().trim().min(1).max(512),
+  revision: z.string().trim().min(1).max(512),
+  weavatrixVersion: z.string().trim().min(1).max(64),
+  nodes: z.array(z.object({
+    id: z.string().trim().min(1).max(512),
+    kind: z.string().trim().min(1).max(64),
+    label: Label,
+  }).strict()).max(256),
+  relations: z.array(z.object({
+    source: z.string().trim().min(1).max(512),
+    target: z.string().trim().min(1).max(512),
+    relation: z.string().trim().min(1).max(64),
+  }).strict()).max(512),
+  totalNodes: z.number().int().nonnegative(),
+  totalRelations: z.number().int().nonnegative(),
+  truncated: z.boolean(),
+}).strict();
+export type ProjectRepositoryGraph = z.infer<typeof ProjectRepositoryGraph>;
+
+export const CortexPacketStatus = z.object({
+  packetId: Identifier.optional(),
+  snapshotId: z.string().trim().min(1).max(512).optional(),
+  included: z.number().int().nonnegative(),
+  omitted: z.number().int().nonnegative(),
+  rawEstimatedTokens: z.number().int().nonnegative(),
+  selectedEstimatedTokens: z.number().int().nonnegative(),
+  omittedEstimatedTokens: z.number().int().nonnegative(),
+  deduplicatedLines: z.number().int().nonnegative(),
+  requiresUpstream: z.boolean(),
+}).strict();
+export type CortexPacketStatus = z.infer<typeof CortexPacketStatus>;
+
+/** Cortex Loom is a native optional integration, never an MCP catalog entry. */
+export const ProjectCortexIntegration = z.object({
+  projectId: Identifier,
+  endpointId: Identifier,
+  enabled: z.boolean(),
+  maxTokens: z.number().int().min(512).max(262_144),
+  state: z.enum(["disabled", "loaded", "succeeded", "unavailable", "degraded"]),
+  version: z.string().trim().min(1).max(64).optional(),
+  revision: z.string().trim().min(1).max(64).optional(),
+  weavatrixVersion: z.string().trim().min(1).max(64).optional(),
+  packet: CortexPacketStatus.optional(),
+  detail: z.string().trim().min(1).max(240).optional(),
+  checkedAt: z.number().nonnegative(),
+}).strict();
+export type ProjectCortexIntegration = z.infer<typeof ProjectCortexIntegration>;
+
 export const MeshSnapshot = z.object({
   type: z.literal("mesh.snapshot"),
   sessionId: Identifier,
@@ -80,11 +180,16 @@ export const MeshSnapshot = z.object({
   bindings: z.array(ProjectBindingSummary).max(64).optional(),
   peers: z.array(IntegrationPeer).max(64).optional(),
   skills: z.array(SharedSkill).max(64).optional(),
+  mcpServers: z.array(ProjectMcpServer).max(128).optional(),
+  capabilityRequests: z.array(ProjectCapabilityRequest).max(128).optional(),
   incomplete: z.boolean().optional(),
   execution: ProjectExecutionPolicy.optional(),
   restrictions: ProjectRestrictionSet.optional(),
   environment: ProjectEnvironment.optional(),
   modelCatalog: z.array(EndpointModelCatalog).max(32).optional(),
+  backbone: ProjectBackbone.optional(),
+  repositoryGraphs: z.array(ProjectRepositoryGraph).max(64).optional(),
+  cortex: z.array(ProjectCortexIntegration).max(32).optional(),
   tasks: z.array(MeshTask).max(64),
   executions: z.array(ExecutionSessionLink).max(128),
   claims: z.array(ResourceClaim).max(128),
@@ -99,6 +204,29 @@ export const MeshSnapshot = z.object({
   const skillNames = new Set(value.skills?.map((skill) => skill.name));
   if ((value.skills?.length ?? 0) !== skillNames.size) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["skills"], message: "duplicate skill name" });
+  }
+  const mcpKeys = new Set(value.mcpServers?.map(
+    (server) => `${server.endpointId}\0${server.provider}\0${server.name}`,
+  ));
+  if ((value.mcpServers?.length ?? 0) !== mcpKeys.size) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["mcpServers"], message: "duplicate MCP server" });
+  }
+  const requestKeys = new Set(value.capabilityRequests?.map(
+    (item) => `${item.kind}\0${item.name.toLowerCase()}`,
+  ));
+  if ((value.capabilityRequests?.length ?? 0) !== requestKeys.size
+    || value.capabilityRequests?.some((item) => item.projectId !== value.projectId)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["capabilityRequests"], message: "invalid capability request scope" });
+  }
+  const cortexEndpoints = new Set(value.cortex?.map((item) => item.endpointId));
+  if ((value.cortex?.length ?? 0) !== cortexEndpoints.size
+    || value.cortex?.some((item) => item.projectId !== value.projectId)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["cortex"], message: "invalid Cortex scope" });
+  }
+  const graphRepositories = new Set(value.repositoryGraphs?.map((item) => item.repositoryId));
+  if ((value.repositoryGraphs?.length ?? 0) !== graphRepositories.size
+    || value.repositoryGraphs?.some((item) => item.projectId !== value.projectId)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["repositoryGraphs"], message: "invalid repository graph scope" });
   }
   const bindingIds = new Set(value.bindings?.map((binding) => binding.bindingId));
   const bindingKeys = new Set(value.bindings?.map(

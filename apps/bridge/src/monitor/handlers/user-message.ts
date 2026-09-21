@@ -53,7 +53,9 @@ async function startNewAgentTask(input: {
     cursor: createCursorSession,
     grok: createGrokSession,
   }[agent];
-  const result = await create(message.text, requestedCwd, DELIVERY_TIMEOUT_MS, attachments);
+  const result = await create(
+    message.text, requestedCwd, DELIVERY_TIMEOUT_MS, attachments, message.model,
+  );
   if (result.ok) {
     await say(result.text, result.sessionId, true);
   } else {

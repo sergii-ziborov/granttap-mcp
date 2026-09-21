@@ -35,7 +35,7 @@ export async function readCurrentMesh(uri: URL) {
     const cursor = uri.searchParams.get("cursor") ?? undefined;
     const body = cursor
       ? renderContextDelta(view, { lastEventId: cursor })
-      : renderProjectContext(view, mode);
+      : await renderProjectContext(view, mode);
     return json(uri.href, {
       ...((body && typeof body === "object") ? body : {}),
       runtime: mode === "full" ? await scopedInvocationSlice(capability!) : undefined,
@@ -72,7 +72,7 @@ export async function readScopedMesh(uri: URL, capability: string | string[]) {
   const cursor = uri.searchParams.get("cursor") ?? undefined;
   const body = cursor
     ? renderContextDelta(view, { lastEventId: cursor })
-    : renderProjectContext(view, mode);
+    : await renderProjectContext(view, mode);
   return json(uri.href, {
     ...(typeof body === "object" && body ? body : {}),
     runtime: mode === "full" ? await scopedInvocationSlice(resolved!) : undefined,

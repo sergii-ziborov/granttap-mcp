@@ -37,7 +37,9 @@ import { refreshMcpLoad } from "../../machine-load/mcp/refresh";
 import { approvalsStatus } from "../../approvals/state";
 import { primeSessionKeys, sendProjectPayload, sendSessionPayload } from "../../host/session-keys";
 import { sendMeshPayload } from "../../host/session-keys";
-import { handleMeshPayload, meshCatalog, meshSnapshots, prepareMeshHandoff } from "../../mesh/runtime";
+import {
+  handleMeshPayload, meshCatalog, meshSnapshots, meshSnapshotsWithEngine, prepareMeshHandoff,
+} from "../../mesh/runtime";
 import { releaseClaimByPerson, releaseResult } from "../../mesh/admin";
 import { deriveObservedClaims } from "../../mesh/observed/claims";
 import { ingestRuntimeInvocations } from "../../engine/invocation/ingest";
@@ -81,6 +83,7 @@ import { handleUserMessage } from "../handlers/user-message";
 import { handleMonitorMessage } from "../handlers/inbound";
 
 const HISTORY_INTERVAL_MS = 10_000;
+let meshEnrichmentInFlight: Promise<void> | undefined;
 
 export type SessionMonitor = {
   publish: () => Promise<void>;
@@ -176,6 +179,10 @@ async function publishMonitorTick(input: {
   if (includeHistory) lastHistoryPublishedAt = Date.now();
   loadLoop.updateStatus(status);
   void refreshMcpLoad(status.sessions).catch(() => {});
+  for (const sessionId of subscriptions) {
+    await publishSessionEvents(client, sessionId, status).catch(() => false);
+  }
+  await client.send(approvalsStatus(), "phone", { ttlMs: INTERVAL_MS * 3, reliable: false });
   if (loadRuntimeConfig().meshEnabled) {
     deriveObservedClaims(localMeshStore(), status.sessions);
     void ingestRuntimeInvocations(status.sessions).catch(() => {});
@@ -190,11 +197,8 @@ async function publishMonitorTick(input: {
       client,
       meshes.map((mesh) => mesh.projectId),
     ).catch(() => {});
+    publishEnrichedMeshes(client);
   }
-  for (const sessionId of subscriptions) {
-    await publishSessionEvents(client, sessionId, status).catch(() => false);
-  }
-  await client.send(approvalsStatus(), "phone", { ttlMs: INTERVAL_MS * 3, reliable: false });
   if (Date.now() - lastCapabilityPublishedAt >= 30_000) {
     const usage = scanCapabilityUsage([
       ...status.sessions,
@@ -204,6 +208,18 @@ async function publishMonitorTick(input: {
     lastCapabilityPublishedAt = Date.now();
   }
   return { lastHistoryPublishedAt, lastCapabilityPublishedAt };
+}
+
+function publishEnrichedMeshes(client: RelayClient): void {
+  if (meshEnrichmentInFlight) return;
+  meshEnrichmentInFlight = (async () => {
+    const meshes = await meshSnapshotsWithEngine();
+    for (const mesh of meshes) {
+      await sendMeshPayload(client, mesh, "phone", {
+        ttlMs: INTERVAL_MS * 24, reliable: false,
+      }).catch(() => {});
+    }
+  })().finally(() => { meshEnrichmentInFlight = undefined; });
 }
 
 /**

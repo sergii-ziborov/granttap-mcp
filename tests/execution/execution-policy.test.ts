@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import {
   admitNewTask,
+  applyHostGrant,
   loadExecutionPolicy,
   rememberExecutionPolicy,
 } from "../../apps/bridge/src/mesh/runtime/execution-policy";
@@ -14,7 +15,7 @@ function isolate(): void {
   process.env.GRANTTAP_CONFIG_DIR = mkdtempSync(join(tmpdir(), "granttap-exec-"));
 }
 
-test("a pinned host on this machine is applied; a foreign host stays pending", () => {
+test("a pinned host stays pending until its owner explicitly applies the grant", () => {
   isolate();
   const local = rememberExecutionPolicy("proj", {
     mode: "pinned",
@@ -23,7 +24,8 @@ test("a pinned host on this machine is applied; a foreign host stays pending", (
     hostGrantStatus: "pending",
     offlineBehavior: "reject",
   }, "mac-a");
-  assert.equal(local?.hostGrantStatus, "applied");
+  assert.equal(local?.hostGrantStatus, "pending");
+  assert.equal(applyHostGrant("proj", "applied", 2, "mac-a")?.hostGrantStatus, "applied");
   isolate();
   const remote = rememberExecutionPolicy("proj", {
     mode: "pinned",
@@ -75,6 +77,7 @@ test("two initiators on the confirmed host are admitted; a foreign model is not"
     hostGrantStatus: "pending",
     offlineBehavior: "reject",
   }, "mac-a");
+  applyHostGrant("proj", "applied", 3, "mac-a");
   const policy = loadExecutionPolicy("proj");
   assert.deepEqual(admitNewTask({
     policy, localEndpointId: "mac-a", hostOnline: true,

@@ -1,19 +1,16 @@
 /**
  * The other side of a Task's repository.
  *
- * A Project binds several repositories, and a bound repository's integration
- * map says which of them sit on the far side of its databases, topics, and
- * APIs. Put the two together and the Mesh can answer the question a merge
- * never does: is someone, right now, changing the other half of the contract
- * this Task is changing? Shared with the phone vector for vector.
+ * A Project binds several repositories. GrantTap Engine and Weavatrix Rust
+ * identify the repository owners on each side of a verified relation. The
+ * legacy peer map remains a compatibility fallback for older computers.
  */
 import { basename } from "node:path";
 import type {
   ExecutionSessionLink,
   IntegrationPeer,
-  IntegrationRelation,
-  IntegrationVia,
   MeshSnapshot,
+  ProjectBackbone,
   ProjectBindingSummary,
 } from "../../../../../packages/protocol/schema";
 
@@ -46,14 +43,73 @@ function repositoryIdsNamed(name: string, bindings: ProjectBindingSummary[]): st
   )];
 }
 
-export type OtherSideEdge = { peer: IntegrationPeer; repositoryId: string };
+export type OtherSideEdge = {
+  repositoryId: string;
+  statedBy: string;
+  via: string;
+  relation: string;
+  through?: string;
+};
+
+function normalized(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function backboneOwners(
+  backbone: ProjectBackbone,
+  bindings: ProjectBindingSummary[],
+): Map<string, string> {
+  const owners = new Map<string, string>();
+  for (const node of backbone.nodes.filter((item) => item.kind === "repository")) {
+    const names = new Set([normalized(node.identity), normalized(node.displayName)]);
+    const binding = bindings.find((item) =>
+      [...repositoryNames(item)].some((name) => names.has(name))
+      || names.has(normalized(item.repositoryId)));
+    owners.set(node.identity, binding?.repositoryId ?? node.identity);
+  }
+  for (let pass = 0; pass < 3; pass += 1) {
+    for (const relation of backbone.relations.filter((item) => item.relation === "owns")) {
+      const owner = owners.get(relation.source);
+      if (owner) owners.set(relation.target, owner);
+    }
+  }
+  return owners;
+}
+
+function backboneOtherSides(
+  repositoryId: string,
+  backbone: ProjectBackbone | undefined,
+  bindings: ProjectBindingSummary[],
+): OtherSideEdge[] {
+  if (!backbone) return [];
+  const owners = backboneOwners(backbone, bindings);
+  const seen = new Set<string>();
+  return backbone.relations.flatMap((relation) => {
+    const source = owners.get(relation.source);
+    const target = owners.get(relation.target);
+    if (!source || !target || source === target) return [];
+    const other = source === repositoryId ? target : target === repositoryId ? source : undefined;
+    if (!other) return [];
+    const key = [repositoryId, other, relation.relation].join("\0");
+    if (!seen.add(key)) return [];
+    return [{
+      repositoryId: other,
+      statedBy: source,
+      via: "engine",
+      relation: relation.relation,
+      through: `${relation.evidenceCount} evidence`,
+    }];
+  });
+}
 
 /** Repositories on the far side of `repositoryId`, whichever side stated the edge. */
 export function otherSides(
   repositoryId: string,
-  snapshot: Pick<MeshSnapshot, "peers" | "bindings">,
+  snapshot: Pick<MeshSnapshot, "backbone" | "peers" | "bindings">,
 ): OtherSideEdge[] {
   const bindings = snapshot.bindings ?? [];
+  const verified = backboneOtherSides(repositoryId, snapshot.backbone, bindings);
+  if (verified.length > 0) return verified;
   const mine = new Set(
     bindings.filter((binding) => binding.repositoryId === repositoryId)
       .flatMap((binding) => [...repositoryNames(binding)]),
@@ -62,10 +118,16 @@ export function otherSides(
   for (const peer of snapshot.peers ?? []) {
     if (peer.repositoryId === repositoryId) {
       for (const id of repositoryIdsNamed(peer.peer, bindings)) {
-        if (id !== repositoryId) edges.push({ peer, repositoryId: id });
+        if (id !== repositoryId) edges.push({
+          repositoryId: id, statedBy: peer.repositoryId,
+          via: peer.via, relation: peer.relation, through: peer.through,
+        });
       }
     } else if (mine.has(peer.peer.trim().toLowerCase())) {
-      edges.push({ peer, repositoryId: peer.repositoryId });
+      edges.push({
+        repositoryId: peer.repositoryId, statedBy: peer.repositoryId,
+        via: peer.via, relation: peer.relation, through: peer.through,
+      });
     }
   }
   return edges;
@@ -91,8 +153,8 @@ export type OtherSideRow = {
   ownerSessionId?: string;
   /** The repository that Task is working in. */
   repositoryId: string;
-  via: IntegrationVia;
-  relation: IntegrationRelation;
+  via: string;
+  relation: string;
   through?: string;
   /** The repository whose map states the edge. */
   statedBy: string;
@@ -117,7 +179,8 @@ export function otherSide(snapshot: MeshSnapshot, taskId: string): OtherSideRow[
           || executionRepository(execution, snapshot) !== edge.repositoryId) continue;
         const task = snapshot.tasks.find((item) => item.taskId === execution.taskId);
         if (!task) continue;
-        const key = `${task.taskId}\0${integrationPeerKey(edge.peer)}`;
+        const key = [task.taskId, edge.repositoryId, edge.statedBy,
+          edge.via, edge.relation, edge.through ?? ""].join("\0");
         if (seen.has(key)) continue;
         seen.add(key);
         rows.push({
@@ -125,10 +188,10 @@ export function otherSide(snapshot: MeshSnapshot, taskId: string): OtherSideRow[
           title: task.title,
           ownerSessionId: task.ownerSessionId,
           repositoryId: edge.repositoryId,
-          via: edge.peer.via,
-          relation: edge.peer.relation,
-          through: edge.peer.through,
-          statedBy: edge.peer.repositoryId,
+          via: edge.via,
+          relation: edge.relation,
+          through: edge.through,
+          statedBy: edge.statedBy,
         });
       }
     }

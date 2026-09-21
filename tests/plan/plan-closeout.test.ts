@@ -108,6 +108,7 @@ test("S07 / S08 revoke and queue are explicit, not a silent fallback", () => {
     mode: "pinned", targetEndpointId: "mac-a", revision: 1,
     hostGrantStatus: "pending", offlineBehavior: "queueUntilDeadline",
   }, "mac-a");
+  applyHostGrant("proj", "applied", 1, "mac-a");
   assert.deepEqual(admitNewTask({
     policy: loadExecutionPolicy("proj"), localEndpointId: "mac-a", hostOnline: false, now: 10,
   }), { ok: true, queued: true, deadline: 10 });

@@ -100,6 +100,25 @@ test("a Project auto-accept covers chats bound in Mesh", (t) => {
   assert.equal(autoAcceptLevelFor("other"), "ask");
 });
 
+test("a Mesh chat never inherits the machine auto-accept default", (t) => {
+  withConfigDir(t);
+  handleConfigSet({ type: "config.set", autoAcceptDefault: "full", createdAt: 0 });
+  writeFileSync(join(process.env.GRANTTAP_CONFIG_DIR!, "project-mesh.json"), JSON.stringify({
+    version: 1,
+    projects: [{ projectId: "proj", name: "GrantTap", createdAt: 1 }],
+    tasks: [{
+      taskId: "task", projectId: "proj", title: "Work", goal: "Ship",
+      state: "working", createdAt: 1, updatedAt: 1,
+    }],
+    executions: [{
+      taskId: "task", sessionId: "mesh-chat", provider: "codex",
+      computerId: "mac", workspace: "/repo", startedAt: 1,
+    }],
+  }));
+  assert.equal(autoAcceptLevelFor("mesh-chat"), "ask");
+  assert.equal(autoAcceptLevelFor("standalone-chat"), "full");
+});
+
 test("an unrelated config.set leaves auto-accept intact", (t) => {
   withConfigDir(t);
   handleConfigSet({ type: "config.set", autoAcceptDefault: "except_push", createdAt: 0 });

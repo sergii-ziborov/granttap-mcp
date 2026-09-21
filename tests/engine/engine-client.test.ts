@@ -18,6 +18,15 @@ const socketPath = (name: string) => join(
   `granttap-engine-client-${process.pid}-${name}.sock`,
 );
 
+const versionResult = {
+  operation: "engine.version" as const,
+  engine_version: "0.1.0",
+  protocol_version: 1 as const,
+  cortex_version: "0.1.0",
+  cortex_revision: "a".repeat(40),
+  weavatrix_version: "2.17.0",
+};
+
 async function listen(server: Server, path: string): Promise<void> {
   await rm(path, { force: true });
   await new Promise<void>((resolve, reject) => {
@@ -52,7 +61,7 @@ test("client multiplexes requests over one versioned Unix socket", async (t) => 
       for (const request of decoder.push(chunk) as EngineRequest[]) {
         const result = request.operation === "engine.ping"
           ? { operation: "engine.pong", engine_version: "0.1.0" }
-          : { operation: "engine.version", engine_version: "0.1.0", protocol_version: 1 };
+          : versionResult;
         socket.write(encodeEngineFrame({
           protocol_version: 1,
           request_id: request.request_id,
@@ -130,7 +139,7 @@ test("remote action error rejects only its request and preserves the socket", as
           ? { status: "error", error: { code: "PING_REJECTED", message: "no ping" } }
           : {
             status: "ok",
-            result: { operation: "engine.version", engine_version: "0.1.0", protocol_version: 1 },
+            result: versionResult,
           };
         socket.write(encodeEngineFrame({
           protocol_version: 1,

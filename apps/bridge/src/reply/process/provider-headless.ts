@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { SessionInfo } from "../../../../../packages/protocol/schema";
 import { runProcess } from ".";
 import type { ReplyResult } from "../payload/types";
+import type { DeliveryOptions } from "../payload/types";
 import { resolveCursorAgentBin } from "./cursor-agent-bin";
 
 function cursorBin(): string {
@@ -59,36 +60,47 @@ function parseGrok(stdout: string, fallback: string): ReplyResult {
     : { ok: false, error: "Grok Build returned an empty response." };
 }
 
-export function runCursorNew(text: string, cwd: string, timeoutMs: number): Promise<ReplyResult> {
+export function runCursorNew(
+  text: string, cwd: string, timeoutMs: number, model?: string,
+): Promise<ReplyResult> {
   return runProcess(
-    cursorBin(), ["-p", "--output-format", "json", text], cwd, timeoutMs, parseCursor,
+    cursorBin(), ["-p", ...(model ? ["--model", model] : []),
+      "--output-format", "json", text], cwd, timeoutMs, parseCursor,
   );
 }
 
 export function runCursorResume(
-  session: SessionInfo, text: string, timeoutMs: number,
+  session: SessionInfo, text: string, timeoutMs: number, model?: string,
 ): Promise<ReplyResult> {
   return runProcess(
-    cursorBin(), ["-p", "--resume", session.sessionId, "--output-format", "json", text],
+    cursorBin(), ["-p", "--resume", session.sessionId,
+      ...(model ? ["--model", model] : []), "--output-format", "json", text],
     session.cwd, timeoutMs, (stdout) => parseCursor(stdout, session.sessionId),
     undefined, session.sessionId,
   );
 }
 
-export function runGrokNew(text: string, cwd: string, timeoutMs: number): Promise<ReplyResult> {
+export function runGrokNew(
+  text: string, cwd: string, timeoutMs: number, model?: string,
+): Promise<ReplyResult> {
   const sessionId = randomUUID();
   const args = [
     "--no-auto-update", "--cwd", cwd, "--session-id", sessionId,
+    ...(model ? ["--model", model] : []),
     "-p", text, "--output-format", "streaming-json",
   ];
   return runProcess(grokBin(), args, cwd, timeoutMs, (stdout) => parseGrok(stdout, sessionId));
 }
 
 export function runGrokResume(
-  session: SessionInfo, text: string, timeoutMs: number,
+  session: SessionInfo, text: string, timeoutMs: number, options: DeliveryOptions = {},
 ): Promise<ReplyResult> {
+  const permission = options.permissionMode === "manual" ? "default" : options.permissionMode;
   const args = [
     "--no-auto-update", ...(session.cwd ? ["--cwd", session.cwd] : []),
+    ...(options.model ? ["--model", options.model] : []),
+    ...(permission ? ["--permission-mode", permission] : []),
+    ...(options.effort ? ["--reasoning-effort", options.effort] : []),
     "--resume", session.sessionId, "-p", text, "--output-format", "streaming-json",
   ];
   return runProcess(

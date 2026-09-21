@@ -27,6 +27,7 @@ import {
   MeshClaimReleaseResult,
   MeshHandoffPrepare,
   MeshSnapshot,
+  ProjectCapabilityRequestSet,
 } from "./messages/mesh";
 import { MachineLoad } from "./messages/machine";
 import { PairingJoin } from "./messages/pairing-join";
@@ -130,6 +131,7 @@ export const Payload = z.union([
   MeshClaimReleaseResult,
   MeshHandoffPrepare,
   MeshSnapshot,
+  ProjectCapabilityRequestSet,
   MeshInvocationQuery,
   MeshInvocationPage,
   MeshEndpointPolicy,

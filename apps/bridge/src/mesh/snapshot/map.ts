@@ -1,12 +1,9 @@
 /**
  * The Project's Mesh as a map a model or a person can read in one pass.
  *
- * `weavatrix-md` showed the value of a small deterministic markdown map next
- * to the code: nothing to query, nothing to learn, just read. The same is
- * done for the Mesh — the Tasks alive in a Project, who is editing which
- * module, the other side of each repository, what waits on what, and what
- * just happened — as text. The brief is the few lines of it that matter to
- * one Task right now; the map is the whole Project.
+ * GrantTap Engine supplies the verified Project Backbone and Weavatrix Rust
+ * supplies repository graphs. This text view keeps the same facts readable by
+ * a model: Tasks, claims, repository topology, dependencies, and recent work.
  */
 import type { MeshSnapshot } from "../../../../../packages/protocol/schema";
 import { compactText } from "../admin/journal";
@@ -116,17 +113,8 @@ export function meshMap(snapshot: MeshSnapshot, now = Date.now()): string {
     lines.push(`- \`${module}\`: ${entries.join("; ")}`);
   }
 
-  lines.push("", "## Other side", "");
-  const peers = snapshot.peers ?? [];
-  if (peers.length === 0) lines.push("- (no integration map; commit a WEAVATRIX.md to a bound repository)");
-  for (const peer of peers) {
-    const through = peer.through ? ` ${peer.through}` : "";
-    const working = snapshot.tasks
-      .filter((task) => otherSide(snapshot, task.taskId).some((row) => row.statedBy === peer.repositoryId && row.through === peer.through))
-      .map((task) => taskTitle(snapshot, task.taskId));
-    const note = working.length ? ` — ${working.join(", ")} working across it` : "";
-    lines.push(`- ${repositoryName(peer.repositoryId, snapshot)} ${peer.relation.replace("_", " ")}${through} → ${peer.peer} (${peer.via})${note}`);
-  }
+  lines.push("", "## Repository topology", "");
+  lines.push(...repositoryTopology(snapshot));
 
   lines.push("", "## Dependencies", "");
   if (snapshot.dependencies.length === 0) lines.push("- (none)");
@@ -144,6 +132,32 @@ export function meshMap(snapshot: MeshSnapshot, now = Date.now()): string {
     lines.push(`- ${clock(event.createdAt)} ${taskTitle(snapshot, event.taskId)} — ${eventLine(event)}`);
   }
   return lines.join("\n") + "\n";
+}
+
+function repositoryTopology(snapshot: MeshSnapshot): string[] {
+  const backbone = snapshot.backbone;
+  if (backbone && backbone.relations.length > 0) {
+    const names = new Map(backbone.nodes.map((node) => [node.identity, node.displayName]));
+    return backbone.relations.map((relation) => {
+      const source = names.get(relation.source) ?? relation.source;
+      const target = names.get(relation.target) ?? relation.target;
+      return `- ${source} ${relation.relation.replace(/_/g, " ")} → ${target} (${relation.evidenceCount} verified evidence)`;
+    });
+  }
+  const graphs = snapshot.repositoryGraphs ?? [];
+  if (graphs.length > 0) {
+    return graphs.map((graph) => {
+      const total = `${graph.totalNodes} nodes · ${graph.totalRelations} relations`;
+      const truncated = graph.truncated ? " · bounded view" : "";
+      return `- ${repositoryName(graph.repositoryId, snapshot)} — Weavatrix ${graph.weavatrixVersion} · ${total}${truncated}`;
+    });
+  }
+  const peers = snapshot.peers ?? [];
+  if (peers.length === 0) return ["- (Engine topology has not been observed yet)"];
+  return peers.map((peer) => {
+    const through = peer.through ? ` ${peer.through}` : "";
+    return `- ${repositoryName(peer.repositoryId, snapshot)} ${peer.relation.replace("_", " ")}${through} → ${peer.peer} (${peer.via}, legacy)`;
+  });
 }
 
 /** The lines of the map that matter to one Task right now; empty when nothing does. */

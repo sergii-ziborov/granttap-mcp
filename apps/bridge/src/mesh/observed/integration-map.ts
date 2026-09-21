@@ -2,14 +2,8 @@ import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 /**
- * The other side of this repository's databases, topics, and APIs.
- *
- * A Task lives in one repository, but the work rarely does: a protocol change
- * lands in the producer and the consumer together, and nothing in the Mesh
- * knew the two were sides of one contract. `weavatrix-md` writes a small,
- * deterministic map of exactly that next to the README — precision over
- * recall, no runtime, no credentials — and this reads it. Only the map's own
- * claims are carried; a missing edge stays missing rather than guessed.
+ * Legacy WEAVATRIX.md import for older computers. New topology comes from the
+ * verified Engine Backbone and full Weavatrix Rust repository analyzer.
  */
 export type IntegrationEdge = {
   peer: string;
@@ -23,7 +17,7 @@ export type IntegrationEdge = {
 export const INTEGRATION_MAP_FILE = "WEAVATRIX.md";
 const MAX_EDGES = 64;
 
-/** Parse a `WEAVATRIX.md` body. Anything the map does not state is left out. */
+/** Parse a legacy `WEAVATRIX.md` body during migration. */
 export function parseIntegrationMap(markdown: string): IntegrationEdge[] {
   const edges: IntegrationEdge[] = [];
   let section: IntegrationEdge["via"] | undefined;
@@ -91,7 +85,7 @@ const MAX_MAP_BYTES = 256 * 1_024;
 const MAX_CACHED = 128;
 const cache = new Map<string, { mtimeMs: number; size: number; edges: IntegrationEdge[] }>();
 
-/** The map committed in a repository root, if the repository keeps one. Re-read only when it changes. */
+/** Read a legacy map when present. Re-read only when it changes. */
 export function readIntegrationMap(root: string): IntegrationEdge[] {
   const path = join(root, INTEGRATION_MAP_FILE);
   let size: number;

@@ -14,6 +14,10 @@ import {
   type AutoAcceptLevel,
 } from "../../policy";
 import { loadStoreState } from "../../mesh/store/state";
+import {
+  parseCortexByProject,
+  type CortexProjectConfig,
+} from "../../cortex/config";
 import { configDir, runtimeConfigPath } from "./paths";
 
 export type RuntimeConfig = {
@@ -33,6 +37,8 @@ export type RuntimeConfig = {
   meshEnabled: boolean;
   /** Off by default: compile a bounded Mesh packet for the calling Task. */
   contextCompilerEnabled: boolean;
+  /** Optional Cortex Loom library path, configured independently per Project. */
+  cortexByProject: Record<string, CortexProjectConfig>;
   /** Absolute path to the separately distributed GrantTap Engine binary. */
   enginePath: string | null;
   /** Expected SHA-256 of that binary, in lowercase hex. */
@@ -54,6 +60,7 @@ const DEFAULT_RUNTIME: RuntimeConfig = {
   providerSettings: { claude: true, codex: true, cursor: true, grok: true },
   meshEnabled: true,
   contextCompilerEnabled: false,
+  cortexByProject: {},
   enginePath: null,
   engineSha256: null,
 };
@@ -164,6 +171,7 @@ export function loadRuntimeConfig(): RuntimeConfig {
       providerSettings: parseProviderSettings(raw.providerSettings),
       meshEnabled: raw.meshEnabled !== false,
       contextCompilerEnabled: raw.contextCompilerEnabled === true,
+      cortexByProject: parseCortexByProject(raw.cortexByProject),
       enginePath: parseEnginePath(raw.enginePath),
       engineSha256: parseEngineChecksum(raw.engineSha256),
     };
@@ -180,6 +188,7 @@ export function loadRuntimeConfig(): RuntimeConfig {
       providerSettings: { ...DEFAULT_RUNTIME.providerSettings },
       meshEnabled: true,
       contextCompilerEnabled: false,
+      cortexByProject: {},
     };
   }
 }
@@ -218,13 +227,16 @@ function projectIdForSession(sessionId: string | null | undefined): string | und
 
 export function autoAcceptLevelFor(sessionId: string | null | undefined): AutoAcceptLevel {
   const cfg = loadRuntimeConfig();
+  const projectId = projectIdForSession(sessionId);
   return resolveAutoAcceptLevel({
     paused: cfg.autoAcceptPaused,
-    defaultLevel: cfg.autoAcceptDefault,
+    // A Mesh execution without an explicit Project level must fail closed.
+    // The machine default belongs only to standalone sessions.
+    defaultLevel: projectId ? "ask" : cfg.autoAcceptDefault,
     bySession: cfg.autoAcceptBySession,
     byProject: cfg.autoAcceptByProject,
     sessionId: sessionId ?? undefined,
-    projectId: projectIdForSession(sessionId),
+    projectId,
   });
 }
 

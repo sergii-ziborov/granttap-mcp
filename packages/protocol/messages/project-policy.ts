@@ -74,6 +74,8 @@ export type ExecutionOfflineBehavior = z.infer<typeof ExecutionOfflineBehavior>;
 export const ProjectExecutionPolicy = z.object({
   mode: ProjectExecutionMode,
   targetEndpointId: Identifier.optional(),
+  defaultProvider: MeshProvider.optional(),
+  defaultModel: z.string().trim().min(1).max(160).optional(),
   revision: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   hostGrantId: Identifier.optional(),
   hostGrantStatus: HostGrantStatus.default("none"),

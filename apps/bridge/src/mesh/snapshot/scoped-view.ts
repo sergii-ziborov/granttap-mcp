@@ -30,8 +30,19 @@ export type ScopedMeshView = {
   claims: MeshSnapshot["claims"];
   /** Another Task's claim on a file this Task holds, or on the same module. */
   neighbours: Array<{ claim: ResourceClaim; kind: "file" | "logical_file" | "module" }>;
-  /** The integration map of this Project's repositories, as they state it. */
+  /** Verified topology and per-repository Weavatrix Rust analysis. */
+  backbone?: MeshSnapshot["backbone"];
+  repositoryGraphs?: NonNullable<MeshSnapshot["repositoryGraphs"]>;
+  /** Legacy compatibility edges from computers that have not migrated yet. */
   peers: NonNullable<MeshSnapshot["peers"]>;
+  skills?: NonNullable<MeshSnapshot["skills"]>;
+  mcpServers?: NonNullable<MeshSnapshot["mcpServers"]>;
+  capabilityRequests?: NonNullable<MeshSnapshot["capabilityRequests"]>;
+  modelCatalog?: NonNullable<MeshSnapshot["modelCatalog"]>;
+  executionPolicy?: MeshSnapshot["execution"];
+  restrictions?: MeshSnapshot["restrictions"];
+  environment?: MeshSnapshot["environment"];
+  cortex?: NonNullable<MeshSnapshot["cortex"]>;
   /** Other Tasks working right now on the far side of this Task's repository. */
   otherSide: OtherSideRow[];
   dependencies: MeshSnapshot["dependencies"];
@@ -96,7 +107,17 @@ export function scopedMeshView(
     executions: snapshot.executions,
     claims: snapshot.claims,
     neighbours: scopedNeighbours(snapshot, capability.taskId),
+    backbone: snapshot.backbone,
+    repositoryGraphs: snapshot.repositoryGraphs ?? [],
     peers: snapshot.peers ?? [],
+    skills: snapshot.skills ?? [],
+    mcpServers: snapshot.mcpServers ?? [],
+    capabilityRequests: snapshot.capabilityRequests ?? [],
+    modelCatalog: snapshot.modelCatalog ?? [],
+    executionPolicy: snapshot.execution,
+    restrictions: snapshot.restrictions,
+    environment: snapshot.environment,
+    cortex: snapshot.cortex ?? [],
     otherSide: otherSide(snapshot, capability.taskId),
     dependencies: snapshot.dependencies,
     events: scopedEvents(snapshot, capability),

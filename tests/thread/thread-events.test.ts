@@ -7,7 +7,7 @@ import type { Payload } from "../../packages/protocol/schema";
 import { Payload as PayloadSchema } from "../../packages/protocol/schema";
 import {
   diffPreviewFromInput, diffPreviewFromPatch, editStats, MAX_DIFF_PREVIEW_LINES, patchStatsByToolUse,
-  sensitivePath, statsFromInput, statsFromPatch, statsFromPatchText,
+  secretFilePath, sensitivePath, statsFromInput, statsFromPatch, statsFromPatchText,
 } from "../../apps/bridge/src/sessions/support/edit-stats";
 import { claudeActivity, scanClaude } from "../../apps/bridge/src/sessions/scan/claude";
 import { MAX_THREAD_ENTRIES, scanThreadActivity } from "../../apps/bridge/src/sessions";
@@ -94,6 +94,68 @@ test("the change itself travels bounded and never from a secret file", () => {
       toolUseResult: { filePath: "/repo/.env", structuredPatch: [{ lines: ["+KEY=1"] }] } }),
   ], (line) => JSON.parse(line));
   assert.deepEqual(secretPatch.get("s"), { stats: { linesAdded: 1, linesRemoved: 0 }, preview: undefined });
+});
+
+test("edit summaries preserve every supported provider shape and reject non-edits", () => {
+  assert.deepEqual(statsFromPatch([null, { lines: "no" }, { lines: [1, " keep", "-a", "+b"] }]),
+    { linesAdded: 1, linesRemoved: 1 });
+  for (const value of [null, 1, "", "   "]) assert.equal(statsFromPatchText(value), undefined);
+  assert.deepEqual(statsFromPatchText("*** header\n--- old\n+++ new\n-a\n+b"),
+    { linesAdded: 1, linesRemoved: 1 });
+  assert.deepEqual(statsFromInput("provider.write_file", { contents: "a\nb" }),
+    { linesAdded: 2, linesRemoved: 0 });
+  assert.deepEqual(statsFromInput("create_file", { text: "a" }), { linesAdded: 1, linesRemoved: 0 });
+  assert.deepEqual(statsFromInput("edit_file", { old_str: "a\n", new_str: "b\n" }),
+    { linesAdded: 1, linesRemoved: 1 });
+  assert.deepEqual(statsFromInput("str_replace_editor", { old_string: "a", code_edit: "b\nc" }),
+    { linesAdded: 2, linesRemoved: 1 });
+  assert.equal(statsFromInput("multiedit", { edits: "no" }), undefined);
+  assert.equal(statsFromInput("multiedit", { edits: [null, {}] }), undefined);
+  assert.deepEqual(statsFromInput("apply_patch", { diff: "-a\n+b" }),
+    { linesAdded: 1, linesRemoved: 1 });
+  assert.deepEqual(editStats("read", {}, [{ lines: [] }]),
+    { linesAdded: 0, linesRemoved: 0 }, "an observed empty patch reports zero changed lines");
+});
+
+test("diff previews bound controls, aliases, redaction, and secret path families", () => {
+  assert.equal(diffPreviewFromPatch(null), undefined);
+  assert.equal(diffPreviewFromPatch([null, { lines: "no" }, { lines: [1] }]), undefined);
+  assert.equal(diffPreviewFromPatch([{ lines: ["+a\u0001b"] }]), "+ab");
+  assert.equal(diffPreviewFromPatch([{ lines: ["+one", "+two"] }], (line) => line.toUpperCase()),
+    "+ONE\n+TWO");
+  const oneLeft = Array.from({ length: MAX_DIFF_PREVIEW_LINES + 1 }, () => "+x");
+  assert.match(diffPreviewFromPatch([{ lines: oneLeft }]) ?? "", /… 1 more line$/);
+  const charBound = Array.from({ length: MAX_DIFF_PREVIEW_LINES }, () => "+" + "x".repeat(159));
+  assert.ok((diffPreviewFromPatch([{ lines: charBound }])?.length ?? 0) <= 2_500);
+
+  assert.equal(diffPreviewFromInput("write_file", { contents: "a\n" }), "+a");
+  assert.equal(diffPreviewFromInput("create_file", { text: "a" }), "+a");
+  assert.equal(diffPreviewFromInput("edit_file", { old_str: "a\n", new_str: "b\n" }), "-a\n+b");
+  assert.equal(diffPreviewFromInput("str_replace_based_edit_tool", { code_edit: "b" }), "+b");
+  assert.equal(diffPreviewFromInput("multiedit", { edits: "no" }), undefined);
+  assert.equal(diffPreviewFromInput("multiedit", { edits: [null, { old_string: "a" }] }), "-a");
+  assert.equal(diffPreviewFromInput("apply_patch", { patch: "header\n context\n+++ a\n--- b\n+x" }),
+    " context\n+x");
+
+  for (const path of [
+    ".env", "prod.env", "server.key", "id_ed25519.pub", "secrets.yaml",
+    "service_account.json", ".npmrc", ".docker/config.json", "state.tfstate.backup",
+  ]) assert.equal(secretFilePath(path), true, path);
+  for (const path of [undefined, 1, "tokenizer.ts", "credentials-view.swift"]) {
+    assert.equal(secretFilePath(path), false, String(path));
+  }
+
+  const rows = patchStatsByToolUse([
+    "ordinary row",
+    "structuredPatch invalid json",
+    JSON.stringify({ toolUseResult: { structuredPatch: [{ lines: ["+x"] }] }, message: { content: [] } }),
+    JSON.stringify({ toolUseResult: { structuredPatch: [] }, message: { content: [] } }),
+    JSON.stringify({ toolUseResult: { structuredPatch: [{ lines: ["+x"] }] }, message: { content: [
+      null, { type: "text" }, { type: "tool_result", tool_use_id: 7 },
+      { type: "tool_result", tool_use_id: "ok" },
+    ] } }),
+  ], (line) => { try { return JSON.parse(line); } catch { return null; } });
+  assert.deepEqual(rows.get("ok"), { stats: { linesAdded: 1, linesRemoved: 0 }, preview: "+x" });
 });
 
 test("a Write reads +3 and an Edit +2 −1, and one agent conversation is fetched whole", async (t) => {

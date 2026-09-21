@@ -134,6 +134,13 @@ export const ProviderRuntimeSettings = z.object({
 }).strict();
 export type ProviderRuntimeSettings = z.infer<typeof ProviderRuntimeSettings>;
 
+export const CortexIntegrationSet = z.object({
+  projectId: z.string().trim().min(1).max(128),
+  enabled: z.boolean(),
+  maxTokens: z.number().int().min(512).max(262_144),
+}).strict();
+export type CortexIntegrationSet = z.infer<typeof CortexIntegrationSet>;
+
 export const SessionsStatus = z.object({
   type: z.literal("sessions.status"),
   machine: z.string(),
@@ -178,6 +185,7 @@ export const ConfigSet = z.object({
   providerEnabled: z.boolean().optional(),
   meshEnabled: z.boolean().optional(),
   contextCompilerEnabled: z.boolean().optional(),
+  cortexIntegration: CortexIntegrationSet.optional(),
   createdAt: z.number(),
   operationId: z.string().trim().min(1).max(128).optional(),
   baseRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),

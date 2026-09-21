@@ -19,7 +19,11 @@ const response = (result: unknown) => ({
 test("response parser accepts every Rust v1 result", () => {
   const results = [
     { operation: "engine.pong", engine_version: "0.1.0" },
-    { operation: "engine.version", engine_version: "0.1.0", protocol_version: 1 },
+    {
+      operation: "engine.version", engine_version: "0.1.0", protocol_version: 1,
+      cortex_version: "0.1.0", cortex_revision: "a".repeat(40),
+      weavatrix_version: "2.17.0",
+    },
     {
       operation: "project.resolved",
       resolution: { project_id: "project", compatibility_mode: false },
@@ -43,6 +47,43 @@ test("response parser accepts every Rust v1 result", () => {
         binding_id: "binding", project_id: "project", endpoint_id: "mac",
         repository_id: "repo", local_root: null, local_alias: null,
         canonical_remote: null, role: "dependency", observed_revision: null, last_seen_at: 1,
+      },
+    },
+    {
+      operation: "graph.backbone",
+      backbone: {
+        project_id: "project", head: "a".repeat(64), pending_candidate_count: 0,
+        nodes: [{ kind: "repository", identity: "repo", display_name: "Repo" }],
+        relations: [{
+          source: "repo", target: "api", relation: "owns", evidence_count: 2,
+        }],
+      },
+    },
+    {
+      operation: "graph.repository",
+      graph: {
+        project_id: "project", repository_id: "repo", revision: "revision",
+        weavatrix_version: "2.17.0", total_nodes: 2, total_relations: 1,
+        truncated: false,
+        nodes: [
+          { id: "repo", kind: "repository", label: "Repo" },
+          { id: "src", kind: "module", label: "src" },
+        ],
+        relations: [{ source: "repo", target: "src", relation: "contains" }],
+      },
+    },
+    {
+      operation: "context.compiled",
+      compilation: {
+        project_id: "project", task_id: "task", cortex_version: "0.1.0",
+        cortex_revision: "a".repeat(40),
+        packet: {
+          content: "<evidence>goal</evidence>", included_ids: ["goal"], omitted_ids: [],
+          raw_estimated_tokens: 10, selected_estimated_tokens: 10,
+          omitted_estimated_tokens: 0, requires_upstream: true,
+          deduplicated_lines: 0, deduplicated_estimated_tokens: 0,
+          packet_id: "pk_123", snapshot_id: "git:abc",
+        },
       },
     },
     {
@@ -131,9 +172,34 @@ test("response parser rejects malformed and incompatible wire values", () => {
     { protocol_version: 1, request_id: "request-1", status: "error", error: {} },
     response({ operation: "engine.unknown" }),
     response({ operation: "engine.pong", engine_version: "" }),
-    response({ operation: "engine.version", engine_version: "0.1.0", protocol_version: 2 }),
+    response({
+      operation: "engine.version", engine_version: "0.1.0", protocol_version: 2,
+      cortex_version: "0.1.0", cortex_revision: "a".repeat(40), weavatrix_version: "2.17.0",
+    }),
     response({ operation: "project.resolved", resolution: [] }),
     response({ operation: "project.resolved", resolution: { project_id: "p" } }),
+    response({
+      operation: "graph.backbone",
+      backbone: { project_id: "project", nodes: [{}], relations: [], pending_candidate_count: 0 },
+    }),
+    response({
+      operation: "graph.repository",
+      graph: {
+        project_id: "project", repository_id: "repo", revision: "revision",
+        weavatrix_version: "2.17.0", total_nodes: 1, total_relations: 0,
+        truncated: false, nodes: [{}], relations: [],
+      },
+    }),
+    response({
+      operation: "context.compiled",
+      compilation: {
+        project_id: "project", task_id: "task", cortex_version: "0.1.0",
+        cortex_revision: "a".repeat(40),
+        packet: { content: "", included_ids: [], omitted_ids: [], raw_estimated_tokens: 0,
+          selected_estimated_tokens: 0, omitted_estimated_tokens: 0,
+          requires_upstream: false, deduplicated_lines: 0, deduplicated_estimated_tokens: 0 },
+      },
+    }),
     response({
       operation: "policy.evaluated",
       decision: { effect: "maybe", source: "project", reason: "x" },
@@ -188,7 +254,7 @@ test("encoder and decoder reject unbounded or non-JSON frames", () => {
   const circular: { self?: unknown } = {};
   circular.self = circular;
   assert.throws(() => encodeEngineFrame(circular), /serializable/i);
-  assert.throws(() => encodeEngineFrame("x".repeat(MAX_ENGINE_FRAME_BYTES)), /64 KiB/i);
+  assert.throws(() => encodeEngineFrame("x".repeat(MAX_ENGINE_FRAME_BYTES)), /512 KiB/i);
 
   const empty = Buffer.alloc(4);
   assert.throws(() => new EngineFrameDecoder().push(empty), /length/i);

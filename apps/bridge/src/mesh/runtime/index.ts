@@ -6,9 +6,12 @@ import type {
   MeshHandoffPrepare,
   MeshProvider,
   MeshSnapshot,
+  ProjectCapabilityRequestSet,
   SessionInfo,
   TaskCapsule,
 } from "../../../../../packages/protocol/schema";
+import { projectBackbone, projectRepositoryGraphs } from "../../engine/runtime/engine-projects";
+import { projectCortexIntegration } from "../../cortex/integration";
 import { configDir } from "../../config";
 import {
   createClaudeSession,
@@ -22,6 +25,8 @@ import { scanSessionHistory, scanSessions } from "../../sessions";
 import { sendMeshPayload } from "../../host/session-keys";
 import { linkSessionsToProjects, workingTreeState } from "../catalog";
 import { catalogFromSessions } from "../catalog/models";
+import { projectMcpServers } from "../catalog/project/capabilities";
+import { saveProjectCapabilityRequest } from "../catalog/project/requests";
 import { computerId } from "../identity/computer";
 import { createCheckpoint } from "../admin/checkpoint";
 import { buildTaskCapsule } from "../admin/capsule";
@@ -152,15 +157,25 @@ export function createMeshRuntime(deps: MeshRuntimeDependencies) {
     catalog,
     snapshots(): MeshSnapshot[] {
       const store = deps.store();
-      const models = catalogFromSessions(deps.computer(), deps.sessions());
+      const sessions = deps.sessions();
+      const models = catalogFromSessions(deps.computer(), sessions);
       return store.projectIds().flatMap((projectId) => {
         const snapshot = store.snapshot(projectId);
         if (!snapshot) return [];
+        const executionIds = new Set(snapshot.executions.map((item) => item.sessionId));
+        const mcpServers = projectMcpServers(sessions, projectId, executionIds);
         return [{
           ...snapshot,
+          mcpServers: mcpServers.length > 0 ? mcpServers : undefined,
           modelCatalog: models.models.length > 0 || models.reason ? [models] : undefined,
         }];
       });
+    },
+    requestCapability(input: ProjectCapabilityRequestSet): boolean {
+      const project = deps.store().snapshot(input.projectId)?.project;
+      if (!project || input.sessionId !== input.projectId) return false;
+      saveProjectCapabilityRequest(input);
+      return true;
     },
     async handle(
       client: RelayClient,
@@ -193,6 +208,25 @@ export function meshCatalog(sessions: SessionInfo[]): SessionInfo[] {
 
 export function meshSnapshots(): MeshSnapshot[] {
   return defaultRuntime.snapshots();
+}
+
+export function requestProjectCapability(input: ProjectCapabilityRequestSet): boolean {
+  return defaultRuntime.requestCapability(input);
+}
+
+export async function meshSnapshotsWithEngine(): Promise<MeshSnapshot[]> {
+  return Promise.all(meshSnapshots().map(async (snapshot) => {
+    const [backbone, repositoryGraphs] = await Promise.all([
+      projectBackbone(snapshot.projectId),
+      projectRepositoryGraphs(snapshot.projectId, snapshot.bindings ?? []),
+    ]);
+    const enriched = { ...snapshot, backbone, repositoryGraphs };
+    const cortex = await projectCortexIntegration(enriched);
+    return {
+      ...enriched,
+      cortex: [cortex],
+    };
+  }));
 }
 
 export function handleMeshPayload(

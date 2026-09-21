@@ -62,6 +62,7 @@ test("gating can exclude exactly one chat without disabling every chat", async (
     providerSettings: { claude: true, codex: true, cursor: true, grok: true },
     meshEnabled: true,
     contextCompilerEnabled: false,
+    cortexByProject: {},
     // The engine ships separately, so nothing is assumed about where it lives.
     enginePath: null,
     engineSha256: null,

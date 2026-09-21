@@ -31,6 +31,10 @@ import { loadExecutionPolicy } from "../runtime/execution-policy";
 import { loadEnvironment, redactEnvironment } from "../context/env";
 import { loadRestrictions } from "../restrictions";
 import { MeshStoreBase } from "./base";
+import {
+  mergeProjectCapabilityRequests,
+  projectCapabilityRequests,
+} from "../catalog/project/requests";
 
 export class MeshStore extends MeshStoreBase {
   recordReceipt(input: ReceiptValue): void {
@@ -330,10 +334,13 @@ export class MeshStore extends MeshStoreBase {
       // snapshot it always did.
       peers: peers.length > 0 ? peers : undefined,
       skills: skills.length > 0 ? skills : undefined,
+      capabilityRequests: projectCapabilityRequests(projectId),
       incomplete: incomplete || undefined,
       ...(execution ? { execution: {
         mode: execution.mode,
         targetEndpointId: execution.targetEndpointId,
+        defaultProvider: execution.defaultProvider,
+        defaultModel: execution.defaultModel,
         revision: execution.revision,
         hostGrantId: execution.hostGrantId,
         hostGrantStatus: execution.hostGrantStatus,
@@ -353,6 +360,7 @@ export class MeshStore extends MeshStoreBase {
   mergeSnapshot(input: SnapshotValue): void {
     this.sync();
     mergeSnapshotState(this.state, input);
+    mergeProjectCapabilityRequests(input.capabilityRequests ?? []);
     // A released claim does not come back with a snapshot that still has it.
     const at = this.now();
     this.state.claims = this.state.claims.filter((claim) => !this.isReleased(claim.claimId, at));

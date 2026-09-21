@@ -157,8 +157,16 @@ export function resolveAutoAcceptLevel(opts: {
 }): AutoAcceptLevel {
   if (opts.paused) return "ask";
   const sid = opts.sessionId;
-  if (sid && opts.bySession?.[sid]) return opts.bySession[sid]!;
   const projectId = opts.projectId;
-  if (projectId && opts.byProject?.[projectId]) return opts.byProject[projectId]!;
+  if (projectId) {
+    const projectLevel = opts.byProject?.[projectId] ?? opts.defaultLevel ?? "ask";
+    const taskLevel = sid ? opts.bySession?.[sid] : undefined;
+    if (!taskLevel) return projectLevel;
+    // A native-session override can narrow Project automation, never enlarge
+    // it. More permissive exceptions require a separate governed operation.
+    return AUTO_ACCEPT_LEVELS.indexOf(taskLevel) <= AUTO_ACCEPT_LEVELS.indexOf(projectLevel)
+      ? taskLevel : projectLevel;
+  }
+  if (sid && opts.bySession?.[sid]) return opts.bySession[sid]!;
   return opts.defaultLevel ?? "except_push";
 }

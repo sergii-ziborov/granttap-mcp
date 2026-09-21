@@ -158,6 +158,42 @@ test("the other side of a Task's repository is found from either side's statemen
   assert.equal(otherSide({ ...byRoot, project: { ...byRoot.project, repositoryRoot: undefined } }, "task-api").length, 0);
 });
 
+test("verified Engine topology replaces the legacy peer map for other-side work", async () => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-other-side-engine-"));
+  const store = seeded(root, () => at);
+  store.recordIntegrationPeers(projectId, api, [{
+    peer: "not-a-bound-repository", via: "api", relation: "calls",
+  }]);
+  const snapshot: MeshSnapshot = {
+    ...store.snapshot(projectId)!,
+    backbone: {
+      projectId,
+      nodes: [
+        { kind: "repository", identity: "repo:api", displayName: "payments-api" },
+        { kind: "service", identity: "service:api", displayName: "Payments API" },
+        { kind: "repository", identity: "repo:worker", displayName: "payment-worker" },
+        { kind: "consumer", identity: "consumer:worker", displayName: "Payment worker" },
+      ],
+      relations: [
+        { source: "repo:api", target: "service:api", relation: "owns", evidenceCount: 2 },
+        { source: "repo:worker", target: "consumer:worker", relation: "owns", evidenceCount: 2 },
+        { source: "service:api", target: "consumer:worker", relation: "publishes_to", evidenceCount: 3 },
+      ],
+      pendingCandidateCount: 0,
+    },
+  };
+
+  const edge = otherSides(api, snapshot)[0];
+  assert.deepEqual(edge, {
+    repositoryId: worker,
+    statedBy: api,
+    via: "engine",
+    relation: "publishes_to",
+    through: "3 evidence",
+  });
+  assert.equal(otherSide(snapshot, "task-api")[0]?.taskId, "task-worker");
+});
+
 test("an agent's scoped view names the claims next to its own by file and by module", () => {
   const claim = (taskId: string, resource: string) => ({
     claimId: `${taskId}-${resource}`, projectId, taskId, ownerSessionId: taskId, resource,

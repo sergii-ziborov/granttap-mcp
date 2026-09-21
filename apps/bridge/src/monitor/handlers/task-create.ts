@@ -91,7 +91,9 @@ export async function handleTaskCreate(
     cursor: createCursorSession,
     grok: createGrokSession,
   }[agent];
-  const result = await create(message.text, message.cwd, DELIVERY_TIMEOUT_MS, resolved.attachments);
+  const result = await create(
+    message.text, message.cwd, DELIVERY_TIMEOUT_MS, resolved.attachments, message.model,
+  );
   if (result.ok) {
     await say(result.text, result.sessionId, true);
   } else {

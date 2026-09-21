@@ -124,12 +124,15 @@ export function renderCompactProjectContext(
   };
 }
 
-export function renderProjectContext(view: ScopedMeshView, mode: ProjectContextMode): unknown {
-  if (mode === "compact") return renderCompactProjectContext(view);
+export async function renderProjectContext(
+  view: ScopedMeshView, mode: ProjectContextMode,
+): Promise<unknown> {
+  const contextPacket = await compileMeshContext(view);
+  if (mode === "compact") return { ...renderCompactProjectContext(view), contextPacket };
   if (mode === "legacy") {
-    return { schema: "granttap.mesh-scope.legacy.v1", mode: "legacy", view, packet: compileMeshContext(view) };
+    return { schema: "granttap.mesh-scope.legacy.v2", mode: "legacy", view, contextPacket };
   }
-  return { ...view, mode: "full" };
+  return { ...view, mode: "full", contextPacket };
 }
 
 export function parseProjectContextMode(value: string | undefined): ProjectContextMode {
