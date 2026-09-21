@@ -169,14 +169,14 @@ test("verified Engine topology replaces the legacy peer map for other-side work"
     backbone: {
       projectId,
       nodes: [
-        { kind: "repository", identity: "repo:api", displayName: "payments-api" },
+        { kind: "repository", identity: api, displayName: "payments-api" },
         { kind: "service", identity: "service:api", displayName: "Payments API" },
-        { kind: "repository", identity: "repo:worker", displayName: "payment-worker" },
+        { kind: "repository", identity: worker, displayName: "payment-worker" },
         { kind: "consumer", identity: "consumer:worker", displayName: "Payment worker" },
       ],
       relations: [
-        { source: "repo:api", target: "service:api", relation: "owns", evidenceCount: 2 },
-        { source: "repo:worker", target: "consumer:worker", relation: "owns", evidenceCount: 2 },
+        { source: api, target: "service:api", relation: "owns", evidenceCount: 2 },
+        { source: worker, target: "consumer:worker", relation: "owns", evidenceCount: 2 },
         { source: "service:api", target: "consumer:worker", relation: "publishes_to", evidenceCount: 3 },
       ],
       pendingCandidateCount: 0,
@@ -192,6 +192,26 @@ test("verified Engine topology replaces the legacy peer map for other-side work"
     through: "3 evidence",
   });
   assert.equal(otherSide(snapshot, "task-api")[0]?.taskId, "task-worker");
+});
+
+test("verified repository identity survives a same-name binding", async () => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-other-side-identity-"));
+  const store = seeded(root, () => at);
+  const other = "github.com/other/payment-worker";
+  store.upsertBinding(binding(other, "payment-worker", "mac-b"));
+  const snapshot: MeshSnapshot = {
+    ...store.snapshot(projectId)!,
+    backbone: {
+      projectId,
+      nodes: [
+        { kind: "repository", identity: api, displayName: "payments-api" },
+        { kind: "repository", identity: other, displayName: "payment-worker" },
+      ],
+      relations: [{ source: api, target: other, relation: "depends_on", evidenceCount: 1 }],
+      pendingCandidateCount: 0,
+    },
+  };
+  assert.deepEqual(otherSides(api, snapshot).map((edge) => edge.repositoryId), [other]);
 });
 
 test("an agent's scoped view names the claims next to its own by file and by module", () => {

@@ -51,21 +51,12 @@ export type OtherSideEdge = {
   through?: string;
 };
 
-function normalized(value: string): string {
-  return value.trim().toLowerCase();
-}
-
 function backboneOwners(
   backbone: ProjectBackbone,
-  bindings: ProjectBindingSummary[],
 ): Map<string, string> {
   const owners = new Map<string, string>();
   for (const node of backbone.nodes.filter((item) => item.kind === "repository")) {
-    const names = new Set([normalized(node.identity), normalized(node.displayName)]);
-    const binding = bindings.find((item) =>
-      [...repositoryNames(item)].some((name) => names.has(name))
-      || names.has(normalized(item.repositoryId)));
-    owners.set(node.identity, binding?.repositoryId ?? node.identity);
+    owners.set(node.identity, node.identity);
   }
   for (let pass = 0; pass < 3; pass += 1) {
     for (const relation of backbone.relations.filter((item) => item.relation === "owns")) {
@@ -79,10 +70,9 @@ function backboneOwners(
 function backboneOtherSides(
   repositoryId: string,
   backbone: ProjectBackbone | undefined,
-  bindings: ProjectBindingSummary[],
 ): OtherSideEdge[] {
   if (!backbone) return [];
-  const owners = backboneOwners(backbone, bindings);
+  const owners = backboneOwners(backbone);
   const seen = new Set<string>();
   return backbone.relations.flatMap((relation) => {
     const source = owners.get(relation.source);
@@ -108,7 +98,7 @@ export function otherSides(
   snapshot: Pick<MeshSnapshot, "backbone" | "peers" | "bindings">,
 ): OtherSideEdge[] {
   const bindings = snapshot.bindings ?? [];
-  const verified = backboneOtherSides(repositoryId, snapshot.backbone, bindings);
+  const verified = backboneOtherSides(repositoryId, snapshot.backbone);
   if (verified.length > 0) return verified;
   const mine = new Set(
     bindings.filter((binding) => binding.repositoryId === repositoryId)
