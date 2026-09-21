@@ -69,6 +69,20 @@ test("Engine scoped read filters a mismatched private record defensively", async
   assert.deepEqual(values?.map((item) => item.recordId), ["shared"]);
 });
 
+test("Project projection asks Engine for shared records before applying the page limit", async () => {
+  let requested: EngineOperation | undefined;
+  const client = { request: async (input: EngineOperation): Promise<EngineResult> => {
+    requested = input;
+    return { operation: "memory.history", page: { project_id: "mesh",
+      entries: [], next_before_version: null, incomplete: false } };
+  }, close: () => undefined };
+  await projectKnowledge("mesh", undefined, { env: { GRANTTAP_ENGINE_ENABLED: "1" }, client });
+  assert.equal(requested?.operation, "memory.history");
+  if (requested?.operation === "memory.history") {
+    assert.equal(requested.input.visibility, "project");
+  }
+});
+
 test("a completed Task enters Memory as an agent report with its source event", () => {
   const values = recordsFromEvent({ type: "mesh.event", sessionId: "task-a",
     eventId: "completed", projectId: "mesh", taskId: "task-a",

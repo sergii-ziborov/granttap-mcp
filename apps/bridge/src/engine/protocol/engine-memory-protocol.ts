@@ -26,7 +26,8 @@ export type KnowledgePage = {
 export type MemoryEngineOperation =
   | { operation: "memory.record"; input: KnowledgeRecordInput }
   | { operation: "memory.history"; input: {
-    project_id: string; task_id?: string | null; before_version?: number | null; limit?: number | null;
+    project_id: string; task_id?: string | null; visibility?: KnowledgeVisibility | null;
+    before_version?: number | null; limit?: number | null;
   } };
 export type MemoryEngineResult =
   | { operation: "memory.recorded"; record_id: string; stream_version: number }

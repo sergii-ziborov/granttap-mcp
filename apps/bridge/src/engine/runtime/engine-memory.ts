@@ -36,11 +36,13 @@ export async function projectKnowledge(
   try {
     const result = await client(options).request({
       operation: "memory.history",
-      input: { project_id: projectId, task_id: taskId, limit: 32 },
+      input: { project_id: projectId, task_id: taskId,
+        visibility: taskId ? undefined : "project", limit: 32 },
     }, { timeoutMs: 250 });
     if (result.operation !== "memory.history" || result.page.project_id !== projectId) return undefined;
-    return result.page.entries.filter((entry) => !taskId || entry.task_id === taskId
-      || entry.visibility === "project").map((entry) => ({
+    return result.page.entries.filter((entry) => taskId
+      ? entry.task_id === taskId || entry.visibility === "project"
+      : entry.visibility === "project").map((entry) => ({
       projectId: entry.project_id, taskId: entry.task_id,
       recordId: entry.record_id, category: entry.category,
       content: entry.content, source: entry.source,
