@@ -36,14 +36,30 @@ function track(key: string, child: ChildProcess): () => void {
   };
 }
 
+function signalOwnedProcess(child: ChildProcess, signal: NodeJS.Signals): boolean {
+  if (process.platform !== "win32" && child.pid && child.pid > 0) {
+    try {
+      // POSIX detached children lead a new process group. Signal descendants
+      // as well as the provider CLI, without touching the monitor's group.
+      process.kill(-child.pid, signal);
+      return true;
+    } catch {
+      // The group may already have exited; fall back to the direct child.
+    }
+  }
+  return child.kill(signal);
+}
+
 /** Request a stop for owned child processes; count signals accepted, not exits. */
 export function abortProcesses(key: string): number {
   const set = running.get(key);
   if (!set) return 0;
   let stopped = 0;
   for (const child of set) {
-    (child as ChildProcess & { granttapStopped?: boolean }).granttapStopped = true;
-    if (child.kill("SIGTERM")) stopped += 1;
+    if (signalOwnedProcess(child, "SIGTERM")) {
+      (child as ChildProcess & { granttapStopped?: boolean }).granttapStopped = true;
+      stopped += 1;
+    }
   }
   return stopped;
 }
@@ -70,6 +86,7 @@ export function runProcess(
         // hand a background run the journal kept for the live session.
         env: { ...process.env, GRANTTAP_DELIVERY: "1", ...projectEnvForCwd(cwd) },
         stdio: [stdin == null ? "ignore" : "pipe", "pipe", "pipe"],
+        detached: process.platform !== "win32",
       });
     } catch (error) {
       resolve({ ok: false, error: `${command} did not start: ${(error as Error).message}` });
@@ -89,7 +106,7 @@ export function runProcess(
     };
     const timer = setTimeout(() => {
       if (done) return;
-      child.kill("SIGKILL");
+      signalOwnedProcess(child, "SIGKILL");
       finish({ ok: false, error: `${command} did not respond within ${Math.round(timeoutMs / 1000)}s.` });
     }, timeoutMs);
     child.stdout?.on("data", (chunk) => { stdout += chunk; });

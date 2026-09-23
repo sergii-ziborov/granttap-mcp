@@ -127,6 +127,38 @@ test("a pause stops the delivery in flight and refuses a new one", async (t) => 
   assert.equal(stopDeliveries("chat-held"), 0);
 });
 
+test("a pause stops an owned descendant before it can keep working", { skip: process.platform === "win32" }, async () => {
+  const dir = await mkdtemp(join(tmpdir(), "granttap-pause-tree-"));
+  const childScript = join(dir, "descendant.mjs");
+  const parentScript = join(dir, "parent.mjs");
+  const ready = join(dir, "ready");
+  const marker = join(dir, "late-effect");
+  await writeFile(childScript, `import { writeFileSync } from "node:fs";
+setTimeout(() => writeFileSync(${JSON.stringify(marker)}, "continued"), 650);
+`);
+  await writeFile(parentScript, `import { spawn } from "node:child_process";
+import { writeFileSync } from "node:fs";
+spawn(process.execPath, [${JSON.stringify(childScript)}], { stdio: "ignore" });
+writeFileSync(${JSON.stringify(ready)}, "started");
+setInterval(() => {}, 1000);
+`);
+  const { abortProcesses, runProcess, STOPPED_ERROR } =
+    await import(`../../apps/bridge/src/reply/process/index.ts?tree=${Date.now()}`);
+  const pending = runProcess(process.execPath, [parentScript], dir, 5_000,
+    (stdout: string) => ({ ok: true, text: stdout }), undefined, "owned-tree");
+  let started = false;
+  for (let attempt = 0; attempt < 100 && !started; attempt++) {
+    started = await readFile(ready).then(() => true, () => false);
+    if (!started) await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.equal(started, true, "the descendant was launched before cancellation");
+  assert.equal(abortProcesses("owned-tree"), 1);
+  assert.deepEqual(await pending, { ok: false, error: STOPPED_ERROR });
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  assert.equal(await readFile(marker).then(() => true, () => false), false,
+    "a stopped run must not leave its local descendant working");
+});
+
 test("the monitor answers a pause at once and continues a resumed chat in the background", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "granttap-pause-monitor-"));
   const repo = join(root, "repo");
