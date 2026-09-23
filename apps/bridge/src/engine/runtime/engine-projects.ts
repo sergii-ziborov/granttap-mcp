@@ -27,8 +27,8 @@ export type LocalProjectBinding = {
 
 let sharedClient: EngineClient | undefined;
 const pendingBindingSyncs = new Map<string, Promise<boolean>>();
-const MAX_REPOSITORY_GRAPH_WIRE_BYTES = 128 * 1_024;
-const MAX_SINGLE_GRAPH_WIRE_BYTES = 96 * 1_024;
+const MAX_REPOSITORY_GRAPH_WIRE_BYTES = 256 * 1_024;
+const MAX_SINGLE_GRAPH_WIRE_BYTES = 192 * 1_024;
 const repositoryGraphJobs = new RepositoryGraphJobs<ProjectRepositoryGraph>();
 
 export async function syncProjectBinding(

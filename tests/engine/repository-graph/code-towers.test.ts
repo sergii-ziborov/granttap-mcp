@@ -70,3 +70,40 @@ test("wire fitting keeps measured towers and valid roads when a code map is larg
   assert.equal(fitted.codeMap?.files[0]?.lineCount, 1);
   assert.equal(fitted.codeMap?.truncated, true);
 });
+
+test("wire fitting preserves a real-sized code city before trimming its files", () => {
+  const files = Array.from({ length: 650 }, (_, index) => ({
+    path: `apps/ios/GrantTap/Features/Area${Math.floor(index / 25)}/Source${index}.swift`,
+    language: "swift", lineCount: index + 10,
+    symbols: [{ id: `apps/ios/GrantTap/Features/Area${index}/Source${index}.swift#ObservedType${index}`,
+      label: `ObservedType${index}`,
+      kind: "struct", startLine: 1, lineCount: 8 }],
+  }));
+  const nodes = Array.from({ length: 144 }, (_, index) => ({
+    id: `apps/ios/GrantTap/Features/ProjectMesh/Component${index}`,
+    kind: "component", label: `apps/ios/GrantTap/Features/ProjectMesh/Component${index}`,
+  }));
+  const relations = Array.from({ length: 500 }, (_, index) => ({
+    source: nodes[index % nodes.length]!.id,
+    target: nodes[(index + 1) % nodes.length]!.id,
+    relation: "depends_on", evidenceCount: 1,
+  }));
+  const roads = Array.from({ length: 75 }, (_, index) => ({
+    source: files[index]!.path, target: files[index + 1]!.path, relation: "imports",
+  }));
+  const graph = ProjectRepositoryGraph.parse({
+    projectId: "p", repositoryId: "repo", revision: "sha", weavatrixVersion: "2.17.4",
+    nodes, relations, totalNodes: nodes.length, totalRelations: relations.length,
+    truncated: false,
+    codeMap: { files, roads, totalFiles: 653, truncated: true },
+  });
+  assert.ok(Buffer.byteLength(JSON.stringify(graph), "utf8") > 192 * 1_024);
+  const fitted = fitRepositoryGraph(graph, 192 * 1_024);
+  assert.ok(fitted);
+  assert.equal(ProjectRepositoryGraph.safeParse(fitted).success, true);
+  assert.ok(Buffer.byteLength(JSON.stringify(fitted), "utf8") <= 192 * 1_024);
+  assert.equal(fitted.codeMap?.files.length, 650);
+  assert.equal(fitted.codeMap?.roads.length, 75);
+  assert.ok(fitted.relations.length >= 64);
+  assert.ok(fitted.codeMap.files.some((file) => file.symbols.length > 0));
+});

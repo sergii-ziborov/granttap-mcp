@@ -287,7 +287,8 @@ test("repository graphs stay inside the Mesh snapshot wire budget", async () => 
   const graphs = await projectRepositoryGraphs("applydjinn", bindings, {
     env: { GRANTTAP_ENGINE_ENABLED: "1" }, client,
   });
-  assert.ok(Buffer.byteLength(JSON.stringify(graphs), "utf8") <= 128 * 1_024);
+  assert.ok(Buffer.byteLength(JSON.stringify(graphs), "utf8") <= 256 * 1_024);
+  assert.ok(graphs.every((graph) => Buffer.byteLength(JSON.stringify(graph), "utf8") <= 192 * 1_024));
   assert.ok(graphs.length > 0);
   assert.ok(graphs.every((graph) => graph.truncated));
 });
