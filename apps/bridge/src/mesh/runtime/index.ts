@@ -24,7 +24,6 @@ import {
   deliverToSession,
 } from "../../reply";
 import { isProviderEnabled } from "../../config/runtime";
-import { scanSessionHistory, scanSessions } from "../../sessions";
 import { sendMeshPayload } from "../../host/session-keys";
 import { linkSessionsToProjects, workingTreeState } from "../catalog";
 import { catalogFromSessions } from "../catalog/models";
@@ -42,21 +41,23 @@ import { localMeshStore } from "../local-remote/local";
 import { createHandoffWorktree, repositoryHasCommit } from "./worktree";
 import { fetchRevision, pushBranch } from "../local-remote/remote";
 import { projectSessionCapabilityInventory, projectExecutionCapabilitySessions } from "./capabilities";
-import { deduplicateNativeSessions } from "./capabilities/session-discovery";
 import { refreshLocalGraphBindings } from "./graph/binding-sync";
+import { createMeshSessionCatalog } from "./catalog/session-catalog";
 
 export type { MeshRuntimeDependencies };
 
 /** Who handed the payload in: the relay (the phone, another computer) or an agent's tool call. */
 export type MeshPayloadOrigin = "relay" | "agent";
 
-function discoveredSessions(): SessionInfo[] {
-  return deduplicateNativeSessions(scanSessionHistory(), scanSessions().sessions);
+const sessionCatalog = createMeshSessionCatalog();
+
+export function invalidateMeshSessionHistory(): void {
+  sessionCatalog.invalidateHistory();
 }
 
 const defaultDependencies: MeshRuntimeDependencies = {
   store: localMeshStore,
-  sessions: discoveredSessions,
+  sessions: sessionCatalog.sessions,
   capabilityInventory: projectSessionCapabilityInventory,
   computer: () => computerId(),
   now: Date.now,

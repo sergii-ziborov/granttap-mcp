@@ -10,6 +10,7 @@ import {
   handleMeshPayload,
   prepareMeshHandoff,
   requestProjectCapability,
+  invalidateMeshSessionHistory,
 } from "../../mesh/runtime";
 import { releaseClaimByPerson, releaseResult } from "../../mesh/admin";
 import { handleInvocationQuery } from "../../engine/invocation/query";
@@ -72,11 +73,7 @@ export async function handleMonitorMessage(
       void publishSessionEvents(client, payload.sessionId, undefined, payload.threadId).catch(() => false);
       return true;
     } else if (payload.type === "sessions.refresh") {
-      // Pull-to-refresh must include a newly scanned history snapshot; otherwise
-      // a phone that cleared local state can receive an apparently empty tick.
-      void publish(true).catch(() => {});
-      if (payload.graphProjectId && loadRuntimeConfig().meshEnabled) requestProjectGraphRefresh(client, payload.graphProjectId);
-      return true;
+      return handleInboundRefresh(client, payload, publish);
     } else if (payload.type === "sessions.history.query") {
       await publishHistoryPage(client, payload);
       return true;
@@ -133,6 +130,20 @@ export async function handleMonitorMessage(
       return true;
     }
     return false;
+}
+
+function handleInboundRefresh(
+  client: RelayClient, payload: Extract<Payload, { type: "sessions.refresh" }>,
+  publish: (forceHistory?: boolean) => Promise<void>,
+): boolean {
+  // An explicit refresh may pay for the full history scan; routine Mesh
+  // snapshots use the cached history and fresh live sessions.
+  invalidateMeshSessionHistory();
+  void publish(true).catch(() => {});
+  if (payload.graphProjectId && loadRuntimeConfig().meshEnabled) {
+    requestProjectGraphRefresh(client, payload.graphProjectId);
+  }
+  return true;
 }
 
 function handleInboundToolUpdate(
