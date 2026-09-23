@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { MeshSnapshot } from "../../packages/protocol/schema";
-import { refreshLocalGraphBindings } from "../../apps/bridge/src/mesh/runtime/graph/binding-sync";
+import {
+  recoverLocalGraphBindings, refreshLocalGraphBindings,
+} from "../../apps/bridge/src/mesh/runtime/graph/binding-sync";
 
 test("Graph refresh readmits only a verified checkout on this endpoint", async () => {
   const project = {
@@ -26,4 +28,47 @@ test("Graph refresh readmits only a verified checkout on this endpoint", async (
     sync: async (_project, local) => { admitted.push(local.summary.bindingId); return true; },
   });
   assert.deepEqual(admitted, ["local"]);
+});
+
+test("Engine restart restores existing Git bindings without admitting the workspace root", async () => {
+  const make = (projectId: string, repositoryId: string, path: string): MeshSnapshot => ({
+    type: "mesh.snapshot", sessionId: projectId, projectId,
+    project: { projectId, name: projectId, canonicalRepositoryId: repositoryId, createdAt: 1 },
+    tasks: [], executions: [], claims: [], dependencies: [], events: [], generatedAt: 1,
+    bindings: [{ bindingId: path, projectId, endpointId: "this-mac", repositoryId,
+      displayName: projectId, localPathHint: path, available: true }],
+  });
+  const admitted: string[] = [];
+  await recoverLocalGraphBindings([
+    make("workspace", "local:/tmp/dev", "/tmp/dev"),
+    make("project", "repo", "/tmp/dev/repo"),
+  ], {
+    endpoint: () => "this-mac",
+    inspect: (path) => path === "/tmp/dev"
+      ? { root: path, canonicalRepositoryId: "local:/tmp/dev" }
+      : { root: path, worktree: path, canonicalRepositoryId: "repo", revision: "head" },
+    sync: async (_project, local) => { admitted.push(local.summary.repositoryId); return true; },
+  });
+  assert.deepEqual(admitted, ["repo"]);
+});
+
+test("a removed checkout does not hide another repository in the same Mesh", async () => {
+  const project = { projectId: "mesh", name: "Mesh", canonicalRepositoryId: "repo", createdAt: 1 };
+  const binding = (path: string) => ({ bindingId: path, projectId: "mesh",
+    endpointId: "this-mac", repositoryId: "repo", displayName: path,
+    localPathHint: path, available: true });
+  const admitted: string[] = [];
+  await refreshLocalGraphBindings({
+    type: "mesh.snapshot", sessionId: "mesh", projectId: "mesh", project,
+    tasks: [], executions: [], claims: [], dependencies: [], events: [], generatedAt: 1,
+    bindings: [binding("/removed"), binding("/present")],
+  }, {
+    endpoint: () => "this-mac",
+    inspect: (path) => {
+      if (path === "/removed") throw new Error("checkout removed");
+      return { root: path, worktree: path, canonicalRepositoryId: "repo", revision: "head" };
+    },
+    sync: async (_project, local) => { admitted.push(local.summary.bindingId); return true; },
+  });
+  assert.deepEqual(admitted, ["/present"]);
 });

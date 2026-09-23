@@ -3,6 +3,8 @@ import { join } from "node:path";
 import { RelayClient } from "../../../../../packages/core/relay-client";
 import { configDir, loadConfig, machineConfigPath } from "../../config";
 import { EngineSupervisor } from "../../engine/runtime/engine-supervisor";
+import { meshSnapshots } from "../../mesh/runtime";
+import { recoverLocalGraphBindings } from "../../mesh/runtime/graph/binding-sync";
 import { startSessionMonitor } from "../../monitor";
 import { controllerPeerGate } from "../../pairing/controllers";
 
@@ -38,6 +40,13 @@ process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
 
 void engine.ensureAvailable().then((health) => {
+  if (health.state === "healthy") {
+    // A new Engine binary starts with its own registry. Re-admit existing,
+    // locally verified Git bindings so linked repositories have a graph again.
+    void recoverLocalGraphBindings(meshSnapshots())
+      .then(() => monitor.publish())
+      .catch(() => undefined);
+  }
   if (health.state !== "disabled" && health.state !== "healthy") {
     const reason = health.reason ? `: ${health.reason}` : "";
     process.stderr.write(
