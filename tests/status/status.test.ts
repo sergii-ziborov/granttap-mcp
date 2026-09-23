@@ -173,3 +173,44 @@ test("public granttap bin exposes management routes and emits compatible JSON re
   );
   assert.deepEqual(readdirSync(root, { recursive: true }).map(String).sort(), before);
 });
+
+test("status CLI explains readiness and rejects unsupported flags", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "granttap-status-text-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const env = {
+    ...process.env,
+    PATH: "",
+    GRANTTAP_SKIP_LAUNCHCTL: "1",
+    GRANTTAP_CONFIG_DIR: join(root, "config"),
+    GRANTTAP_CURSOR_DIR: join(root, "cursor"),
+    GRANTTAP_CLAUDE_DIR: join(root, "claude"),
+    GRANTTAP_CODEX_DIR: join(root, "codex"),
+    GRANTTAP_LAUNCH_AGENTS_DIR: join(root, "agents"),
+  };
+  for (const path of [env.GRANTTAP_CONFIG_DIR, env.GRANTTAP_CURSOR_DIR,
+    env.GRANTTAP_CLAUDE_DIR, env.GRANTTAP_CODEX_DIR, env.GRANTTAP_LAUNCH_AGENTS_DIR]) {
+    mkdirSync(path, { recursive: true });
+  }
+
+  const text = spawnSync(process.execPath, [executable, "status"], {
+    cwd: packageRoot, encoding: "utf8", env,
+  });
+  assert.equal(text.status, 0, text.stderr);
+  assert.match(text.stdout, /Phone pairing\s+Not paired/);
+  assert.match(text.stdout, /Background helper\s+Needs setup/);
+  for (const label of ["Cursor", "Claude Code", "Codex", "Grok Build"]) {
+    assert.match(text.stdout, new RegExp(label));
+  }
+
+  const help = spawnSync(process.execPath, [executable, "status", "--help"], {
+    cwd: packageRoot, encoding: "utf8", env,
+  });
+  assert.equal(help.status, 0, help.stderr);
+  assert.match(help.stdout, /Usage: granttap status \[--json\]/);
+
+  const invalid = spawnSync(process.execPath, [executable, "status", "--unknown"], {
+    cwd: packageRoot, encoding: "utf8", env,
+  });
+  assert.equal(invalid.status, 1);
+  assert.match(invalid.stderr, /Usage: granttap status \[--json\]/);
+});
