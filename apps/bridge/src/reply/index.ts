@@ -29,7 +29,7 @@ export function resolveAgentWorkspace(cwd: string | undefined, agent: CodingAgen
 
 const inFlight = new Map<string, Promise<ReplyResult>>();
 
-/** Stop whatever is running for a chat right now; how many runs stopped. */
+/** Request a stop for owned processes; confirmation arrives only on process exit. */
 export function stopDeliveries(sessionId: string): number {
   return abortProcesses(sessionId);
 }
@@ -64,10 +64,11 @@ export function createCodexSession(
   timeoutMs = 240_000,
   attachments: UserAttachment[] = [],
   model?: string,
+  operationKey?: string,
 ): Promise<ReplyResult> {
   const workspace = resolveAgentWorkspace(cwd, "codex");
   return queued("__new_codex_task__", () => withAttachments(attachments, text, (prepared) =>
-    runCodexNew(prepared.prompt, workspace, timeoutMs, prepared.images, model),
+    runCodexNew(prepared.prompt, workspace, timeoutMs, prepared.images, model, operationKey),
   ));
 }
 
@@ -78,10 +79,11 @@ export function createClaudeSession(
   timeoutMs = 240_000,
   attachments: UserAttachment[] = [],
   model?: string,
+  operationKey?: string,
 ): Promise<ReplyResult> {
   const workspace = resolveAgentWorkspace(cwd, "claude");
   return queued("__new_claude_task__", () => withAttachments(attachments, text, (prepared) =>
-    runClaudeNew(prepared.claudePrompt, workspace, timeoutMs, model),
+    runClaudeNew(prepared.claudePrompt, workspace, timeoutMs, model, operationKey),
   ));
 }
 
@@ -91,10 +93,11 @@ export function createCursorSession(
   timeoutMs = 240_000,
   attachments: UserAttachment[] = [],
   model?: string,
+  operationKey?: string,
 ): Promise<ReplyResult> {
   const workspace = resolveAgentWorkspace(cwd, "cursor");
   return queued("__new_cursor_task__", () => withAttachments(attachments, text, (prepared) =>
-    runCursorNew(prepared.claudePrompt, workspace, timeoutMs, model),
+    runCursorNew(prepared.claudePrompt, workspace, timeoutMs, model, operationKey),
   ));
 }
 
@@ -104,10 +107,11 @@ export function createGrokSession(
   timeoutMs = 240_000,
   attachments: UserAttachment[] = [],
   model?: string,
+  operationKey?: string,
 ): Promise<ReplyResult> {
   const workspace = resolveAgentWorkspace(cwd, "grok");
   return queued("__new_grok_task__", () => withAttachments(attachments, text, (prepared) =>
-    runGrokNew(prepared.claudePrompt, workspace, timeoutMs, model),
+    runGrokNew(prepared.claudePrompt, workspace, timeoutMs, model, operationKey),
   ));
 }
 
@@ -176,7 +180,7 @@ function runClaude(
 }
 
 function runClaudeNew(
-  text: string, cwd: string, timeoutMs: number, model?: string,
+  text: string, cwd: string, timeoutMs: number, model?: string, operationKey?: string,
 ): Promise<ReplyResult> {
   const args = ["-p", ...(model ? ["--model", model] : []), "--output-format", "json", text];
   const claude = resolveClaudeBinary();
@@ -196,12 +200,14 @@ function runClaudeNew(
     return trimmed
       ? { ok: true, text: trimmed.slice(0, 4000) }
       : { ok: false, error: "Claude returned an empty response." };
-  });
+  }, undefined, operationKey);
 }
 
 function parseCodexJsonl(stdout: string, fallbackSessionId?: string): ReplyResult {
   let lastMessage = "";
   let sessionId = fallbackSessionId;
+  let structured = false;
+  let failure = "";
   for (const line of stdout.split("\n")) {
     if (!line.trim()) continue;
     try {
@@ -209,19 +215,27 @@ function parseCodexJsonl(stdout: string, fallbackSessionId?: string): ReplyResul
         type?: string;
         thread_id?: string;
         session_id?: string;
-        item?: { type?: string; text?: string };
+        item?: { type?: string; text?: string; message?: string };
+        error?: { message?: string } | string;
       };
+      structured = true;
       if (event.type === "thread.started") {
         sessionId = event.thread_id ?? event.session_id ?? sessionId;
       }
       if (event.item?.type === "agent_message" && typeof event.item.text === "string") {
         lastMessage = event.item.text;
       }
+      if (event.type === "error" || event.type === "turn.failed" || event.item?.type === "error") {
+        failure = (typeof event.error === "string" ? event.error : event.error?.message)
+          ?? event.item?.message ?? "Codex reported an error.";
+      }
     } catch {
       // Ignore non-JSON diagnostic lines.
     }
   }
+  if (failure) return { ok: false, error: failure.slice(0, 500) };
   if (lastMessage) return { ok: true, text: lastMessage.slice(0, 4000), sessionId };
+  if (structured) return { ok: false, error: "Codex returned no agent message." };
   const trimmed = stdout.trim();
   return trimmed
     ? { ok: true, text: trimmed.slice(0, 4000), sessionId }
@@ -276,11 +290,12 @@ function runCodexNew(
   timeoutMs: number,
   images: string[] = [],
   model?: string,
+  operationKey?: string,
 ): Promise<ReplyResult> {
   // This is the supported non-interactive Codex path. It preserves the user's
   // normal sandbox, approval, hooks, model, and auth configuration.
   const imageArgs = images.flatMap((path) => ["-i", path]);
   const args = ["exec", ...(model ? ["-m", model] : []), ...imageArgs,
     "--json", "--skip-git-repo-check", "-"];
-  return runProcess(resolveCodexBinary(), args, cwd, timeoutMs, parseCodexJsonl, text);
+  return runProcess(resolveCodexBinary(), args, cwd, timeoutMs, parseCodexJsonl, text, operationKey);
 }

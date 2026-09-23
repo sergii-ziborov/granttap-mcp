@@ -84,10 +84,11 @@ export function installPairingRoutes(app: Express, provider: GrantTapOAuthProvid
         return;
       }
       const replace = req.body?.replace === "true";
+      const addController = req.body?.mode === "add_device" && !replace && isMachineConfigured();
       const firstPairing = !isMachineConfigured();
       const pairing = await createOneTimePairing(
         process.env.GRANTTAP_RELAY_URL ?? process.env.NODVOX_RELAY_URL ?? DEFAULT_RELAY,
-        { installHooks: false, replace },
+        { installHooks: false, replace, addController },
       );
       resetRelay();
       void relay();

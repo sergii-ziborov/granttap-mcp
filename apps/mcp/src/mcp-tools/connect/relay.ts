@@ -11,6 +11,7 @@ import { applyPairingJoin } from "../../../../bridge/src/pairing";
 import { installMonitorHelper, reloadMonitorHelper } from "../../../../bridge/src/install";
 import { recordPhoneSeen } from "../../../../bridge/src/pairing/presence";
 import { completeEnrollment } from "../../connection-center/enrollment";
+import { confirmPendingController } from "../../../../bridge/src/pairing/controllers";
 
 const ASK_TIMEOUT_MS = Number(
   process.env.GRANTTAP_ASK_TIMEOUT_MS ?? process.env.NODVOX_ASK_TIMEOUT_MS ?? 180_000,
@@ -31,7 +32,7 @@ export async function relay(): Promise<RelayClient | null> {
   try {
     if (!client) {
       client = new RelayClient(loadConfig(machineConfigPath()), { autoReconnect: true });
-      client.onMessage((payload) => {
+      client.onMessage((payload, peerPublicKey) => {
         if (payload.type === "pairing.join") {
           const result = applyPairingJoin(payload);
           if (result === "adopted") {
@@ -45,8 +46,12 @@ export async function relay(): Promise<RelayClient | null> {
           }
           return true;
         }
+        if (payload.type === "hello" && payload.role === "phone") {
+          confirmPendingController(client!.room, peerPublicKey);
+          completeEnrollment(peerPublicKey);
+        }
         phoneLastSeenAt = Date.now();
-        recordPhoneSeen(phoneLastSeenAt);
+        recordPhoneSeen(phoneLastSeenAt, peerPublicKey);
         return false;
       });
       monitor = startSessionMonitor(client);

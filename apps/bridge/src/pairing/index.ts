@@ -1,4 +1,4 @@
-import { generateTransferKey, randomId, sealWithTransferKey } from "../../../../packages/core/crypto";
+import { generateKeyPair, generateTransferKey, randomId, sealWithTransferKey } from "../../../../packages/core/crypto";
 import {
   installClaudeHook,
   installCodexHook,
@@ -18,6 +18,7 @@ import {
 import type { PeerConfig } from "../../../../packages/core/relay-client";
 import type { PairingJoin } from "../../../../packages/protocol/messages/pairing-join";
 import { clearPhoneSeen } from "./presence";
+import { prunePendingControllers, rememberPendingController } from "./controllers";
 
 export const DEFAULT_RELAY = DEFAULT_RELAY_URL;
 export const PAIRING_CODE_TTL_MINUTES = 15;
@@ -155,6 +156,15 @@ export function applyPairingJoin(payload: PairingJoin): PairingJoinResult {
       && machine.relayUrl === relayUrl) {
     return "already";
   }
+  if (machine.room === payload.room && machine.relayUrl === relayUrl
+      && machine.extraPeerPublicKeys?.includes(payload.phonePublicKey)) {
+    // An added controller does not replace the original phone identity.
+    return "already";
+  }
+  if ((machine.extraPeerPublicKeys?.length ?? 0) > 0) {
+    // Moving a room with other authorized phones would silently strand them.
+    return "rejected";
+  }
   const nextMachine: PeerConfig = {
     ...machine,
     relayUrl,
@@ -173,7 +183,7 @@ export function applyPairingJoin(payload: PairingJoin): PairingJoinResult {
 }
 export async function createOneTimePairing(
   relayUrl: string,
-  options: { installHooks?: boolean; replace?: boolean } = {},
+  options: { installHooks?: boolean; replace?: boolean; addController?: boolean } = {},
 ): Promise<OneTimePairing> {
   const existing = options.replace ? null : parkedPairingHalves();
   if (!existing && !options.replace && machineIdentityPresent()) {
@@ -181,7 +191,20 @@ export async function createOneTimePairing(
       "GrantTap already has a pairing room on this computer, but the local phone half is missing or does not match. Reconnect reuses that room. Confirm replace only to start a different room.",
     );
   }
-  const { machineCfg, phoneCfg } = existing ?? createPairing(relayUrl);
+  let { machineCfg, phoneCfg } = existing ?? createPairing(relayUrl);
+  if (existing) machineCfg = prunePendingControllers(machineCfg);
+  if (existing && options.addController) {
+    const extra = machineCfg.extraPeerPublicKeys ?? [];
+    if (extra.length >= 16) throw new Error("This computer has reached its controller device limit.");
+    const keys = generateKeyPair();
+    phoneCfg = {
+      ...phoneCfg,
+      senderId: randomId(8),
+      myPublicKey: keys.publicKey,
+      mySecretKey: keys.secretKey,
+    };
+    machineCfg = { ...machineCfg, extraPeerPublicKeys: [...extra, keys.publicKey] };
+  }
   const mailboxId = randomId(16);
   const transferKey = generateTransferKey();
   const sealed = sealWithTransferKey(phoneCfg, transferKey);
@@ -213,6 +236,10 @@ export async function createOneTimePairing(
     saveConfig(machineConfigPath(), machineCfg);
     saveConfig(phonePairingPath(), phoneCfg);
     clearPhoneSeen();
+  } else if (options.addController) {
+    rememberPendingController(machineCfg.room, phoneCfg.myPublicKey,
+      Date.now() + PAIRING_CODE_TTL_MINUTES * 60_000);
+    saveConfig(machineConfigPath(), machineCfg);
   }
 
   const installHooks = options.installHooks ?? process.env.GRANTTAP_SKIP_HOOKS !== "1";

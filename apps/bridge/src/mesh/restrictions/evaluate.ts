@@ -62,22 +62,26 @@ export function evaluateContent(
   const lines = countLines(content);
   const bytes = Buffer.byteLength(content);
   const functions = functionLineCounts(content);
+  let approval: RestrictionViolation | undefined;
   for (const rule of rules) {
     if (!ruleApplies(rule, filePath)) continue;
+    let hit: RestrictionViolation | undefined;
     if (rule.kind === "max_file_lines" && rule.limit != null && lines > rule.limit) {
-      return violation(rule, filePath, `${lines} lines (limit ${rule.limit})`);
+      hit = violation(rule, filePath, `${lines} lines (limit ${rule.limit})`);
     }
     if (rule.kind === "max_file_bytes" && rule.limit != null && bytes > rule.limit) {
-      return violation(rule, filePath, `${bytes} bytes (limit ${rule.limit})`);
+      hit = violation(rule, filePath, `${bytes} bytes (limit ${rule.limit})`);
     }
     if (rule.kind === "max_function_lines" && rule.limit != null) {
       const worst = Math.max(0, ...functions);
       if (worst > rule.limit) {
-        return violation(rule, filePath, `a function is ${worst} lines (limit ${rule.limit})`);
+        hit = violation(rule, filePath, `a function is ${worst} lines (limit ${rule.limit})`);
       }
     }
+    if (hit?.effect === "deny") return hit;
+    if (hit && !approval) approval = hit;
   }
-  return undefined;
+  return approval;
 }
 
 function violation(

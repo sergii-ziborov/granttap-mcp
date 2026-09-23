@@ -203,7 +203,12 @@ async function handleInboundTaskCreate(
   }
   if (state === "processing") return false;
   try {
-    await handleTaskCreate(client, payload);
+    const admission = await handleTaskCreate(client, payload);
+    if (admission.status === "rejected") {
+      abandonDelivery(payload.operationId);
+      await sendDeliveryReceipt(client, payload.operationId, "rejected", admission.error);
+      return true;
+    }
     completeDelivery(payload.operationId);
     await sendDeliveryReceipt(client, payload.operationId, "accepted");
     void publish().catch(() => {});

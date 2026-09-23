@@ -48,6 +48,7 @@ import { cachedSessionActivity } from "./session-activity";
 import { HEARTBEAT_INTERVAL_MS, publishHeartbeat } from "./heartbeat";
 import { applyPairingJoin } from "../../pairing";
 import { recordPhoneSeen } from "../../pairing/presence";
+import { confirmPendingController } from "../../pairing/controllers";
 import { startPublishLoop } from "./publish-loop";
 import { singleFlightPublisher } from "./single-flight";
 import { createMachineLoadPublisher } from "../../machine-load";
@@ -268,11 +269,12 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
     lastCapabilityPublishedAt = next.lastCapabilityPublishedAt;
   });
 
-  const off = client.onMessage(async (payload: Payload) => handleMonitorMessage(client, payload, {
-    leadership,
-    subscriptions,
-    publish,
-  }));
+  const off = client.onMessage(async (payload: Payload, peerPublicKey) => {
+    if (payload.type === "hello" && payload.role === "phone") {
+      confirmPendingController(client.room, peerPublicKey);
+    }
+    return handleMonitorMessage(client, payload, { leadership, subscriptions, publish });
+  });
 
   const stopCatalog = startPublishLoop({
     connected: () => client.isConnected,

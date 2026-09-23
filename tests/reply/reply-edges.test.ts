@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import type { SessionInfo } from "../../packages/protocol/schema";
-import { runProcess } from "../../apps/bridge/src/reply/process";
+import { runProcess, runningProcessCount } from "../../apps/bridge/src/reply/process";
 
 async function script(root: string, name: string, body: string): Promise<string> {
   const path = join(root, name);
@@ -74,6 +74,8 @@ test("Codex delivery covers JSONL diagnostics, sandbox variants, and escaped MCP
     "process.stdin?.on('end', () => {",
     " if (input.includes('empty')) return;",
     " if (input.includes('raw')) return process.stdout.write('diagnostic text');",
+    " if (input.includes('json-error')) return process.stdout.write(JSON.stringify({type:'turn.failed',error:{message:'provider failed'}})+'\\n');",
+    " if (input.includes('json-only')) return process.stdout.write(JSON.stringify({type:'thread.started',session_id:'orphan'})+'\\n');",
     " process.stdout.write('not-json\\n');",
     " process.stdout.write(JSON.stringify({type:'thread.started',session_id:'fallback-thread'})+'\\n');",
     " process.stdout.write(JSON.stringify({item:{type:'agent_message',text:process.argv.slice(2).join('|')}})+'\\n');",
@@ -109,6 +111,12 @@ test("Codex delivery covers JSONL diagnostics, sandbox variants, and escaped MCP
   assert.deepEqual(await reply.createCodexSession("empty", root, 2_000), {
     ok: false, error: "Codex returned an empty response.",
   });
+  assert.deepEqual(await reply.createCodexSession("json-error", root, 2_000), {
+    ok: false, error: "provider failed",
+  });
+  assert.deepEqual(await reply.createCodexSession("json-only", root, 2_000), {
+    ok: false, error: "Codex returned no agent message.",
+  });
   assert.equal((await reply.createCodexSession("normal", root, 2_000)).sessionId, "fallback-thread");
   assert.equal((await reply.deliverToSession({ ...session("codex", "bad", root), agent: "other" as never }, "go")).ok, false);
 });
@@ -124,5 +132,34 @@ test("process delivery reports spawn, exit, parse, and timeout failures", async 
   assert.deepEqual(await runProcess(failed, [], root, 15_000, () => ({ ok: true, text: "x" })), {
     ok: false, error: `${failed} exited with code 7: fixture failed`,
   });
+  const noisyFailure = await script(root, "noisy-failed.mjs", "process.stdout.write('partial output'); process.exit(7);");
+  const noisyResult = await runProcess(noisyFailure, [], root, 15_000, () => ({ ok: true, text: "partial output" }));
+  assert.equal(noisyResult.ok, false, "stdout from a failed process is not a successful result");
+  const valid = await script(root, "valid.mjs", "process.stdout.write('output');");
+  const unreadable = await runProcess(valid, [], root, 15_000, () => { throw new Error("bad JSON"); });
+  assert.equal(unreadable.ok, false);
+  if (!unreadable.ok) assert.match(unreadable.error, /unreadable result: bad JSON/);
   assert.equal((await runProcess(slow, [], root, 20, () => ({ ok: true, text: "x" }))).ok, false);
+});
+
+test("a new Task process is tracked by operation before a native session exists", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-new-task-stop-"));
+  const binary = await script(root, "codex.mjs", "setTimeout(() => {}, 20_000);");
+  const previous = process.env.GRANTTAP_CODEX_BIN;
+  process.env.GRANTTAP_CODEX_BIN = binary;
+  t.after(() => {
+    if (previous == null) delete process.env.GRANTTAP_CODEX_BIN;
+    else process.env.GRANTTAP_CODEX_BIN = previous;
+  });
+  const reply = await import(`../../apps/bridge/src/reply/index.ts?operationStop=${Date.now()}`);
+  const operationId = "new-task-operation-123";
+  const pending = reply.createCodexSession("go", root, 15_000, [], undefined, operationId);
+  for (let tries = 0; tries < 100 && runningProcessCount(operationId) === 0; tries++) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.equal(runningProcessCount(operationId), 1);
+  assert.equal(reply.stopDeliveries(operationId), 1);
+  const result = await pending;
+  assert.equal(result.ok, false);
+  assert.equal(runningProcessCount(operationId), 0);
 });

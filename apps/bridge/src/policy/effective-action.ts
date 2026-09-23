@@ -88,16 +88,15 @@ export async function evaluateEffectiveAction(
   } catch {
     restriction = undefined;
   }
-  if (restriction) {
-    return {
-      effect: restriction.effect,
-      source: "project",
-      reason: restriction.reason,
-      projectId: restrictionProjectId,
-      engineEvaluated: false,
-    };
-  }
-  if (!projectPolicyFeatureEnabled(env)) return FALLBACK;
+  const restrictionDecision: EffectiveActionDecision | undefined = restriction && {
+    effect: restriction.effect,
+    source: "project",
+    reason: restriction.reason,
+    projectId: restrictionProjectId,
+    engineEvaluated: false,
+  };
+  if (restrictionDecision?.effect === "deny") return restrictionDecision;
+  if (!projectPolicyFeatureEnabled(env)) return restrictionDecision ?? FALLBACK;
   const now = options.now ?? Date.now;
   const deadline = now() + DEFAULT_ENGINE_POLICY_TIMEOUT_MS;
   const ownedClient = options.client == null;
@@ -107,7 +106,7 @@ export async function evaluateEffectiveAction(
     projectId = options.projectId
       ?? meshProjectId(input, endpointId)
       ?? await resolveProject(client, input.cwd, endpointId, deadline, now);
-    if (!projectId) return FALLBACK;
+    if (!projectId) return restrictionDecision ?? FALLBACK;
     const capability = input.capability ?? capabilityFingerprint({
       provider: input.provider, cwd: input.cwd,
       toolName: input.toolName, toolInput: input.toolInput,
@@ -125,14 +124,28 @@ export async function evaluateEffectiveAction(
         impact_available: false,
       },
     }, { timeoutMs: remaining(deadline, now) });
-    if (result.operation !== "policy.evaluated") return unavailable(projectId);
+    if (result.operation !== "policy.evaluated") {
+      return restrictionDecision ?? unavailable(projectId);
+    }
     if (result.decision.policy_revision != null) {
       rememberGovernedProject(projectId, result.decision.policy_revision, now());
+    }
+    if (result.decision.effect === "deny") {
+      return { ...result.decision, projectId, engineEvaluated: true,
+        artifactHash: capability.script_hash };
+    }
+    if (restrictionDecision) {
+      return { ...restrictionDecision, projectId, engineEvaluated: true,
+        policy_revision: result.decision.policy_revision,
+        reason: result.decision.effect === "ask"
+          ? `${restrictionDecision.reason}; ${result.decision.reason}`
+          : restrictionDecision.reason,
+        artifactHash: capability.script_hash };
     }
     return { ...result.decision, projectId, engineEvaluated: true,
       artifactHash: capability.script_hash };
   } catch {
-    return projectId ? unavailable(projectId) : FALLBACK;
+    return restrictionDecision ?? (projectId ? unavailable(projectId) : FALLBACK);
   } finally {
     if (ownedClient) client.close();
   }

@@ -82,7 +82,7 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   const connectMeta = connectTool?._meta as { ui?: { resourceUri?: string } } | undefined;
   assert.equal(connectMeta?.ui?.resourceUri, "ui://granttap/connection/v2.html");
   const reconnectTool = tools.tools.find((tool) => tool.name === "reconnect");
-  assert.deepEqual(Object.keys(reconnectTool?.inputSchema.properties ?? {}), ["confirmed"]);
+  assert.deepEqual(Object.keys(reconnectTool?.inputSchema.properties ?? {}), ["confirmed", "mode"]);
   const notifyTool = tools.tools.find((tool) => tool.name === "notify");
   assert.equal(
     (notifyTool?.inputSchema.properties?.message as { maxLength?: number })?.maxLength,

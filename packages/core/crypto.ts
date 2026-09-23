@@ -72,9 +72,20 @@ export function openFromPeers(
   peerPublicKey: string,
   extraPeerPublicKeys?: string[],
 ): unknown | null {
+  return openFromPeersWithIdentity(nonce, box, mySecretKey, peerPublicKey, extraPeerPublicKeys)?.body ?? null;
+}
+
+/** The public key that authenticated this envelope is the device identity. */
+export function openFromPeersWithIdentity(
+  nonce: string,
+  box: string,
+  mySecretKey: string,
+  peerPublicKey: string,
+  extraPeerPublicKeys?: string[],
+): { body: unknown; peerPublicKey: string } | null {
   for (const peer of peerPublicKeys(peerPublicKey, extraPeerPublicKeys)) {
     const body = open(nonce, box, peer, mySecretKey);
-    if (body !== null) return body;
+    if (body !== null) return { body, peerPublicKey: peer };
   }
   return null;
 }

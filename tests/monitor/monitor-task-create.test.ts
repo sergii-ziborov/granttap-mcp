@@ -87,11 +87,12 @@ test("task.create refuses stale epoch, loops, missing files, and a disabled host
   saveRuntimeConfig({
     providerSettings: { claude: true, codex: true, cursor: true, grok: true },
   });
-  await handleTaskCreate(fake as never, {
+  const missingAttachment = await handleTaskCreate(fake as never, {
     ...base, operationId: "missing-file-op", instanceEpoch: currentInstanceEpoch(),
     attachmentRefs: [{ attachmentId: "missing-shot", name: "shot.png", mimeType: "image/png" }],
   });
-  assert.match(JSON.stringify(fake.sent.at(-1)), /attachment-missing/);
+  assert.equal(missingAttachment.status, "rejected");
+  assert.match(JSON.stringify(missingAttachment), /attachment-missing/);
 
   await handleTaskCreate(fake as never, {
     ...base, operationId: "unknown-cwd-op", cwd: join(root, "missing"),
@@ -131,4 +132,27 @@ test("task.create refuses stale epoch, loops, missing files, and a disabled host
     ...base, operationId: "create-success-op", instanceEpoch: currentInstanceEpoch(),
   });
   assert.match(JSON.stringify(fake.sent), /Grok created|not one of the agent workspaces|queued until the deadline|Creating a new/);
+});
+
+test("rejected task admission never emits an accepted receipt for the same operation", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-task-receipt-"));
+  process.env.GRANTTAP_CONFIG_DIR = join(root, "config");
+  t.after(() => { delete process.env.GRANTTAP_CONFIG_DIR; });
+  const { handleMonitorMessage } = await import("../../apps/bridge/src/monitor/handlers/inbound");
+  const fake = new FakeRelay();
+  const payload = {
+    type: "project.task.create" as const,
+    operationId: "missing-attachment-receipt",
+    text: "Use the image",
+    cwd: root,
+    agent: "codex" as const,
+    attachmentRefs: [{ attachmentId: "missing-image", name: "image.png", mimeType: "image/png" }],
+    instanceEpoch: currentInstanceEpoch(),
+    createdAt: Date.now(),
+  };
+  await handleMonitorMessage(fake as never, payload, {
+    leadership: { acquire: () => true }, subscriptions: new Set(), publish: async () => {},
+  });
+  const receipts = fake.sent.filter((item) => item.type === "delivery.receipt");
+  assert.deepEqual(receipts.map((item) => item.status), ["rejected"]);
 });

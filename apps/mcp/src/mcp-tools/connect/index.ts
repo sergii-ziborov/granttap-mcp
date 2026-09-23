@@ -26,7 +26,7 @@ const changes = {
 export function registerConnectTool(server: McpServer): void {
   const state = new ConnectionState();
   let pendingCall: Promise<CallToolResult> | null = null;
-  const perform = (options: { issue?: boolean; replace?: boolean } = {}) => {
+  const perform = (options: { issue?: boolean; replace?: boolean; addController?: boolean } = {}) => {
     if (pendingCall) return pendingCall;
     pendingCall = connect(state, options).finally(() => { pendingCall = null; });
     return pendingCall;
@@ -53,21 +53,24 @@ export function registerConnectTool(server: McpServer): void {
   server.registerTool(
     "reconnect",
     {
-      description: "Show a new one-time QR so another phone, tablet, or this computer can join the same pairing room. Requires confirmation. Does not start a different room.",
-      inputSchema: { confirmed: z.boolean().describe("True only after the user confirms showing a new QR") },
+      description: "Show a one-time QR for reconnect or add an independent controller device to this computer. Requires confirmation and keeps the current room.",
+      inputSchema: {
+        confirmed: z.boolean().describe("True only after the user confirms showing a new QR"),
+        mode: z.enum(["reconnect", "add_device"]).default("reconnect"),
+      },
       outputSchema: connectionOutput,
       annotations: { ...changes, destructiveHint: true },
       _meta: widgetMeta,
     },
-    async ({ confirmed }): Promise<CallToolResult> => confirmed
-      ? perform({ issue: true })
+    async ({ confirmed, mode }): Promise<CallToolResult> => confirmed
+      ? perform({ issue: true, addController: mode === "add_device" })
       : ({ isError: true, content: [{ type: "text", text: "Reconnect cancelled: explicit confirmation is required." }] }),
   );
 }
 
 async function connect(
   state: ConnectionState,
-  options: { issue?: boolean; replace?: boolean } = {},
+  options: { issue?: boolean; replace?: boolean; addController?: boolean } = {},
 ): Promise<CallToolResult> {
   try {
     if (!options.issue && !options.replace && isMachineConfigured()) {
@@ -77,6 +80,7 @@ async function connect(
     const startedAt = Date.now();
     const pairing = await createOneTimePairing(process.env.GRANTTAP_TEST_RELAY_URL ?? DEFAULT_RELAY, {
       replace: options.replace === true,
+      addController: options.addController === true,
     });
     const png = await QRCode.toBuffer(pairing.qrPayload, {
       type: "png", width: 900, margin: 4, errorCorrectionLevel: "L",
@@ -86,6 +90,7 @@ async function connect(
       expiresAt: startedAt + PAIRING_CODE_TTL_MINUTES * 60_000,
       pairingUri: pairing.qrPayload,
       qrDataUrl: `data:image/png;base64,${png.toString("base64")}`,
+      peerPublicKey: pairing.phoneCfg.myPublicKey,
     });
     resetRelay();
     void relay();

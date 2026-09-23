@@ -2,6 +2,7 @@ const $ = id => document.getElementById(id);
 let busy = false;
 let pairingUri = "";
 let current = {};
+let pendingMode = "reconnect";
 function message(text) { $("message").textContent = text; }
 function setBusy(value) {
   busy = value;
@@ -81,7 +82,8 @@ function updateExpiry() {
 }
 $("connect").addEventListener("click", () => {
   if (current.status && current.status !== "disconnected") {
-    $("confirm-copy").textContent = "Add another device shows a QR for this same room. Scan it on iPhone, iPad, or Android.";
+    pendingMode = "add_device";
+    $("confirm-copy").textContent = "Add another controller device with its own encryption key. Scan this computer’s QR in GrantTap on the new phone.";
     $("confirm").classList.remove("hidden");
     $("cancel").focus();
     return;
@@ -90,17 +92,18 @@ $("connect").addEventListener("click", () => {
 });
 $("refresh").addEventListener("click", () => call("connection_status"));
 $("reconnect").addEventListener("click", () => {
-  $("confirm-copy").textContent = "Reconnect shows a new QR for this same room. Scan it on a phone or tablet already in the room, or joining it.";
+  pendingMode = "reconnect";
+  $("confirm-copy").textContent = "Reconnect shows a new QR for the existing controller device in this room.";
   $("confirm").classList.remove("hidden");
   $("cancel").focus();
 });
 $("cancel").addEventListener("click", () => $("confirm").classList.add("hidden"));
 $("confirm-reconnect").addEventListener("click", () => {
   $("confirm").classList.add("hidden");
-  call("reconnect", { confirmed: true });
+  call("reconnect", { confirmed: true, mode: pendingMode });
 });
 $("new-qr")?.addEventListener("click", () => {
-  $("confirm-copy").textContent = "Create a new QR starts one new enrollment attempt in this same room. The saved pairing stays. This is not automatic.";
+  $("confirm-copy").textContent = "Create a new QR for the selected device action. The saved pairing stays.";
   $("confirm").classList.remove("hidden");
   $("cancel").focus();
 });

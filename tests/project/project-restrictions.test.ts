@@ -53,6 +53,31 @@ test("a file over the line limit is a denial; a short file is clean", () => {
   assert.equal(evaluateContent(fileRule.rules, "src/ok.ts", "const x = 1;\n"), undefined);
 });
 
+test("a later DENY takes precedence over an earlier ASK and an Engine ALLOW", async () => {
+  isolate();
+  const rules = [
+    { ruleId: "review", kind: "max_file_lines" as const, limit: 1, effect: "ask" as const },
+    { ruleId: "forbid", kind: "max_file_bytes" as const, limit: 1, effect: "deny" as const },
+  ];
+  assert.equal(evaluateContent(rules, "src/a.ts", "line one\nline two")?.effect, "deny");
+  rememberRestrictions("proj", { ...fileRule, rules: [rules[0]!] });
+  const decision = await evaluateEffectiveAction({
+    provider: "claude", toolName: "Write",
+    toolInput: { file_path: "src/a.ts", content: "line one\nline two" },
+  }, {
+    env: { GRANTTAP_ENGINE_ENABLED: "1", GRANTTAP_PROJECT_POLICY_ENABLED: "1" },
+    projectId: "proj",
+    client: {
+      request: async () => ({ operation: "policy.evaluated", decision: {
+        effect: "deny", source: "project", reason: "Engine forbids this write",
+      } }),
+      close: () => undefined,
+    },
+  });
+  assert.equal(decision.effect, "deny");
+  assert.equal(decision.engineEvaluated, true);
+});
+
 test("function line counts measure brace-depth bodies", () => {
   const source = [
     "function small() {",

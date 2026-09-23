@@ -10,7 +10,7 @@ keeps each phone response tied to the exact originating chat and prompt.
 Install the supported CLI on this computer, then run:
 
 ```bash
-npm install -g https://github.com/sergii-ziborov/granttap-mcp/archive/81bfd51bd12b4667ed062f2e72f794a8daa47ec3.tar.gz
+npm install -g granttap-mcp@0.8.18
 granttap setup
 granttap status
 ```
@@ -35,8 +35,8 @@ current `granttap-mcp` package on that same Windows computer. The jobs restart
 after a crash and keep running when Cursor closes.
 
 The plugin `mcp.json` starts GrantTap with `node -e` so Cursor's cwd=`$HOME`
-does not have to contain `stdio-bootstrap.js`. On Windows that bootstrap
-runs `cmd.exe /c npx` so Cursor can spawn the MCP. Do not add a GrantTap URL to
+does not have to contain `stdio-bootstrap.js`. On Windows it runs npm's
+JavaScript entry point through Node, avoiding command-shell quoting. Do not add a GrantTap URL to
 `~/.cursor/mcp.json`.
 
 ## Install the Cursor plugin
@@ -75,7 +75,7 @@ prompt must never resolve the current request.
 | --- | --- |
 | `.cursor-plugin/plugin.json` | Cursor plugin manifest |
 | `mcp.json` | Plugin stdio MCP (`node -e`, cwd-independent). Do not add GrantTap to user `mcp.json`. |
-| `stdio-bootstrap.cjs` | Readable bootstrap used by tests and Windows `cmd /c npx`. |
+| `stdio-bootstrap.cjs` | Readable bootstrap used by tests and the inline MCP command. |
 | `assets/logo.svg` | Plugin logo |
 | `rules/dual-channel.mdc` | Exact prompt/correlation rule |
 | `skills/connect/SKILL.md` | Authorization and pairing workflow |

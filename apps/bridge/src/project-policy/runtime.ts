@@ -1,4 +1,3 @@
-import { hostname } from "node:os";
 import { join } from "node:path";
 import type { RelayClient } from "../../../../packages/core/relay-client";
 import type { ProjectPolicySet } from "../../../../packages/protocol/schema";
@@ -8,6 +7,7 @@ import { EngineClient } from "../engine/runtime/engine-client";
 import { engineFeatureEnabled } from "../engine/runtime/engine-supervisor";
 import { inspectAgentIntegrations } from "../install";
 import { sendProjectPayload } from "../host/session-keys";
+import { computerId } from "../mesh/identity/computer";
 import { applyPolicy, publishOne } from "./apply";
 import type { ProjectPolicyRuntimeDependencies } from "./types";
 
@@ -37,7 +37,7 @@ function defaultRuntime() {
   return createProjectPolicyRuntime({
     client: sharedClient,
     log: (line) => process.stderr.write(`[monitor] rules: ${line}\n`),
-    endpointId: hostname,
+    endpointId: computerId,
     providers: () => {
       const configured = loadRuntimeConfig().providerSettings;
       return inspectAgentIntegrations()

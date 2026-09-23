@@ -36,19 +36,19 @@ const CAPABILITIES = [
   "agent", "mcp", "skill", "shell", "script", "file_write", "deploy", "network",
 ] as const;
 
-function projectRepositoryRoot(projectId: string): string | undefined {
+function projectRepositoryRoot(projectId: string, endpointId: string): string | undefined {
   try {
     const snapshot = localMeshStore().snapshot(projectId);
-    return snapshot?.project.repositoryRoot
-      ?? snapshot?.bindings?.find((item) => item.localPathHint)?.localPathHint;
+    return snapshot?.bindings?.find((item) =>
+      item.endpointId === endpointId && item.available && item.localPathHint)?.localPathHint;
   } catch {
     return undefined;
   }
 }
 
-export function persistMeshPolicyExtras(projectId: string, policy: ProjectPolicy): void {
+export function persistMeshPolicyExtras(projectId: string, policy: ProjectPolicy, endpointId: string): void {
   assertProjectEnvironmentKeys(policy.environment);
-  const root = projectRepositoryRoot(projectId);
+  const root = projectRepositoryRoot(projectId, endpointId);
   rememberRestrictions(projectId, policy.restrictions, root);
   rememberEnvironment(projectId, policy.environment, root);
 }
@@ -191,7 +191,7 @@ export async function applyPolicy(
       environment: request.policy.environment
         ? { ...request.policy.environment, revision: applied.policy.revision }
         : undefined,
-    });
+    }, deps.endpointId());
     const targets = new Map(deps.providers().map((item) => [item.provider, item]));
     for (const target of [...targets.values()].sort((left, right) =>
       left.provider.localeCompare(right.provider))) {

@@ -12,7 +12,7 @@
 import WebSocket from "ws";
 import { createHash } from "node:crypto";
 import { Envelope, Payload, type Role } from "../protocol/schema";
-import { openFromPeers, openWithTransferKey, peerPublicKeys, seal, sealWithTransferKey } from "./crypto";
+import { openFromPeersWithIdentity, openWithTransferKey, peerPublicKeys, seal, sealWithTransferKey } from "./crypto";
 import type { PeerConfig, RelayClientOptions, SendOptions } from "./relay-client-types";
 export type { PeerConfig, RelayClientOptions, SendOptions } from "./relay-client-types";
 import { loadReplayFingerprints, saveReplayFingerprints } from "./replay-store";
@@ -20,7 +20,7 @@ import { sealEnvelope } from "./relay-envelope";
 export { sealEnvelope } from "./relay-envelope";
 
 /** Return true only after this consumer has durably accepted the payload. */
-type Listener = (p: Payload) => boolean | void | Promise<boolean | void>;
+type Listener = (p: Payload, peerPublicKey: string) => boolean | void | Promise<boolean | void>;
 
 export class RelayClient {
   private ws?: WebSocket;
@@ -129,14 +129,15 @@ export class RelayClient {
     if (env.from !== this.otherRole()) return;
     if (env.to !== this.cfg.role && env.to !== "all") return;
     if (env.expiresAt != null && env.expiresAt <= Date.now()) return;
-    const body = openFromPeers(
+    const opened = openFromPeersWithIdentity(
       env.nonce,
       env.box,
       this.cfg.mySecretKey,
       this.cfg.peerPublicKey,
       this.cfg.extraPeerPublicKeys,
     );
-    if (body === null) return; // not for us, or tampered
+    if (opened === null) return; // not for us, or tampered
+    const { body, peerPublicKey } = opened;
     const parsedPayload = Payload.safeParse(body);
     if (!parsedPayload.success) {
       const type = body && typeof body === "object" && "type" in body ? String((body as { type?: unknown }).type) : "";
@@ -187,7 +188,7 @@ export class RelayClient {
     this.processingCiphertexts.add(fingerprint);
     try {
       const results = await Promise.all([...this.listeners].map(async (listener) => {
-        try { return (await listener(payload)) === true; } catch { return false; }
+        try { return (await listener(payload, peerPublicKey)) === true; } catch { return false; }
       }));
       // Hello and key grants are completely consumed by RelayClient itself.
       const accepted = payload.type === "hello" || payload.type === "session.key.grant"
@@ -218,9 +219,7 @@ export class RelayClient {
   ): Promise<void> {
     const ws = this.ws;
     if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error("relay not connected");
-    const peers = this.cfg.role === "phone" && (to === "machine" || to === "all")
-      ? peerPublicKeys(this.cfg.peerPublicKey, this.cfg.extraPeerPublicKeys)
-      : [this.cfg.peerPublicKey];
+    const peers = peerPublicKeys(this.cfg.peerPublicKey, this.cfg.extraPeerPublicKeys);
     for (const peerPublicKey of peers) {
       ws.send(sealEnvelope(
         { ...this.cfg, peerPublicKey },

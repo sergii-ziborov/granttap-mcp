@@ -61,11 +61,11 @@ function parseGrok(stdout: string, fallback: string): ReplyResult {
 }
 
 export function runCursorNew(
-  text: string, cwd: string, timeoutMs: number, model?: string,
+  text: string, cwd: string, timeoutMs: number, model?: string, operationKey?: string,
 ): Promise<ReplyResult> {
   return runProcess(
     cursorBin(), ["-p", ...(model ? ["--model", model] : []),
-      "--output-format", "json", text], cwd, timeoutMs, parseCursor,
+      "--output-format", "json", text], cwd, timeoutMs, parseCursor, undefined, operationKey,
   );
 }
 
@@ -81,7 +81,7 @@ export function runCursorResume(
 }
 
 export function runGrokNew(
-  text: string, cwd: string, timeoutMs: number, model?: string,
+  text: string, cwd: string, timeoutMs: number, model?: string, operationKey?: string,
 ): Promise<ReplyResult> {
   const sessionId = randomUUID();
   const args = [
@@ -89,7 +89,8 @@ export function runGrokNew(
     ...(model ? ["--model", model] : []),
     "-p", text, "--output-format", "streaming-json",
   ];
-  return runProcess(grokBin(), args, cwd, timeoutMs, (stdout) => parseGrok(stdout, sessionId));
+  return runProcess(grokBin(), args, cwd, timeoutMs, (stdout) => parseGrok(stdout, sessionId),
+    undefined, operationKey);
 }
 
 export function runGrokResume(

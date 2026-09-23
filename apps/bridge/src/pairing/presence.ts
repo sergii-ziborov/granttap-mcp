@@ -4,6 +4,7 @@ import { configDir } from "../config/runtime/paths";
 
 type PresenceState = {
   phoneLastSeenAt?: number;
+  controllers?: Record<string, number>;
 };
 
 function presencePath(): string {
@@ -25,11 +26,25 @@ export function readPhoneLastSeenAt(): number | null {
   return typeof at === "number" && Number.isFinite(at) ? at : null;
 }
 
-export function recordPhoneSeen(at = Date.now()): void {
+export function readControllerLastSeenAt(peerPublicKey: string): number | null {
+  const at = readPresence().controllers?.[peerPublicKey];
+  return typeof at === "number" && Number.isFinite(at) ? at : null;
+}
+
+export function hasControllerPresence(): boolean {
+  return Object.keys(readPresence().controllers ?? {}).length > 0;
+}
+
+export function recordPhoneSeen(at = Date.now(), peerPublicKey?: string): void {
   const path = presencePath();
   mkdirSync(dirname(path), { recursive: true });
   const tmp = `${path}.tmp`;
-  writeFileSync(tmp, JSON.stringify({ ...readPresence(), phoneLastSeenAt: at }));
+  const previous = readPresence();
+  writeFileSync(tmp, JSON.stringify({ ...previous, phoneLastSeenAt: at,
+    controllers: peerPublicKey
+      ? { ...previous.controllers, [peerPublicKey]: at }
+      : previous.controllers,
+  }), { mode: 0o600 });
   renameSync(tmp, path);
 }
 

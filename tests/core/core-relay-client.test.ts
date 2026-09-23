@@ -99,6 +99,32 @@ test("a phone in a shared room opens a second computer's envelopes", async () =>
   assert.equal(received[0]?.type, "machine.heartbeat");
 });
 
+test("one computer sends a separate encrypted copy to each controller phone", async () => {
+  const machine = generateKeyPair();
+  const first = generateKeyPair();
+  const second = generateKeyPair();
+  const base = { relayUrl: "ws://127.0.0.1:1", room: "room-controllers" };
+  const sender = new RelayClient({ ...base, role: "machine", deviceName: "Mac",
+    senderId: "mac", myPublicKey: machine.publicKey, mySecretKey: machine.secretKey,
+    peerPublicKey: first.publicKey, extraPeerPublicKeys: [second.publicKey] });
+  const raw: string[] = [];
+  (sender as unknown as { ws: { readyState: number; send(raw: string): void } }).ws = {
+    readyState: 1, send: (value) => raw.push(value),
+  };
+  const payload: Payload = { type: "machine.heartbeat", machine: "Mac", createdAt: Date.now() };
+  await sender.send(payload, "phone");
+  assert.equal(raw.length, 2);
+  for (const [index, keys] of [first, second].entries()) {
+    const recipient = new RelayClient({ ...base, role: "phone", deviceName: "iPhone",
+      senderId: `phone-${index}`, myPublicKey: keys.publicKey, mySecretKey: keys.secretKey,
+      peerPublicKey: machine.publicKey });
+    const received: Payload[] = [];
+    recipient.onMessage((item) => { received.push(item); return true; });
+    for (const box of raw) await receiveRaw(recipient, JSON.parse(box) as Envelope);
+    assert.deepEqual(received, [payload]);
+  }
+});
+
 test("relay ACK waits until one consumer actually accepts the decrypted payload", async () => {
   const machine = generateKeyPair();
   const phone = generateKeyPair();

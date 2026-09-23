@@ -1,49 +1,58 @@
 #!/usr/bin/env node
 "use strict";
 
-// Cursor starts plugin MCP with cwd=$HOME, so mcp.json cannot use a relative
-// script path. This file is the readable form of that spawn. The plugin entry
-// inlines the same logic via `node -e` so it does not depend on cwd.
+// Cursor may start this MCP from any cwd. Execute JavaScript entry points with
+// Node itself: Windows batch shims require shell quoting that differs by host.
 const { spawn } = require("node:child_process");
 const { existsSync } = require("node:fs");
-const { dirname, join } = require("node:path");
+const { delimiter, dirname, join } = require("node:path");
 
-const PACKAGE = "https://github.com/sergii-ziborov/granttap-mcp/archive/81bfd51bd12b4667ed062f2e72f794a8daa47ec3.tar.gz";
-const windows = process.platform === "win32";
-const sibling = (name) => {
-  const candidate = join(dirname(process.execPath), name);
-  return existsSync(candidate) ? candidate : "";
-};
-const granttap = windows
-  ? sibling("granttap-mcp.cmd") || sibling("granttap-mcp")
-  : sibling("granttap-mcp");
-const npx = windows ? sibling("npx.cmd") || sibling("npx") : sibling("npx");
-const command = windows ? (process.env.ComSpec || "cmd.exe") : (granttap || npx || "npx");
-const args = windows
-  ? [
-    "/d",
-    "/s",
-    "/c",
-    granttap
-      ? `"${granttap}"`
-      : `where granttap-mcp >nul 2>nul && granttap-mcp || "${npx || "npx"}" -y ${PACKAGE}`,
-  ]
-  : granttap
-    ? []
-    : ["-y", PACKAGE];
+const PACKAGE = "granttap-mcp@0.8.18";
+const dryRun = process.env.GRANTTAP_BOOTSTRAP_DRY_RUN === "1";
+const platform = dryRun && process.env.GRANTTAP_BOOTSTRAP_PLATFORM
+  ? process.env.GRANTTAP_BOOTSTRAP_PLATFORM : process.platform;
+const nodeRoot = dryRun && process.env.GRANTTAP_BOOTSTRAP_NODE_ROOT
+  ? process.env.GRANTTAP_BOOTSTRAP_NODE_ROOT : dirname(process.execPath);
+const pathRoots = (process.env.PATH || "").split(delimiter).filter(Boolean);
+const appData = process.env.APPDATA;
+const roots = [nodeRoot, ...pathRoots, ...(appData ? [join(appData, "npm")] : [])];
+const first = (paths) => paths.find((path) => existsSync(path));
 
-if (process.env.GRANTTAP_BOOTSTRAP_DRY_RUN === "1") {
-  process.stdout.write(JSON.stringify({ command, args }));
+function launch() {
+  if (platform !== "win32") {
+    const installed = first(roots.map((root) => join(root, "granttap-mcp")));
+    if (installed) return { command: installed, args: [] };
+    const npx = first(roots.map((root) => join(root, "npx"))) || "npx";
+    return { command: npx, args: ["-y", PACKAGE] };
+  }
+  const installed = first(roots.map((root) =>
+    join(root, "node_modules", "granttap-mcp", "bin", "granttap-mcp.mjs")));
+  if (installed) return { command: process.execPath, args: [installed] };
+  const npx = first(roots.map((root) =>
+    join(root, "node_modules", "npm", "bin", "npx-cli.js")));
+  if (npx) return { command: process.execPath, args: [npx, "-y", PACKAGE] };
+  throw new Error("Node.js/npm 20+ is required on this Windows device. Install npm and retry GrantTap.");
+}
+
+let target;
+try { target = launch(); }
+catch (error) {
+  process.stderr.write(`[granttap] ${error.message}\n`);
+  process.exit(1);
+}
+
+if (dryRun) {
+  process.stdout.write(JSON.stringify(target));
   process.exit(0);
 }
 
-const child = spawn(command, args, { stdio: "inherit", windowsHide: true });
+const child = spawn(target.command, target.args, { stdio: "inherit", windowsHide: true });
 child.on("error", (error) => {
   process.stderr.write(`[granttap] ${error.message}\n`);
   process.exit(1);
 });
 child.on("exit", (code, signal) => {
-  if (signal && process.platform !== "win32") {
+  if (signal && platform !== "win32") {
     try { process.kill(process.pid, signal); } catch { process.exit(code ?? 1); }
     return;
   }

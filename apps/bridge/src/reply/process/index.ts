@@ -36,15 +36,14 @@ function track(key: string, child: ChildProcess): () => void {
   };
 }
 
-/** Stop every delivery running for a chat; how many were stopped. */
+/** Request a stop for owned child processes; count signals accepted, not exits. */
 export function abortProcesses(key: string): number {
   const set = running.get(key);
   if (!set) return 0;
   let stopped = 0;
   for (const child of set) {
     (child as ChildProcess & { granttapStopped?: boolean }).granttapStopped = true;
-    child.kill("SIGTERM");
-    stopped += 1;
+    if (child.kill("SIGTERM")) stopped += 1;
   }
   return stopped;
 }
@@ -103,14 +102,20 @@ export function runProcess(
         finish({ ok: false, error: STOPPED_ERROR });
         return;
       }
-      if (code !== 0 && !stdout.trim()) {
+      if (code !== 0) {
         finish({
           ok: false,
-          error: `${command} exited with code ${code}: ${stderr.trim().slice(0, 300)}`,
+          error: `${command} exited with code ${code}: ${(stderr.trim() || stdout.trim()).slice(0, 300)}`,
         });
         return;
       }
-      finish(parse(stdout));
+      try {
+        finish(parse(stdout));
+      } catch (error) {
+        finish({ ok: false, error: `${command} returned an unreadable result: ${
+          error instanceof Error ? error.message : String(error)
+        }` });
+      }
     });
   });
 }

@@ -85,7 +85,7 @@ export async function handleSessionControl(
   if (message.action === "pause") {
     const stopped = stopDeliveries(sessionId);
     return reply(true, stopped > 0
-      ? `Paused. ${stopped} running turn stopped; every tool call from this chat is refused until you resume.`
+      ? `Paused. Stop requested for ${stopped} running turn${stopped === 1 ? "" : "s"}; process exit is not yet confirmed. Every new tool call from this chat is refused until you resume.`
       : "Paused: every tool call from this chat is refused until you resume.");
   }
   if (!message.continue) return reply(true, "Resumed: tool calls are allowed again.");

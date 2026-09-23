@@ -63,16 +63,23 @@ test("widget initializes, checks status, and requires explicit reconnect confirm
   assert.equal(ui.el("reconnect").classList.contains("hidden"), false);
   ui.button("connect").click();
   assert.equal(ui.el("confirm").classList.contains("hidden"), false);
+  ui.button("confirm-reconnect").click();
+  await ui.settle();
+  assert.equal(ui.calls.at(-1)?.name, "reconnect");
+  assert.equal((ui.calls.at(-1)?.arguments as { confirmed: boolean }).confirmed, true);
+  assert.equal((ui.calls.at(-1)?.arguments as { mode: string }).mode, "add_device");
+  ui.button("connect").click();
   ui.button("cancel").click();
   assert.equal(ui.el("confirm").classList.contains("hidden"), true);
   ui.button("reconnect").click();
   ui.button("cancel").click();
-  assert.equal(ui.calls.length, 3);
+  assert.equal(ui.calls.length, 4);
   ui.button("reconnect").click();
   ui.button("confirm-reconnect").click();
   await ui.settle();
   assert.equal(ui.calls.at(-1)?.name, "reconnect");
   assert.equal((ui.calls.at(-1)?.arguments as { confirmed: boolean }).confirmed, true);
+  assert.equal((ui.calls.at(-1)?.arguments as { mode: string }).mode, "reconnect");
 });
 
 test("widget clears secrets when paired or expired and ignores foreign messages", async (t) => {

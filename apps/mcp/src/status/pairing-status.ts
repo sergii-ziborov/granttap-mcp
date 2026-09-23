@@ -1,8 +1,9 @@
 import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { loadConfig } from "../../../bridge/src/config";
-import { readPhoneLastSeenAt } from "../../../bridge/src/pairing/presence";
+import { hasControllerPresence, readControllerLastSeenAt, readPhoneLastSeenAt } from "../../../bridge/src/pairing/presence";
 
 export type PairedPhone = {
   name: string;
@@ -14,9 +15,8 @@ export type PhoneReachability = "live" | "offline" | "unknown";
 
 /** healthz must not stay "unknown" when this Mac already has a pairing slot. */
 export function phoneReachability(phones: PairedPhone[] = listPairedPhones()): PhoneReachability {
-  const phone = phones[0];
-  if (!phone) return "unknown";
-  return phone.status === "seen" ? "live" : "offline";
+  if (phones.length === 0) return "unknown";
+  return phones.some((phone) => phone.status === "seen") ? "live" : "offline";
 }
 
 /** Resolve the active config without configDir()'s legacy rename side effect. */
@@ -40,9 +40,10 @@ export function isMachineConfigured(): boolean {
   }
 }
 
-/** One saved pairing slot on this Mac, not every device that knows the room. */
+/** Authorized controller keys for this computer; activity is per authenticated key. */
 export function listPairedPhones(phoneLastSeenAt: number | null = null, now = Date.now()): PairedPhone[] {
   if (!isMachineConfigured()) return [];
+  const machine = loadConfig(readOnlyMachineConfigPath());
   let name = "iPhone";
   try {
     const phonePath = join(dirname(readOnlyMachineConfigPath()), "phone.pairing.json");
@@ -51,10 +52,20 @@ export function listPairedPhones(phoneLastSeenAt: number | null = null, now = Da
       if (labeled && labeled !== "phone") name = labeled.slice(0, 80);
     }
   } catch { /* keep iPhone */ }
-  const recorded = readPhoneLastSeenAt();
-  const lastSeenAt = [phoneLastSeenAt, recorded].reduce<number | null>((best, value) => (
+  const primarySeen = readControllerLastSeenAt(machine.peerPublicKey);
+  const recorded = hasControllerPresence() ? primarySeen : readPhoneLastSeenAt();
+  const lastSeenAt = [hasControllerPresence() ? null : phoneLastSeenAt, recorded].reduce<number | null>((best, value) => (
     value != null && (best == null || value > best) ? value : best
   ), null);
   const seen = lastSeenAt != null && now - lastSeenAt < 60_000;
-  return [{ name, status: seen ? "seen" : "paired", lastSeenAt }];
+  const primary: PairedPhone = { name, status: seen ? "seen" : "paired", lastSeenAt };
+  const additional = (machine.extraPeerPublicKeys ?? [])
+    .filter((key) => key && key !== machine.peerPublicKey)
+    .map((key, index): PairedPhone => {
+      const at = readControllerLastSeenAt(key);
+      const suffix = createHash("sha256").update(key).digest("hex").slice(0, 6);
+      return { name: `Controller ${index + 2} · ${suffix}`,
+        status: at != null && now - at < 60_000 ? "seen" : "paired", lastSeenAt: at };
+    });
+  return [primary, ...additional];
 }

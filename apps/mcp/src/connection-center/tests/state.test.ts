@@ -8,6 +8,7 @@ import { ConnectionState } from "../state";
 import { createPairing, machineConfigPath, saveConfig } from "../../../../bridge/src/config";
 import { relay, resetRelay, connectionRuntimeStatus } from "../../mcp-tools/connect/relay";
 import { RelayClient } from "../../../../../packages/core/relay-client";
+import { generateKeyPair } from "../../../../../packages/core/crypto";
 import { forwardingRelay, waitFor } from "../../../../../tests/support/forwarding-relay";
 
 // Tests use a disposable machine identity and a loopback relay only.
@@ -44,12 +45,17 @@ test("only an encrypted phone message confirms activity; relay online is distinc
   const root = await mkdtemp(join(tmpdir(), "granttap-connection-live-"));
   const server = await forwardingRelay();
   const pair = createPairing(server.url);
+  const secondKeys = generateKeyPair();
+  pair.machineCfg.extraPeerPublicKeys = [secondKeys.publicKey];
   process.env.GRANTTAP_CONFIG_DIR = root;
   saveConfig(machineConfigPath(), pair.machineCfg);
   const phone = new RelayClient(pair.phoneCfg);
-  t.after(async () => { phone.close(); resetRelay(); delete process.env.GRANTTAP_CONFIG_DIR; await server.close(); });
+  const secondPhone = new RelayClient({ ...pair.phoneCfg, senderId: "second-phone",
+    myPublicKey: secondKeys.publicKey, mySecretKey: secondKeys.secretKey });
+  t.after(async () => { phone.close(); secondPhone.close(); resetRelay(); delete process.env.GRANTTAP_CONFIG_DIR; await server.close(); });
   const state = new ConnectionState();
-  state.remember({ room: pair.machineCfg.room, expiresAt: Date.now() + 60000, pairingUri: "test", qrDataUrl: "test" });
+  state.remember({ room: pair.machineCfg.room, expiresAt: Date.now() + 60000,
+    pairingUri: "test", qrDataUrl: "test", peerPublicKey: secondKeys.publicKey });
   await relay();
   assert.equal(state.snapshot().structuredContent.relayStatus, "online");
   assert.equal(state.snapshot().structuredContent.status, "pairing");
@@ -62,8 +68,13 @@ test("only an encrypted phone message confirms activity; relay online is distinc
   assert.equal(stillPairing._meta.granttap.pairingUri, "test");
   assert.equal(state.snapshot(Date.now() + 61000).structuredContent.status, "expired");
   assert.deepEqual(connectionRuntimeStatus("other-room"), { relayStatus: "unknown", phoneLastSeenAt: null });
-  completeEnrollment("new-phone-key");
+  assert.equal(completeEnrollment(pair.phoneCfg.myPublicKey), false);
+  await secondPhone.connect();
+  await waitFor(() => currentEnrollment() === null);
   const joined = state.snapshot();
   assert.equal(joined.structuredContent.status, "connected");
+  assert.equal(joined.structuredContent.phones.length, 2);
+  assert.match(joined.structuredContent.phones[1]!.name, /Controller 2/);
+  assert.equal(joined.structuredContent.phones[1]!.status, "seen");
   assert.deepEqual(joined._meta.granttap, {});
 });

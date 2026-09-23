@@ -66,6 +66,30 @@ test("one-time pairing persists only after relay acceptance and can be reused", 
   assert.equal(reusablePairing(), null);
 });
 
+test("adding a controller phone keeps the room and gives it a distinct encryption identity", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-controller-phone-"));
+  const relay = await pairingRelay();
+  process.env.GRANTTAP_CONFIG_DIR = root;
+  t.after(async () => {
+    delete process.env.GRANTTAP_CONFIG_DIR;
+    await relay.close();
+  });
+  const first = await createOneTimePairing(relay.url, { installHooks: false });
+  const second = await createOneTimePairing(relay.url, {
+    installHooks: false, addController: true,
+  });
+  assert.equal(second.machineCfg.room, first.machineCfg.room);
+  assert.equal(second.machineCfg.myPublicKey, first.machineCfg.myPublicKey);
+  assert.notEqual(second.phoneCfg.myPublicKey, first.phoneCfg.myPublicKey);
+  assert.notEqual(second.phoneCfg.senderId, first.phoneCfg.senderId);
+  assert.equal(second.phoneCfg.peerPublicKey, first.machineCfg.myPublicKey);
+  const machine = JSON.parse(await readFile(machineConfigPath(), "utf8"));
+  assert.equal(machine.peerPublicKey, first.phoneCfg.myPublicKey);
+  assert.deepEqual(machine.extraPeerPublicKeys, [second.phoneCfg.myPublicKey]);
+  const savedFirst = JSON.parse(await readFile(phonePairingPath(), "utf8"));
+  assert.equal(savedFirst.myPublicKey, first.phoneCfg.myPublicKey);
+});
+
 test("a broken phone half does not mint a different room", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "granttap-pairing-keep-room-"));
   const relay = await pairingRelay();
@@ -150,6 +174,24 @@ test("unpaired computers mint distinct candidate rooms until the same iPhone uni
     phoneCfg: { ...first.phoneCfg, role: "phone" as const, pushAuth: null },
     createdAt: Date.now(),
   }).phoneCfg.pushAuth, undefined);
+});
+
+test("an added controller cannot replace the primary phone or move a shared room", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-controller-join-"));
+  const relay = await pairingRelay();
+  process.env.GRANTTAP_CONFIG_DIR = root;
+  t.after(async () => { delete process.env.GRANTTAP_CONFIG_DIR; await relay.close(); });
+  const primary = await createOneTimePairing(relay.url, { installHooks: false });
+  const added = await createOneTimePairing(relay.url, { installHooks: false, addController: true });
+  const before = await readFile(machineConfigPath(), "utf8");
+  assert.equal(applyPairingJoin({ type: "pairing.join", room: added.phoneCfg.room,
+    relayUrl: added.phoneCfg.relayUrl, phonePublicKey: added.phoneCfg.myPublicKey,
+    phoneCfg: { ...added.phoneCfg, role: "phone" as const }, createdAt: Date.now() }), "already");
+  assert.equal(await readFile(machineConfigPath(), "utf8"), before);
+  assert.equal(applyPairingJoin({ type: "pairing.join", room: "other-room",
+    relayUrl: primary.phoneCfg.relayUrl, phonePublicKey: added.phoneCfg.myPublicKey,
+    phoneCfg: { ...added.phoneCfg, role: "phone" as const, room: "other-room" }, createdAt: Date.now() }), "rejected");
+  assert.equal(await readFile(machineConfigPath(), "utf8"), before);
 });
 
 test("pairing failures do not persist a replacement", async (t) => {

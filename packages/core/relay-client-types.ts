@@ -10,7 +10,7 @@ export type PeerConfig = {
   myPublicKey: string;
   mySecretKey: string;
   peerPublicKey: string;
-  /** Additional machine public keys in this room. The phone decrypts every one. */
+  /** Additional approved peer keys in this room. Each peer keeps its own secret key. */
   extraPeerPublicKeys?: string[];
   /** Relay-only random credential for push-token registration; never an E2EE key. */
   pushAuth?: string;

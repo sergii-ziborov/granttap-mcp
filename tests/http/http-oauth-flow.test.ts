@@ -228,6 +228,19 @@ test("HTTP OAuth pairs, consents, exchanges a token, and initializes MCP", async
   const latestView = await fetch(`${base}/oauth/pairing/view?view_id=${websitePairing.viewId}&embed=1`);
   assert.equal(latestView.status, 200);
   assert.deepEqual(await readFile(join(root, "machine.json")), savedPairing);
+  const another = await fetch(`${base}/oauth/pairing`, {
+    method: "POST", headers: {
+      "content-type": "application/x-www-form-urlencoded", origin: websiteOrigin,
+    }, body: new URLSearchParams({ confirmed: "true", mode: "add_device" }),
+  });
+  assert.equal(another.status, 200);
+  const addedMachine = JSON.parse((await readFile(join(root, "machine.json"))).toString()) as {
+    room: string; peerPublicKey: string; extraPeerPublicKeys?: string[];
+  };
+  const originalMachine = JSON.parse(savedPairing.toString()) as { room: string; peerPublicKey: string };
+  assert.equal(addedMachine.room, originalMachine.room);
+  assert.equal(addedMachine.peerPublicKey, originalMachine.peerPublicKey);
+  assert.equal(addedMachine.extraPeerPublicKeys?.length, 1);
   const replaced = await fetch(`${base}/oauth/pairing`, {
     method: "POST", headers: {
       "content-type": "application/x-www-form-urlencoded", origin: websiteOrigin,

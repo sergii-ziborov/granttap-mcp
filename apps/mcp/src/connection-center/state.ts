@@ -37,12 +37,12 @@ export type PendingCode = {
 export class ConnectionState {
   private pending: PendingCode | null = null;
 
-  remember(code: Omit<PendingCode, "attemptId"> & { attemptId?: string }): void {
+  remember(code: Omit<PendingCode, "attemptId"> & { attemptId?: string; peerPublicKey?: string }): void {
     const attempt = beginEnrollment({
       room: code.room,
-      peerPublicKey: isMachineConfigured()
+      peerPublicKey: code.peerPublicKey ?? (isMachineConfigured()
         ? loadConfig(readOnlyMachineConfigPath()).peerPublicKey
-        : null,
+        : null),
     });
     this.pending = { ...code, attemptId: code.attemptId ?? attempt.attemptId };
   }
@@ -51,7 +51,9 @@ export class ConnectionState {
     const config = isMachineConfigured() ? loadConfig(readOnlyMachineConfigPath()) : null;
     const runtime = connectionRuntimeStatus(config?.room);
     const phones = listPairedPhones(runtime.phoneLastSeenAt, now);
-    const lastSeenAt = phones[0]?.lastSeenAt ?? runtime.phoneLastSeenAt;
+    const lastSeenAt = phones.reduce<number | null>((latest, phone) =>
+      phone.lastSeenAt != null && (latest == null || phone.lastSeenAt > latest)
+        ? phone.lastSeenAt : latest, null);
     if (!config || this.pending?.room !== config.room) {
       cancelEnrollment();
       this.pending = null;

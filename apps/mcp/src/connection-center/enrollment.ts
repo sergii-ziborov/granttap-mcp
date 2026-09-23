@@ -31,10 +31,10 @@ export function enrollmentIsOpen(attemptId?: string): boolean {
   return current != null && (attemptId == null || current.attemptId === attemptId);
 }
 
-/** True when a new endpoint identity finished this attempt. Same peer is ignored. */
+/** Only the key in this QR can complete the enrollment attempt. */
 export function completeEnrollment(peerPublicKey: string): boolean {
   if (!current) return false;
-  if (current.peerPublicKey && current.peerPublicKey === peerPublicKey) return false;
+  if (current.peerPublicKey && current.peerPublicKey !== peerPublicKey) return false;
   current = null;
   return true;
 }
