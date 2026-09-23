@@ -4,6 +4,7 @@ import { RelayClient } from "../../../../../packages/core/relay-client";
 import { configDir, loadConfig, machineConfigPath } from "../../config";
 import { EngineSupervisor } from "../../engine/runtime/engine-supervisor";
 import { startSessionMonitor } from "../../monitor";
+import { controllerPeerGate } from "../../pairing/controllers";
 
 let client: RelayClient;
 let monitor: ReturnType<typeof startSessionMonitor>;
@@ -15,6 +16,7 @@ try {
   client = new RelayClient(cfg, {
     autoReconnect: true,
     replayPath: join(configDir(), `replay-${cfg.room}.json`),
+    peerAllowed: controllerPeerGate(cfg),
   });
   monitor = startSessionMonitor(client);
 } catch (error) {

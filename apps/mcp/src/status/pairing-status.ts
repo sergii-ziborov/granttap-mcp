@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { loadConfig } from "../../../bridge/src/config";
 import { hasControllerPresence, readControllerLastSeenAt, readPhoneLastSeenAt } from "../../../bridge/src/pairing/presence";
+import { controllerPeerGate } from "../../../bridge/src/pairing/controllers";
 
 export type PairedPhone = {
   name: string;
@@ -59,8 +60,9 @@ export function listPairedPhones(phoneLastSeenAt: number | null = null, now = Da
   ), null);
   const seen = lastSeenAt != null && now - lastSeenAt < 60_000;
   const primary: PairedPhone = { name, status: seen ? "seen" : "paired", lastSeenAt };
+  const allowed = controllerPeerGate(machine);
   const additional = (machine.extraPeerPublicKeys ?? [])
-    .filter((key) => key && key !== machine.peerPublicKey)
+    .filter((key) => key && key !== machine.peerPublicKey && allowed(key))
     .map((key, index): PairedPhone => {
       const at = readControllerLastSeenAt(key);
       const suffix = createHash("sha256").update(key).digest("hex").slice(0, 6);

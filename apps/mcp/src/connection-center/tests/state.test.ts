@@ -9,6 +9,7 @@ import { createPairing, machineConfigPath, saveConfig } from "../../../../bridge
 import { relay, resetRelay, connectionRuntimeStatus } from "../../mcp-tools/connect/relay";
 import { RelayClient } from "../../../../../packages/core/relay-client";
 import { generateKeyPair } from "../../../../../packages/core/crypto";
+import { rememberPendingController } from "../../../../bridge/src/pairing/controllers";
 import { forwardingRelay, waitFor } from "../../../../../tests/support/forwarding-relay";
 
 // Tests use a disposable machine identity and a loopback relay only.
@@ -49,6 +50,7 @@ test("only an encrypted phone message confirms activity; relay online is distinc
   pair.machineCfg.extraPeerPublicKeys = [secondKeys.publicKey];
   process.env.GRANTTAP_CONFIG_DIR = root;
   saveConfig(machineConfigPath(), pair.machineCfg);
+  rememberPendingController(pair.machineCfg.room, secondKeys.publicKey, Date.now() + 60_000);
   const phone = new RelayClient(pair.phoneCfg);
   const secondPhone = new RelayClient({ ...pair.phoneCfg, senderId: "second-phone",
     myPublicKey: secondKeys.publicKey, mySecretKey: secondKeys.secretKey });

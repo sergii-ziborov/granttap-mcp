@@ -11,7 +11,7 @@ import { applyPairingJoin } from "../../../../bridge/src/pairing";
 import { installMonitorHelper, reloadMonitorHelper } from "../../../../bridge/src/install";
 import { recordPhoneSeen } from "../../../../bridge/src/pairing/presence";
 import { completeEnrollment } from "../../connection-center/enrollment";
-import { confirmPendingController } from "../../../../bridge/src/pairing/controllers";
+import { confirmPendingController, controllerPeerGate } from "../../../../bridge/src/pairing/controllers";
 
 const ASK_TIMEOUT_MS = Number(
   process.env.GRANTTAP_ASK_TIMEOUT_MS ?? process.env.NODVOX_ASK_TIMEOUT_MS ?? 180_000,
@@ -31,7 +31,8 @@ export type TaskInteractionScope = {
 export async function relay(): Promise<RelayClient | null> {
   try {
     if (!client) {
-      client = new RelayClient(loadConfig(machineConfigPath()), { autoReconnect: true });
+      const config = loadConfig(machineConfigPath());
+      client = new RelayClient(config, { autoReconnect: true, peerAllowed: controllerPeerGate(config) });
       client.onMessage((payload, peerPublicKey) => {
         if (payload.type === "pairing.join") {
           const result = applyPairingJoin(payload);

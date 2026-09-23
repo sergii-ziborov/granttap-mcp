@@ -125,6 +125,32 @@ test("one computer sends a separate encrypted copy to each controller phone", as
   }
 });
 
+test("a revoked controller receives no new copy and cannot deliver a payload", async () => {
+  const machine = generateKeyPair();
+  const first = generateKeyPair();
+  const expired = generateKeyPair();
+  const cfg: PeerConfig = { relayUrl: "ws://127.0.0.1:1", room: "room-expired-controller",
+    role: "machine", deviceName: "Mac", senderId: "mac", myPublicKey: machine.publicKey,
+    mySecretKey: machine.secretKey, peerPublicKey: first.publicKey,
+    extraPeerPublicKeys: [expired.publicKey] };
+  const client = new RelayClient(cfg, { peerAllowed: (key) => key !== expired.publicKey });
+  const sent: string[] = [];
+  (client as unknown as { ws: { readyState: number; send(raw: string): void } }).ws = {
+    readyState: 1, send: (raw) => sent.push(raw),
+  };
+  await client.send({ type: "machine.heartbeat", machine: "Mac", createdAt: Date.now() });
+  assert.equal(sent.length, 1);
+  const received: Payload[] = [];
+  client.onMessage((payload) => { received.push(payload); return true; });
+  const hello: Payload = { type: "hello", role: "phone", deviceName: "iPhone", createdAt: Date.now() };
+  await receiveRaw(client, encryptedEnvelope({ payload: hello, room: cfg.room, from: "phone",
+    to: "machine", senderSecretKey: expired.secretKey, recipientPublicKey: machine.publicKey }));
+  assert.deepEqual(received, []);
+  await receiveRaw(client, encryptedEnvelope({ payload: hello, room: cfg.room, from: "phone",
+    to: "machine", senderSecretKey: first.secretKey, recipientPublicKey: machine.publicKey }));
+  assert.deepEqual(received, [hello]);
+});
+
 test("relay ACK waits until one consumer actually accepts the decrypted payload", async () => {
   const machine = generateKeyPair();
   const phone = generateKeyPair();

@@ -9,6 +9,7 @@ import {
 } from "../../approvals/state";
 import { isProviderEnabled, loadConfig, machineConfigPath } from "../../config";
 import { cursorRootSessionId } from "../../sessions/cursor";
+import { controllerPeerGate } from "../../pairing/controllers";
 
 const SHELL_TOOLS = new Set([
   "bash",
@@ -75,7 +76,8 @@ async function main(): Promise<void> {
 
   if (cancelled.length > 0) {
     try {
-      const client = new RelayClient(loadConfig(machineConfigPath()));
+      const config = loadConfig(machineConfigPath());
+      const client = new RelayClient(config, { peerAllowed: controllerPeerGate(config) });
       await client.connect();
       try {
         for (const { request, accepted } of cancelled) {

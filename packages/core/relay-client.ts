@@ -61,6 +61,11 @@ export class RelayClient {
     return this.cfg.role === "machine" ? "phone" : "machine";
   }
 
+  private peerIsAllowed(peerPublicKey: string): boolean {
+    try { return this.opts.peerAllowed?.(peerPublicKey) ?? true; }
+    catch { return false; }
+  }
+
   connect(timeoutMs = 10_000): Promise<void> {
     if (this.isConnected) return Promise.resolve();
     if (this.connectPromise) return this.connectPromise;
@@ -138,6 +143,7 @@ export class RelayClient {
     );
     if (opened === null) return; // not for us, or tampered
     const { body, peerPublicKey } = opened;
+    if (!this.peerIsAllowed(peerPublicKey)) return;
     const parsedPayload = Payload.safeParse(body);
     if (!parsedPayload.success) {
       const type = body && typeof body === "object" && "type" in body ? String((body as { type?: unknown }).type) : "";
@@ -219,7 +225,9 @@ export class RelayClient {
   ): Promise<void> {
     const ws = this.ws;
     if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error("relay not connected");
-    const peers = peerPublicKeys(this.cfg.peerPublicKey, this.cfg.extraPeerPublicKeys);
+    const peers = peerPublicKeys(this.cfg.peerPublicKey, this.cfg.extraPeerPublicKeys)
+      .filter((peerPublicKey) => this.peerIsAllowed(peerPublicKey));
+    if (peers.length === 0) throw new Error("no authorized pairing peers");
     for (const peerPublicKey of peers) {
       ws.send(sealEnvelope(
         { ...this.cfg, peerPublicKey },

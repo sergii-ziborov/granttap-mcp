@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { createPairing } from "../../apps/bridge/src/config";
 import { recordPhoneSeen } from "../../apps/bridge/src/pairing/presence";
+import { rememberPendingController } from "../../apps/bridge/src/pairing/controllers";
 import { listPairedPhones, phoneReachability } from "../../apps/mcp/src/status/pairing-status";
 import { RelayClient } from "../../packages/core/relay-client";
 import { forwardingRelay, waitFor } from "../support/forwarding-relay";
@@ -47,6 +48,7 @@ test("controller activity identifies the exact phone without marking its peer li
     ...machineCfg, extraPeerPublicKeys: [second],
   }));
   const now = Date.now();
+  rememberPendingController(machineCfg.room, second, now + 60_000);
   recordPhoneSeen(now, second);
   const phones = listPairedPhones(null, now);
   assert.equal(phones.length, 2);

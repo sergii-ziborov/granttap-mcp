@@ -19,6 +19,7 @@ import {
   type ApprovalRegistrationHandle,
 } from "./state";
 import { primeSessionKeys, sendSessionPayload } from "../host/session-keys";
+import { controllerPeerGate } from "../pairing/controllers";
 
 /**
  * Nobody answered — relay unreachable, or the phone never responded before the
@@ -44,7 +45,7 @@ export async function requestApproval(
   opts: RequestApprovalOpts = {},
 ): Promise<ApprovalDecision> {
   const timeoutMs = opts.timeoutMs ?? 60_000;
-  const client = opts.client ?? new RelayClient(cfg);
+  const client = opts.client ?? new RelayClient(cfg, { peerAllowed: controllerPeerGate(cfg) });
   const ownsClient = !opts.client;
   let cancelDecisionWait = () => {};
   const registration = registerPendingApproval(req);

@@ -32,6 +32,8 @@ export type RelayClientOptions = {
   pongTimeoutMs?: number;
   /** Durable ciphertext fingerprints so a restart cannot replay a consumed box. */
   replayPath?: string;
+  /** Refuse a revoked or expired controller before handling or sending payloads. */
+  peerAllowed?: (peerPublicKey: string) => boolean;
 };
 
 export type SendOptions = {
