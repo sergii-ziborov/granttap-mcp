@@ -148,6 +148,7 @@ function parseRepositoryGraph(value: unknown): void {
       }
     }
   }
+  if (graph.code_map != null) parseCodeMap(graph.code_map);
   if (!Array.isArray(graph.nodes) || graph.nodes.length > 256
     || !Array.isArray(graph.relations) || graph.relations.length > 512
     || !Number.isSafeInteger(graph.total_nodes) || Number(graph.total_nodes) < 0
@@ -167,6 +168,43 @@ function parseRepositoryGraph(value: unknown): void {
     if (relation.evidence_count != null
       && (!Number.isSafeInteger(relation.evidence_count)
         || Number(relation.evidence_count) < 0)) invalidResult();
+  }
+}
+
+function parseCodeMap(value: unknown): void {
+  const map = requireObject(value, "repository code map");
+  if (!Array.isArray(map.files) || map.files.length > 650
+    || !Array.isArray(map.roads) || map.roads.length > 1_200
+    || !Number.isSafeInteger(map.total_files) || Number(map.total_files) < map.files.length
+    || typeof map.truncated !== "boolean") invalidResult();
+  const paths = new Set<string>();
+  for (const value of map.files) {
+    const file = requireObject(value, "repository code file");
+    requireBoundedString(file.path, "code path", 512);
+    const path = file.path as string;
+    if (path.startsWith("/") || path.split("/").includes("..") || paths.has(path)) invalidResult();
+    paths.add(path);
+    requireOptionalString(file.language, "code language", 64);
+    if (file.line_count != null
+      && (!Number.isSafeInteger(file.line_count) || Number(file.line_count) < 1)) invalidResult();
+    if (!Array.isArray(file.symbols) || file.symbols.length > 72) invalidResult();
+    for (const value of file.symbols) {
+      const symbol = requireObject(value, "code symbol");
+      requireBoundedString(symbol.id, "code symbol id", 512);
+      requireBoundedString(symbol.label, "code symbol label", 160);
+      requireBoundedString(symbol.kind, "code symbol kind", 64);
+      if (!Number.isSafeInteger(symbol.start_line) || Number(symbol.start_line) < 1
+        || !Number.isSafeInteger(symbol.line_count) || Number(symbol.line_count) < 1) invalidResult();
+    }
+  }
+  for (const value of map.roads) {
+    const road = requireObject(value, "code road");
+    requireBoundedString(road.source, "road source", 512);
+    requireBoundedString(road.target, "road target", 512);
+    const source = road.source as string;
+    const target = road.target as string;
+    requireBoundedString(road.relation, "road relation", 64);
+    if (!paths.has(source) || !paths.has(target)) invalidResult();
   }
 }
 

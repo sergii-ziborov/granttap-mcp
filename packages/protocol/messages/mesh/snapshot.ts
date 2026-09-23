@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ProjectCodeMap } from "./graph/code-map";
 import { Identifier, Label, MeshProvider } from "./endpoint";
 import {
   ProjectEnvironment,
@@ -161,6 +162,7 @@ export const ProjectRepositoryGraph = z.object({
     contradictions: z.array(z.string().max(240)).max(16),
     unknowns: z.array(z.string().max(160)).max(4),
   }).strict()).max(8).optional(),
+  codeMap: ProjectCodeMap.optional(),
   nodes: z.array(z.object({
     id: z.string().trim().min(1).max(512),
     kind: z.string().trim().min(1).max(64),

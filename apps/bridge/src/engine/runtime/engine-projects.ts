@@ -15,6 +15,7 @@ import type {
   EngineContextEvidence,
 } from "../protocol/engine-protocol";
 import { RepositoryGraphJobs } from "./repository-graph-jobs";
+import { fitRepositoryGraph } from "./repository-graph/fit";
 
 export type LocalProjectBinding = {
   summary: ProjectBindingSummary;
@@ -27,7 +28,7 @@ export type LocalProjectBinding = {
 let sharedClient: EngineClient | undefined;
 const pendingBindingSyncs = new Map<string, Promise<boolean>>();
 const MAX_REPOSITORY_GRAPH_WIRE_BYTES = 128 * 1_024;
-const MAX_SINGLE_GRAPH_WIRE_BYTES = 48 * 1_024;
+const MAX_SINGLE_GRAPH_WIRE_BYTES = 96 * 1_024;
 const repositoryGraphJobs = new RepositoryGraphJobs<ProjectRepositoryGraph>();
 
 export async function syncProjectBinding(
@@ -211,6 +212,18 @@ async function analyzeRepositoryGraph(
       analysisId: graph.analysis_id ?? undefined,
       analysisStatus: graph.analysis_status,
       architectureHypotheses: graph.architecture_hypotheses,
+      codeMap: graph.code_map ? {
+        files: graph.code_map.files.map((file) => ({
+          path: file.path, language: file.language, lineCount: file.line_count,
+          symbols: file.symbols.map((symbol) => ({
+            id: symbol.id, label: symbol.label, kind: symbol.kind,
+            startLine: symbol.start_line, lineCount: symbol.line_count,
+          })),
+        })),
+        roads: graph.code_map.roads,
+        totalFiles: graph.code_map.total_files,
+        truncated: graph.code_map.truncated,
+      } : undefined,
       nodes: graph.nodes,
       relations: graph.relations.map((edge) => ({
         source: edge.source, target: edge.target, relation: edge.relation,
@@ -247,27 +260,6 @@ function boundRepositoryGraphs(graphs: ProjectRepositoryGraph[]): ProjectReposit
     remaining -= Buffer.byteLength(JSON.stringify(bounded), "utf8");
   }
   return result;
-}
-
-function fitRepositoryGraph(
-  graph: ProjectRepositoryGraph,
-  maxBytes: number,
-): ProjectRepositoryGraph | undefined {
-  let nodes = graph.nodes;
-  let relations = graph.relations;
-  let bounded = graph;
-  while (Buffer.byteLength(JSON.stringify(bounded), "utf8") > maxBytes
-    && (nodes.length > 8 || relations.length > 8)) {
-    if (relations.length >= nodes.length && relations.length > 8) {
-      relations = relations.slice(0, Math.max(8, Math.floor(relations.length / 2)));
-    } else if (nodes.length > 8) {
-      nodes = nodes.slice(0, Math.max(8, Math.floor(nodes.length / 2)));
-      const ids = new Set(nodes.map((node) => node.id));
-      relations = relations.filter((edge) => ids.has(edge.source) && ids.has(edge.target));
-    }
-    bounded = { ...graph, nodes, relations, truncated: true };
-  }
-  return Buffer.byteLength(JSON.stringify(bounded), "utf8") <= maxBytes ? bounded : undefined;
 }
 
 function defaultClient(): EngineClient {

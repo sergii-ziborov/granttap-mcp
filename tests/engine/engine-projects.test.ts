@@ -177,6 +177,15 @@ test("repository graph maps full Weavatrix analysis for each unique binding", as
           evidence: ["outer_implements_core: src/infra/mod.rs → src/domain/mod.rs (implements)"],
           contradictions: [], unknowns: ["static edges do not prove runtime composition"],
         }],
+        code_map: {
+          files: [
+            { path: "src/main.ts", language: "typescript", line_count: 20,
+              symbols: [{ id: "main", label: "main", kind: "function", start_line: 2, line_count: 10 }] },
+            { path: "src/store.ts", language: "typescript", line_count: null, symbols: [] },
+          ],
+          roads: [{ source: "src/main.ts", target: "src/store.ts", relation: "imports" }],
+          total_files: 2, truncated: false,
+        },
         nodes: [{ id: "src", kind: "component", label: "src" }],
         relations: [], total_nodes: 1, total_relations: 0, truncated: false,
       },
@@ -192,6 +201,9 @@ test("repository graph maps full Weavatrix analysis for each unique binding", as
   assert.equal(graphs[0]?.nodes[0]?.kind, "component");
   assert.equal(graphs[0]?.architectureHypotheses?.[0]?.name, "onion");
   assert.equal(graphs[0]?.architectureHypotheses?.[0]?.status, "SUPPORTED");
+  assert.equal(graphs[0]?.codeMap?.files[0]?.lineCount, 20);
+  assert.equal(graphs[0]?.codeMap?.files[1]?.lineCount, null);
+  assert.equal(ProjectRepositoryGraphSchema.safeParse(graphs[0]).success, true);
 });
 
 test("stale checkout binding reports a graph failure without fabricating architecture", async () => {

@@ -45,6 +45,14 @@ export type EngineRepositoryGraph = {
     status: "SUPPORTED" | "CANDIDATE" | "CONTRADICTED" | "INSUFFICIENT_EVIDENCE";
     evidence: string[]; contradictions: string[]; unknowns: string[];
   }>;
+  code_map?: {
+    files: Array<{ path: string; language: string | null; line_count: number | null;
+      symbols: Array<{ id: string; label: string; kind: string;
+        start_line: number; line_count: number }> }>;
+    roads: Array<{ source: string; target: string; relation: string }>;
+    total_files: number;
+    truncated: boolean;
+  } | null;
   nodes: Array<{ id: string; kind: string; label: string }>;
   relations: Array<{ source: string; target: string; relation: string; evidence_count?: number }>;
   total_nodes: number;
