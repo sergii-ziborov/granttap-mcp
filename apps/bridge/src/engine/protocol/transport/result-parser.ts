@@ -174,8 +174,11 @@ function parseRepositoryGraph(value: unknown): void {
 function parseCodeMap(value: unknown): void {
   const map = requireObject(value, "repository code map");
   if (!Array.isArray(map.files) || map.files.length > 650
+    || (map.externals != null && (!Array.isArray(map.externals) || map.externals.length > 24))
     || !Array.isArray(map.roads) || map.roads.length > 1_200
     || !Number.isSafeInteger(map.total_files) || Number(map.total_files) < map.files.length
+    || (map.total_externals != null && !Number.isSafeInteger(map.total_externals))
+    || Number(map.total_externals ?? 0) < (Array.isArray(map.externals) ? map.externals.length : 0)
     || typeof map.truncated !== "boolean") invalidResult();
   const paths = new Set<string>();
   for (const value of map.files) {
@@ -196,6 +199,15 @@ function parseCodeMap(value: unknown): void {
       if (!Number.isSafeInteger(symbol.start_line) || Number(symbol.start_line) < 1
         || !Number.isSafeInteger(symbol.line_count) || Number(symbol.line_count) < 1) invalidResult();
     }
+  }
+  for (const value of (map.externals ?? []) as unknown[]) {
+    const external = requireObject(value, "repository external resource");
+    requireBoundedString(external.id, "external id", 512);
+    requireBoundedString(external.label, "external label", 160);
+    requireBoundedString(external.kind, "external kind", 64);
+    const id = external.id as string;
+    if (!id.startsWith("ext:") || id.length < 5 || paths.has(id)) invalidResult();
+    paths.add(id);
   }
   for (const value of map.roads) {
     const road = requireObject(value, "code road");

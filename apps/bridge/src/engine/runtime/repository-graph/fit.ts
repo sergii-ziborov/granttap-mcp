@@ -29,6 +29,7 @@ export function fitRepositoryGraph(
         .slice(0, Math.ceil(map.files.length / 2))
         .sort((left, right) => left.path.localeCompare(right.path));
       const paths = new Set(files.map((file) => file.path));
+      for (const external of map.externals ?? []) paths.add(external.id);
       bounded = { ...bounded, codeMap: { ...map, files, truncated: true,
         roads: map.roads.filter((road) => paths.has(road.source) && paths.has(road.target)) } };
     } else if (bounded.relations.length > 8) {

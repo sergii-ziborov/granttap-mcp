@@ -23,6 +23,30 @@ test("Engine code towers keep repository paths scoped and reject dangling roads"
     ...graph.code_map,
     roads: [{ source: "src/main.ts", target: "../secret", relation: "imports" }],
   } }), "r"), EngineProtocolError);
+  const withExternal = { ...graph, code_map: { ...graph.code_map,
+    externals: [{ id: "ext:postgres", label: "Postgres", kind: "service" }],
+    total_externals: 1,
+    roads: [{ source: "src/main.ts", target: "ext:postgres", relation: "consumes" }],
+  } };
+  assert.equal(parseEngineResponse(response(withExternal), "r").operation, "graph.repository");
+  const projected = ProjectRepositoryGraph.parse({
+    projectId: "p", repositoryId: "repo", revision: "sha", weavatrixVersion: "2.17.4",
+    nodes: [], relations: [], totalNodes: 0, totalRelations: 0, truncated: false,
+    codeMap: {
+      files: [{ path: "src/main.ts", language: "typescript", lineCount: 42, symbols: [] }],
+      externals: [{ id: "ext:postgres", label: "Postgres", kind: "service" }],
+      roads: [{ source: "src/main.ts", target: "ext:postgres", relation: "consumes" }],
+      totalFiles: 1, totalExternals: 1, truncated: false,
+    },
+  });
+  assert.equal(projected.codeMap?.roads[0]?.target, "ext:postgres");
+  assert.throws(() => parseEngineResponse(response({ ...graph, code_map: {
+    ...withExternal.code_map, total_externals: undefined,
+  } }), "r"), EngineProtocolError);
+  assert.throws(() => parseEngineResponse(response({ ...graph, code_map: {
+    ...withExternal.code_map,
+    roads: [{ source: "src/main.ts", target: "ext:unknown", relation: "consumes" }],
+  } }), "r"), EngineProtocolError);
 });
 
 test("wire fitting keeps measured towers and valid roads when a code map is large", () => {

@@ -49,8 +49,10 @@ export type EngineRepositoryGraph = {
     files: Array<{ path: string; language: string | null; line_count: number | null;
       symbols: Array<{ id: string; label: string; kind: string;
         start_line: number; line_count: number }> }>;
+    externals?: Array<{ id: string; label: string; kind: string }>;
     roads: Array<{ source: string; target: string; relation: string }>;
     total_files: number;
+    total_externals?: number;
     truncated: boolean;
   } | null;
   nodes: Array<{ id: string; kind: string; label: string }>;
