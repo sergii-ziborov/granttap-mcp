@@ -110,6 +110,12 @@ test("widget clears secrets when paired or expired and ignores foreign messages"
   assert.equal(ui.calls.some((item) => item.name === "reconnect"), false);
   assert.equal(ui.calls.length, before);
   assert.equal(ui.el("new-qr").classList.contains("hidden"), false);
+  ui.button("new-qr").click();
+  assert.equal(ui.el("confirm").classList.contains("hidden"), false);
+  assert.match(ui.el("confirm-copy").textContent || "", /saved pairing stays/);
+  assert.equal(ui.calls.length, before);
+  ui.button("cancel").click();
+  assert.equal(ui.el("confirm").classList.contains("hidden"), true);
 });
 
 

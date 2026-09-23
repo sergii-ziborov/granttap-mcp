@@ -192,6 +192,14 @@ test("an added controller cannot replace the primary phone or move a shared room
     relayUrl: primary.phoneCfg.relayUrl, phonePublicKey: added.phoneCfg.myPublicKey,
     phoneCfg: { ...added.phoneCfg, role: "phone" as const, room: "other-room" }, createdAt: Date.now() }), "rejected");
   assert.equal(await readFile(machineConfigPath(), "utf8"), before);
+  assert.equal(applyPairingJoin({ type: "pairing.join", room: primary.phoneCfg.room,
+    relayUrl: "ftp://invalid.example", phonePublicKey: primary.phoneCfg.myPublicKey,
+    phoneCfg: { ...primary.phoneCfg, role: "phone" as const }, createdAt: Date.now() }), "rejected");
+  assert.equal(await readFile(machineConfigPath(), "utf8"), before);
+  await writeFile(machineConfigPath(), "not-json");
+  assert.equal(applyPairingJoin({ type: "pairing.join", room: primary.phoneCfg.room,
+    relayUrl: primary.phoneCfg.relayUrl, phonePublicKey: primary.phoneCfg.myPublicKey,
+    phoneCfg: { ...primary.phoneCfg, role: "phone" as const }, createdAt: Date.now() }), "rejected");
 });
 
 test("pairing failures do not persist a replacement", async (t) => {

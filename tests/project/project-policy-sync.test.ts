@@ -31,6 +31,7 @@ import {
   createProjectPolicyRuntime,
   enforcementCoverageFor,
   handleProjectPolicySet,
+  publishProjectPolicyStatuses,
   projectPolicyFeatureEnabled,
 } from "../../apps/bridge/src/project-policy/runtime";
 
@@ -168,6 +169,22 @@ test("Project policy rollout requires both engine and governance flags", () => {
   assert.equal(projectPolicyFeatureEnabled({
     GRANTTAP_ENGINE_ENABLED: "1", GRANTTAP_PROJECT_POLICY_ENABLED: "TRUE",
   }), true);
+});
+
+test("enabled status publication tolerates an unavailable local Engine", async () => {
+  const previousEngine = process.env.GRANTTAP_ENGINE_ENABLED;
+  const previousPolicy = process.env.GRANTTAP_PROJECT_POLICY_ENABLED;
+  process.env.GRANTTAP_ENGINE_ENABLED = "1";
+  process.env.GRANTTAP_PROJECT_POLICY_ENABLED = "1";
+  try {
+    await assert.doesNotReject(publishProjectPolicyStatuses({} as RelayClient, ["project"]));
+    assert.equal(governedRevision("project"), undefined);
+  } finally {
+    if (previousEngine == null) delete process.env.GRANTTAP_ENGINE_ENABLED;
+    else process.env.GRANTTAP_ENGINE_ENABLED = previousEngine;
+    if (previousPolicy == null) delete process.env.GRANTTAP_PROJECT_POLICY_ENABLED;
+    else process.env.GRANTTAP_PROJECT_POLICY_ENABLED = previousPolicy;
+  }
 });
 
 test("unsupported policy transport cannot export Project environment", async () => {
