@@ -42,7 +42,8 @@ test("Cursor plugin bootstrap is valid JavaScript and pins a published runtime",
   const checked = spawnSync(process.execPath, ["--check", path], { encoding: "utf8" });
   assert.equal(checked.status, 0, checked.stderr);
   const source = readFileSync(path, "utf8");
-  assert.match(source, /granttap-mcp@0\.8\.19/);
+  const packageVersion = JSON.parse(readFileSync(join(import.meta.dirname, "../..", "package.json"), "utf8")).version;
+  assert.ok(source.includes(`granttap-mcp@${packageVersion}`));
   assert.doesNotMatch(source, /cmd\.exe|ComSpec|npx\.cmd/);
 });
 
@@ -79,6 +80,7 @@ test("Cursor plugin MCP starts from a foreign cwd, unlike a relative bootstrap p
 
 test("Windows Cursor bootstrap invokes npm's JavaScript entry without cmd quoting", () => {
   const plugin = join(import.meta.dirname, "../..", "cursor-plugin");
+  const packageVersion = JSON.parse(readFileSync(join(plugin, "..", "package.json"), "utf8")).version;
   const nodeRoot = mkdtempSync(join(tmpdir(), "granttap-windows-node-"));
   const npmBin = join(nodeRoot, "node_modules", "npm", "bin");
   mkdirSync(npmBin, { recursive: true });
@@ -93,6 +95,6 @@ test("Windows Cursor bootstrap invokes npm's JavaScript entry without cmd quotin
     assert.equal(result.status, 0, result.stderr);
     const plan = JSON.parse(result.stdout) as { command: string; args: string[] };
     assert.equal(plan.command, process.execPath);
-    assert.deepEqual(plan.args, [join(npmBin, "npx-cli.js"), "-y", "granttap-mcp@0.8.19"]);
+    assert.deepEqual(plan.args, [join(npmBin, "npx-cli.js"), "-y", `granttap-mcp@${packageVersion}`]);
   }
 });

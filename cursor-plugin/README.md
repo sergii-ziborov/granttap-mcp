@@ -10,7 +10,7 @@ keeps each phone response tied to the exact originating chat and prompt.
 Install the supported CLI on this computer, then run:
 
 ```bash
-npm install -g granttap-mcp@0.8.19
+npm install -g granttap-mcp@0.8.20
 granttap setup
 granttap status
 ```
@@ -49,10 +49,10 @@ import the public repository once and reload Cursor. The plugin adds `/connect`,
 skill, and the exact-correlation rule; `granttap setup` configures the local
 MCP endpoint separately.
 
-Publish by pushing this repository. Keep `name` as `granttap` and the GitHub URL
-as `sergii-ziborov/granttap-mcp`. That updates the existing listing. Do not
-submit Cursor Marketplace or cursor.directory again — a second submit is a
-second card. The only Cursor marketplace file is the repo-root
+Pushing this repository updates the plugin source. Cursor reviews marketplace
+updates separately, so confirm the displayed version after review. Keep `name`
+as `granttap` and the GitHub URL as `sergii-ziborov/granttap-mcp`; do not create
+a second listing. The only Cursor marketplace file is the repo-root
 `.cursor-plugin/marketplace.json`, and it lists this plugin once.
 
 If Customize or Marketplace shows both a lowercase **granttap** cube and an
