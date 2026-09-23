@@ -274,7 +274,7 @@ test("published snapshots stay inside the phone snapshot allowlist", async () =>
     "bindings", "peers", "skills", "incomplete", "execution", "restrictions",
     "environment", "modelCatalog", "mcpServers", "capabilityRequests",
     "capabilityObservations", "backbone", "repositoryGraphs", "cortex",
-    "claims", "dependencies", "events", "knowledge", "generatedAt",
+    "claims", "dependencies", "events", "knowledge", "supersededKnowledgeRecordIds", "generatedAt",
   ]);
   for (const snap of snaps) {
     for (const key of Object.keys(snap)) {

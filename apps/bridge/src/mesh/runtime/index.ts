@@ -38,7 +38,7 @@ import { handoffReadiness } from "../tasks/readiness";
 import { createHandoffFlow } from "./handoff";
 import type { MeshRuntimeDependencies } from "./dependencies";
 import { localMeshStore } from "../local-remote/local";
-import { activeProjectKnowledge } from "../knowledge/active";
+import { activeProjectKnowledge, supersededProjectKnowledgeIds } from "../knowledge/active";
 import { createHandoffWorktree, repositoryHasCommit } from "./worktree";
 import { fetchRevision, pushBranch } from "../local-remote/remote";
 import { projectSessionCapabilityInventory, projectExecutionCapabilitySessions } from "./capabilities";
@@ -266,9 +266,15 @@ export async function meshSnapshotsWithEngine(): Promise<MeshSnapshot[]> {
     if (sharedKnowledge) localMeshStore().cacheKnowledge(snapshot.projectId, sharedKnowledge);
     const memoryRows = new Map((snapshot.knowledge ?? []).map((item) => [item.recordId, item]));
     for (const item of sharedKnowledge ?? []) memoryRows.set(item.recordId, item);
+    const allMemory = [...memoryRows.values()];
+    const correctedIds = [...new Set([
+      ...(snapshot.supersededKnowledgeRecordIds ?? []),
+      ...supersededProjectKnowledgeIds(snapshot.projectId, allMemory),
+    ])].sort().slice(-128);
     const enriched = { ...snapshot, backbone, repositoryGraphs,
-      knowledge: activeProjectKnowledge(snapshot.projectId, [...memoryRows.values()])
-        .sort((a, b) => b.recordedAt - a.recordedAt).slice(0, 16) };
+      knowledge: activeProjectKnowledge(snapshot.projectId, allMemory)
+        .sort((a, b) => b.recordedAt - a.recordedAt).slice(0, 16),
+      ...(correctedIds.length > 0 ? { supersededKnowledgeRecordIds: correctedIds } : {}) };
     const cortex = await projectCortexIntegration(enriched);
     return {
       ...enriched,

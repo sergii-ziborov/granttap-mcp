@@ -14,6 +14,7 @@ import type { ScopedMeshView } from "../mesh/snapshot/scoped-view";
 import { loadRuntimeConfig } from "../config/runtime";
 import { computerId } from "../mesh/identity/computer";
 import { defaultCortexConfig } from "./config";
+import { activeProjectKnowledge, activeScopedKnowledge, unrecordedKnowledgeEvents } from "../mesh/knowledge/active";
 
 type CortexDependencies = {
   provenance?: typeof projectEngineProvenance;
@@ -109,15 +110,16 @@ export function cortexSnapshotEvidence(
     `repository.${graph.repositoryId}`, "weavatrix.repository", JSON.stringify(graph),
     "high", "verified", "graph", graph.revision,
   ));
-  const knowledge = (snapshot.knowledge ?? []).filter((record) =>
+  const knowledge = activeProjectKnowledge(snapshot.projectId, snapshot.knowledge ?? []).filter((record) =>
     record.taskId === taskId || record.visibility === "project").slice(0, 16);
   for (const record of knowledge) evidence.push(item(
     `knowledge.${record.recordId}`, "weavatrix.memory", JSON.stringify(record),
     "high", "unverified", "memory", `memory:${record.streamVersion}`,
   ));
-  const recorded = new Set(knowledge.map((record) => record.sourceRef));
-  for (const event of snapshot.events.filter((value) => value.taskId === taskId
-    && !recorded.has(value.eventId)).slice(-32)) {
+  for (const event of unrecordedKnowledgeEvents(
+    snapshot.events.filter((value) => value.taskId === taskId),
+    snapshot.knowledge ?? [], snapshot.supersededKnowledgeRecordIds,
+  ).slice(-32)) {
     evidence.push(item(
       `event.${event.eventId}`, "mesh.event", JSON.stringify(event),
       "normal", "unverified", "memory", `event:${event.createdAt}`,
@@ -145,13 +147,14 @@ export function cortexScopedEvidence(view: ScopedMeshView): EngineContextEvidenc
     `repository.${graph.repositoryId}`, "weavatrix.repository", JSON.stringify(graph),
     "high", "verified", "graph", graph.revision,
   ));
-  const knowledge = (view.knowledge ?? []).slice(0, 16);
+  const knowledge = activeScopedKnowledge(view.project.projectId, view.knowledge ?? [], taskId).slice(0, 16);
   for (const record of knowledge) evidence.push(item(
     `knowledge.${record.recordId}`, "weavatrix.memory", JSON.stringify(record),
     "high", "unverified", "memory", `memory:${record.streamVersion}`,
   ));
-  const recorded = new Set(knowledge.map((record) => record.sourceRef));
-  for (const event of view.events.filter((value) => !recorded.has(value.eventId)).slice(-32)) evidence.push(item(
+  for (const event of unrecordedKnowledgeEvents(
+    view.events, view.knowledge ?? [], view.supersededKnowledgeRecordIds,
+  ).slice(-32)) evidence.push(item(
     `event.${event.eventId}`, "mesh.event", JSON.stringify(event),
     "normal", "unverified", "memory", `event:${event.createdAt}`,
   ));

@@ -31,7 +31,7 @@ import { loadExecutionPolicy } from "../runtime/execution-policy";
 import { loadEnvironment, redactEnvironment } from "../context/env";
 import { loadRestrictions } from "../restrictions";
 import { MeshStoreBase } from "./base";
-import { activeProjectKnowledge } from "../knowledge/active";
+import { activeProjectKnowledge, supersededProjectKnowledgeIds } from "../knowledge/active";
 import {
   projectCapabilityRequests,
 } from "../catalog/project/requests";
@@ -338,6 +338,7 @@ export class MeshStore extends MeshStoreBase {
     const execution = loadExecutionPolicy(projectId);
     const restrictions = loadRestrictions(projectId);
     const environment = redactEnvironment(loadEnvironment(projectId));
+    const correctedIds = supersededProjectKnowledgeIds(projectId, this.state.knowledge);
     return MeshSnapshot.parse({
       type: "mesh.snapshot",
       sessionId: projectId,
@@ -369,6 +370,7 @@ export class MeshStore extends MeshStoreBase {
       events: this.eventsForProject(projectId).filter((event) => taskIds.has(event.taskId)),
       knowledge: activeProjectKnowledge(projectId, this.state.knowledge)
         .slice(-16).reverse(),
+      ...(correctedIds.length > 0 ? { supersededKnowledgeRecordIds: correctedIds } : {}),
       generatedAt: this.now(),
     });
   }

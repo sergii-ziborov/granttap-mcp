@@ -10,6 +10,7 @@ import type { ExecutionCapability } from "../catalog/capability";
 import { liveExecutionScope } from "../catalog/capability";
 import { otherSide, type OtherSideRow } from "../handoff/other-side";
 import { scopedOverlapKind } from "../store/support";
+import { unrecordedKnowledgeEvents } from "../knowledge/active";
 
 const MAX_SCOPED_EVENTS = 32;
 const MAX_NEIGHBOURS = 32;
@@ -44,6 +45,7 @@ export type ScopedMeshView = {
   environment?: MeshSnapshot["environment"];
   cortex?: NonNullable<MeshSnapshot["cortex"]>;
   knowledge?: NonNullable<MeshSnapshot["knowledge"]>;
+  supersededKnowledgeRecordIds?: NonNullable<MeshSnapshot["supersededKnowledgeRecordIds"]>;
   /** Other Tasks working right now on the far side of this Task's repository. */
   otherSide: OtherSideRow[];
   dependencies: MeshSnapshot["dependencies"];
@@ -121,9 +123,11 @@ export function scopedMeshView(
     cortex: snapshot.cortex ?? [],
     knowledge: snapshot.knowledge?.filter((item) => item.taskId === capability.taskId
       || item.visibility === "project"),
+    supersededKnowledgeRecordIds: snapshot.supersededKnowledgeRecordIds,
     otherSide: otherSide(snapshot, capability.taskId),
     dependencies: snapshot.dependencies,
-    events: scopedEvents(snapshot, capability),
+    events: unrecordedKnowledgeEvents(scopedEvents(snapshot, capability),
+      snapshot.knowledge ?? [], snapshot.supersededKnowledgeRecordIds),
     allowedEventTypes: capability.allowedEventTypes,
   };
 }

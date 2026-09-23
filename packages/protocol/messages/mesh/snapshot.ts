@@ -239,6 +239,7 @@ export const MeshSnapshot = z.object({
   repositoryGraphs: z.array(ProjectRepositoryGraph).max(64).optional(),
   cortex: z.array(ProjectCortexIntegration).max(32).optional(),
   knowledge: z.array(ProjectKnowledgeRecord).max(32).optional(),
+  supersededKnowledgeRecordIds: z.array(Identifier).max(128).optional(),
   tasks: z.array(MeshTask).max(64),
   executions: z.array(ExecutionSessionLink).max(128),
   claims: z.array(ResourceClaim).max(128),
@@ -295,6 +296,11 @@ export const MeshSnapshot = z.object({
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["repositoryGraphs"], message: "invalid repository graph scope" });
   }
   const knowledgeIds = new Set(value.knowledge?.map((item) => item.recordId));
+  const supersededKnowledgeIds = new Set(value.supersededKnowledgeRecordIds);
+  if (supersededKnowledgeIds.size !== (value.supersededKnowledgeRecordIds?.length ?? 0)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["supersededKnowledgeRecordIds"],
+      message: "duplicate superseded knowledge identity" });
+  }
   if ((value.knowledge?.length ?? 0) !== knowledgeIds.size
     || value.knowledge?.some((item) => item.projectId !== value.projectId
       || item.visibility !== "project")) {

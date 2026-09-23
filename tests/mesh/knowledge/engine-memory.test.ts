@@ -81,6 +81,8 @@ test("Project projection asks Engine for shared records before applying the page
   assert.equal(requested?.operation, "memory.history");
   if (requested?.operation === "memory.history") {
     assert.equal(requested.input.visibility, "project");
+    assert.equal(requested.input.include_superseded, true);
+    assert.equal(requested.input.limit, 64);
   }
 });
 
@@ -185,8 +187,10 @@ test("a corrected decision survives store restart and stale Mesh replay", () => 
     store.cacheKnowledge("mesh", [replacement]);
     const restored = new MeshStore(path, () => 21);
     assert.deepEqual(restored.snapshot("mesh")?.knowledge?.map((item) => item.recordId), ["new"]);
+    assert.deepEqual(restored.snapshot("mesh")?.supersededKnowledgeRecordIds, ["old"]);
     restored.mergeSnapshot(stale);
     assert.deepEqual(restored.snapshot("mesh")?.knowledge?.map((item) => item.recordId), ["new"]);
+    assert.deepEqual(restored.snapshot("mesh")?.supersededKnowledgeRecordIds, ["old"]);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -200,6 +204,32 @@ test("a correction from another Project or category cannot hide shared memory", 
     category: "result" as const, supersedesRecordId: "old" };
   assert.deepEqual(activeProjectKnowledge("mesh", [old, foreign, wrongKind])
     .map((item) => item.recordId), ["old", "result"]);
+});
+
+test("corrected capsule decisions never return as Cortex event evidence", () => {
+  const event = { type: "mesh.event" as const, sessionId: "task-a", eventId: "handoff",
+    projectId: "mesh", taskId: "task-a", sourceSessionId: "native",
+    eventType: "HANDOFF_REQUEST" as const, createdAt: 10,
+    payload: { capsule: { taskId: "task-a", goal: "Fix", currentStatus: "working",
+      sourceProvider: "codex" as const, sourceComputer: "mac-a",
+      targetProvider: "claude" as const, targetComputer: "mac-b",
+      repository: "repo", baseSha: "a".repeat(40), filesChanged: [],
+      dependencies: [], resourceClaims: [], remainingWork: [],
+      importantDecisions: ["Old decision", "Still valid"], createdAt: 10 } } };
+  const oldId = recordsFromEvent(event)[0]!.record_id;
+  const snapshot: MeshSnapshot = {
+    type: "mesh.snapshot", sessionId: "mesh", projectId: "mesh",
+    project: { projectId: "mesh", name: "Mesh", canonicalRepositoryId: "repo", createdAt: 1 },
+    tasks: [{ projectId: "mesh", taskId: "task-a", title: "A", goal: "A",
+      state: "working", createdAt: 1, updatedAt: 10 }],
+    executions: [], claims: [], dependencies: [], events: [event], generatedAt: 12,
+    knowledge: [{ ...record("new", "task-a", "project"), content: "Reviewed decision",
+      supersedesRecordId: oldId }], supersededKnowledgeRecordIds: [oldId],
+  };
+  const evidence = cortexSnapshotEvidence(snapshot, "task-a");
+  assert.equal(evidence.some((item) => item.content.includes("Old decision")), false);
+  assert.equal(evidence.some((item) => item.content.includes("Still valid")), true);
+  assert.equal(evidence.some((item) => item.content.includes("Reviewed decision")), true);
 });
 
 test("retained structured events older than the phone window enter Memory", async () => {

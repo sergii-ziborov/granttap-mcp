@@ -5,6 +5,9 @@
 import type { ScopedMeshView } from "../snapshot/scoped-view";
 import { compileMeshContext } from "./packet";
 import { projectKnowledge } from "../../engine/runtime/engine-memory";
+import {
+  activeScopedKnowledge, supersededScopedKnowledgeIds, unrecordedKnowledgeEvents,
+} from "../knowledge/active";
 
 export type ProjectContextMode = "compact" | "full" | "legacy";
 
@@ -139,8 +142,16 @@ export async function renderProjectContext(
   const local = await projectKnowledge(view.project.projectId, view.execution.taskId);
   const records = new Map((view.knowledge ?? []).map((item) => [item.recordId, item]));
   for (const item of local ?? []) records.set(item.recordId, item);
-  const scoped = { ...view, knowledge: [...records.values()]
-    .sort((a, b) => b.recordedAt - a.recordedAt).slice(0, 32) };
+  const all = [...records.values()];
+  const supersededKnowledgeRecordIds = [...new Set([
+    ...(view.supersededKnowledgeRecordIds ?? []),
+    ...supersededScopedKnowledgeIds(view.project.projectId, all, view.execution.taskId),
+  ])];
+  const scoped = { ...view,
+    knowledge: activeScopedKnowledge(view.project.projectId, all, view.execution.taskId)
+      .sort((a, b) => b.recordedAt - a.recordedAt).slice(0, 32),
+    supersededKnowledgeRecordIds,
+    events: unrecordedKnowledgeEvents(view.events, all, supersededKnowledgeRecordIds) };
   const contextPacket = await compileMeshContext(scoped);
   if (mode === "compact") return { ...renderCompactProjectContext(scoped), contextPacket };
   if (mode === "legacy") {

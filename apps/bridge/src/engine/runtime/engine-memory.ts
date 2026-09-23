@@ -37,7 +37,8 @@ export async function projectKnowledge(
     const result = await client(options).request({
       operation: "memory.history",
       input: { project_id: projectId, task_id: taskId,
-        visibility: taskId ? undefined : "project", limit: 32 },
+        visibility: taskId ? undefined : "project", limit: 64,
+        include_superseded: true },
     }, { timeoutMs: 250 });
     if (result.operation !== "memory.history" || result.page.project_id !== projectId) return undefined;
     return result.page.entries.filter((entry) => taskId
