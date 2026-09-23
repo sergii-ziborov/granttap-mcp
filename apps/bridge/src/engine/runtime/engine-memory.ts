@@ -11,6 +11,7 @@ type KnowledgeSourceWindow = Pick<MeshSnapshot, "projectId" | "events">;
 let sharedClient: EngineClient | undefined;
 const synced = new Set<string>();
 const pendingSyncs = new Map<string, Promise<void>>();
+const queuedSyncs = new Map<string, { snapshot: KnowledgeSourceWindow; options: Options }>();
 
 function client(options: Options): EngineClientLike {
   return options.client ?? (sharedClient ??= new EngineClient({
@@ -34,25 +35,36 @@ export async function projectKnowledge(
 ): Promise<ProjectKnowledgeRecord[] | undefined> {
   if (!engineFeatureEnabled(options.env ?? process.env)) return undefined;
   try {
-    const result = await client(options).request({
-      operation: "memory.history",
-      input: { project_id: projectId, task_id: taskId,
-        visibility: taskId ? undefined : "project", limit: 64,
-        include_superseded: true },
-    }, { timeoutMs: 250 });
-    if (result.operation !== "memory.history" || result.page.project_id !== projectId) return undefined;
-    return result.page.entries.filter((entry) => taskId
-      ? entry.task_id === taskId || entry.visibility === "project"
-      : entry.visibility === "project").map((entry) => ({
-      projectId: entry.project_id, taskId: entry.task_id,
-      recordId: entry.record_id, category: entry.category,
-      content: entry.content, source: entry.source,
-      sourceRef: entry.source_ref, visibility: entry.visibility,
-      repositoryId: entry.repository_id ?? undefined,
-      commitSha: entry.commit_sha ?? undefined,
-      supersedesRecordId: entry.supersedes_record_id ?? undefined,
-      recordedAt: entry.recorded_at, streamVersion: entry.stream_version,
-    }));
+    const records: ProjectKnowledgeRecord[] = [];
+    let beforeVersion: number | undefined;
+    // The local Mesh cache holds at most 256 records. Read that same bounded
+    // window, including corrections, before deciding which entries are active.
+    for (let page = 0; page < 4; page += 1) {
+      const result = await client(options).request({
+        operation: "memory.history",
+        input: { project_id: projectId, task_id: taskId,
+          visibility: taskId ? undefined : "project", limit: 64,
+          include_superseded: true, before_version: beforeVersion },
+      }, { timeoutMs: 250 });
+      if (result.operation !== "memory.history" || result.page.project_id !== projectId) return undefined;
+      records.push(...result.page.entries.filter((entry) => taskId
+        ? entry.task_id === taskId || entry.visibility === "project"
+        : entry.visibility === "project").map((entry) => ({
+        projectId: entry.project_id, taskId: entry.task_id,
+        recordId: entry.record_id, category: entry.category,
+        content: entry.content, source: entry.source,
+        sourceRef: entry.source_ref, visibility: entry.visibility,
+        repositoryId: entry.repository_id ?? undefined,
+        commitSha: entry.commit_sha ?? undefined,
+        supersedesRecordId: entry.supersedes_record_id ?? undefined,
+        recordedAt: entry.recorded_at, streamVersion: entry.stream_version,
+      })));
+      const next = result.page.next_before_version;
+      if (!result.page.incomplete || next == null
+        || beforeVersion != null && next >= beforeVersion) break;
+      beforeVersion = next;
+    }
+    return records;
   } catch { return undefined; }
 }
 
@@ -108,11 +120,19 @@ export async function syncProjectKnowledge(snapshot: KnowledgeSourceWindow, opti
 }
 
 /** Publish never waits for the memory backfill; one bounded writer runs per Project. */
-export function queueProjectKnowledgeSync(snapshot: KnowledgeSourceWindow): void {
-  if (pendingSyncs.has(snapshot.projectId)) return;
-  const pending = syncProjectKnowledge(snapshot);
+export function queueProjectKnowledgeSync(snapshot: KnowledgeSourceWindow, options: Options = {}): void {
+  if (pendingSyncs.has(snapshot.projectId)) {
+    queuedSyncs.set(snapshot.projectId, { snapshot, options });
+    return;
+  }
+  const pending = syncProjectKnowledge(snapshot, options);
   pendingSyncs.set(snapshot.projectId, pending);
   void pending.catch(() => undefined).finally(() => {
-    if (pendingSyncs.get(snapshot.projectId) === pending) pendingSyncs.delete(snapshot.projectId);
+    if (pendingSyncs.get(snapshot.projectId) !== pending) return;
+    pendingSyncs.delete(snapshot.projectId);
+    const next = queuedSyncs.get(snapshot.projectId);
+    if (!next) return;
+    queuedSyncs.delete(snapshot.projectId);
+    queueProjectKnowledgeSync(next.snapshot, next.options);
   });
 }

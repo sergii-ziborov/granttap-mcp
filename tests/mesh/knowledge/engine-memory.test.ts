@@ -4,7 +4,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  projectKnowledge, recordProjectKnowledge, recordsFromEvent, syncProjectKnowledge,
+  projectKnowledge, queueProjectKnowledgeSync, recordProjectKnowledge,
+  recordsFromEvent, syncProjectKnowledge,
 } from "../../../apps/bridge/src/engine/runtime/engine-memory";
 import { parseEngineResponse, type EngineOperation, type EngineResult } from "../../../apps/bridge/src/engine/protocol/engine-protocol";
 import { projectScopedSnapshot } from "../../../apps/bridge/src/mesh/snapshot/window";
@@ -88,6 +89,32 @@ test("Project projection asks Engine for shared records before applying the page
   }
 });
 
+test("Project memory follows bounded Engine pages so a corrected old decision stays hidden", async () => {
+  const requested: Array<number | null | undefined> = [];
+  const input = (recordId: string, version: number, supersedes?: string) => ({
+    project_id: "mesh", task_id: "task-a", record_id: recordId,
+    category: "decision" as const, content: recordId,
+    source: "user_decision" as const, source_ref: recordId,
+    visibility: "project" as const, recorded_at: version,
+    stream_version: version, supersedes_record_id: supersedes,
+  });
+  const client = { request: async (operation: EngineOperation): Promise<EngineResult> => {
+    assert.equal(operation.operation, "memory.history");
+    if (operation.operation !== "memory.history") throw new Error("unexpected write");
+    requested.push(operation.input.before_version);
+    return { operation: "memory.history", page: operation.input.before_version == null
+      ? { project_id: "mesh", incomplete: true, next_before_version: 2,
+        entries: [input("corrected", 2, "old")] }
+      : { project_id: "mesh", incomplete: false, next_before_version: null,
+        entries: [input("old", 1)] } };
+  }, close: () => undefined };
+  const values = await projectKnowledge("mesh", undefined, {
+    env: { GRANTTAP_ENGINE_ENABLED: "1" }, client,
+  });
+  assert.deepEqual(requested, [undefined, 2]);
+  assert.deepEqual(activeProjectKnowledge("mesh", values ?? []).map((row) => row.recordId), ["corrected"]);
+});
+
 test("a completed Task enters Memory as an agent report with its source event", () => {
   const values = recordsFromEvent({ type: "mesh.event", sessionId: "task-a",
     eventId: "completed", projectId: "mesh", taskId: "task-a",
@@ -151,6 +178,33 @@ test("bounded event backfill submits once and never treats Engine failure as per
     env: {}, client,
   }), false);
   assert.equal(calls.length, 2);
+});
+
+test("a newer structured event queued during Memory import is written after the current pass", async () => {
+  const ids: string[] = [];
+  let releaseFirst!: () => void;
+  let reportSecond!: () => void;
+  const firstHeld = new Promise<void>((resolve) => { releaseFirst = resolve; });
+  const secondSeen = new Promise<void>((resolve) => { reportSecond = resolve; });
+  const client = { request: async (operation: EngineOperation): Promise<EngineResult> => {
+    if (operation.operation !== "memory.record") throw new Error("unexpected read");
+    ids.push(operation.input.record_id);
+    if (ids.length === 1) await firstHeld;
+    if (ids.length === 2) reportSecond();
+    return { operation: "memory.recorded", record_id: operation.input.record_id, stream_version: ids.length };
+  }, close: () => undefined };
+  const event = (id: string) => ({ type: "mesh.event" as const, sessionId: "task-queue",
+    eventId: id, projectId: "mesh-queue", taskId: "task-queue",
+    sourceSessionId: "native", eventType: "TASK_COMPLETED" as const,
+    createdAt: 10, payload: { summary: id } });
+  const options = { env: { GRANTTAP_ENGINE_ENABLED: "1" }, client };
+  queueProjectKnowledgeSync({ projectId: "mesh-queue", events: [event("first-queue")] }, options);
+  queueProjectKnowledgeSync({ projectId: "mesh-queue",
+    events: [event("first-queue"), event("second-queue")] }, options);
+  releaseFirst();
+  await Promise.race([secondSeen, new Promise((_, reject) =>
+    setTimeout(() => reject(new Error("queued Memory write was lost")), 500))]);
+  assert.deepEqual(ids, ["first-queue", "second-queue"]);
 });
 
 test("Project memory projection survives bridge restart and rejects changed record identity", () => {
