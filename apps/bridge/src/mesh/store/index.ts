@@ -31,6 +31,7 @@ import { loadExecutionPolicy } from "../runtime/execution-policy";
 import { loadEnvironment, redactEnvironment } from "../context/env";
 import { loadRestrictions } from "../restrictions";
 import { MeshStoreBase } from "./base";
+import { activeProjectKnowledge } from "../knowledge/active";
 import {
   projectCapabilityRequests,
 } from "../catalog/project/requests";
@@ -268,6 +269,12 @@ export class MeshStore extends MeshStoreBase {
     return this.state.events.filter((event) => event.projectId === projectId).slice(-128);
   }
 
+  /** Retained, structured evidence for a one-time Memory backfill. */
+  historyEventsForProject(projectId: string): MeshEventValue[] {
+    this.sync();
+    return this.state.events.filter((event) => event.projectId === projectId);
+  }
+
   projectIds(): string[] {
     this.sync();
     return this.state.projects.map((project) => project.projectId);
@@ -360,7 +367,7 @@ export class MeshStore extends MeshStoreBase {
       claims: this.activeClaims().filter((item) => item.projectId === projectId && taskIds.has(item.taskId)).slice(-128),
       dependencies: this.state.dependencies.filter((item) => taskIds.has(item.taskId)).slice(-128),
       events: this.eventsForProject(projectId).filter((event) => taskIds.has(event.taskId)),
-      knowledge: this.state.knowledge.filter((item) => item.projectId === projectId)
+      knowledge: activeProjectKnowledge(projectId, this.state.knowledge)
         .slice(-16).reverse(),
       generatedAt: this.now(),
     });

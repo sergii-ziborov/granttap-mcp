@@ -12,6 +12,7 @@ export type KnowledgeRecordInput = {
   visibility: KnowledgeVisibility;
   repository_id?: string | null;
   commit_sha?: string | null;
+  supersedes_record_id?: string | null;
   recorded_at: number;
 };
 
@@ -28,6 +29,7 @@ export type MemoryEngineOperation =
   | { operation: "memory.history"; input: {
     project_id: string; task_id?: string | null; visibility?: KnowledgeVisibility | null;
     before_version?: number | null; limit?: number | null;
+    include_superseded?: boolean;
   } };
 export type MemoryEngineResult =
   | { operation: "memory.recorded"; record_id: string; stream_version: number }
@@ -62,6 +64,7 @@ export function parseMemoryResult(result: Record<string, unknown>, invalid: () =
     if (entry.repository_id != null) bounded(entry.repository_id, 512, invalid);
     if (entry.commit_sha != null && (typeof entry.commit_sha !== "string"
       || !/^[0-9a-f]{7,64}$/i.test(entry.commit_sha))) invalid();
+    if (entry.supersedes_record_id != null) bounded(entry.supersedes_record_id, 128, invalid);
     integer(entry.recorded_at, invalid);
     integer(entry.stream_version, invalid);
   }

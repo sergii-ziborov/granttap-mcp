@@ -10,6 +10,7 @@ import { parseEngineResponse, type EngineOperation, type EngineResult } from "..
 import { projectScopedSnapshot } from "../../../apps/bridge/src/mesh/snapshot/window";
 import { cortexSnapshotEvidence } from "../../../apps/bridge/src/cortex/integration";
 import { MeshStore } from "../../../apps/bridge/src/mesh/store";
+import { activeProjectKnowledge } from "../../../apps/bridge/src/mesh/knowledge/active";
 import type { MeshSnapshot } from "../../../packages/protocol/schema";
 
 const record = (recordId: string, taskId: string, visibility: "task" | "project") => ({
@@ -163,6 +164,73 @@ test("Project memory projection survives bridge restart and rejects changed reco
     incoming.knowledge = [{ ...record("shared", "task-a", "project"), content: "tampered" }];
     assert.throws(() => restored.mergeSnapshot(incoming), /identity conflict/);
     assert.equal(restored.snapshot("mesh")?.knowledge?.[0]?.content, "shared decision");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("a corrected decision survives store restart and stale Mesh replay", () => {
+  const directory = mkdtempSync(join(tmpdir(), "granttap-memory-correction-"));
+  try {
+    const path = join(directory, "project-mesh.json");
+    const store = new MeshStore(path, () => 20);
+    store.upsertProject({ projectId: "mesh", name: "Mesh",
+      canonicalRepositoryId: "repo", createdAt: 1 });
+    const old = record("old", "task-a", "project");
+    store.cacheKnowledge("mesh", [old]);
+    const stale = store.snapshot("mesh")!;
+    const replacement = { ...record("new", "task-a", "project"),
+      content: "Reviewed decision", streamVersion: 2, recordedAt: 11,
+      supersedesRecordId: "old" };
+    store.cacheKnowledge("mesh", [replacement]);
+    const restored = new MeshStore(path, () => 21);
+    assert.deepEqual(restored.snapshot("mesh")?.knowledge?.map((item) => item.recordId), ["new"]);
+    restored.mergeSnapshot(stale);
+    assert.deepEqual(restored.snapshot("mesh")?.knowledge?.map((item) => item.recordId), ["new"]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("a correction from another Project or category cannot hide shared memory", () => {
+  const old = record("old", "task-a", "project");
+  const foreign = { ...record("foreign", "task-a", "project"),
+    projectId: "other", supersedesRecordId: "old" };
+  const wrongKind = { ...record("result", "task-a", "project"),
+    category: "result" as const, supersedesRecordId: "old" };
+  assert.deepEqual(activeProjectKnowledge("mesh", [old, foreign, wrongKind])
+    .map((item) => item.recordId), ["old", "result"]);
+});
+
+test("retained structured events older than the phone window enter Memory", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "granttap-memory-import-"));
+  try {
+    const store = new MeshStore(join(directory, "mesh.json"), () => 10);
+    store.upsertProject({ projectId: "mesh", name: "Mesh",
+      canonicalRepositoryId: "repo", createdAt: 1 });
+    for (let index = 0; index < 130; index += 1) {
+      assert.equal(store.acceptEvent({
+        type: "mesh.event", sessionId: "task-a", eventId: `import-${index}`,
+        projectId: "mesh", taskId: "task-a", sourceSessionId: "native",
+        eventType: "AGENT_ANSWER", createdAt: index + 1,
+        payload: { answer: `Recorded answer ${index}` },
+      }), true);
+    }
+    assert.equal(store.eventsForProject("mesh").length, 128);
+    const events = store.historyEventsForProject("mesh");
+    assert.equal(events.length, 130);
+    const calls: string[] = [];
+    const client = { request: async (input: EngineOperation): Promise<EngineResult> => {
+      if (input.operation !== "memory.record") throw new Error("unexpected read");
+      calls.push(input.input.record_id);
+      return { operation: "memory.recorded", record_id: input.input.record_id,
+        stream_version: calls.length };
+    }, close: () => undefined };
+    await syncProjectKnowledge({ projectId: "mesh", events }, {
+      env: { GRANTTAP_ENGINE_ENABLED: "1" }, client,
+    });
+    assert.equal(calls.length, 130);
+    assert.equal(calls[0], "import-0");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

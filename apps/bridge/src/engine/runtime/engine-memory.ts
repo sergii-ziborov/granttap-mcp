@@ -7,10 +7,10 @@ import { EngineClient } from "./engine-client";
 import { engineFeatureEnabled, type EngineClientLike } from "./engine-supervisor";
 
 type Options = { env?: NodeJS.ProcessEnv; client?: EngineClientLike };
+type KnowledgeSourceWindow = Pick<MeshSnapshot, "projectId" | "events">;
 let sharedClient: EngineClient | undefined;
 const synced = new Set<string>();
 const pendingSyncs = new Map<string, Promise<void>>();
-const nextIndex = new Map<string, number>();
 
 function client(options: Options): EngineClientLike {
   return options.client ?? (sharedClient ??= new EngineClient({
@@ -49,6 +49,7 @@ export async function projectKnowledge(
       sourceRef: entry.source_ref, visibility: entry.visibility,
       repositoryId: entry.repository_id ?? undefined,
       commitSha: entry.commit_sha ?? undefined,
+      supersedesRecordId: entry.supersedes_record_id ?? undefined,
       recordedAt: entry.recorded_at, streamVersion: entry.stream_version,
     }));
   } catch { return undefined; }
@@ -86,27 +87,27 @@ export function recordsFromEvent(event: MeshEvent): KnowledgeRecordInput[] {
   return [];
 }
 
-/** Backfill the bounded event window once per process, then append only new IDs. */
-export async function syncProjectKnowledge(snapshot: MeshSnapshot, options: Options = {}): Promise<void> {
+/** Backfill retained structured events; a failed Engine write stops this pass. */
+export async function syncProjectKnowledge(snapshot: KnowledgeSourceWindow, options: Options = {}): Promise<void> {
   if (!engineFeatureEnabled(options.env ?? process.env)) return;
   const candidates = snapshot.events.flatMap(recordsFromEvent)
-    .filter((entry) => !synced.has(`${entry.project_id}\0${entry.record_id}`));
+    .filter((entry) => entry.project_id === snapshot.projectId
+      && !synced.has(`${entry.project_id}\0${entry.record_id}`))
+    .slice(-512);
   if (candidates.length === 0) return;
-  const start = (nextIndex.get(snapshot.projectId) ?? 0) % candidates.length;
-  const count = Math.min(candidates.length, 16);
-  nextIndex.set(snapshot.projectId, start + count);
-  for (let offset = 0; offset < count; offset += 1) {
-    const entry = candidates[(start + offset) % candidates.length]!;
-    const key = `${entry.project_id}\0${entry.record_id}`;
-    if (await recordProjectKnowledge(entry, options)) {
-      synced.add(key);
-      if (synced.size > 4_096) synced.delete(synced.values().next().value!);
+  for (const [index, entry] of candidates.entries()) {
+    if (index > 0 && index % 16 === 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
     }
+    const key = `${entry.project_id}\0${entry.record_id}`;
+    if (!await recordProjectKnowledge(entry, options)) break;
+    synced.add(key);
+    if (synced.size > 4_096) synced.delete(synced.values().next().value!);
   }
 }
 
 /** Publish never waits for the memory backfill; one bounded writer runs per Project. */
-export function queueProjectKnowledgeSync(snapshot: MeshSnapshot): void {
+export function queueProjectKnowledgeSync(snapshot: KnowledgeSourceWindow): void {
   if (pendingSyncs.has(snapshot.projectId)) return;
   const pending = syncProjectKnowledge(snapshot);
   pendingSyncs.set(snapshot.projectId, pending);

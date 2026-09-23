@@ -38,6 +38,7 @@ import { handoffReadiness } from "../tasks/readiness";
 import { createHandoffFlow } from "./handoff";
 import type { MeshRuntimeDependencies } from "./dependencies";
 import { localMeshStore } from "../local-remote/local";
+import { activeProjectKnowledge } from "../knowledge/active";
 import { createHandoffWorktree, repositoryHasCommit } from "./worktree";
 import { fetchRevision, pushBranch } from "../local-remote/remote";
 import { projectSessionCapabilityInventory, projectExecutionCapabilitySessions } from "./capabilities";
@@ -249,7 +250,10 @@ export function requestProjectCapability(input: ProjectCapabilityRequestSet): bo
 export async function meshSnapshotsWithEngine(): Promise<MeshSnapshot[]> {
   return Promise.all(meshSnapshots().map(async (snapshot) => {
     await waitForProjectBindingSync(snapshot.projectId);
-    queueProjectKnowledgeSync(snapshot);
+    queueProjectKnowledgeSync({
+      projectId: snapshot.projectId,
+      events: localMeshStore().historyEventsForProject(snapshot.projectId),
+    });
     const [backbone, repositoryGraphs, knowledge] = await Promise.all([
       projectBackbone(snapshot.projectId),
       projectRepositoryGraphs(snapshot.projectId, snapshot.bindings ?? [], {
@@ -263,7 +267,8 @@ export async function meshSnapshotsWithEngine(): Promise<MeshSnapshot[]> {
     const memoryRows = new Map((snapshot.knowledge ?? []).map((item) => [item.recordId, item]));
     for (const item of sharedKnowledge ?? []) memoryRows.set(item.recordId, item);
     const enriched = { ...snapshot, backbone, repositoryGraphs,
-      knowledge: [...memoryRows.values()].sort((a, b) => b.recordedAt - a.recordedAt).slice(0, 16) };
+      knowledge: activeProjectKnowledge(snapshot.projectId, [...memoryRows.values()])
+        .sort((a, b) => b.recordedAt - a.recordedAt).slice(0, 16) };
     const cortex = await projectCortexIntegration(enriched);
     return {
       ...enriched,

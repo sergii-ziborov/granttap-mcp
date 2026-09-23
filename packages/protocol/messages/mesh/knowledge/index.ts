@@ -13,6 +13,7 @@ export const ProjectKnowledgeRecord = z.object({
   visibility: z.enum(["task", "project"]),
   repositoryId: z.string().trim().min(1).max(512).optional(),
   commitSha: z.string().regex(/^[a-f0-9]{7,64}$/i).optional(),
+  supersedesRecordId: Identifier.optional(),
   recordedAt: z.number().int().nonnegative(),
   streamVersion: z.number().int().nonnegative(),
 }).strict();

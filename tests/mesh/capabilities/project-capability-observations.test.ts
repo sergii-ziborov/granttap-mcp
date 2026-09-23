@@ -91,8 +91,15 @@ test("a pinned MCP request requires the exact reported configuration digest", ()
         metadataSource: "mcp", authStatus: "credential_missing" },
     ],
   });
-  assert.equal(selected[0]?.state, "configured");
-  assert.equal(selected[0]?.artifactDigest, digest);
+  assert.equal(selected[0]?.state, "version_conflict");
+  assert.equal(selected[0]?.artifactDigest, undefined);
+  const partlyKnown = projectCapabilityObservations({
+    ...input, mcpServers: [
+      { ...server, configDigest: digest },
+      { ...server, provider: "codex" },
+    ],
+  });
+  assert.equal(partlyKnown[0]?.state, "unsupported");
 });
 
 test("MCP result reports the observed native digest even when a pin differs", () => {

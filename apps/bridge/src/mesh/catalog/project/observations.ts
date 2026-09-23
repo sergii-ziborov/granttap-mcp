@@ -55,6 +55,13 @@ function mcpObservation(
   if (candidates.length === 0) return { state: "not_found" };
   const digests = new Set(candidates.map((server) => server.configDigest).filter(Boolean));
   const artifactDigest = digests.size === 1 ? [...digests][0] : undefined;
+  if (request.artifactDigest) {
+    if (candidates.some((server) => server.configDigest
+      && server.configDigest !== request.artifactDigest)) {
+      return { state: "version_conflict", artifactDigest };
+    }
+    if (candidates.some((server) => !server.configDigest)) return { state: "unsupported" };
+  }
   if (!request.artifactDigest) {
     if (digests.size > 1) return { state: "version_conflict" };
     if (digests.size === 1 && candidates.some((server) => !server.configDigest)) {
