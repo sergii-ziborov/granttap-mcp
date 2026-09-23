@@ -39,6 +39,31 @@ test("a mailbox scan that records presence flips the phone from offline to live"
   assert.equal(phoneReachability(phones), "live");
 });
 
+test("controller activity identifies the exact phone without marking its peer live", (t) => {
+  const root = isolate(t);
+  const { machineCfg } = createPairing("wss://relay.granttap.com");
+  const second = createPairing("wss://relay.granttap.com").phoneCfg.myPublicKey;
+  writeFileSync(join(root, "machine.json"), JSON.stringify({
+    ...machineCfg, extraPeerPublicKeys: [second],
+  }));
+  const now = Date.now();
+  recordPhoneSeen(now, second);
+  const phones = listPairedPhones(null, now);
+  assert.equal(phones.length, 2);
+  assert.equal(phones[0]?.status, "paired");
+  assert.equal(phones[1]?.status, "seen");
+  assert.equal(phoneReachability(phones), "live");
+  recordPhoneSeen(now, machineCfg.peerPublicKey);
+  assert.deepEqual(listPairedPhones(null, now).map((phone) => phone.status), ["seen", "seen"]);
+});
+
+test("corrupt pairing data is reported as unconfigured", (t) => {
+  const root = isolate(t);
+  writeFileSync(join(root, "machine.json"), "not-json");
+  assert.deepEqual(listPairedPhones(), []);
+  assert.equal(phoneReachability(), "unknown");
+});
+
 test("Mac / and iPhone /ws exchange hello on the same room", async (t) => {
   const relay = await forwardingRelay();
   t.after(() => relay.close());
