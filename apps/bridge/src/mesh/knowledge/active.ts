@@ -38,8 +38,9 @@ export function supersededScopedKnowledgeIds(
 ): string[] {
   return [...new Set(records.filter((item) => item.projectId === projectId
     && (item.visibility === "project" || item.visibility === "task" && item.taskId === taskId))
-    .flatMap((item) => item.supersedesRecordId ? [item.supersedesRecordId] : []))]
-    .sort().slice(-128);
+    .sort((left, right) => right.recordedAt - left.recordedAt)
+    .flatMap((item) => item.supersedesRecordId ? [item.supersedesRecordId] : [])
+    .slice(0, 128))].sort();
 }
 
 /** Keep unrelated event context, but remove decisions already recorded or corrected. */

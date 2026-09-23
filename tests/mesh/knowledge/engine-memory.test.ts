@@ -10,7 +10,9 @@ import { parseEngineResponse, type EngineOperation, type EngineResult } from "..
 import { projectScopedSnapshot } from "../../../apps/bridge/src/mesh/snapshot/window";
 import { cortexSnapshotEvidence } from "../../../apps/bridge/src/cortex/integration";
 import { MeshStore } from "../../../apps/bridge/src/mesh/store";
-import { activeProjectKnowledge } from "../../../apps/bridge/src/mesh/knowledge/active";
+import {
+  activeProjectKnowledge, supersededProjectKnowledgeIds,
+} from "../../../apps/bridge/src/mesh/knowledge/active";
 import type { MeshSnapshot } from "../../../packages/protocol/schema";
 
 const record = (recordId: string, taskId: string, visibility: "task" | "project") => ({
@@ -204,6 +206,17 @@ test("a correction from another Project or category cannot hide shared memory", 
     category: "result" as const, supersedesRecordId: "old" };
   assert.deepEqual(activeProjectKnowledge("mesh", [old, foreign, wrongKind])
     .map((item) => item.recordId), ["old", "result"]);
+});
+
+test("bounded correction tombstones retain the newest decisions", () => {
+  const corrections = Array.from({ length: 129 }, (_, index) => ({
+    ...record(`new-${index}`, "task-a", "project"), recordedAt: index + 1,
+    supersedesRecordId: `old-${String(129 - index).padStart(3, "0")}`,
+  }));
+  const ids = supersededProjectKnowledgeIds("mesh", corrections);
+  assert.equal(ids.length, 128);
+  assert.equal(ids.includes("old-001"), true);
+  assert.equal(ids.includes("old-129"), false);
 });
 
 test("corrected capsule decisions never return as Cortex event evidence", () => {
