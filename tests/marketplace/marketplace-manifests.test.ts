@@ -40,12 +40,14 @@ test("Cursor plugin is stdio so Cloud does not fetch loopback", () => {
     mcpServers: { granttap: { type?: string; url?: string } };
   };
   assert.equal(plugin.name, "granttap");
-  assert.equal(plugin.version, "0.1.11");
+  assert.equal(plugin.version, "0.1.12");
   assert.equal(plugin.logo, "assets/logo.svg");
   assert.equal(hosts.mcpServers.granttap.url, "http://127.0.0.1:17342/mcp");
   assert.equal(mcp.mcpServers.granttap.command, "node");
   assert.equal(mcp.mcpServers.granttap.args?.[0], "-e");
   const bootstrap = mcp.mcpServers.granttap.args?.[1] ?? "";
+  assert.equal(bootstrap, readFileSync(join(repositoryRoot, "cursor-plugin/stdio-bootstrap.cjs"), "utf8")
+    .replace(/^#![^\n]*\n/, ""));
   const runtime = bootstrap.match(/granttap-mcp@\d+\.\d+\.\d+/)?.[0];
   assert.ok(runtime, "Cursor pins an exact published runtime");
   for (const file of ["cursor-plugin/stdio-bootstrap.cjs", "cursor-plugin/README.md"]) {

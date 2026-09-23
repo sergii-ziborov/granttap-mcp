@@ -42,7 +42,7 @@ test("Cursor plugin bootstrap is valid JavaScript and pins a published runtime",
   const checked = spawnSync(process.execPath, ["--check", path], { encoding: "utf8" });
   assert.equal(checked.status, 0, checked.stderr);
   const source = readFileSync(path, "utf8");
-  assert.match(source, /granttap-mcp@0\.8\.18/);
+  assert.match(source, /granttap-mcp@0\.8\.19/);
   assert.doesNotMatch(source, /cmd\.exe|ComSpec|npx\.cmd/);
 });
 
@@ -93,6 +93,6 @@ test("Windows Cursor bootstrap invokes npm's JavaScript entry without cmd quotin
     assert.equal(result.status, 0, result.stderr);
     const plan = JSON.parse(result.stdout) as { command: string; args: string[] };
     assert.equal(plan.command, process.execPath);
-    assert.deepEqual(plan.args, [join(npmBin, "npx-cli.js"), "-y", "granttap-mcp@0.8.18"]);
+    assert.deepEqual(plan.args, [join(npmBin, "npx-cli.js"), "-y", "granttap-mcp@0.8.19"]);
   }
 });
