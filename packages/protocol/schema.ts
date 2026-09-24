@@ -31,6 +31,8 @@ import {
 } from "./messages/mesh";
 import { MachineLoad } from "./messages/machine";
 import { PairingJoin } from "./messages/pairing-join";
+import { ControllerPairOffer, ControllerPairRequest } from "./messages/device/controller-pairing";
+import { KnowledgeWrite, KnowledgeWriteResult } from "./messages/mesh/knowledge/write";
 import { MeshInvocationPage, MeshInvocationQuery } from "./messages/mesh/invocations";
 import {
   ProjectPolicyAck,
@@ -63,6 +65,8 @@ export * from "./messages/capabilities";
 export * from "./messages/interaction";
 export * from "./messages/machine";
 export * from "./messages/pairing-join";
+export * from "./messages/device/controller-pairing";
+export * from "./messages/mesh/knowledge/write";
 export * from "./messages/mesh";
 export * from "./messages/mesh/invocations";
 export * from "./messages/primitives";
@@ -147,6 +151,10 @@ export const Payload = z.union([
   MachineHeartbeat,
   MachineLoad,
   PairingJoin,
+  ControllerPairRequest,
+  ControllerPairOffer,
+  KnowledgeWrite,
+  KnowledgeWriteResult,
 ]).superRefine((payload, ctx) => {
   if (payload.type !== "user.message") return;
   const encodedCharacters = payload.attachments?.reduce(

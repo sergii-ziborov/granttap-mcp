@@ -273,7 +273,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
     if (payload.type === "hello" && payload.role === "phone") {
       confirmPendingController(client.room, peerPublicKey);
     }
-    return handleMonitorMessage(client, payload, { leadership, subscriptions, publish });
+    return handleMonitorMessage(client, payload, { leadership, subscriptions, publish, peerPublicKey });
   });
 
   const stopCatalog = startPublishLoop({

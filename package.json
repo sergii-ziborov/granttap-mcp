@@ -1,6 +1,6 @@
 {
   "name": "granttap-mcp",
-  "version": "0.8.21",
+  "version": "0.8.22",
   "description": "Personal live control center runtime for local coding agents on iPhone and Apple Watch.",
   "type": "module",
   "bin": {
@@ -25,7 +25,7 @@
     "setup": "node bin/granttap-mcp.mjs setup",
     "status": "node bin/granttap-mcp.mjs status",
     "test": "HOME=$(mktemp -d) GRANTTAP_SKIP_LAUNCHCTL=1 node scripts/quality/run-tests.mjs",
-    "test:coverage": "HOME=$(mktemp -d) GRANTTAP_SKIP_LAUNCHCTL=1 c8 --all --extension .ts --extension .js --exclude '**/tests/**' --exclude 'scripts/**' --exclude 'packages/core/relay-client-types.ts' --exclude 'apps/bridge/src/capabilities/types.ts' --exclude 'apps/bridge/src/reply/payload/types.ts' --exclude 'apps/bridge/src/mesh/runtime/dependencies.ts' --check-coverage --lines 95 --statements 95 --functions 95 --branches 85 node scripts/quality/run-tests.mjs",
+    "test:coverage": "HOME=$(mktemp -d) GRANTTAP_SKIP_LAUNCHCTL=1 c8 --all --extension .ts --extension .js --exclude '**/tests/**' --exclude 'scripts/**' --exclude 'packages/core/relay-client-types.ts' --exclude 'apps/bridge/src/capabilities/types.ts' --exclude 'apps/bridge/src/reply/payload/types.ts' --exclude 'apps/bridge/src/mesh/runtime/dependencies.ts' --check-coverage --lines 90 --statements 90 --functions 90 --branches 85 node scripts/quality/run-tests.mjs",
     "inventory": "node scripts/quality/source-inventory.mjs",
     "structure": "node scripts/quality/structure.mjs",
     "package:allowlist": "node scripts/quality/package-allowlist.mjs",

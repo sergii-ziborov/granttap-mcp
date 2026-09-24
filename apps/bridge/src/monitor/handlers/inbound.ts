@@ -34,6 +34,7 @@ import { handleUserMessage } from "./user-message";
 import { publishSessionEvents } from "./catalog";
 import { publishHistoryPage } from "../history/pages";
 import { requestProjectGraphRefresh } from "../graph-refresh";
+import { handleControllerPairRequest, handleInboundKnowledgeWrite } from "../controller-knowledge";
 
 export async function handleMonitorMessage(
   client: RelayClient,
@@ -42,6 +43,7 @@ export async function handleMonitorMessage(
     leadership: { acquire: () => boolean };
     subscriptions: Set<string>;
     publish: (forceHistory?: boolean) => Promise<void>;
+    peerPublicKey?: string;
   },
 ): Promise<boolean> {
   const { leadership, subscriptions, publish } = input;
@@ -52,6 +54,12 @@ export async function handleMonitorMessage(
     // Codex may start one MCP server per open task. Exactly one instance owns
     // phone routing, so a single phone message can never create duplicate tasks.
     if (!leadership.acquire()) return false;
+    if (payload.type === "controller.pair.request") {
+      return handleControllerPairRequest(client, payload, input.peerPublicKey);
+    }
+    if (payload.type === "knowledge.write") {
+      return handleInboundKnowledgeWrite(client, payload, input.peerPublicKey, publish);
+    }
     if (payload.type === "user.message") {
       return handleInboundUserMessage(client, payload, publish);
     } else if (payload.type === "user.attachment") {
@@ -121,15 +129,21 @@ export async function handleMonitorMessage(
       if (prepared) void publish().catch(() => {});
       return prepared;
     } else if (payload.type === "mesh.claim.release" && loadRuntimeConfig().meshEnabled) {
-      // The person's own authority, not an owner's event: written down, then
-      // applied, and answered either way, so a refusal is seen where it was asked.
-      const outcome = releaseClaimByPerson(localMeshStore(), payload);
-      await sendProjectPayload(client, releaseResult(payload, outcome), "phone", { ttlMs: 15 * 60_000 })
-        .catch(() => {});
-      if (outcome.released) void publish().catch(() => {});
-      return true;
+      return handleInboundClaimRelease(client, payload, publish);
     }
     return false;
+}
+
+async function handleInboundClaimRelease(
+  client: RelayClient, payload: Extract<Payload, { type: "mesh.claim.release" }>,
+  publish: (forceHistory?: boolean) => Promise<void>,
+): Promise<boolean> {
+  // The person's authority is recorded and answered even when release fails.
+  const outcome = releaseClaimByPerson(localMeshStore(), payload);
+  await sendProjectPayload(client, releaseResult(payload, outcome), "phone", { ttlMs: 15 * 60_000 })
+    .catch(() => {});
+  if (outcome.released) void publish().catch(() => {});
+  return true;
 }
 
 function handleInboundRefresh(

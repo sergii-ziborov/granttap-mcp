@@ -20,6 +20,12 @@ sealed with the same independent Project key as Mesh snapshots. Coverage keeps
 `enforced`, `observed`, `unsupported`, and `unknown` distinct so clients never
 claim a provider can block an action when it cannot.
 
+`device/controller-pairing.ts` lets an authenticated controller ask its linked
+computer for another one-time controller credential. The reply is sealed only
+to the requester. It is device-network pairing, not Project membership.
+`mesh/knowledge/write.ts` carries a Task-bound human decision or correction and a
+separate Engine-confirmed result.
+
 Tests are discoverable in `tests/core.test.ts` and the feature-level bridge and MCP suites.
 
 License: this module is distributed under the MIT License in the repository-root `LICENSE` file.

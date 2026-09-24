@@ -238,6 +238,27 @@ export class RelayClient {
     }
   }
 
+  /** Add a newly issued controller without waiting for the monitor to restart. */
+  addControllerPeer(peerPublicKey: string): void {
+    if (this.cfg.role !== "machine" || !this.peerIsAllowed(peerPublicKey)) {
+      throw new Error("controller peer is not authorized");
+    }
+    const peers = this.cfg.extraPeerPublicKeys ?? [];
+    if (peerPublicKey !== this.cfg.peerPublicKey && !peers.includes(peerPublicKey)) {
+      if (peers.length >= 16) throw new Error("controller device limit reached");
+      this.cfg.extraPeerPublicKeys = [...peers, peerPublicKey];
+    }
+  }
+
+  /** Keep a controller invitation visible only to the requesting phone key. */
+  async sendToPeer(payload: Payload, peerPublicKey: string, options: SendOptions = {}): Promise<void> {
+    const ws = this.ws;
+    if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error("relay not connected");
+    if (!peerPublicKeys(this.cfg.peerPublicKey, this.cfg.extraPeerPublicKeys).includes(peerPublicKey)
+      || !this.peerIsAllowed(peerPublicKey)) throw new Error("controller peer is not authorized");
+    ws.send(sealEnvelope({ ...this.cfg, peerPublicKey }, payload, this.otherRole(), options));
+  }
+
   setSessionKey(sessionId: string, key: string): void {
     this.sessionKeys.set(sessionId, key);
   }

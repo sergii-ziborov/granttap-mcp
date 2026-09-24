@@ -80,12 +80,34 @@ separate from their path identity. Missing content evidence remains unknown.
 
 <p align="center">
   <img src="docs/images/iphone-projects-shared.png" width="200" alt="Projects: one owned by this phone, one shared by another">
+  <img src="docs/images/iphone-linked-projects.png" width="200" alt="Two linked Projects with separate access scopes">
   <img src="docs/images/iphone-project-mesh.png" width="200" alt="A Project: Governance, members and computers, Mesh status, repositories, Tasks">
   <img src="docs/images/iphone-task-route.png" width="200" alt="A Task: executions, Runtime history, and resource claims">
   <img src="docs/images/iphone-handoff.png" width="200" alt="Task handoff: destination, push, and readiness checks">
 </p>
 
-<p align="center"><em>Projects, one of them shared by another phone · a Project with its Governance, members, computers, repositories, and Tasks · a Task with executions, Runtime history, and claims · a handoff with its readiness checks</em></p>
+<p align="center"><em>Shared Projects · linked repository bindings with separate Project access · Project management · Task execution history · handoff readiness</em></p>
+
+<p align="center">
+  <img src="docs/images/iphone-weavatrix-graph.png" width="200" alt="Full-screen architecture graph with sample evidence">
+  <img src="docs/images/iphone-health-code-towers.png" width="200" alt="Full-screen Health code towers with sample evidence">
+</p>
+
+<p align="center"><em>These are deterministic simulator fixtures, not reports from a live customer repository.</em></p>
+
+An authenticated controller can request a separate, one-time device credential
+for another iPhone or iPad from each Live linked computer. The phone packages
+the resulting links in an encrypted, single-use QR. This adds the new phone to
+the same device network; it does not grant Project membership. Explicit human
+decisions for a bound Project Task can be recorded through Engine Memory, and
+a same-scope correction supersedes an earlier decision while retaining history.
+The computer returns `recorded` only after the Engine confirms storage.
+
+The capability catalog distinguishes local observations from installed and
+initialized state. It does not yet transfer and apply complete MCP or skill
+bundles to every host. Usage figures do not enforce spending caps. Project
+Environment secrets injected into an agent process remain readable by that
+process; a use-only credential broker is not part of this runtime yet.
 
 For Claude Code, Codex, and Cursor, the provider hook runs inside the agent's
 own session and sees the exact call. GrantTap attributes every `notify` to the

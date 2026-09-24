@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -22,6 +22,7 @@ import {
   environmentSummary,
   envFileExists,
   loadEnvironment,
+  repoEnvPath,
   redactEnvironment,
   rememberEnvironment,
   writeRepoEnv,
@@ -293,4 +294,23 @@ test("non-secret env can be shared with the repository and summarized", () => {
   assert.equal(environmentSummary(undefined), "No variables");
   rememberEnvironment("proj", undefined);
   assert.equal(loadEnvironment("proj"), undefined);
+});
+
+test("turning off repository sharing removes only GrantTap's managed export", () => {
+  isolate();
+  const root = mkdtempSync(join(tmpdir(), "granttap-env-revoke-"));
+  const shared = { projectId: "proj", revision: 1,
+    shareNonSecretsWithRepo: true,
+    variables: [{ key: "PUBLIC_URL", value: "https://example.test", secret: false }] };
+  rememberEnvironment("proj", shared, root);
+  assert.equal(envFileExists(root), true);
+  rememberEnvironment("proj", { ...shared, revision: 2,
+    shareNonSecretsWithRepo: false }, root);
+  assert.equal(envFileExists(root), false);
+  const path = repoEnvPath(root);
+  writeFileSync(path, "# Someone else's file\nVALUE=kept\n");
+  assert.throws(() => rememberEnvironment("proj", { ...shared, revision: 3,
+    shareNonSecretsWithRepo: false }, root), /not managed/);
+  assert.equal(readFileSync(path, "utf8"), "# Someone else's file\nVALUE=kept\n");
+  assert.equal(loadEnvironment("proj")?.revision, 2);
 });

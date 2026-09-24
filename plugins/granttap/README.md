@@ -13,7 +13,7 @@ iPhone and Apple Watch.
 Install the durable local GrantTap helper on each Mac or Windows computer you connect:
 
 ```bash
-npm install --global https://github.com/sergii-ziborov/granttap-mcp/archive/81bfd51bd12b4667ed062f2e72f794a8daa47ec3.tar.gz
+npm install --global granttap-mcp@0.8.22
 granttap setup
 ```
 
@@ -34,6 +34,11 @@ The website does not receive the pairing keys or task content. Provider sign-in 
 separate. Do not ask the agent to print a pairing QR in chat. A Git marketplace plugin does not acquire the native Connect modal
 of a registered remote OpenAI app merely by installing it.
 
+After one iPhone is linked, its GrantTap Settings can show an expiring QR to
+add another iPhone or iPad as a controller of the same Live computers. That
+device pairing is separate from inviting a person into Project Mesh. Offline
+computers are listed as omitted and need a fresh QR when they reconnect.
+
 In Codex, click **Try now** on the GrantTap plugin page and choose **Connect
 GrantTap to this computer**. After authorization, the `connection_status` tool
 opens GrantTap's connection panel in the conversation. It shows connection
@@ -45,7 +50,7 @@ status, and confirmed Reconnect controls.
 Install the same local helper first, then install the plugin:
 
 ```bash
-npm install --global https://github.com/sergii-ziborov/granttap-mcp/archive/81bfd51bd12b4667ed062f2e72f794a8daa47ec3.tar.gz
+npm install --global granttap-mcp@0.8.22
 granttap setup
 claude plugin marketplace add sergii-ziborov/granttap-mcp
 claude plugin install granttap@granttap
@@ -66,7 +71,7 @@ Cloud Agents start that process. They cannot fetch `http://127.0.0.1`.
 ### Grok Build
 
 ```bash
-npm install --global https://github.com/sergii-ziborov/granttap-mcp/archive/81bfd51bd12b4667ed062f2e72f794a8daa47ec3.tar.gz
+npm install --global granttap-mcp@0.8.22
 granttap setup
 grok plugin marketplace add sergii-ziborov/granttap-mcp
 grok plugin install granttap --trust

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { ProjectEnvironment, ProjectEnvVar } from "../../../../../packages/protocol/schema";
 import { ProjectEnvironment as EnvironmentSchema } from "../../../../../packages/protocol/schema";
@@ -10,6 +10,7 @@ type StoreFile = { environments: ProjectEnvironment[] };
 const PROTECTED_KEYS = new Set([
   "HOME", "PATH", "SHELL", "USER", "LOGNAME", "TMPDIR", "NODE_OPTIONS",
 ]);
+const MANAGED_HEADER = "# GrantTap Project environment. Secrets stay on the Mesh, not here.";
 
 function protectedRuntimeKey(key: string): boolean {
   return PROTECTED_KEYS.has(key)
@@ -76,6 +77,7 @@ export function rememberEnvironment(
 ): ProjectEnvironment | undefined {
   const others = loadAll().filter((item) => item.projectId !== projectId);
   if (!environment) {
+    if (repositoryRoot) removeManagedRepoEnv(repositoryRoot);
     saveAll(others);
     return undefined;
   }
@@ -83,6 +85,8 @@ export function rememberEnvironment(
   const stored = mergeEnvironment({ ...environment, projectId }, loadEnvironment(projectId));
   if (stored.shareNonSecretsWithRepo && repositoryRoot) {
     writeRepoEnv(repositoryRoot, stored.variables);
+  } else if (repositoryRoot) {
+    removeManagedRepoEnv(repositoryRoot);
   }
   saveAll([...others, stored]);
   return stored;
@@ -120,11 +124,37 @@ export function writeRepoEnv(root: string, variables: ProjectEnvVar[]): void {
     .map((item) => `${item.key}=${escapeEnv(item.value ?? "")}`);
   const path = repoEnvPath(root);
   mkdirSync(dirname(path), { recursive: true });
+  if (!lstatSync(dirname(path)).isDirectory()) throw new Error("repository export directory is unsafe");
+  const stat = lstatSync(path, { throwIfNoEntry: false });
+  if (stat) {
+    if (!stat.isFile() || !readFileSync(path, "utf8").startsWith(`${MANAGED_HEADER}\n`)) {
+      throw new Error("repository environment file is not managed by GrantTap");
+    }
+  }
   writeFileSync(
     path,
-    `${["# GrantTap Project environment. Secrets stay on the Mesh, not here.", ...lines].join("\n")}\n`,
+    `${[MANAGED_HEADER, ...lines].join("\n")}\n`,
     { mode: 0o644 },
   );
+}
+
+/** Revoking a share removes a managed export and reports unsafe leftovers. */
+export function removeManagedRepoEnv(root: string): boolean {
+  const path = repoEnvPath(root);
+  try {
+    if (!lstatSync(dirname(path)).isDirectory()) {
+      throw new Error("repository environment directory is unsafe");
+    }
+    if (!lstatSync(path).isFile()
+      || !readFileSync(path, "utf8").startsWith(`${MANAGED_HEADER}\n`)) {
+      throw new Error("repository environment file is not managed by GrantTap");
+    }
+    unlinkSync(path);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  }
 }
 
 function escapeEnv(value: string): string {
