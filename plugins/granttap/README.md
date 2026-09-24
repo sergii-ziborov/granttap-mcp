@@ -13,7 +13,7 @@ iPhone and Apple Watch.
 Install the durable local GrantTap helper on each Mac or Windows computer you connect:
 
 ```bash
-npm install --global granttap-mcp@0.8.22
+npm install --global granttap-mcp@0.8.23
 granttap setup
 ```
 
@@ -24,24 +24,32 @@ codex plugin marketplace add sergii-ziborov/granttap-mcp
 codex plugin add granttap@granttap
 ```
 
-Run `codex mcp login granttap` or use Codex's MCP authorization control.
-The browser opens `granttap.com/connect`. That page talks only to the
-website; it does not fetch loopback. If this computer is not yet paired,
-scan the QR in the GrantTap app. A scan of a new device is the Approve.
-If it is already paired, the same page still opens so you can Approve this
-coding app, Reconnect, or Add another — it does not skip to the callback.
-The website does not receive the pairing keys or task content. Provider sign-in remains
-separate. Do not ask the agent to print a pairing QR in chat. A Git marketplace plugin does not acquire the native Connect modal
-of a registered remote OpenAI app merely by installing it.
+Codex **Connected accounts** lists external app accounts, not GrantTap phones.
+GrantTap has no separate account sign-in. On the plugin page, click **Try now →
+Connect GrantTap to this computer** to open its connection card in a conversation.
+On a new computer, the card shows **Add a device** and a one-time QR. In the
+GrantTap iPhone app, open **Settings → Connections → Add a device (Scan QR)**
+and scan it. For another iPhone or iPad, choose **Add another device** in the
+card; for the same phone after reinstall, choose **Reconnect**. A saved
+computer pairing does not automatically put a phone in Codex's account list.
+If a coding app cannot operate the card, run `granttap phone add` in your own
+interactive terminal, or `granttap phone reconnect` for the same phone. These
+commands refuse to print a private QR into redirected output or agent logs.
+
+`codex mcp login granttap` authorizes Codex as an MCP client. Its browser page
+at `granttap.com/connect` shows the approval request and phone observations;
+the connection card shows the pairing QR. The website does not receive pairing
+keys or task content. Provider sign-in remains separate. Never paste a pairing
+token or QR into chat. A Git marketplace plugin does not acquire the native
+Connect modal of a registered remote OpenAI app merely by installing it.
 
 After one iPhone is linked, its GrantTap Settings can show an expiring QR to
 add another iPhone or iPad as a controller of the same Live computers. That
 device pairing is separate from inviting a person into Project Mesh. Offline
 computers are listed as omitted and need a fresh QR when they reconnect.
 
-In Codex, click **Try now** on the GrantTap plugin page and choose **Connect
-GrantTap to this computer**. After authorization, the `connection_status` tool
-opens GrantTap's connection panel in the conversation. It shows connection
+The `connection_status` tool opens GrantTap's connection panel in the
+conversation. It shows connection
 status, relay and phone observations, provider readiness, Connect, Refresh
 status, and confirmed Reconnect controls.
 
@@ -50,7 +58,7 @@ status, and confirmed Reconnect controls.
 Install the same local helper first, then install the plugin:
 
 ```bash
-npm install --global granttap-mcp@0.8.22
+npm install --global granttap-mcp@0.8.23
 granttap setup
 claude plugin marketplace add sergii-ziborov/granttap-mcp
 claude plugin install granttap@granttap
@@ -71,7 +79,7 @@ Cloud Agents start that process. They cannot fetch `http://127.0.0.1`.
 ### Grok Build
 
 ```bash
-npm install --global granttap-mcp@0.8.22
+npm install --global granttap-mcp@0.8.23
 granttap setup
 grok plugin marketplace add sergii-ziborov/granttap-mcp
 grok plugin install granttap --trust

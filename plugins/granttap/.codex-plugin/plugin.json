@@ -1,6 +1,6 @@
 {
   "name": "granttap",
-  "version": "0.1.12+codex.20260924003229",
+  "version": "0.1.12+codex.20260924050621",
   "description": "Pair local coding agents with GrantTap and approve, answer, or steer their work from iPhone and Apple Watch.",
   "author": {
     "name": "GrantTap",
@@ -22,7 +22,7 @@
   "interface": {
     "displayName": "GrantTap",
     "shortDescription": "Connect GrantTap to your phone",
-    "longDescription": "Try now / Connect GrantTap: the agent connects this computer. You do not pair in chat. Authenticate opens granttap.com/connect. Device list, Approve, Add another device, and Reconnect stay on that page, in GrantTap plugin settings, and in the GrantTap app. The same pairing room is shared. Provider sign-in is separate.",
+    "longDescription": "Try now / Connect GrantTap opens the connection card. It shows linked phones and a one-time QR under Add a device, Add another device, or Reconnect. Scan that QR in GrantTap on iPhone or iPad. Codex Connected accounts is for external apps; no GrantTap account is required. Authenticate opens granttap.com/connect for coding-app approval, not the QR. Pairing stays out of chat.",
     "developerName": "GrantTap",
     "category": "Developer Tools",
     "capabilities": [

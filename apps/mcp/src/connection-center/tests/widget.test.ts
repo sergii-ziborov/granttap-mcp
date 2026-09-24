@@ -30,7 +30,7 @@ async function fixture(t: { after: (fn: () => void) => void }, silent = false) {
     if (data.id === undefined) { notifications.push(data.method); return; }
     if (silent) return;
     let result;
-    if (data.method === "ui/initialize") result = { protocolVersion: "2026-01-26" };
+    if (data.method === "ui/initialize") result = { protocolVersion: "2026-01-26", hostCapabilities: { serverTools: {} } };
     else { calls.push(data.params); result = { structuredContent: state, _meta: { granttap: meta } }; }
     queueMicrotask(() => window.dispatchEvent(new window.MessageEvent("message", {
       source: window as unknown as Window, origin: "https://host.example", data: failure ? { jsonrpc: "2.0", id: data.id, error: { message: "failed" } } : { jsonrpc: "2.0", id: data.id, result },
@@ -153,6 +153,33 @@ test("legacy hosts can use the same controls; clipboard failures give QR fallbac
   await ui.settle();
   assert.equal(copied, "granttap://pair-v2?fixture");
   assert.match(ui.el("message").textContent || "", /Pairing link copied/);
+});
+
+test("compatibility tool calls remain usable when the host also initializes MCP Apps", async (t) => {
+  const dom = new JSDOM(asset("widget.html"), { runScripts: "outside-only", url: "https://widget.example" });
+  t.after(() => dom.window.close());
+  const called: string[] = [];
+  Object.defineProperty(dom.window, "openai", { value: { callTool: async (name: string) => {
+    called.push(name);
+    return { structuredContent: { status: "paired", providers: [] } };
+  } } });
+  dom.window.postMessage = ((data: { id?: number; method: string }) => {
+    if (data.method !== "ui/initialize") return;
+    queueMicrotask(() => dom.window.dispatchEvent(new dom.window.MessageEvent("message", {
+      source: dom.window as unknown as Window,
+      origin: "https://host.example",
+      data: { jsonrpc: "2.0", id: data.id, result: { protocolVersion: "2026-01-26", hostCapabilities: { serverTools: {} } } },
+    })));
+  }) as typeof dom.window.postMessage;
+  for (const name of ["bridge.js", "view.js"]) {
+    new Script(asset(name), { filename: fileURLToPath(new URL(`../${name}`, import.meta.url)) })
+      .runInContext(dom.getInternalVMContext());
+  }
+  await new Promise<void>(resolve => setImmediate(resolve));
+  assert.deepEqual(called, ["connection_status"]);
+  (dom.window.document.getElementById("refresh") as HTMLElement).click();
+  await new Promise<void>(resolve => setImmediate(resolve));
+  assert.deepEqual(called, ["connection_status", "connection_status"]);
 });
 
 

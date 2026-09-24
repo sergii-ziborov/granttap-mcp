@@ -28,7 +28,8 @@ async function connect(relayUrl: string): Promise<void> {
       "Background helper   Run granttap setup to verify",
       "",
       "Existing pairing reused. No QR or key rotation was needed.",
-      "Use granttap reset before pairing this computer again.",
+      "To link another iPhone or iPad, open the GrantTap connection card in your coding app and choose Add another device.",
+      "To repair the same phone, choose Reconnect in that card. Do not reset the computer pairing for either action.",
       "",
     ].join("\n"));
     return;

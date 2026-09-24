@@ -10,7 +10,7 @@ keeps each phone response tied to the exact originating chat and prompt.
 Install the supported CLI on this computer, then run:
 
 ```bash
-npm install -g granttap-mcp@0.8.22
+npm install -g granttap-mcp@0.8.23
 granttap setup
 granttap status
 ```
@@ -22,9 +22,12 @@ The commands have separate jobs:
 2. `granttap setup` also installs the background task-sync helper.
 3. `granttap status` performs a read-only readiness check.
 
-After `granttap setup`, pair on `granttap.com/connect` — Approve this coding
-app, Reconnect, or Add another. A saved pairing still opens that page. Scan
-in the GrantTap app only when a new device joins. Cloud **Error · fetch
+After `granttap setup`, open the GrantTap connection card in Cursor for **Add a
+device**, **Add another device**, or **Reconnect**. Scan its QR in the phone
+app. If Cursor does not render or operate the card, run `granttap phone add`
+in your own interactive terminal; it never prints the QR to an agent log.
+`granttap.com/connect` approves the coding app and shows phone observations.
+Cloud **Error · fetch
 failed** is a leftover HTTP MCP at `http://127.0.0.1:17342/mcp` — either a
 user Customize → MCPs row or an old plugin `mcp.json`. The current plugin is
 stdio (`node -e`) so Cloud never fetches loopback.

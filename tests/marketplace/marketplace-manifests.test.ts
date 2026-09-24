@@ -40,7 +40,7 @@ test("Cursor plugin is stdio so Cloud does not fetch loopback", () => {
     mcpServers: { granttap: { type?: string; url?: string } };
   };
   assert.equal(plugin.name, "granttap");
-  assert.equal(plugin.version, "0.1.15");
+  assert.equal(plugin.version, "0.1.16");
   assert.equal(plugin.logo, "assets/logo.svg");
   assert.equal(hosts.mcpServers.granttap.url, "http://127.0.0.1:17342/mcp");
   assert.equal(mcp.mcpServers.granttap.command, "node");
@@ -73,7 +73,7 @@ test("Cursor publishes one GrantTap listing, never a second marketplace plugin",
   assert.equal(existsSync(join(repositoryRoot, ".cursor-plugin/plugin.json")), false);
 });
 
-test("chat connect is the agent; humans manage devices in plugin settings", () => {
+test("each host directs the person to the actual connection card", () => {
   const cursorSkill = readFileSync(join(repositoryRoot, "cursor-plugin/skills/connect/SKILL.md"), "utf8");
   const cursorCommand = readFileSync(join(repositoryRoot, "cursor-plugin/commands/connect.md"), "utf8");
   const hostSkill = readFileSync(join(repositoryRoot, "plugins/granttap/skills/granttap-connect/SKILL.md"), "utf8");
@@ -81,11 +81,11 @@ test("chat connect is the agent; humans manage devices in plugin settings", () =
   const face = (codex.interface ?? {}) as { longDescription?: string; websiteURL?: string };
   for (const text of [cursorSkill, cursorCommand, hostSkill]) {
     assert.match(text, /Call `connection_status`/);
-    assert.match(text, /plugin\s+settings/);
+    assert.match(text, /connection card/);
     assert.match(text, /granttap\.com\/connect/);
     assert.doesNotMatch(text, /Show the returned QR image directly in the conversation/);
   }
-  assert.match(face.longDescription ?? "", /plugin settings/);
+  assert.match(face.longDescription ?? "", /connection card/);
   assert.match(face.longDescription ?? "", /granttap\.com\/connect/);
   assert.equal(face.websiteURL, "https://granttap.com/connect");
 });

@@ -16,6 +16,8 @@ const usage = [
   "  granttap setup                    Detect agents and install or repair GrantTap",
   "  granttap status [--json]          Show pairing, helper, and provider readiness",
   "  granttap connect [--relay <url>]  Pair this computer with iPhone/Apple Watch",
+  "  granttap phone add              Show a QR for another controller phone",
+  "  granttap phone reconnect        Show a QR to restore the same phone",
   "  granttap reset [--yes]            Reset this computer's phone pairing",
   "  granttap mesh connect <invite>    Redeem a one-time Grok Bot Mesh invite",
   "  granttap restrictions check [dir] Check files against Mesh / .granttap restrictions",
@@ -36,6 +38,8 @@ if (command === "mcp") {
   entry = join(root, "apps", "bridge", "src", "bin", "cli", "setup.ts");
 } else if (command === "connect") {
   entry = join(root, "apps", "bridge", "src", "bin", "cli", "connect.ts");
+} else if (command === "phone" && ["add", "reconnect"].includes(argument)) {
+  entry = join(root, "apps", "bridge", "src", "bin", "cli", "phone.ts");
 } else if (command === "status") {
   entry = join(root, "apps", "mcp", "src", "bin", "status.ts");
 } else if (command === "reset") {
@@ -100,8 +104,8 @@ if (!preflight || !loader) {
   process.exit(1);
 }
 
-const forwardedArgs = ["connect", "status", "reset", "mesh", "setup", "restrictions"].includes(command)
-  ? (command === "mesh" || command === "restrictions" ? commandArgs.slice(1) : commandArgs)
+const forwardedArgs = ["connect", "status", "reset", "mesh", "setup", "restrictions", "phone"].includes(command)
+  ? (command === "mesh" || command === "restrictions" || command === "phone" ? commandArgs.slice(1) : commandArgs)
   : [];
 const child = spawn(
   process.execPath,

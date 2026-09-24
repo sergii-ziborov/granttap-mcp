@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "The agent connects this computer in chat. Authorize in plugin settings opens the device window. Scan the QR in GrantTap — that scan authorizes. Device list and Add another stay there and in the GrantTap app.",
-    "version": "0.1.15"
+    "version": "0.1.16"
   },
   "plugins": [
     {
       "name": "granttap",
       "source": "cursor-plugin",
       "description": "The agent connects this computer in chat. Authorize in plugin settings opens the device window. Scan the QR in GrantTap — that scan authorizes. Device list and Add another stay there and in the GrantTap app.",
-      "version": "0.1.15",
+      "version": "0.1.16",
       "logo": "https://raw.githubusercontent.com/sergii-ziborov/granttap-mcp/main/cursor-plugin/assets/logo.svg",
       "author": {
         "name": "GrantTap",

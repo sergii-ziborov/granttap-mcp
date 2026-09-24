@@ -45,6 +45,7 @@ test("source CLI connects, reuses, resets, and prints a recoverable paste URI", 
   };
   const connect = "apps/bridge/src/bin/cli/connect.ts";
   const reset = "apps/bridge/src/bin/cli/reset.ts";
+  const phone = "apps/bridge/src/bin/cli/phone.ts";
   const pairUri = "apps/bridge/src/bin/cli/pair-uri.ts";
 
   const help = await run(connect, ["--help"], env);
@@ -61,6 +62,11 @@ test("source CLI connects, reuses, resets, and prints a recoverable paste URI", 
   const reused = await run(connect, ["--relay", relay.url], env);
   assert.equal(reused.code, 0, reused.stderr);
   assert.match(reused.stdout, /Existing pairing reused/);
+  assert.match(reused.stdout, /Add another device/);
+  const nonInteractivePhone = await run(phone, ["add"], env);
+  assert.equal(nonInteractivePhone.code, 1);
+  assert.equal(nonInteractivePhone.stdout, "");
+  assert.match(nonInteractivePhone.stderr, /interactive terminal/);
 
   const resetHelp = await run(reset, ["--help"], env);
   assert.equal(resetHelp.code, 0);

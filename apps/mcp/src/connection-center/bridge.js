@@ -43,6 +43,13 @@ async function initializeBridge() {
     });
     if (initialized?.protocolVersion !== "2026-01-26") throw new Error("Unsupported UI protocol");
     post({ method: "ui/notifications/initialized" });
+    // The compatibility API is an explicit tool-call capability. In Codex it
+    // avoids an iframe proxy that can initialize but time out on tools/call.
+    legacyBridge = typeof window.openai?.callTool === "function";
+    if (!legacyBridge && !initialized.hostCapabilities?.serverTools) {
+      message("This host cannot call GrantTap tools from the card. Ask the agent to open connection status or add a device.");
+      return;
+    }
     bridgeReady = true;
   } catch {
     if (!window.openai?.callTool) {
