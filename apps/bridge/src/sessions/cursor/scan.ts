@@ -137,6 +137,8 @@ function addComposerSession(context: ScanContext, composer: ComposerRow): void {
     sessionId: composer.id, files, cwd: composer.cwd, composers: context.composers, descendants,
   });
   const childLast = child.children.reduce((latest, item) => Math.max(latest, item.lastActivityAt), 0);
+  const lastMessageAt = Math.max(root.lastMessageAt ?? 0,
+    ...child.summaries.map((item) => item.lastMessageAt ?? 0));
   const lastActivityAt = Math.max(
     composerActivityAt(composer), root.lastActivityAt, childLast,
   );
@@ -153,6 +155,7 @@ function addComposerSession(context: ScanContext, composer: ComposerRow): void {
       root.startedAt || lastActivityAt || context.now,
     ),
     lastActivityAt: lastActivityAt || composer.createdAt,
+    ...(lastMessageAt ? { lastMessageAt } : {}),
     tokensSession,
     tokensLastTurn: root.files.length ? root.tokensLastTurn : 0,
     contextTokensUsed: composer.contextTokensUsed ?? root.contextTokensUsed ?? tokensSession,
@@ -175,6 +178,8 @@ function addOrphanSession(context: ScanContext, file: CursorLogFile): void {
   const root = transcriptSummary(sessionId, files.filter((item) => !item.isSubagent), sessionId, cwd);
   const child = childSummaries({ sessionId, files, cwd, composers: context.composers });
   const childLast = child.children.reduce((latest, item) => Math.max(latest, item.lastActivityAt), 0);
+  const lastMessageAt = Math.max(root.lastMessageAt ?? 0,
+    ...child.summaries.map((item) => item.lastMessageAt ?? 0));
   const lastActivityAt = Math.max(file.mtimeMs, root.lastActivityAt, childLast);
   const title = childTitle(context.sidebar.get(sessionId) || root.titleFromUser);
   const session = aggregateChildThreads({
@@ -185,6 +190,7 @@ function addOrphanSession(context: ScanContext, file: CursorLogFile): void {
     state: stateFor(lastActivityAt),
     startedAt: Math.min(file.birthtimeMs || lastActivityAt, root.startedAt || lastActivityAt),
     lastActivityAt,
+    ...(lastMessageAt ? { lastMessageAt } : {}),
     tokensSession: root.tokensSession,
     tokensLastTurn: root.tokensLastTurn,
     contextTokensUsed: root.contextTokensUsed,

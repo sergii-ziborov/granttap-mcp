@@ -43,6 +43,11 @@ hosted service is governed by its own terms.
 GrantTap reports the depth each provider actually exposes. Visibility does not
 imply deterministic remote blocking or full mobile continuation.
 
+Session catalogs report `lastMessageAt` only when a provider transcript has a
+timestamped user or assistant message. `lastActivityAt` remains the separate
+runtime activity timestamp and can include metadata or file updates. Clients
+label that fallback as activity rather than presenting it as a message time.
+
 ## Project Mesh and task handoff
 
 Project Mesh adds stable Project and Task identity above provider-native

@@ -25,6 +25,7 @@ export type CursorLogFile = {
 
 export type CursorTranscriptSummary = {
   lastActivityAt: number;
+  lastMessageAt?: number;
   startedAt: number;
   files: string[];
   model?: string;
@@ -196,6 +197,11 @@ function summarizeFile(
     const item = safeParse(line);
     if (!item) continue;
     observeBlocks({ item, file, lineIndex, rootSessionId, cwd, acc });
+    if (["user", "assistant"].includes(item.role)
+      && textBlocks(item.message?.content).some((text) => !!text.trim())) {
+      const at = ts(item.timestamp ?? item.message?.timestamp);
+      if (at) acc.lastMessageAt = Math.max(acc.lastMessageAt ?? 0, at);
+    }
     if (!file.isSubagent) {
       if (!acc.titleFromUser && item.role === "user") {
         acc.titleFromUser = titleFrom(textBlocks(item.message?.content).join("\n"));

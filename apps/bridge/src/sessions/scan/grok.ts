@@ -32,6 +32,7 @@ type ParsedLog = {
   entries: ActivityEntry[];
   usage: CapabilityObservation[];
   firstUser?: string;
+  lastMessageAt?: number;
   tokens: number;
   lastTurn: number;
 };
@@ -78,6 +79,7 @@ function parseLog(path: string, sessionId: string, fallbackTime: number): Parsed
   const usage: CapabilityObservation[] = [];
   const seen = new Set<string>();
   let firstUser: string | undefined;
+  let lastMessageAt = 0;
   let tokens = 0;
   let lastTurn = 0;
   lines.forEach((line, index) => {
@@ -86,11 +88,13 @@ function parseLog(path: string, sessionId: string, fallbackTime: number): Parsed
     const message = row.message && typeof row.message === "object" ? row.message : row;
     const role = String(message.role ?? row.role ?? "");
     if (role === "reasoning" || role === "system") return;
-    const createdAt = ts(row.timestamp ?? message.timestamp) || fallbackTime + index;
+    const messageAt = ts(row.timestamp ?? message.timestamp);
+    const createdAt = messageAt || fallbackTime + index;
     const texts = textBlocks(message.content);
     if (role === "user") {
       const text = texts.join("\n").trim();
       if (text) {
+        if (messageAt) lastMessageAt = Math.max(lastMessageAt, messageAt);
         firstUser ??= text;
         pushEntry({ out: entries, seen: seen, sessionId: sessionId, kind: "user", text: text, createdAt: createdAt, ordinal: index });
         tokens += estimateTokens(text);
@@ -103,6 +107,9 @@ function parseLog(path: string, sessionId: string, fallbackTime: number): Parsed
       pushEntry({ out: entries, seen: seen, sessionId: sessionId, kind: "message", text: text, createdAt: createdAt, ordinal: index * 100 + block });
       turnTokens += estimateTokens(text);
     });
+    if (texts.some((text) => !!text.trim()) && messageAt) {
+      lastMessageAt = Math.max(lastMessageAt, messageAt);
+    }
     const blocks = Array.isArray(message.content) ? message.content : [];
     blocks.forEach((block: Record<string, unknown>, blockIndex: number) => {
       if (block?.type !== "tool_use") return;
@@ -122,7 +129,7 @@ function parseLog(path: string, sessionId: string, fallbackTime: number): Parsed
     tokens += turnTokens;
     if (turnTokens > 0) lastTurn = turnTokens;
   });
-  return { entries, usage, firstUser, tokens, lastTurn };
+  return { entries, usage, firstUser, lastMessageAt: lastMessageAt || undefined, tokens, lastTurn };
 }
 
 function parseSummary(path: string): Summary | null {
@@ -156,6 +163,7 @@ export function scanGrok(maxFiles = MAX_FILES): Scan {
       sessionId, agent: "grok", title: title?.trim().slice(0, 120), cwd,
       model: typeof summary.current_model_id === "string" ? summary.current_model_id : undefined,
       state: stateFor(updatedAt), startedAt, lastActivityAt: updatedAt,
+      ...(parsed.lastMessageAt ? { lastMessageAt: parsed.lastMessageAt } : {}),
       tokensSession: parsed.tokens, tokensLastTurn: parsed.lastTurn,
       contextTokensUsed: parsed.tokens,
     });

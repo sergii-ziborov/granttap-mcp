@@ -27,6 +27,7 @@ type CodexParseState = {
   child?: CodexChildSource;
   startedAt: number;
   lastActivityAt: number;
+  lastMessageAt: number;
   tokensSession: number;
   tokensLastTurn: number;
   contextTokensUsed?: number;
@@ -40,6 +41,15 @@ function applyCodexLine(d: any, state: CodexParseState): void {
   if (t) {
     if (!state.startedAt || t < state.startedAt) state.startedAt = t;
     if (t > state.lastActivityAt) state.lastActivityAt = t;
+    const eventMessage = d.type === "event_msg"
+      && ["user_message", "agent_message"].includes(d.payload?.type);
+    const responseMessage = d.type === "response_item"
+      && d.payload?.type === "message"
+      && ["user", "assistant"].includes(d.payload?.role)
+      && Array.isArray(d.payload?.content) && d.payload.content.length > 0;
+    if (eventMessage || responseMessage) {
+      state.lastMessageAt = Math.max(state.lastMessageAt, t);
+    }
   }
 
   if (d.type === "session_meta") {
@@ -130,7 +140,7 @@ export function parseCodexFile(file: string): CodexCandidate | undefined {
     return undefined;
   }
   const state: CodexParseState = {
-    sessionId: "", startedAt: 0, lastActivityAt: 0,
+    sessionId: "", startedAt: 0, lastActivityAt: 0, lastMessageAt: 0,
     tokensSession: 0, tokensLastTurn: 0, workdirs: [],
   };
   for (const line of lines) {
@@ -155,6 +165,7 @@ export function parseCodexFile(file: string): CodexCandidate | undefined {
     state: stateFor(state.lastActivityAt),
     startedAt: state.startedAt || state.lastActivityAt,
     lastActivityAt: state.lastActivityAt,
+    ...(state.lastMessageAt ? { lastMessageAt: state.lastMessageAt } : {}),
     tokensSession: state.tokensSession,
     tokensLastTurn: state.tokensLastTurn,
     contextTokensUsed: state.contextTokensUsed,

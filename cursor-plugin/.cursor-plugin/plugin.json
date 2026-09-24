@@ -1,7 +1,7 @@
 {
   "name": "granttap",
   "displayName": "GrantTap",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "description": "GrantTap pairs this computer with iPhone. The connection card shows a one-time QR when Cursor supports interactive MCP Apps; an interactive terminal command is available if it does not. The website approves the coding app.",
   "author": {
     "name": "GrantTap",

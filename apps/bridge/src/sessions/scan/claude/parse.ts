@@ -24,6 +24,7 @@ type ClaudeParseState = {
   summary?: string;
   startedAt: number;
   lastActivityAt: number;
+  lastMessageAt: number;
   tokensSession: number;
   tokensLastTurn: number;
   contextTokensUsed?: number;
@@ -53,6 +54,15 @@ function applyClaudeLine(d: any, state: ClaudeParseState): void {
   if (t) {
     if (!state.startedAt || t < state.startedAt) state.startedAt = t;
     if (t > state.lastActivityAt) state.lastActivityAt = t;
+    const role = d.message?.role ?? d.type;
+    const content = d.message?.content ?? d.content;
+    const visible = typeof content === "string" ? content.trim().length > 0
+      : Array.isArray(content) && content.some((block: any) =>
+        ["text", "image", "image_url", "input_image"].includes(block?.type)
+          && (block.type !== "text" || typeof block.text === "string" && !!block.text.trim()));
+    if (["user", "assistant"].includes(role) && visible) {
+      state.lastMessageAt = Math.max(state.lastMessageAt, t);
+    }
   }
   const usage = d?.message?.usage;
   if (usage) {
@@ -117,7 +127,10 @@ export function parseClaudeFile(file: string): {
     return undefined;
   }
   const lines = text.split("\n");
-  const state: ClaudeParseState = { sessionId: "", startedAt: 0, lastActivityAt: 0, tokensSession: 0, tokensLastTurn: 0 };
+  const state: ClaudeParseState = {
+    sessionId: "", startedAt: 0, lastActivityAt: 0, lastMessageAt: 0,
+    tokensSession: 0, tokensLastTurn: 0,
+  };
   for (const line of lines) {
     if (!line) continue;
     const d = safeParse(line);
@@ -135,6 +148,7 @@ export function parseClaudeFile(file: string): {
     state: stateFor(state.lastActivityAt),
     startedAt: state.startedAt || state.lastActivityAt,
     lastActivityAt: state.lastActivityAt,
+    ...(state.lastMessageAt ? { lastMessageAt: state.lastMessageAt } : {}),
     tokensSession: state.tokensSession,
     tokensLastTurn: state.tokensLastTurn,
     contextTokensUsed: state.contextTokensUsed,

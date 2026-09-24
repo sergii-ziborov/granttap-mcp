@@ -74,6 +74,8 @@ export const SessionInfo = z.object({
   state: SessionState,
   startedAt: z.number(),
   lastActivityAt: z.number(),
+  /** Timestamp of a visible user or assistant message; absent when no message timestamp is known. */
+  lastMessageAt: z.number().optional(),
   tokensSession: z.number(),
   tokensLastTurn: z.number(),
   contextTokensUsed: z.number().optional(),
