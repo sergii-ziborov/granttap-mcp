@@ -190,8 +190,9 @@ hub: nothing a member does reaches a computer without passing through it.
 The owner manages **company accounts** and repository grants separately from
 Project Mesh membership. An account can cover selected repository IDs or all
 company repositories; it does not join a Mesh merely because it has repository
-access. Each invited device receives a separate pairing, selected Project IDs,
-and a Project role. Several devices may use the same account with different
+access. A phone or tablet may pair to the account before any computer or
+Project exists, with zero Project permissions. The owner then grants selected
+Project IDs and a role to that device. Several devices may use the same account with different
 Mesh grants. Before the phone forwards a complete Project snapshot, its key,
 chats, or actions, the account must cover every repository ID in that Project.
 Linked sub-Mesh Projects still require separate selection. These owner-phone
@@ -210,6 +211,7 @@ though nothing already seen can be recalled.
 <p align="center">
   <img src="docs/images/iphone-company-accounts.png" width="200" alt="Company accounts separate from Mesh device links">
   <img src="docs/images/iphone-company-repositories.png" width="200" alt="Selected repository IDs for one company account">
+  <img src="docs/images/iphone-company-device-invite.png" width="200" alt="Controller device code before any Mesh Project grant">
   <img src="docs/images/iphone-members.png" width="200" alt="Members and computers of a Project, seen by its owner">
   <img src="docs/images/iphone-invite.png" width="200" alt="Invite a person: name, role, and the four answers under it">
   <img src="docs/images/iphone-join-project.png" width="200" alt="Join a Project from another phone: scan the invite or paste it">
