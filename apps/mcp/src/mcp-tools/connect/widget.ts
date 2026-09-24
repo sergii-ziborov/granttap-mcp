@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-export const CONNECTION_WIDGET_URI = "ui://granttap/connection/v2.html";
+export const CONNECTION_WIDGET_URI = "ui://granttap/connection/v3.html";
 
 import { readFileSync } from "node:fs";
 
