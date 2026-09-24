@@ -187,6 +187,16 @@ of a topic it produces, the caller of an API it changes), and the scoped
 
 A Project is shared from the phone that owns it, and that phone stays the
 hub: nothing a member does reaches a computer without passing through it.
+The owner manages **company accounts** and repository grants separately from
+Project Mesh membership. An account can cover selected repository IDs or all
+company repositories; it does not join a Mesh merely because it has repository
+access. Each invited device receives a separate pairing, selected Project IDs,
+and a Project role. Several devices may use the same account with different
+Mesh grants. Before the phone forwards a complete Project snapshot, its key,
+chats, or actions, the account must cover every repository ID in that Project.
+Linked sub-Mesh Projects still require separate selection. These owner-phone
+grants do not edit Git provider ACLs or give the MCP a company login.
+
 *Invite a person* makes a one-time code, good for fifteen minutes; the other
 phone scans it under *Projects → Join a Project*, and the Project arrives
 there with the role the owner chose — Viewer, Member, or Admin — and the four
@@ -198,13 +208,15 @@ a role takes effect at once; removing a member stops the forwarding at once,
 though nothing already seen can be recalled.
 
 <p align="center">
+  <img src="docs/images/iphone-company-accounts.png" width="200" alt="Company accounts separate from Mesh device links">
+  <img src="docs/images/iphone-company-repositories.png" width="200" alt="Selected repository IDs for one company account">
   <img src="docs/images/iphone-members.png" width="200" alt="Members and computers of a Project, seen by its owner">
   <img src="docs/images/iphone-invite.png" width="200" alt="Invite a person: name, role, and the four answers under it">
   <img src="docs/images/iphone-join-project.png" width="200" alt="Join a Project from another phone: scan the invite or paste it">
   <img src="docs/images/iphone-members-shared.png" width="200" alt="A shared Project on the member's phone, with a computer of their own to add">
 </p>
 
-<p align="center"><em>The owner's members and computers · an invite with its role · joining from another phone · the shared Project as the member sees it, with a computer of their own to add</em></p>
+<p align="center"><em>Company accounts and repository grants · separate Mesh members and device links · joining from another phone</em></p>
 
 A member works in the Project with computers of their own. Adding one hands
 it the Project's mesh key over the pairing the member's phone already trusts,
