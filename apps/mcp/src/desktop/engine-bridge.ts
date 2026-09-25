@@ -59,19 +59,17 @@ export async function startDesktopEngineBridge(options: {
         if (input !== undefined && (input === null || typeof input !== "object"
           || Array.isArray(input))) { socket.destroy(); return; }
         const query = input === undefined ? { operation } : { operation, input };
+        const localCatalog = operation === "project.list"
+          ? desktopProjectCatalog(input, options.storePath) : undefined;
         const read = operation === "desktop.task_activity"
           ? activity.read(input, options.storePath)
           : operation.startsWith("desktop.")
             ? Promise.resolve(operation === "desktop.project"
               ? desktopMeshProject(input, options.storePath)
               : desktopWorkspace(options.storePath))
-          : engine.request(query as EngineOperation, { timeoutMs: 5_000 }).catch((error: unknown) => {
-          if (operation === "project.list") {
-            const page = desktopProjectCatalog(input, options.storePath);
-            if (page) return page;
-          }
-          throw error;
-        });
+          : localCatalog
+            ? Promise.resolve(localCatalog)
+            : engine.request(query as EngineOperation, { timeoutMs: 5_000 });
         void read.then(
           (result) => {
             if (!result) { socket.destroy(); return; }

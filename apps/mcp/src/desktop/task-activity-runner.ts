@@ -8,7 +8,7 @@ const workerPath = fileURLToPath(new URL("./task-activity-worker.ts", import.met
 
 type Pending = {
   id: string; payload: string; sent: boolean;
-  resolve: (value: unknown) => void; timer: NodeJS.Timeout;
+  resolve: (value: unknown) => void; timer?: NodeJS.Timeout;
 };
 
 /** Keeps transcript parsing off the HTTP and policy event loop. */
@@ -17,12 +17,15 @@ export class DesktopTaskActivityRunner {
   private ready = false;
   private closed = false;
   private pending?: Pending;
+  private queue: Pending[] = [];
   private buffer = "";
 
   constructor() { this.start(); }
 
   read(query: unknown, storePath?: string): Promise<unknown> {
-    if (this.pending || !this.child) return Promise.resolve(undefined);
+    if (this.closed || this.queue.length + (this.pending ? 1 : 0) >= 8) {
+      return Promise.resolve(undefined);
+    }
     if (query === null || typeof query !== "object" || Array.isArray(query)) {
       return Promise.resolve(undefined);
     }
@@ -33,22 +36,18 @@ export class DesktopTaskActivityRunner {
     }
     return new Promise((resolve) => {
       const id = randomUUID();
-      const timer = setTimeout(() => {
-        const wasSent = this.pending?.sent === true;
-        this.finish(undefined);
-        if (wasSent) this.child?.kill("SIGKILL");
-      }, 4_000);
-      this.pending = {
+      this.queue.push({
         id, payload: `${JSON.stringify({ id, query, storePath })}\n`,
-        sent: false, resolve, timer,
-      };
-      this.sendPending();
+        sent: false, resolve,
+      });
+      this.activateNext();
     });
   }
 
   close(): void {
     this.closed = true;
     this.finish(undefined);
+    for (const item of this.queue.splice(0)) item.resolve(undefined);
     this.child?.kill("SIGKILL");
     this.child = undefined;
   }
@@ -75,10 +74,14 @@ export class DesktopTaskActivityRunner {
         this.receive(line);
       }
     });
-    child.on("error", () => this.finish(undefined));
+    child.on("error", () => {
+      this.ready = false;
+      this.finish(undefined);
+    });
     child.on("close", () => {
       if (this.child !== child) return;
       this.child = undefined;
+      this.ready = false;
       this.finish(undefined);
       if (!this.closed) setTimeout(() => this.start(), 1_000);
     });
@@ -102,8 +105,21 @@ export class DesktopTaskActivityRunner {
     const pending = this.pending;
     if (!pending) return;
     this.pending = undefined;
-    clearTimeout(pending.timer);
+    if (pending.timer) clearTimeout(pending.timer);
     pending.resolve(value);
+    this.activateNext();
+  }
+
+  private activateNext(): void {
+    if (this.closed || this.pending) return;
+    this.pending = this.queue.shift();
+    if (!this.pending) return;
+    this.pending.timer = setTimeout(() => {
+      this.ready = false;
+      this.finish(undefined);
+      this.child?.kill("SIGKILL");
+    }, 4_000);
+    this.sendPending();
   }
 
   private sendPending(): void {

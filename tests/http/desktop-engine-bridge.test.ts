@@ -64,10 +64,11 @@ test("desktop bridge finds Mesh Projects when an installed Engine lacks catalog 
   executions: [{ taskId: "task-one", sessionId: "session-one", provider: "codex",
     computerId: "computer-one", workspace: "/tmp/project", startedAt: 1,
     activeAt: 2 }] }));
+  let engineReads = 0;
   const bridge = await startDesktopEngineBridge({
     storePath,
     client: {
-      async request() { throw new Error("unsupported operation"); },
+      async request() { engineReads++; throw new Error("unsupported operation"); },
       close() {},
     },
   });
@@ -81,6 +82,7 @@ test("desktop bridge finds Mesh Projects when an installed Engine lacks catalog 
   };
   assert.equal(body.status, "ok");
   assert.deepEqual(body.result.page.projects.map((item) => item.name), ["Uppercase", "Lowercase"]);
+  assert.equal(engineReads, 0);
 
   const meshResponse = await exchange(bridge.socketPath, {
     protocol_version: 1, request_id: "mesh", operation: "desktop.project",
@@ -142,6 +144,29 @@ test("desktop workspace includes every Task in a 134-Task local Mesh", async () 
   assert.equal(workspace?.task_count, 134);
   assert.equal(workspace?.tasks.length, 134);
   assert.equal(workspace?.tasks.at(-1)?.task_id, "task-0");
+});
+
+test("parallel Mac windows can read the same Task conversation", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "granttap-desktop-windows-"));
+  const storePath = join(directory, "project-mesh.json");
+  await writeFile(storePath, JSON.stringify({ version: 1,
+    projects: [{ projectId: "project", name: "Test", canonicalRepositoryId: "repo", createdAt: 1 }],
+    tasks: [{ taskId: "task", projectId: "project", title: "Test",
+      goal: "Test goal", state: "working", createdAt: 1, updatedAt: 2 }],
+    executions: [{ taskId: "task", sessionId: "session", provider: "codex",
+      computerId: "computer", workspace: "/tmp/project", startedAt: 1 }],
+  }));
+  const bridge = await startDesktopEngineBridge({ storePath,
+    client: { async request() { throw new Error("unsupported"); }, close() {} },
+  });
+  t.after(() => bridge.close());
+  const responses = await Promise.all(["one", "two"].map((request_id) => exchange(
+    bridge.socketPath, { protocol_version: 1, request_id,
+      operation: "desktop.task_activity", input: { project_id: "project", task_id: "task" } },
+  )));
+  assert.deepEqual(responses.map((frame) =>
+    frame.length < 4 ? null : JSON.parse(frame.subarray(4).toString("utf8")).status),
+  ["ok", "ok"]);
 });
 
 test("desktop workspace does not call an ended execution live", async () => {
