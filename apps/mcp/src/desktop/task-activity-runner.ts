@@ -115,9 +115,10 @@ export class DesktopTaskActivityRunner {
     this.pending = this.queue.shift();
     if (!this.pending) return;
     this.pending.timer = setTimeout(() => {
-      this.ready = false;
+      const wasSent = this.pending?.sent === true;
+      if (wasSent) this.ready = false;
       this.finish(undefined);
-      this.child?.kill("SIGKILL");
+      if (wasSent) this.child?.kill("SIGKILL");
     }, 4_000);
     this.sendPending();
   }
