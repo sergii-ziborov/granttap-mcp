@@ -7,6 +7,7 @@ import { completeEnrollment, currentEnrollment } from "../enrollment";
 import { ConnectionState } from "../state";
 import { createPairing, machineConfigPath, saveConfig } from "../../../../bridge/src/config";
 import { relay, resetRelay, connectionRuntimeStatus } from "../../mcp-tools/connect/relay";
+import { desktopStatusSnapshot } from "../../status/desktop-status";
 import { RelayClient } from "../../../../../packages/core/relay-client";
 import { generateKeyPair } from "../../../../../packages/core/crypto";
 import { rememberPendingController } from "../../../../bridge/src/pairing/controllers";
@@ -60,6 +61,10 @@ test("only an encrypted phone message confirms activity; relay online is distinc
     pairingUri: "test", qrDataUrl: "test", peerPublicKey: secondKeys.publicKey });
   await relay();
   assert.equal(state.snapshot().structuredContent.relayStatus, "online");
+  const desktop = desktopStatusSnapshot();
+  assert.equal(desktop.relayStatus, "online");
+  assert.equal(desktop.relayHost, new URL(server.url).host);
+  assert.equal("roomPrefix" in desktop, false);
   assert.equal(state.snapshot().structuredContent.status, "pairing");
   await phone.connect();
   await phone.send({ type: "user.message", text: "test", createdAt: Date.now() }, "machine");

@@ -16,8 +16,11 @@ import { resetPairingWatches } from "../oauth/consent/pairing-view";
 import { GrantTapOAuthProvider } from "../oauth-provider";
 import { resetConnectWatchers } from "../oauth/consent/website-session";
 import { isMachineConfigured, phoneReachability } from "../status/pairing-status";
+import { packageVersion } from "../status/package-version";
+import { desktopStatusSnapshot } from "../status/desktop-status";
 import { installOAuthBrowserRoutes } from "./oauth-routes";
 import { createMcpSessionHandler } from "./mcp-handler";
+import { startDesktopEngineBridge } from "../desktop/engine-bridge";
 
 export const DEFAULT_HTTP_HOST = "127.0.0.1";
 export const DEFAULT_HTTP_PORT = 17342;
@@ -42,6 +45,7 @@ export async function startHttpMcpServer(options: ServeOptions = {}): Promise<{
   if (!Number.isInteger(port) || port < 1 || port > 65_535) {
     throw new Error("GrantTap HTTP MCP port must be an integer between 1 and 65535");
   }
+  const desktopBridge = await startDesktopEngineBridge();
 
   const mcpUrl = new URL(`http://${host === "::1" ? "[::1]" : host}:${port}/mcp`);
   const issuerUrl = new URL(`http://${host === "::1" ? "[::1]" : host}:${port}`);
@@ -74,17 +78,28 @@ export async function startHttpMcpServer(options: ServeOptions = {}): Promise<{
       schema: "granttap.http-health.v1",
       ok: true,
       service: "granttap-mcp",
+      version: packageVersion(),
       paired: pairingKeysPresent,
       pairingKeysPresent,
       phoneReachability: phoneReachability(),
       mcp: mcpUrl.href,
     });
   });
-
-  const server = await new Promise<import("node:http").Server>((resolve, reject) => {
-    const httpServer = app.listen(port, host, () => resolve(httpServer));
-    httpServer.on("error", reject);
+  app.get("/desktop/status", (_req, res) => {
+    res.set("Cache-Control", "no-store");
+    res.json(desktopStatusSnapshot(desktopBridge.socketPath));
   });
+
+  let server: import("node:http").Server;
+  try {
+    server = await new Promise<import("node:http").Server>((resolve, reject) => {
+      const httpServer = app.listen(port, host, () => resolve(httpServer));
+      httpServer.on("error", reject);
+    });
+  } catch (error) {
+    await desktopBridge.close();
+    throw error;
+  }
 
   provider.resumeConnectWatches();
   void relay();
@@ -98,6 +113,7 @@ export async function startHttpMcpServer(options: ServeOptions = {}): Promise<{
       resetConnectWatchers();
       resetPairingWatches();
       resetRelay();
+      await desktopBridge.close();
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));
       });
