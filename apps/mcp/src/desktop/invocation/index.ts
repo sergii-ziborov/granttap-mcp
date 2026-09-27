@@ -15,10 +15,16 @@ export async function desktopInvocationHistory(
   const loaded = readStoreState(storePath);
   if (loaded.status !== "ok" || !loaded.state.tasks.some((task) =>
     task.projectId === projectId && task.taskId === taskId)) return undefined;
+  const read = (timeoutMs: number) => engine.request({ operation: "invocation.history",
+    input: { project_id: projectId, task_id: taskId, tail: true, limit: 16 } },
+  { timeoutMs });
   try {
-    const result = await engine.request({ operation: "invocation.history",
-      input: { project_id: projectId, task_id: taskId, tail: true, limit: 16 } },
-    { timeoutMs: 3_000 });
+    let result;
+    try {
+      result = await read(3_000);
+    } catch {
+      result = await read(6_000);
+    }
     if (result.operation !== "invocation.history"
       || result.page.events.some((row) => row.event.project_id !== projectId
         || row.event.task_id !== taskId)) return undefined;

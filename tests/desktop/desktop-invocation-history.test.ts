@@ -28,3 +28,24 @@ test("local invocation history stays within the requested Mesh Task", async () =
       project_id: "mesh-a", task_id: "task-a", events: [], has_older: false });
   assert.deepEqual(calls, ["task-a"]);
 });
+
+test("local invocation history retries a transient Engine read failure", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "granttap-invocation-retry-"));
+  const storePath = join(directory, "mesh.json");
+  await writeFile(storePath, JSON.stringify({ version: 1,
+    projects: [{ projectId: "mesh-a", name: "Mesh A", createdAt: 1 }],
+    tasks: [{ taskId: "task-a", projectId: "mesh-a", title: "Test",
+      goal: "test", state: "working", createdAt: 1, updatedAt: 2 }],
+  }));
+  let calls = 0;
+  const engine = { request: async () => {
+    calls += 1;
+    if (calls === 1) throw new Error("Engine waking");
+    return { operation: "invocation.history", page: { events: [],
+      has_older: false } };
+  } };
+  assert.deepEqual(await desktopInvocationHistory({ project_id: "mesh-a", task_id: "task-a" },
+    engine as never, storePath), { operation: "desktop.invocation_history",
+      project_id: "mesh-a", task_id: "task-a", events: [], has_older: false });
+  assert.equal(calls, 2);
+});
