@@ -20,4 +20,4 @@ Knowledge, graph, and invocation reads remain Engine responses.
 
 Tests are in `../../../../tests/http/desktop-engine-bridge.test.ts`.
 
-This MCP component is covered by the repository [MIT License](../../../../../LICENSE).
+This MCP component is covered by the repository [MIT License](../../../../LICENSE).

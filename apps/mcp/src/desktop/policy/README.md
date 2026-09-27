@@ -13,3 +13,5 @@ the actual value plus the computer's paused state. Global policy is preserved.
 
 Tests are in `tests/desktop/policy`. See the desktop module and repository
 engineering contract for the local channel and quality boundaries.
+
+This MCP component is covered by the repository [MIT License](../../../../../LICENSE).

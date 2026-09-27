@@ -323,7 +323,7 @@ export function inspectMonitorHelper(): MonitorIntegrationStatus {
   const active = spawnSync(
     "launchctl",
     ["print", `gui/${uid}/${launchAgentLabel}`],
-    { stdio: "ignore" },
+    { stdio: "ignore", timeout: 1_000, killSignal: "SIGKILL" },
   );
   return { configured: true, running: active.status === 0 };
 }
