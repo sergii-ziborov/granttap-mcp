@@ -1,3 +1,5 @@
+import { desktopProjectAutoAccept } from "../policy/auto-accept";
+import { desktopProjectPolicy } from "../policy";
 import { desktopProjectCatalog } from "../project-catalog";
 import { desktopFixtureSnapshot, desktopMeshProject, desktopMeshSnapshots, desktopWorkspace } from "../mesh-project";
 import { localMeshStore } from "../../../../bridge/src/mesh/local-remote/local";
@@ -18,6 +20,12 @@ export function desktopReadOperation(input: {
   enrichment: DesktopTaskActivityRunner;
 }): Promise<unknown> {
   const { operation, queryInput, storePath, engine, activity, enrichment } = input;
+  if (operation === "desktop.project_auto_accept") {
+    return Promise.resolve(desktopProjectAutoAccept(queryInput, { storePath }));
+  }
+  if (operation === "desktop.policy_status" || operation === "desktop.policy_set") {
+    return desktopProjectPolicy(operation, queryInput, { storePath, engine });
+  }
   if (operation === "desktop.capability_usage") return desktopUsage();
   if (operation === "desktop.installed_skills") {
     return Promise.resolve(desktopInstalledSkills(queryInput, storePath));

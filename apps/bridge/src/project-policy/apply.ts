@@ -105,7 +105,7 @@ function withLocalExecution(policy: ProjectPolicy): ProjectPolicy {
 
 async function sendStatus(
   deps: ProjectPolicyRuntimeDependencies,
-  relay: RelayClient,
+  relay: RelayClient | undefined,
   policy: EngineProjectPolicy,
   coverage: EnginePolicyCoverage,
 ): Promise<boolean> {
@@ -129,7 +129,7 @@ async function sendStatus(
 
 export async function publishOne(
   deps: ProjectPolicyRuntimeDependencies,
-  relay: RelayClient,
+  relay: RelayClient | undefined,
   projectId: string,
 ): Promise<boolean> {
   try {
@@ -152,7 +152,7 @@ export async function publishOne(
 
 async function rejectPolicy(
   deps: ProjectPolicyRuntimeDependencies,
-  relay: RelayClient,
+  relay: RelayClient | undefined,
   request: ProjectPolicySet,
   error: unknown,
 ): Promise<void> {
@@ -187,7 +187,7 @@ async function rejectPolicy(
 
 export async function applyPolicy(
   deps: ProjectPolicyRuntimeDependencies,
-  relay: RelayClient,
+  relay: RelayClient | undefined,
   request: ProjectPolicySet,
 ): Promise<boolean> {
   rememberGovernedProject(request.projectId, request.policy.revision, deps.now());

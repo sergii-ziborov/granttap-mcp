@@ -13,11 +13,11 @@ export type ProviderCoverageTarget = {
 };
 
 export type ProjectPolicyRuntimeDependencies = {
-  client: EngineClientLike;
+  client: Pick<EngineClientLike, "request">;
   endpointId: () => string;
   providers: () => ProviderCoverageTarget[];
   now: () => number;
-  send: (relay: RelayClient, payload: ProjectPolicyPayload) => Promise<void>;
+  send: (relay: RelayClient | undefined, payload: ProjectPolicyPayload) => Promise<void>;
   log?: (line: string) => void;
 };
 

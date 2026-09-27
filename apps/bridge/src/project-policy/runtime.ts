@@ -16,8 +16,8 @@ export { enforcementCoverageFor, rejectionReason } from "./types";
 
 export function createProjectPolicyRuntime(deps: ProjectPolicyRuntimeDependencies) {
   return {
-    apply: (relay: RelayClient, request: ProjectPolicySet) => applyPolicy(deps, relay, request),
-    publish: async (relay: RelayClient, projectIds: string[]) => {
+    apply: (relay: RelayClient | undefined, request: ProjectPolicySet) => applyPolicy(deps, relay, request),
+    publish: async (relay: RelayClient | undefined, projectIds: string[]) => {
       for (const projectId of [...new Set(projectIds)].sort()) {
         await publishOne(deps, relay, projectId);
       }
@@ -32,9 +32,9 @@ export function projectPolicyFeatureEnabled(env: NodeJS.ProcessEnv = process.env
 
 let sharedClient: EngineClient | undefined;
 
-function defaultRuntime() {
+export function projectPolicyRuntimeDependencies(): ProjectPolicyRuntimeDependencies {
   sharedClient ??= new EngineClient({ socketPath: join(configDir(), "engine.sock") });
-  return createProjectPolicyRuntime({
+  return {
     client: sharedClient,
     log: (line) => process.stderr.write(`[monitor] rules: ${line}\n`),
     endpointId: computerId,
@@ -45,24 +45,25 @@ function defaultRuntime() {
         .map((item) => ({ provider: item.agent, hookConfigured: item.hookConfigured }));
     },
     now: Date.now,
-    send: (relay, payload) => sendProjectPayload(relay, payload, "phone", {
-      ttlMs: 24 * 60 * 60_000,
-    }),
-  });
+    send: async (relay, payload) => {
+      if (!relay) throw new Error("Relay delivery is unavailable");
+      await sendProjectPayload(relay, payload, "phone", { ttlMs: 24 * 60 * 60_000 });
+    },
+  };
 }
 
 export function handleProjectPolicySet(
-  relay: RelayClient,
+  relay: RelayClient | undefined,
   request: ProjectPolicySet,
 ): Promise<boolean> {
   if (!projectPolicyFeatureEnabled()) return Promise.resolve(false);
-  return defaultRuntime().apply(relay, request);
+  return createProjectPolicyRuntime(projectPolicyRuntimeDependencies()).apply(relay, request);
 }
 
 export function publishProjectPolicyStatuses(
-  relay: RelayClient,
+  relay: RelayClient | undefined,
   projectIds: string[],
 ): Promise<void> {
   if (!projectPolicyFeatureEnabled()) return Promise.resolve();
-  return defaultRuntime().publish(relay, projectIds);
+  return createProjectPolicyRuntime(projectPolicyRuntimeDependencies()).publish(relay, projectIds);
 }

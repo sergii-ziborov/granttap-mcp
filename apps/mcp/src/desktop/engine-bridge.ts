@@ -10,13 +10,13 @@ import {
 import { DesktopTaskActivityRunner } from "./task-activity-runner";
 import { desktopReadOperation } from "./operations";
 
-const READ_OPERATIONS = new Set([
+const DESKTOP_OPERATIONS = new Set([
   "engine.version", "project.list", "project.resolve", "project.get",
   "project.list_bindings", "policy.get", "policy.coverage",
   "graph.get_backbone", "memory.history", "invocation.history",
   "desktop.project", "desktop.mesh_snapshot", "desktop.workspace", "desktop.task_activity",
   "desktop.machine_load", "desktop.capability_usage", "desktop.task_image",
-  "desktop.installed_skills",
+  "desktop.installed_skills", "desktop.policy_status", "desktop.policy_set", "desktop.project_auto_accept",
   "desktop.mesh_snapshots",
   "desktop.task_send",
   "desktop.task_create",
@@ -25,6 +25,8 @@ const READ_OPERATIONS = new Set([
 ]);
 
 function desktopOperationTimeout(operation: unknown, input: unknown): number {
+  if (operation === "desktop.policy_set") return 60_000;
+  if (operation === "desktop.policy_status") return 30_000;
   if (operation === "desktop.capability_usage"
     || operation === "desktop.mesh_snapshots") return 75_000;
   if (operation === "desktop.task_activity"
@@ -70,7 +72,7 @@ export async function startDesktopEngineBridge(options: {
         if (request.protocol_version !== ENGINE_PROTOCOL_VERSION
           || typeof requestId !== "string" || requestId.length === 0
           || requestId.length > 128 || typeof operation !== "string"
-          || !READ_OPERATIONS.has(operation)) {
+          || !DESKTOP_OPERATIONS.has(operation)) {
           socket.destroy();
           return;
         }
