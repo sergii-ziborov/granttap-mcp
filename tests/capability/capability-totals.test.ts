@@ -76,3 +76,13 @@ test("totals separate outcomes, windows, and keep the busiest names", () => {
     1,
   );
 });
+
+test("future observations do not enter a past or current half-open window", () => {
+  const totals = capabilityUsageTotals([
+    event(1, { createdAt: now - 1 }),
+    event(2, { createdAt: now }),
+    event(3, { createdAt: now + hour }),
+  ], now);
+  assert.equal(totals.find((row) => row.windowHours === 24
+    && row.kind === "cli" && row.name == null)?.count, 1);
+});

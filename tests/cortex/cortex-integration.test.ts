@@ -268,3 +268,18 @@ test("a scoped generic client receives the same Cortex compilation input", async
   assert.ok(received >= 8);
   assert.equal(targetedRepository, "repo");
 });
+
+test("a relevant seventeenth decision reaches both Cortex evidence paths", () => {
+  const records = Array.from({ length: 17 }, (_, index) => ({
+    projectId: "project", taskId: "task", recordId: `decision-${index}`,
+    category: "decision" as const, content: `Decision ${index}`,
+    source: index === 16 ? "user_decision" as const : "agent_report" as const,
+    sourceRef: `source-${index}`, visibility: "project" as const,
+    recordedAt: index + 1, streamVersion: index + 1,
+  }));
+  const value = { ...snapshot(), knowledge: records };
+  assert.ok(cortexSnapshotEvidence(value, "task")
+    .some((item) => item.id === "knowledge.decision-16"));
+  assert.ok(cortexScopedEvidence({ ...view(value), knowledge: records })
+    .some((item) => item.id === "knowledge.decision-16"));
+});

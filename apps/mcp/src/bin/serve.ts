@@ -6,9 +6,14 @@ async function serve(): Promise<void> {
   const close = () => {
     if (closing) return;
     closing = true;
-    void started.close().finally(() => {
-      process.exitCode = 0;
-    });
+    // A live HTTP/SSE client can keep server.close() pending after launchd has
+    // stopped the wrapper. Bound the shutdown so the old child releases its
+    // loopback port before the replacement helper starts.
+    const deadline = setTimeout(() => process.exit(0), 3_000);
+    void started.close().then(
+      () => { clearTimeout(deadline); process.exit(0); },
+      () => { clearTimeout(deadline); process.exit(1); },
+    );
   };
   process.once("SIGINT", close);
   process.once("SIGTERM", close);

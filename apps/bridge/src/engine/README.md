@@ -22,8 +22,11 @@ bypass, paused gating, and auto-accept. Codex carries ASK from `PreToolUse` to
 `PermissionRequest` with a single-use exact-call marker; Cursor evaluates shell
 and redacted MCP fingerprints directly. A disabled or unavailable engine
 preserves the established GrantTap flow, and no hook request is retried inside
-its 2,000 ms policy budget. Repository impact is not computed synchronously in
-the hook; unavailable impact remains explicitly unavailable.
+its 2,000 ms policy budget. For an identified Task write, the hook asks the
+already-persisted graph for heads and a bounded impact result. It reports
+impact available only when Task head, repository revision, path and completeness
+match; it never scans a repository on the hook path. Unknown impact remains
+explicitly unavailable.
 
 `invocation-ingest.ts` reads bounded complete transcript lines and exact-call
 hook denial metadata without forwarding tool arguments, output, or reason text.

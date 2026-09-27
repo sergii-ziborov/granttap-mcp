@@ -1,8 +1,8 @@
-import { isAbsolute, join, normalize } from "node:path";
+import { isAbsolute, join, normalize, relative, sep } from "node:path";
 import { inspectRepository } from "../mesh/catalog";
 import { computerId } from "../mesh/identity/computer";
 import { localMeshStore } from "../mesh/local-remote/local";
-import { evaluateWriteRestrictions } from "../mesh/restrictions";
+import { evaluateWriteRestrictions, writeCandidate } from "../mesh/restrictions";
 import { configDir } from "../config/runtime/paths";
 import { EngineClient } from "../engine/runtime/engine-client";
 import type {
@@ -16,6 +16,7 @@ import { engineFeatureEnabled, type EngineClientLike } from "../engine/runtime/e
 import { loadStoreState } from "../mesh/store/state";
 import { capabilityFingerprint } from "./capability-fingerprint";
 import { governedRevision, rememberGovernedProject } from "./governed-projects";
+import { verifiedImpactAvailable, type ImpactScope } from "./impact/impact-evidence";
 
 export type EffectiveActionInput = {
   provider: "claude" | "codex" | "cursor" | "grok";
@@ -111,6 +112,11 @@ export async function evaluateEffectiveAction(
       provider: input.provider, cwd: input.cwd,
       toolName: input.toolName, toolInput: input.toolInput,
     });
+    const impactScope = resolveImpactScope(input, projectId, endpointId);
+    const impactAvailable = impactScope != null
+      && await verifiedImpactAvailable(client, impactScope, deadline, now)
+      && input.cwd != null
+      && inspectRepository(input.cwd).revision === impactScope.repositoryRevision;
     const result = await client.request({
       operation: "policy.evaluate_action",
       input: {
@@ -121,7 +127,7 @@ export async function evaluateEffectiveAction(
         project_id: projectId,
         endpoint_id: endpointId,
         capability,
-        impact_available: false,
+        impact_available: impactAvailable,
       },
     }, { timeoutMs: remaining(deadline, now) });
     if (result.operation !== "policy.evaluated") {
@@ -149,6 +155,30 @@ export async function evaluateEffectiveAction(
   } finally {
     if (ownedClient) client.close();
   }
+}
+
+function resolveImpactScope(
+  input: EffectiveActionInput, projectId: string, endpointId: string,
+): ImpactScope | undefined {
+  if (!input.sessionId || !input.cwd) return undefined;
+  const candidate = writeCandidate(input.toolName, input.toolInput, input.cwd);
+  if (!candidate) return undefined;
+  const state = loadStoreState(join(configDir(), "project-mesh.json"));
+  const taskId = state.executions.find((item) =>
+    item.provider === input.provider && item.sessionId === input.sessionId
+      && item.computerId === endpointId)?.taskId;
+  if (!taskId || !state.tasks.some((item) =>
+    item.taskId === taskId && item.projectId === projectId)) return undefined;
+  const repository = inspectRepository(input.cwd);
+  if (!repository.revision) return undefined;
+  const absolute = isAbsolute(candidate.path)
+    ? normalize(candidate.path) : normalize(join(input.cwd, candidate.path));
+  const path = relative(repository.root, absolute).split(sep).join("/");
+  if (!path || path === ".." || path.startsWith("../") || isAbsolute(path)) return undefined;
+  return {
+    projectId, taskId, repositoryId: repository.canonicalRepositoryId,
+    repositoryRevision: repository.revision, path,
+  };
 }
 
 /**

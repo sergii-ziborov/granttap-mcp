@@ -67,8 +67,10 @@ function applyClaudeLine(d: any, state: ClaudeParseState): void {
   const usage = d?.message?.usage;
   if (usage) {
     const spent = sumClaudeUsage(usage);
-    state.tokensSession += spent;
-    state.tokensLastTurn = spent;
+    if (spent != null) {
+      state.tokensSession += spent;
+      state.tokensLastTurn = spent;
+    }
     state.contextTokensUsed = claudeContextUsage(usage) ?? state.contextTokensUsed;
     if (d.message?.model && !state.model) state.model = String(d.message.model);
   }

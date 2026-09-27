@@ -138,7 +138,7 @@ export function codexTranscriptPaths(sessionId: string): string[] {
 export const CODEX_SUMMARY_HEAD_BYTES = 128 * 1024;
 export const CODEX_SUMMARY_TAIL_BYTES = 512 * 1024;
 export const CODEX_ACTIVITY_HEAD_BYTES = 256 * 1024;
-export const CODEX_ACTIVITY_TAIL_BYTES = 2 * 1024 * 1024;
+export const CODEX_ACTIVITY_TAIL_BYTES = 16 * 1024 * 1024;
 
 /**
  * Codex rollouts may contain a single screenshot/tool-result line larger than a
@@ -198,4 +198,36 @@ export function effectiveCodexUsage(usage: any): number | undefined {
       ? usage.cached_input_tokens
       : 0;
   return Math.max(0, total - cached);
+}
+
+export function codexLogLines(sessionId: string): string[] | undefined {
+  const indexed = codexLogPathBySession.get(sessionId);
+  if (indexed) {
+    try {
+      return readCodexLogWindow(
+        indexed,
+        CODEX_ACTIVITY_HEAD_BYTES,
+        CODEX_ACTIVITY_TAIL_BYTES,
+      );
+    } catch {
+      codexLogPathBySession.delete(sessionId);
+    }
+  }
+  for (const file of recentLogs(codexSessionsRoot(), 5)) {
+    try {
+      const candidate = readCodexLogWindow(
+        file, CODEX_ACTIVITY_HEAD_BYTES, CODEX_ACTIVITY_TAIL_BYTES,
+      );
+      if (candidate.some((line) => {
+        const row = safeParse(line);
+        return row?.type === "session_meta" &&
+          String(row.payload?.id ?? row.id ?? "") === sessionId;
+      })) {
+        return candidate;
+      }
+    } catch {
+      // Keep looking through the bounded recent-file set.
+    }
+  }
+  return undefined;
 }

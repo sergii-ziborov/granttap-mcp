@@ -56,12 +56,11 @@ test("the guard covers trust state and unknown files while leaving diagnostics r
   for (const path of readable) {
     assert.equal(protectedGrantTapAccess("Read", { path }), null, `${path} must stay readable`);
   }
-  // A crash is diagnosable without a trusted terminal; the keys beside it are not.
-  assert.equal(protectedGrantTapAccess("Bash", {}, "tail -60 ~/.granttap/monitor.log"), null);
-  assert.equal(
+  // Native Read tools keep diagnostics accessible; shell resolution is untrusted.
+  assert.ok(protectedGrantTapAccess("Bash", {}, "tail -60 ~/.granttap/monitor.log"));
+  assert.ok(
     protectedGrantTapAccess("Bash", { command: "tail -60 ~/.granttap/monitor.log 2>&1 | head -5" }),
-    null,
-    "a whole command line, not just a bare path, must resolve to the entry it names",
+    "shell pipelines cannot claim diagnostic-read access",
   );
   assert.ok(protectedGrantTapAccess("Bash", {}, "cat ~/.granttap/machine.json"));
   assert.ok(protectedGrantTapAccess("Bash", {}, "cat ~/.granttap/mesh-tool-calls.json"));
@@ -88,6 +87,20 @@ test("the guard covers trust state and unknown files while leaving diagnostics r
   );
   assert.equal(protectedGrantTapAccess("Bash", { command: "pgrep -fl com.granttap.mcp-http" }), null);
   assert.ok(protectedGrantTapAccess("Bash", { command: "cd $HOME && cat .granttap/session-keys.json" }));
+});
+
+test("a shell command cannot treat an arbitrary executable named cat as a reader", (t) => {
+  const configDir = mkdtempSync(join(tmpdir(), "granttap-reader-"));
+  const prior = process.env.GRANTTAP_CONFIG_DIR;
+  process.env.GRANTTAP_CONFIG_DIR = configDir;
+  t.after(() => {
+    if (prior == null) delete process.env.GRANTTAP_CONFIG_DIR;
+    else process.env.GRANTTAP_CONFIG_DIR = prior;
+    rmSync(configDir, { recursive: true, force: true });
+  });
+  assert.ok(protectedGrantTapAccess("Bash", {
+    command: `/tmp/cat ${join(configDir, "monitor.log")}`,
+  }));
 });
 
 test("a fault inside the guard is reported and allowed instead of blocking every tool", () => {

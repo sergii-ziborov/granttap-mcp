@@ -1,4 +1,4 @@
-import type { UserAttachment, UserMessage } from "../../../../../packages/protocol/schema";
+import type { UserMessage } from "../../../../../packages/protocol/schema";
 import { ATTACHMENT_MISSING_ERROR } from "../../../../../packages/protocol/schema";
 import type { RelayClient } from "../../../../../packages/core/relay-client";
 import { takeAttachment } from "../../delivery/attachment-store";
@@ -22,10 +22,9 @@ import { DELIVERY_TIMEOUT_MS } from "./receipts";
 async function startNewAgentTask(input: {
   client: RelayClient;
   message: UserMessage;
-  attachments: UserAttachment[];
   say: (text: string, sessionId?: string, wake?: boolean) => Promise<unknown>;
-}): Promise<void> {
-  const { client, message, attachments, say } = input;
+}): Promise<"rejected" | void> {
+  const { client, message, say } = input;
   const agent = message.agent ?? "codex";
   const displayName = {
     claude: "Claude Code", codex: "Codex", cursor: "Cursor", grok: "Grok Build",
@@ -45,6 +44,18 @@ async function startNewAgentTask(input: {
       await say(admitted.detail, undefined, true);
       return;
     }
+    if ("queued" in admitted && admitted.queued) {
+      // The phone's durable outbox retries after reconnect. This monitor has
+      // no worker for its separate pinned-task queue, so do not launch here.
+      return "rejected";
+    }
+  }
+  const resolved = resolveMessageAttachments(message, (attachmentId) => takeAttachment(attachmentId, client.room));
+  if (!resolved.ok) {
+    if (message.messageId) {
+      await sendDeliveryReceipt(client, message.messageId, "rejected", ATTACHMENT_MISSING_ERROR);
+    }
+    return "rejected";
   }
   await say(`Creating a new ${displayName} task…`);
   const create = {
@@ -54,7 +65,7 @@ async function startNewAgentTask(input: {
     grok: createGrokSession,
   }[agent];
   const result = await create(
-    message.text, requestedCwd, DELIVERY_TIMEOUT_MS, attachments, message.model,
+    message.text, requestedCwd, DELIVERY_TIMEOUT_MS, resolved.attachments, message.model,
   );
   if (result.ok) {
     await say(result.text, result.sessionId, true);
@@ -74,6 +85,9 @@ export async function handleUserMessage(
       ? sendSessionPayload(client, payload, sessionId, "phone", options)
       : client.send(payload, "phone", options)).catch(() => {});
   };
+  if (!message.sessionId) {
+    return startNewAgentTask({ client, message, say });
+  }
   const resolved = resolveMessageAttachments(message, (attachmentId) => takeAttachment(attachmentId, client.room));
   if (!resolved.ok) {
     if (message.messageId) {
@@ -82,11 +96,6 @@ export async function handleUserMessage(
     return "rejected";
   }
   const attachments = resolved.attachments;
-
-  if (!message.sessionId) {
-    await startNewAgentTask({ client, message, attachments, say });
-    return;
-  }
 
   const target = scanSessions().sessions.find((session) => session.sessionId === message.sessionId);
   if (!target) {

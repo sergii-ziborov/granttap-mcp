@@ -20,7 +20,7 @@ import { packageVersion } from "../status/package-version";
 import { desktopStatusSnapshot } from "../status/desktop-status";
 import { installOAuthBrowserRoutes } from "./oauth-routes";
 import { createMcpSessionHandler } from "./mcp-handler";
-import { startDesktopEngineBridge } from "../desktop/engine-bridge";
+import { startDesktopEngineBridgeProcess } from "../desktop/process/bridge-process";
 
 export const DEFAULT_HTTP_HOST = "127.0.0.1";
 export const DEFAULT_HTTP_PORT = 17342;
@@ -45,7 +45,7 @@ export async function startHttpMcpServer(options: ServeOptions = {}): Promise<{
   if (!Number.isInteger(port) || port < 1 || port > 65_535) {
     throw new Error("GrantTap HTTP MCP port must be an integer between 1 and 65535");
   }
-  const desktopBridge = await startDesktopEngineBridge();
+  const desktopBridge = await startDesktopEngineBridgeProcess();
 
   const mcpUrl = new URL(`http://${host === "::1" ? "[::1]" : host}:${port}/mcp`);
   const issuerUrl = new URL(`http://${host === "::1" ? "[::1]" : host}:${port}`);

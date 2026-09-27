@@ -29,3 +29,12 @@ test("an empty catalog is reported, not filled from a static fallback", () => {
   assert.equal(catalog.models.length, 0);
   assert.equal(catalog.reason, "not_reported");
 });
+
+test("an observed model belongs only to its provider on that endpoint", () => {
+  const catalog = catalogFromSessions("mac-a", [
+    { agent: "codex", computerId: "mac-a", model: "shared-name" },
+  ], 20);
+  assert.deepEqual(allowedModelIds(catalog, undefined, "claude"), []);
+  assert.deepEqual(allowedModelIds(catalog, undefined, "codex"), ["shared-name"]);
+  assert.deepEqual(allowedModelIds(catalog, [], "codex"), []);
+});

@@ -1,6 +1,9 @@
 import { parseInvocationResult } from "../engine-invocation-protocol";
 import { parseMemoryResult } from "../engine-memory-protocol";
 import { parsePolicyResult } from "../engine-policy-protocol";
+import { parseImpactResult } from "../impact/engine-impact-protocol";
+import { parseEngineIdentityResult } from "./identity-result-parser";
+import { parseProjectCatalog } from "./project-catalog-parser";
 import {
   ENGINE_PROTOCOL_VERSION,
   EngineProtocolError,
@@ -37,10 +40,10 @@ export function parseEngineResponse(value: unknown, requestId: string): EngineRe
 function parseResult(value: unknown): EngineResult {
   const result = requireObject(value, "engine result");
   const operation = result.operation;
-  if (operation === "engine.pong") parsePong(result);
-  else if (operation === "engine.version") parseVersion(result);
+  if (operation === "engine.pong" || operation === "engine.version") parseEngineIdentityResult(result);
   else if (operation === "project.resolved") parseResolution(result.resolution);
   else if (operation === "project.found") parseProject(result.project);
+  else if (operation === "project.listed") parseProjectCatalog(result.page);
   else if (operation === "project.bindings") parseBindings(result.bindings);
   else if (operation === "project.binding_upserted") parseBinding(result.binding);
   else if (operation === "graph.backbone") parseBackbone(result.backbone);
@@ -48,26 +51,13 @@ function parseResult(value: unknown): EngineResult {
   else if (operation === "context.compiled") {
     return { operation, compilation: parseContextCompilation(result.compilation) };
   }
-  else if (!parseMemoryResult(result, invalidResult)
+  else if (!parseImpactResult(result)
+    && !parseMemoryResult(result, invalidResult)
     && !parsePolicyResult(result, invalidResult)
     && !parseInvocationResult(result, invalidResult)) {
     throw new EngineProtocolError("engine result operation is unsupported");
   }
   return result as EngineResult;
-}
-
-function parsePong(result: EngineWireObject): void {
-  requireString(result.engine_version, "engine_version");
-}
-
-function parseVersion(result: EngineWireObject): void {
-  requireString(result.engine_version, "engine_version");
-  if (result.protocol_version !== ENGINE_PROTOCOL_VERSION) {
-    throw new EngineProtocolError("engine result protocol version mismatch");
-  }
-  requireBoundedString(result.cortex_version, "Cortex version", 64);
-  requireBoundedString(result.cortex_revision, "Cortex revision", 64);
-  requireBoundedString(result.weavatrix_version, "Weavatrix version", 64);
 }
 
 function parseResolution(value: unknown): void {

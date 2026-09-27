@@ -163,4 +163,29 @@ test("monitor routes settings and task messages without weakening provider gates
     ...base, messageId: "new-success", agent: "grok", cwd: fixture.repo,
   });
   assert.match(JSON.stringify(fake.sent.at(-1)), /Grok completed/);
+
+  const { inspectRepository } = await import("../../apps/bridge/src/mesh/catalog");
+  const { computerId } = await import("../../apps/bridge/src/mesh/identity/computer");
+  const { localMeshStore } = await import("../../apps/bridge/src/mesh/local-remote/local");
+  const { rememberExecutionPolicy, applyHostGrant } = await import("../../apps/bridge/src/mesh/runtime/execution-policy");
+  const endpoint = computerId();
+  const repositoryId = inspectRepository(fixture.repo).canonicalRepositoryId;
+  localMeshStore().upsertProject({ projectId: "offline-project", name: "Offline",
+    canonicalRepositoryId: repositoryId, createdAt: 1 });
+  localMeshStore().upsertBinding({ bindingId: "offline-binding", projectId: "offline-project",
+    endpointId: endpoint, repositoryId, displayName: "Local", localPathHint: fixture.repo, available: true });
+  rememberExecutionPolicy("offline-project", { mode: "pinned", targetEndpointId: endpoint,
+    revision: 1, hostGrantStatus: "pending", offlineBehavior: "queueUntilDeadline" }, endpoint);
+  applyHostGrant("offline-project", "applied", 1, endpoint);
+  const { storeAttachment, takeAttachment } = await import("../../apps/bridge/src/delivery/attachment-store");
+  assert.equal(storeAttachment({ type: "user.attachment", attachmentId: "offline-file",
+    name: "note.txt", mimeType: "text/plain", data: "ZGF0YQ==", createdAt: Date.now() }, fake.room), true);
+  const sentBeforeDisconnect = fake.sent.length;
+  assert.equal(await handleUserMessage(fake as never, {
+    ...base, messageId: "offline-new", agent: "grok", cwd: fixture.repo, projectId: "offline-project",
+    attachmentRefs: [{ attachmentId: "offline-file", name: "note.txt", mimeType: "text/plain" }],
+  }), "rejected");
+  assert.equal(fake.sent.length, sentBeforeDisconnect, "a disconnected host must not start or acknowledge the Task");
+  assert.equal(takeAttachment("offline-file", fake.room)?.name, "note.txt",
+    "retry must still be able to resolve the staged attachment");
 });

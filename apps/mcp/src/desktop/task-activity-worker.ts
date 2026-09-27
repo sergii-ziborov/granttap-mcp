@@ -1,12 +1,50 @@
 import { createInterface } from "node:readline";
 import { desktopTaskActivity } from "./task-activity";
+import { desktopTaskImage } from "./image";
+import { scanCapabilityUsage } from "../../../bridge/src/sessions";
+import { desktopSelectedMesh } from "./projection/selected-mesh";
+
+let usageCache: { at: number; result: unknown } | undefined;
+const activityCache = new Map<string, { at: number; result: ReturnType<typeof desktopTaskActivity> }>();
+
+function cachedActivity(query: unknown, storePath?: string) {
+  if (!query || typeof query !== "object") return undefined;
+  const input = query as { project_id?: unknown; task_id?: unknown };
+  if (typeof input.project_id !== "string" || typeof input.task_id !== "string") return undefined;
+  const key = JSON.stringify([storePath ?? "", input.project_id, input.task_id]);
+  const cached = activityCache.get(key);
+  if (cached && Date.now() - cached.at < 30_000) return cached.result;
+  const result = desktopTaskActivity(query, storePath);
+  if (activityCache.size > 16) activityCache.clear();
+  activityCache.set(key, { at: Date.now(), result });
+  return result;
+}
+
+function cachedUsage(): unknown {
+  if (usageCache && Date.now() - usageCache.at < 120_000) return usageCache.result;
+  const result = { ...scanCapabilityUsage(), operation: "desktop.capability_usage" };
+  usageCache = { at: Date.now(), result };
+  return result;
+}
 
 process.stdout.write('{"ready":true}\n');
 for await (const line of createInterface({ input: process.stdin, crlfDelay: Infinity })) {
   if (line.length > 8_192) continue;
   try {
     const request = JSON.parse(line) as { id: string; query: unknown; storePath?: string };
-    const result = desktopTaskActivity(request.query, request.storePath) ?? null;
+    const result = request.query && typeof request.query === "object"
+      && (request.query as { operation?: string }).operation === "desktop.capability_usage"
+      ? cachedUsage()
+      : request.query && typeof request.query === "object"
+        && (request.query as { operation?: string }).operation === "desktop.mesh_snapshot"
+        ? await desktopSelectedMesh(
+          (request.query as { project_id: string }).project_id
+        ) ?? null
+      : request.query && typeof request.query === "object"
+        && (request.query as { operation?: string }).operation === "desktop.task_image"
+        ? desktopTaskImage(request.query, request.storePath,
+          cachedActivity(request.query, request.storePath)) ?? null
+      : cachedActivity(request.query, request.storePath) ?? null;
     process.stdout.write(`${JSON.stringify({ id: request.id, result })}\n`);
   } catch {
     process.stdout.write('{"id":null,"result":null}\n');

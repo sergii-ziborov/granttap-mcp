@@ -194,9 +194,12 @@ function expectedResultOperation(
   if (operation === "engine.version") return "engine.version";
   if (operation === "project.resolve") return "project.resolved";
   if (operation === "project.get") return "project.found";
+  if (operation === "project.list") return "project.listed";
   if (operation === "project.list_bindings") return "project.bindings";
   if (operation === "project.upsert_binding") return "project.binding_upserted";
   if (operation === "graph.get_backbone") return "graph.backbone";
+  if (operation === "graph.get_heads") return "graph.heads";
+  if (operation === "graph.compute_impact") return "graph.impact";
   if (operation === "graph.analyze_repository") return "graph.repository";
   if (operation === "context.compile_project") return "context.compiled";
   if (operation === "invocation.observe") return "invocation.observed";

@@ -1,6 +1,8 @@
 import { join } from "node:path";
 import { configDir } from "../../../bridge/src/config/runtime/paths";
 import { readStoreState } from "../../../bridge/src/mesh/store/state";
+import { selectSnapshotTasks } from "../../../bridge/src/mesh/snapshot/window";
+import { MeshSnapshot } from "../../../../packages/protocol/schema";
 
 type DesktopExecution = {
   taskId: string; provider: string; startedAt: number;
@@ -40,16 +42,73 @@ export function desktopMeshProject(input: unknown, storePath = join(configDir(),
   };
 }
 
+/** Fixture-store projection for isolated bridge tests; production uses the canonical runtime. */
+export function desktopFixtureSnapshot(
+  input: unknown, storePath = join(configDir(), "project-mesh.json")
+) {
+  if (input === null || typeof input !== "object" || Array.isArray(input)) return undefined;
+  const projectId = (input as Record<string, unknown>).project_id;
+  if (typeof projectId !== "string" || !projectId || projectId.length > 128) return undefined;
+  const loaded = readStoreState(storePath);
+  if (loaded.status !== "ok") return undefined;
+  const state = loaded.state;
+  const project = state.projects.find((item) => item.projectId === projectId);
+  if (!project) return undefined;
+  const selected = selectSnapshotTasks(state.tasks.filter((item) => item.projectId === projectId));
+  const taskIds = new Set(selected.tasks.map((item) => item.taskId));
+  const bindings = state.bindings.filter((item) => item.projectId === projectId);
+  const peers = state.peers.filter((item) => item.projectId === projectId);
+  const executions = state.executions.filter((item) => taskIds.has(item.taskId));
+  const claims = state.claims.filter((item) => item.projectId === projectId
+    && taskIds.has(item.taskId) && item.expiresAt > Date.now());
+  const dependencies = state.dependencies.filter((item) => taskIds.has(item.taskId));
+  const events = state.events.filter((item) => item.projectId === projectId && taskIds.has(item.taskId));
+  const incomplete = selected.incomplete || bindings.length > 64 || peers.length > 64
+    || executions.length > 128 || claims.length > 128 || dependencies.length > 128
+    || events.length > 128;
+  return MeshSnapshot.parse({
+    type: "mesh.snapshot", sessionId: projectId, projectId, project,
+    bindings: bindings.slice(0, 64), peers: peers.slice(-64),
+    tasks: selected.tasks, executions: executions.slice(-128),
+    claims: claims.slice(-128), dependencies: dependencies.slice(-128),
+    events: events.slice(-128), incomplete: incomplete || undefined,
+    generatedAt: Date.now(),
+  });
+}
+
+/** Durable Mesh list; live Engine enrichment is requested for the selected Mesh only. */
+export function desktopMeshSnapshots(storePath = join(configDir(), "project-mesh.json")) {
+  return {
+    operation: "desktop.mesh_snapshots" as const,
+    snapshots: (desktopWorkspace(storePath)?.projects ?? []).flatMap((project) =>
+      desktopFixtureSnapshot({ project_id: project.project_id }, storePath) ?? []),
+  };
+}
+
 /** Global Task index for the Mac's Now and Tasks views. */
 export function desktopWorkspace(storePath = join(configDir(), "project-mesh.json")) {
   const loaded = readStoreState(storePath);
   if (loaded.status !== "ok" && loaded.status !== "missing") return undefined;
   const state = loaded.state;
   const projects = new Map(state.projects.map((project) => [project.projectId, project.name]));
+  const taskCounts = new Map<string, number>();
+  for (const task of state.tasks) {
+    taskCounts.set(task.projectId, (taskCounts.get(task.projectId) ?? 0) + 1);
+  }
   return {
     operation: "desktop.workspace" as const,
     project_count: state.projects.length,
     task_count: state.tasks.length,
+    projects: state.projects.slice(0, 256).map((project) => ({
+      project_id: project.projectId,
+      name: project.name,
+      task_count: taskCounts.get(project.projectId) ?? 0,
+      repository_count: new Set([
+        project.canonicalRepositoryId,
+        ...state.bindings.filter((binding) => binding.projectId === project.projectId)
+          .map((binding) => binding.repositoryId),
+      ]).size,
+    })),
     tasks: [...state.tasks].sort((left, right) => right.updatedAt - left.updatedAt)
       .slice(0, 256).map((task) => ({
         project_id: task.projectId, project_name: projects.get(task.projectId) ?? "Project",

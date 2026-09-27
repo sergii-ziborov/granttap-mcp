@@ -1,6 +1,6 @@
-import { readFileSync } from "node:fs";
+import { lstatSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ProjectExecutionPolicy } from "../../../../../packages/protocol/schema";
+import { ProjectExecutionPolicy as ExecutionPolicySchema, type ProjectExecutionPolicy } from "../../../../../packages/protocol/schema";
 import { configDir } from "../../config/runtime/paths";
 import { writePrivateFile } from "../../config/access/write-private";
 import { setRequireFreshCommands } from "../../config/commands";
@@ -8,21 +8,68 @@ import { setRequireFreshCommands } from "../../config/commands";
 export type StoredExecutionPolicy = ProjectExecutionPolicy & { projectId: string };
 
 type StoreFile = { policies: StoredExecutionPolicy[] };
+const STORE_MARKER = "execution-policies-v1\n";
 
 export function executionPoliciesPath(): string {
   return join(configDir(), "execution-policies.json");
 }
 
-function loadAll(): StoredExecutionPolicy[] {
+export class ExecutionPolicyStoreError extends Error {
+  constructor() { super("Execution policy store is unreadable or invalid"); }
+}
+
+function markerPath(): string {
+  return join(configDir(), "execution-policies.known");
+}
+
+function markerPresent(): boolean {
+  const path = markerPath();
   try {
-    const raw = JSON.parse(readFileSync(executionPoliciesPath(), "utf8")) as StoreFile;
-    return Array.isArray(raw.policies) ? raw.policies : [];
-  } catch {
-    return [];
+    if (!lstatSync(path).isFile() || readFileSync(path, "utf8") !== STORE_MARKER) {
+      throw new ExecutionPolicyStoreError();
+    }
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw new ExecutionPolicyStoreError();
   }
 }
 
+function ensureMarker(): void {
+  if (markerPresent()) return;
+  try { writePrivateFile(markerPath(), STORE_MARKER); }
+  catch { throw new ExecutionPolicyStoreError(); }
+}
+
+function loadAll(): StoredExecutionPolicy[] {
+  let contents: string;
+  try {
+    contents = readFileSync(executionPoliciesPath(), "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT" && !markerPresent()) return [];
+    throw new ExecutionPolicyStoreError();
+  }
+  // Migrate an existing store on first read. A later missing store is then a
+  // failure, including when a crash occurs after recording the marker.
+  ensureMarker();
+  let raw: StoreFile;
+  try { raw = JSON.parse(contents) as StoreFile; }
+  catch { throw new ExecutionPolicyStoreError(); }
+  if (!raw || !Array.isArray(raw.policies)) throw new ExecutionPolicyStoreError();
+  const seen = new Set<string>();
+  return raw.policies.map((item) => {
+    if (!item || typeof item.projectId !== "string" || !item.projectId.trim()
+      || seen.has(item.projectId)) throw new ExecutionPolicyStoreError();
+    const { projectId, ...policy } = item;
+    const parsed = ExecutionPolicySchema.safeParse(policy);
+    if (!parsed.success) throw new ExecutionPolicyStoreError();
+    seen.add(projectId);
+    return { ...parsed.data, projectId };
+  });
+}
+
 function saveAll(policies: StoredExecutionPolicy[]): void {
+  ensureMarker();
   writePrivateFile(executionPoliciesPath(), `${JSON.stringify({ policies }, null, 2)}\n`);
   setRequireFreshCommands(policies.some((item) => item.mode === "pinned"));
 }
@@ -76,6 +123,9 @@ export function admitNewTask(input: {
   now?: number;
 }): TaskAdmission {
   const policy = input.policy;
+  if (input.model && input.allowedModels && !input.allowedModels.includes(input.model)) {
+    return { ok: false, reason: "model_not_allowed" };
+  }
   if (!policy || policy.mode === "distributed") return { ok: true };
   const target = policy.targetEndpointId;
   if (!target || target !== input.localEndpointId) return { ok: false, reason: "wrong_host" };
@@ -89,9 +139,6 @@ export function admitNewTask(input: {
       return { ok: true, queued: true, deadline: input.now ?? Date.now() };
     }
     return { ok: false, reason: "host_offline" };
-  }
-  if (input.model && input.allowedModels && !input.allowedModels.includes(input.model)) {
-    return { ok: false, reason: "model_not_allowed" };
   }
   return { ok: true };
 }

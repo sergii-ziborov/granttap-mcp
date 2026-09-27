@@ -32,7 +32,6 @@ export type CursorTranscriptSummary = {
   titleFromUser?: string;
   tokensSession: number;
   tokensLastTurn: number;
-  contextTokensUsed: number;
   observations: CapabilityObservation[];
 };
 
@@ -239,7 +238,7 @@ export function transcriptSummary(
   if (cached?.fingerprint === fingerprint) return cached.summary;
   const acc: SummaryAccumulator = {
     lastActivityAt: 0, startedAt: 0, files: files.map((file) => file.path),
-    tokensSession: 0, tokensLastTurn: 0, contextTokensUsed: 0,
+    tokensSession: 0, tokensLastTurn: 0,
     observations: [], pending: new Map(),
   };
   for (const file of files) summarizeFile(file, rootSessionId, cwd, acc);
@@ -248,7 +247,6 @@ export function transcriptSummary(
     if (observation) rememberCapabilityObservation(acc.observations, observation);
   }
   const { pending, lastRole, ...summary } = acc;
-  summary.contextTokensUsed = summary.tokensSession;
   summaryCache.delete(cacheKey);
   summaryCache.set(cacheKey, { fingerprint, summary });
   while (summaryCache.size > 512) summaryCache.delete(summaryCache.keys().next().value!);

@@ -1,6 +1,6 @@
 import { inspectRepository } from "../catalog";
 import { computerId } from "../identity/computer";
-import { admitNewTask, loadExecutionPolicy } from "../runtime/execution-policy";
+import { admitNewTask, ExecutionPolicyStoreError, loadExecutionPolicy } from "../runtime/execution-policy";
 import { localMeshStore } from "../local-remote/local";
 import { allowedModelIds, catalogFromSessions } from "../catalog/models";
 import { scanSessionHistory, scanSessions } from "../../sessions";
@@ -11,9 +11,10 @@ const DETAILS = {
   wrong_host: "This Project is pinned to another computer. GrantTap will not start the task here.",
   host_offline: "The pinned host is offline.",
   host_unavailable: "The pinned host grant was withdrawn.",
-  model_not_allowed: "That model is not in the pinned host catalog.",
+  model_not_allowed: "That model is not available for this provider on this computer.",
   no_project_binding: "This computer has no Project binding for that folder.",
   wrong_project: "That folder belongs to a different Project on this computer.",
+  policy_unavailable: "This Project's execution policy cannot be read; task creation is paused until it is repaired.",
 } as const;
 
 export type CreateTaskEvaluation =
@@ -66,14 +67,19 @@ export function evaluateCreateTask(input: {
   });
   if (!resolved.ok) return resolved;
   const projectId = resolved.projectId;
-  const policy = projectId ? loadExecutionPolicy(projectId) : undefined;
+  let policy;
+  try { policy = projectId ? loadExecutionPolicy(projectId) : undefined; }
+  catch (error) {
+    if (!(error instanceof ExecutionPolicyStoreError)) throw error;
+    return { ok: false, reason: "policy_unavailable", detail: DETAILS.policy_unavailable };
+  }
   const catalog = catalogFromSessions(endpoint, scanSessions().sessions);
   const admitted = admitNewTask({
     policy,
     localEndpointId: endpoint,
     hostOnline: input.hostOnline ?? true,
     model: input.model,
-    allowedModels: allowedModelIds(catalog, undefined),
+    allowedModels: allowedModelIds(catalog, undefined, input.agent),
     now: input.now,
   });
   if (!admitted.ok) return { ok: false, reason: admitted.reason, detail: DETAILS[admitted.reason] };

@@ -19,6 +19,7 @@ export class DesktopTaskActivityRunner {
   private pending?: Pending;
   private queue: Pending[] = [];
   private buffer = "";
+  private usageInFlight?: Promise<unknown>;
 
   constructor() { this.start(); }
 
@@ -34,6 +35,35 @@ export class DesktopTaskActivityRunner {
       || typeof taskId !== "string" || !taskId || taskId.length > 128) {
       return Promise.resolve(undefined);
     }
+    return this.enqueue(query, storePath);
+  }
+
+  usage(): Promise<unknown> {
+    if (this.usageInFlight) return this.usageInFlight;
+    if (this.closed || this.queue.length + (this.pending ? 1 : 0) >= 8) {
+      return Promise.resolve(undefined);
+    }
+    const request = this.enqueue({ operation: "desktop.capability_usage" });
+    this.usageInFlight = request;
+    void request.finally(() => { if (this.usageInFlight === request) this.usageInFlight = undefined; });
+    return request;
+  }
+
+  enrichedSnapshot(projectId: string): Promise<unknown> {
+    if (this.closed || this.queue.length + (this.pending ? 1 : 0) >= 8
+      || !projectId || projectId.length > 128) return Promise.resolve(undefined);
+    return this.enqueue({ operation: "desktop.mesh_snapshot", project_id: projectId });
+  }
+
+  image(query: unknown, storePath?: string): Promise<unknown> {
+    if (this.closed || this.queue.length + (this.pending ? 1 : 0) >= 8
+      || query === null || typeof query !== "object" || Array.isArray(query)) {
+      return Promise.resolve(undefined);
+    }
+    return this.enqueue({ ...query, operation: "desktop.task_image" }, storePath);
+  }
+
+  private enqueue(query: unknown, storePath?: string): Promise<unknown> {
     return new Promise((resolve) => {
       const id = randomUUID();
       this.queue.push({
@@ -65,7 +95,7 @@ export class DesktopTaskActivityRunner {
     child.stderr.resume();
     child.stdout.on("data", (chunk: Buffer) => {
       this.buffer += chunk.toString("utf8");
-      if (this.buffer.length > 256 * 1_024) { child.kill("SIGKILL"); return; }
+      if (this.buffer.length > 480 * 1_024) { child.kill("SIGKILL"); return; }
       for (;;) {
         const end = this.buffer.indexOf("\n");
         if (end < 0) break;
@@ -97,7 +127,10 @@ export class DesktopTaskActivityRunner {
       }
       if (message.id !== this.pending?.id) return;
       const result = message.result as Record<string, unknown> | null;
-      this.finish(result?.operation === "desktop.task_activity" ? result : undefined);
+      this.finish(result?.operation === "desktop.task_activity"
+        || result?.operation === "desktop.capability_usage"
+        || result?.type === "mesh.snapshot"
+        || result?.operation === "desktop.task_image" ? result : undefined);
     } catch { this.finish(undefined); }
   }
 
@@ -119,7 +152,10 @@ export class DesktopTaskActivityRunner {
       if (wasSent) this.ready = false;
       this.finish(undefined);
       if (wasSent) this.child?.kill("SIGKILL");
-    }, 4_000);
+    }, this.pending.payload.includes("desktop.capability_usage") ? 60_000
+      : this.pending.payload.includes("desktop.mesh_snapshot") ? 40_000
+      : this.pending.payload.includes("desktop.task_activity")
+        || this.pending.payload.includes("desktop.task_image") ? 35_000 : 12_000);
     this.sendPending();
   }
 

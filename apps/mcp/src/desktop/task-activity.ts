@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { configDir } from "../../../bridge/src/config/runtime/paths";
 import { readStoreState } from "../../../bridge/src/mesh/store/state";
 import { scanSessionActivity } from "../../../bridge/src/sessions";
+import { codexActivity } from "../../../bridge/src/sessions/scan/codex";
 import type { SessionActivity, SessionInfo } from "../../../../packages/protocol/schema";
 
 type ActivitySources = {
@@ -34,13 +35,17 @@ export function desktopTaskActivity(
   }));
   const matched = links.flatMap((link) => sessions.filter((session) =>
     session.sessionId === link.sessionId && session.agent === link.provider))[0];
-  const activity = matched ? (sources.activity ?? scanSessionActivity)(matched) : undefined;
+  const activity = matched ? sources.activity?.(matched)
+    ?? (matched.agent === "codex"
+      ? { entries: codexActivity(matched), state: matched.state }
+      : scanSessionActivity(matched)) : undefined;
   const rootEntries = activity?.entries.filter((entry) => !entry.childThreadId) ?? [];
-  const entries = rootEntries.slice(-48).map((entry) => ({
+  const entries = rootEntries.slice(-256).map((entry) => ({
     id: entry.id.slice(0, 256), kind: entry.kind,
     text: entry.text.slice(0, 2_048), created_at: entry.createdAt,
     tool_name: entry.toolName?.slice(0, 160) ?? null,
     summary: entry.summary?.slice(0, 200) ?? null,
+    attachments: entry.attachments ?? null,
   }));
   return {
     operation: "desktop.task_activity" as const,

@@ -283,8 +283,9 @@ export function scanCapabilityUsage(
             : session.agent === "grok" ? grokCapabilityUsage(session)
             : [];
     for (const observation of observations) {
-      const event = toRemoteCapabilityUsageEvent(observation);
-      if (!event) continue;
+      const converted = toRemoteCapabilityUsageEvent(observation);
+      if (!converted) continue;
+      const event = { ...converted, agent: session.agent };
       totals.add(event);
       rememberCapabilityUsageCandidate(candidates, event);
     }

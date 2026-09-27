@@ -1,13 +1,97 @@
 import assert from "node:assert/strict";
 import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { createConnection } from "node:net";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { startDesktopEngineBridge } from "../../apps/mcp/src/desktop/engine-bridge";
+import { startDesktopEngineBridgeProcess } from "../../apps/mcp/src/desktop/process/bridge-process";
+import { DesktopTaskActivityRunner } from "../../apps/mcp/src/desktop/task-activity-runner";
 import { desktopWorkspace } from "../../apps/mcp/src/desktop/mesh-project";
 import { desktopTaskActivity } from "../../apps/mcp/src/desktop/task-activity";
+import { desktopReadOperation } from "../../apps/mcp/src/desktop/operations";
+import { codexImageChunk } from "../../apps/bridge/src/sessions/scan/codex/activity";
 import { encodeEngineFrame } from "../../apps/bridge/src/engine/protocol/engine-protocol";
+
+test("Codex image bytes are available only by the matching conversation entry", () => {
+  const timestamp = "2026-09-27T00:00:00.000Z";
+  const data = Buffer.from("image-test-bytes");
+  const lines = [JSON.stringify({ type: "response_item", timestamp,
+    payload: { type: "message", role: "user", content: [
+      { type: "input_text", text: "See image" },
+      { type: "input_image", image_url: `data:image/png;base64,${data.toString("base64")}` },
+    ] } })];
+  const id = `session:${Date.parse(timestamp)}:1`;
+  const chunk = codexImageChunk("session", id, 0, lines);
+  assert.equal(chunk?.mime_type, "image/png");
+  assert.deepEqual(Buffer.from(chunk?.data_base64 ?? "", "base64"), data);
+  assert.equal(codexImageChunk("other-session", id, 0, lines), undefined);
+  assert.equal(codexImageChunk("session", id, data.length + 1, lines), undefined);
+});
+
+test("desktop Mesh list is available without waiting for the analysis worker", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "granttap-desktop-mesh-list-"));
+  const storePath = join(directory, "project-mesh.json");
+  writeFileSync(storePath, JSON.stringify({ version: 1,
+    projects: [{ projectId: "mesh-one", name: "A Mesh", createdAt: 1,
+      canonicalRepositoryId: "repo-one" }],
+    tasks: [], bindings: [], executions: [],
+  }));
+  const fail = () => { throw new Error("analysis worker must not delay the Mesh list"); };
+  type ReadInput = Parameters<typeof desktopReadOperation>[0];
+  const result = await desktopReadOperation({
+    operation: "desktop.mesh_snapshots", queryInput: undefined, storePath,
+    engine: { request: fail } as unknown as ReadInput["engine"],
+    activity: {} as ReadInput["activity"],
+    enrichment: {} as ReadInput["enrichment"],
+  });
+  assert.deepEqual((result as { snapshots: Array<{ projectId: string }> }).snapshots
+    .map((snapshot) => snapshot.projectId), ["mesh-one"]);
+});
+
+test("selected Mesh enrichment is independent of usage scanning", async () => {
+  type ReadInput = Parameters<typeof desktopReadOperation>[0];
+  const result = await desktopReadOperation({
+    operation: "desktop.mesh_snapshot",
+    queryInput: { project_id: "mesh-one", enrich: "true" },
+    engine: { request: async () => ({}) } as unknown as ReadInput["engine"],
+    activity: {} as ReadInput["activity"],
+    enrichment: { enrichedSnapshot: async () => ({ type: "mesh.snapshot" }) } as never,
+  });
+  assert.deepEqual(result, { type: "mesh.snapshot" });
+});
+
+test("desktop reads remain responsive while the HTTP process is busy", async (t) => {
+  const bridge = await startDesktopEngineBridgeProcess();
+  t.after(() => bridge.close());
+  const request = [
+    "const net=require('node:net');",
+    "const input=JSON.stringify({protocol_version:1,request_id:'test',operation:'desktop.workspace'});",
+    "const header=Buffer.alloc(4);header.writeUInt32BE(Buffer.byteLength(input));",
+    "const socket=net.createConnection(process.argv[1]);let bytes=Buffer.alloc(0);",
+    "socket.on('connect',()=>socket.write(Buffer.concat([header,Buffer.from(input)])));",
+    "socket.on('data',chunk=>{bytes=Buffer.concat([bytes,chunk]);",
+    "if(bytes.length<4||bytes.length<4+bytes.readUInt32BE(0))return;",
+    "const result=JSON.parse(bytes.subarray(4).toString());",
+    "process.stdout.write(result.status);socket.end();});",
+  ].join("");
+  const status = execFileSync(process.execPath, ["-e", request, bridge.socketPath], {
+    encoding: "utf8", timeout: 8_000,
+  });
+  assert.equal(status, "ok");
+});
+
+test("concurrent desktop Usage reads share one scan", async (t) => {
+  const worker = new DesktopTaskActivityRunner();
+  t.after(() => worker.close());
+  const first = worker.usage();
+  const second = worker.usage();
+  assert.strictEqual(second, first);
+  const result = await first as { operation?: string } | undefined;
+  assert.equal(result?.operation, "desktop.capability_usage");
+});
 
 function exchange(path: string, request: object): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -59,7 +143,9 @@ test("desktop bridge finds Mesh Projects when an installed Engine lacks catalog 
   await writeFile(storePath, JSON.stringify({ version: 1, projects: [
     { projectId: "a", name: "Lowercase", canonicalRepositoryId: "repo-a", createdAt: 2 },
     { projectId: "A", name: "Uppercase", canonicalRepositoryId: "repo-A", createdAt: 1 },
-  ], tasks: [{ taskId: "task-one", projectId: "A", title: "Fix Mac",
+  ], bindings: [{ bindingId: "binding-b", projectId: "A", endpointId: "computer-one",
+    repositoryId: "repo-B", displayName: "Second repository", available: true }],
+  tasks: [{ taskId: "task-one", projectId: "A", title: "Fix Mac",
     goal: "Private task prompt", state: "working", createdAt: 1, updatedAt: 2 }],
   executions: [{ taskId: "task-one", sessionId: "session-one", provider: "codex",
     computerId: "computer-one", workspace: "/tmp/project", startedAt: 1,
@@ -100,17 +186,47 @@ test("desktop bridge finds Mesh Projects when an installed Engine lacks catalog 
   assert.equal(meshBody.result.tasks[0]?.last_execution_active_at, 2);
   assert.doesNotMatch(JSON.stringify(meshBody), /Private task prompt/);
 
+  const snapshotResponse = await exchange(bridge.socketPath, {
+    protocol_version: 1, request_id: "snapshot", operation: "desktop.mesh_snapshot",
+    input: { project_id: "A" },
+  });
+  const snapshotBody = JSON.parse(snapshotResponse.subarray(4).toString("utf8")) as {
+    status: string; result: { type: string; projectId: string;
+      bindings: Array<{ repositoryId: string }>;
+      tasks: Array<{ taskId: string }>; executions: Array<{ sessionId: string }> };
+  };
+  assert.equal(snapshotBody.status, "ok");
+  assert.equal(snapshotBody.result.type, "mesh.snapshot");
+  assert.equal(snapshotBody.result.projectId, "A");
+  assert.deepEqual(snapshotBody.result.bindings.map((item) => item.repositoryId), ["repo-B"]);
+  assert.deepEqual(snapshotBody.result.tasks.map((item) => item.taskId), ["task-one"]);
+  assert.deepEqual(snapshotBody.result.executions.map((item) => item.sessionId), ["session-one"]);
+
+  const batchResponse = await exchange(bridge.socketPath, {
+    protocol_version: 1, request_id: "snapshots", operation: "desktop.mesh_snapshots",
+  });
+  const batchBody = JSON.parse(batchResponse.subarray(4).toString("utf8")) as {
+    status: string; result: { snapshots: Array<{ projectId: string }> };
+  };
+  assert.equal(batchBody.status, "ok");
+  assert.deepEqual(batchBody.result.snapshots.map((item) => item.projectId), ["a", "A"]);
+
   const workspaceResponse = await exchange(bridge.socketPath, {
     protocol_version: 1, request_id: "workspace", operation: "desktop.workspace",
   });
   const workspaceBody = JSON.parse(workspaceResponse.subarray(4).toString("utf8")) as {
     status: string; result: { project_count: number; task_count: number;
+      projects: Array<{ project_id: string; name: string; task_count: number;
+        repository_count: number }>;
       tasks: Array<{ title: string; project_name: string; has_open_execution: boolean;
         last_execution_active_at: number | null }> };
   };
   assert.equal(workspaceBody.status, "ok");
   assert.equal(workspaceBody.result.project_count, 2);
   assert.equal(workspaceBody.result.task_count, 1);
+  assert.deepEqual(workspaceBody.result.projects.map((item) => [
+    item.project_id, item.name, item.task_count, item.repository_count,
+  ]), [["a", "Lowercase", 0, 1], ["A", "Uppercase", 1, 2]]);
   assert.deepEqual(workspaceBody.result.tasks.map((item) => item.title), ["Fix Mac"]);
   assert.equal(workspaceBody.result.tasks[0]?.has_open_execution, true);
   assert.equal(workspaceBody.result.tasks[0]?.last_execution_active_at, 2);

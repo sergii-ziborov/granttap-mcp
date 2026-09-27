@@ -13,8 +13,6 @@ import type {
 import {
   projectBackbone, projectRepositoryGraphs, waitForProjectBindingSync,
 } from "../../engine/runtime/engine-projects";
-import { projectCortexIntegration } from "../../cortex/integration";
-import { projectKnowledge, queueProjectKnowledgeSync } from "../../engine/runtime/engine-memory";
 import { configDir } from "../../config";
 import {
   createClaudeSession,
@@ -38,7 +36,7 @@ import { handoffReadiness } from "../tasks/readiness";
 import { createHandoffFlow } from "./handoff";
 import type { MeshRuntimeDependencies } from "./dependencies";
 import { localMeshStore } from "../local-remote/local";
-import { activeProjectKnowledge, supersededProjectKnowledgeIds } from "../knowledge/active";
+import { enrichMeshSnapshot } from "./snapshot/enriched";
 import { createHandoffWorktree, repositoryHasCommit } from "./worktree";
 import { fetchRevision, pushBranch } from "../local-remote/remote";
 import { projectSessionCapabilityInventory, projectExecutionCapabilitySessions } from "./capabilities";
@@ -160,43 +158,53 @@ export function createMeshRuntime(deps: MeshRuntimeDependencies) {
   const catalog = (sessions: SessionInfo[]) =>
     linkSessionsToProjects(deps.store(), sessions, deps.computer());
 
+  const composeSnapshot = (
+    projectId: string,
+    store = deps.store(),
+    sessions = deps.sessions(),
+    models = catalogFromSessions(deps.computer(), sessions),
+  ): MeshSnapshot | undefined => {
+    const snapshot = store.snapshot(projectId, deps.computer());
+    if (!snapshot) return undefined;
+    const linked = projectExecutionCapabilitySessions(
+      snapshot, sessions, deps.computer(), deps.capabilityInventory,
+    );
+    const reported = projectMcpServers(
+      linked.filter((session) => session.computerId === deps.computer()), projectId,
+    );
+    const workspaces = (snapshot.bindings ?? [])
+      .filter((binding) => binding.endpointId === deps.computer()
+        && binding.available && binding.localPathHint)
+      .map((binding) => binding.localPathHint!);
+    const mcpServers = mergeConfiguredMcpServers(
+      configuredProjectMcpServers(deps.computer(), workspaces), reported,
+    );
+    const capabilityObservations = projectCapabilityObservations({
+      projectId, endpointId: deps.computer(), bound: workspaces.length > 0,
+      requests: snapshot.capabilityRequests ?? [], skills: snapshot.skills ?? [],
+      mcpServers, now: deps.now(),
+    });
+    return {
+      ...snapshot,
+      publisherEndpointId: deps.computer(),
+      mcpServers: mcpServers.length > 0 ? mcpServers : undefined,
+      capabilityObservations: capabilityObservations.length > 0
+        ? capabilityObservations : undefined,
+      modelCatalog: models.models.length > 0 || models.reason ? [models] : undefined,
+    };
+  };
+
   return {
     catalog,
+    snapshot(projectId: string): MeshSnapshot | undefined {
+      return composeSnapshot(projectId);
+    },
     snapshots(): MeshSnapshot[] {
       const store = deps.store();
       const sessions = deps.sessions();
       const models = catalogFromSessions(deps.computer(), sessions);
-      return store.projectIds().flatMap((projectId) => {
-        const snapshot = store.snapshot(projectId, deps.computer());
-        if (!snapshot) return [];
-        const linked = projectExecutionCapabilitySessions(
-          snapshot, sessions, deps.computer(), deps.capabilityInventory,
-        );
-        const reported = projectMcpServers(
-          linked.filter((session) => session.computerId === deps.computer()),
-          projectId,
-        );
-        const workspaces = (snapshot.bindings ?? [])
-          .filter((binding) => binding.endpointId === deps.computer()
-            && binding.available && binding.localPathHint)
-          .map((binding) => binding.localPathHint!);
-        const mcpServers = mergeConfiguredMcpServers(
-          configuredProjectMcpServers(deps.computer(), workspaces), reported,
-        );
-        const capabilityObservations = projectCapabilityObservations({
-          projectId, endpointId: deps.computer(), bound: workspaces.length > 0,
-          requests: snapshot.capabilityRequests ?? [], skills: snapshot.skills ?? [],
-          mcpServers, now: deps.now(),
-        });
-        return [{
-          ...snapshot,
-          publisherEndpointId: deps.computer(),
-          mcpServers: mcpServers.length > 0 ? mcpServers : undefined,
-          capabilityObservations: capabilityObservations.length > 0
-            ? capabilityObservations : undefined,
-          modelCatalog: models.models.length > 0 || models.reason ? [models] : undefined,
-        }];
-      });
+      return store.projectIds().flatMap((projectId) =>
+        composeSnapshot(projectId, store, sessions, models) ?? []);
     },
     requestCapability(input: ProjectCapabilityRequestSet): boolean {
       const project = deps.store().snapshot(input.projectId)?.project;
@@ -243,44 +251,21 @@ export function meshSnapshots(): MeshSnapshot[] {
   return defaultRuntime.snapshots();
 }
 
+export function meshSnapshot(projectId: string): MeshSnapshot | undefined {
+  return defaultRuntime.snapshot(projectId);
+}
+
 export function requestProjectCapability(input: ProjectCapabilityRequestSet): boolean {
   return defaultRuntime.requestCapability(input);
 }
 
 export async function meshSnapshotsWithEngine(): Promise<MeshSnapshot[]> {
-  return Promise.all(meshSnapshots().map(async (snapshot) => {
-    await waitForProjectBindingSync(snapshot.projectId);
-    queueProjectKnowledgeSync({
-      projectId: snapshot.projectId,
-      events: localMeshStore().historyEventsForProject(snapshot.projectId),
-    });
-    const [backbone, repositoryGraphs, knowledge] = await Promise.all([
-      projectBackbone(snapshot.projectId),
-      projectRepositoryGraphs(snapshot.projectId, snapshot.bindings ?? [], {
-        background: true,
-        priority: snapshot.tasks.reduce((latest, task) => Math.max(latest, task.updatedAt), 0),
-      }),
-      projectKnowledge(snapshot.projectId),
-    ]);
-    const sharedKnowledge = knowledge?.filter((item) => item.visibility === "project");
-    if (sharedKnowledge) localMeshStore().cacheKnowledge(snapshot.projectId, sharedKnowledge);
-    const memoryRows = new Map((snapshot.knowledge ?? []).map((item) => [item.recordId, item]));
-    for (const item of sharedKnowledge ?? []) memoryRows.set(item.recordId, item);
-    const allMemory = [...memoryRows.values()];
-    const correctedIds = [...new Set([
-      ...(snapshot.supersededKnowledgeRecordIds ?? []),
-      ...supersededProjectKnowledgeIds(snapshot.projectId, allMemory),
-    ])].sort().slice(-128);
-    const enriched = { ...snapshot, backbone, repositoryGraphs,
-      knowledge: activeProjectKnowledge(snapshot.projectId, allMemory)
-        .sort((a, b) => b.recordedAt - a.recordedAt).slice(0, 16),
-      ...(correctedIds.length > 0 ? { supersededKnowledgeRecordIds: correctedIds } : {}) };
-    const cortex = await projectCortexIntegration(enriched);
-    return {
-      ...enriched,
-      cortex: [cortex],
-    };
-  }));
+  return Promise.all(meshSnapshots().map(enrichMeshSnapshot));
+}
+
+export async function meshSnapshotWithEngine(projectId: string): Promise<MeshSnapshot | undefined> {
+  const snapshot = meshSnapshot(projectId);
+  return snapshot ? enrichMeshSnapshot(snapshot) : undefined;
 }
 
 /** A person's explicit Graph refresh bypasses background job backoff. */

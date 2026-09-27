@@ -3,8 +3,9 @@
 `engine-bridge.ts` is the MCP-owned, same-user Unix-socket entry point for the
 native Mac app. Its path is announced by the loopback `/desktop/status` response.
 The socket and its private parent directory are created at runtime and removed
-when the HTTP helper stops. The bridge accepts one bounded read per connection;
-the operation allowlist excludes Engine writes and approval actions.
+when the HTTP helper stops. The bridge accepts one bounded operation per
+connection. Engine writes and approval actions are excluded. A local Task send
+requires an exact persisted Mesh, Task, and native Execution link.
 
 `project-catalog.ts` reads the MCP-owned local Project Mesh registry when an
 installed Engine does not provide `project.list`. `mesh-project.ts` supplies

@@ -39,9 +39,11 @@ export function catalogFromSessions(
 export function allowedModelIds(
   catalog: EndpointModelCatalog | undefined,
   granted: string[] | undefined,
+  provider?: string,
 ): string[] {
-  const advertised = catalog?.models.map((item) => item.modelId) ?? [];
-  if (!granted || granted.length === 0) return advertised;
+  const advertised = catalog?.models.filter((item) => provider == null || item.provider === provider)
+    .map((item) => item.modelId) ?? [];
+  if (granted === undefined) return advertised;
   const allow = new Set(granted);
   return advertised.filter((item) => allow.has(item));
 }

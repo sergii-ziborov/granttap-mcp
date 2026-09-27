@@ -119,7 +119,7 @@ export function claudeChildSummary(
       }
     }
     const spent = sumClaudeUsage(row.message?.usage);
-    if (spent > 0) {
+    if (spent != null) {
       tokensSession += spent;
       tokensLastTurn = spent;
     }
@@ -152,23 +152,43 @@ export function claudeChildSummary(
  * hundreds of millions for one long chat and tells you nothing about what the
  * work actually cost.
  */
-export function sumClaudeUsage(u: any): number {
-  if (!u || typeof u !== "object") return 0;
-  return (u.input_tokens ?? 0) + (u.output_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
+function claudeCounters(usage: unknown): {
+  input: number;
+  output: number;
+  cacheWrite: number;
+  cacheRead: number;
+  hasContext: boolean;
+} | undefined {
+  if (!usage || typeof usage !== "object" || Array.isArray(usage)) return undefined;
+  const row = usage as Record<string, unknown>;
+  const keys = [
+    "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens",
+  ] as const;
+  if (!keys.some((key) => row[key] !== undefined)) return undefined;
+  const values: number[] = [];
+  for (const key of keys) {
+    const value = row[key];
+    if (value !== undefined && (!Number.isSafeInteger(value) || (value as number) < 0)) return undefined;
+    values.push((value as number | undefined) ?? 0);
+  }
+  return {
+    input: values[0]!, output: values[1]!, cacheWrite: values[2]!, cacheRead: values[3]!,
+    hasContext: keys.some((key) => key !== "output_tokens" && row[key] !== undefined),
+  };
 }
 
-export function claudeContextUsage(usage: any): number | undefined {
-  if (!usage || typeof usage !== "object") return undefined;
-  const values = [
-    usage.input_tokens,
-    usage.cache_creation_input_tokens,
-    usage.cache_read_input_tokens,
-  ];
-  if (!values.some((value) => typeof value === "number")) return undefined;
-  return values.reduce<number>(
-    (sum, value) => sum + (typeof value === "number" ? value : 0),
-    0,
-  );
+export function sumClaudeUsage(usage: unknown): number | undefined {
+  const counters = claudeCounters(usage);
+  if (!counters) return undefined;
+  const total = counters.input + counters.output + counters.cacheWrite;
+  return Number.isSafeInteger(total) ? total : undefined;
+}
+
+export function claudeContextUsage(usage: unknown): number | undefined {
+  const counters = claudeCounters(usage);
+  if (!counters?.hasContext) return undefined;
+  const total = counters.input + counters.cacheWrite + counters.cacheRead;
+  return Number.isSafeInteger(total) ? total : undefined;
 }
 
 export function claudeLogPath(sessionId: string): string | undefined {

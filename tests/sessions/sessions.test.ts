@@ -71,6 +71,7 @@ test("session activity exposes visible text/tools but never thinking blocks", as
   const capabilityUsage = scanCapabilityUsage(scan.sessions);
   assert.equal(capabilityUsage.events.length, 1);
   assert.equal(capabilityUsage.events[0]?.name, "github");
+  assert.equal((capabilityUsage.events[0] as { agent?: string })?.agent, "claude");
   assert.equal((capabilityUsage.events[0]?.estimatedContextTokens ?? 0) > 0, true);
   assert.doesNotMatch(JSON.stringify(activity), /hidden chain of thought/);
 

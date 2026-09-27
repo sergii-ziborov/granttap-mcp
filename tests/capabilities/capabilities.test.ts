@@ -61,7 +61,9 @@ test("task capabilities expose configured MCP servers plus global and repository
   await writeFile(join(cursorSkillDir, "SKILL.md"), [
     "---",
     "name: cursor-check",
-    "description: Check tasks opened by Cursor.",
+    "description: >-",
+    "  Check tasks opened",
+    "  by Cursor.",
     "---",
   ].join("\n"));
 

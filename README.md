@@ -4,24 +4,26 @@
 [![CI](https://github.com/sergii-ziborov/granttap-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/sergii-ziborov/granttap-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-GrantTap is a Personal live control center for local coding agents.
+GrantTap is a distributed Project control system for local coding agents.
 
 > See what your coding agents are doing. Step in when they need you.
 
 This repository is the canonical machine runtime: CLI, MCP server, provider
-hooks, local adapters, and TypeScript wire schemas. Agents and provider
-credentials stay on your computer. Native iPhone and Apple Watch traffic is
-end-to-end encrypted.
+hooks, local adapters, and TypeScript wire schemas. It connects the Mac,
+iPhone, iPad, and Apple Watch product surfaces to local agents, Project Mesh,
+Governance, auto-accept, and Engine-backed evidence. Agents and provider
+credentials stay on your computer. Native controller traffic is end-to-end
+encrypted.
 
-The MCP runtime, plugins, and CLI are open source under the MIT License. The
-iPhone and Apple Watch app is a separate, proprietary product; use of GrantTap's
-hosted service is governed by its own terms.
+The MCP runtime, plugins, and CLI are open source under the MIT License.
+The Apple apps, Engine, relay, and website are separately licensed commercial
+products or source. Their licenses do not change this repository's MIT grant.
 
 [Website](https://granttap.com) · [npm](https://www.npmjs.com/package/granttap-mcp) ·
 [Security model](SECURITY.md) ·
 [Relay source](https://github.com/sergii-ziborov/granttap-relay)
 
-## iPhone and Apple Watch
+## Mac, iPhone, iPad, and Apple Watch
 
 <p align="center">
   <img src="docs/images/iphone-command-center.png" width="230" alt="GrantTap Now with Needs You and at-risk tasks">
@@ -42,6 +44,12 @@ hosted service is governed by its own terms.
 
 GrantTap reports the depth each provider actually exposes. Visibility does not
 imply deterministic remote blocking or full mobile continuation.
+
+The Mac app checks this runtime's local health endpoint without account login
+or QR scanning. The iPhone and iPad app provides the mobile Project controller;
+Apple Watch carries the compact attention and reply flow through iPhone.
+The machine runtime and separately distributed Engine supply Project records,
+policy coverage, Invocation history, and the distributed evidence graph.
 
 Session catalogs report `lastMessageAt` only when a provider transcript has a
 timestamped user or assistant message. `lastActivityAt` remains the separate
@@ -599,7 +607,7 @@ typecheck, and release checks pass.
 ## License
 
 GrantTap MCP, its CLI, and bundled plugins are distributed under the
-[MIT License](LICENSE). The iPhone and Apple Watch app is licensed separately.
+[MIT License](LICENSE). The Mac, iPhone, iPad, and Apple Watch apps are licensed separately.
 Third-party dependencies retain their own terms; see
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 

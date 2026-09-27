@@ -25,8 +25,13 @@ export function resolveCodexBinary(
   if (onPath) return onPath;
   for (const app of ["ChatGPT.app", "Codex.app"]) {
     for (const root of [applicationsRoot, join(home, "Applications")]) {
-      const candidate = join(root, app, "Contents", "Resources", "codex");
-      if (executable(candidate)) return candidate;
+      for (const relative of [
+        ["Contents", "Resources", "codex"],
+        ["Contents", "Resources", "codex-cli", "CodexCLI.app", "Contents", "MacOS", "codex"],
+      ]) {
+        const candidate = join(root, app, ...relative);
+        if (executable(candidate)) return candidate;
+      }
     }
   }
   return "codex";

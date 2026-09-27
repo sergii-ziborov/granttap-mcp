@@ -184,6 +184,22 @@ function clipSkillText(value: string | undefined, max: number): string | undefin
   return trimmed.length > max ? trimmed.slice(0, max) : trimmed;
 }
 
+function skillDescription(header: string): string | undefined {
+  const lines = header.split("\n");
+  const index = lines.findIndex((line) => /^description:\s*/.test(line));
+  if (index < 0) return undefined;
+  const scalar = lines[index]!.replace(/^description:\s*/, "").trim();
+  if (!/^[>|][+-]?$/.test(scalar)) {
+    return clipSkillText(scalar.replace(/^["']|["']$/g, ""), 500);
+  }
+  const parts: string[] = [];
+  for (const line of lines.slice(index + 1)) {
+    if (line.trim() && !/^\s/.test(line)) break;
+    parts.push(line.trim());
+  }
+  return clipSkillText(parts.join(scalar.startsWith(">") ? " " : "\n"), 500);
+}
+
 function readSkillFile(path: string): {
   name: string;
   description?: string;
@@ -197,7 +213,7 @@ function readSkillFile(path: string): {
     const header = body.slice(3, end);
     const name = header.match(/^name:\s*["']?([^\n"']+)["']?\s*$/m)?.[1]?.trim();
     if (!name) return undefined;
-    const description = header.match(/^description:\s*["']?([^\n"']+)["']?\s*$/m)?.[1]?.trim();
+    const description = skillDescription(header);
     const version = header.match(/^version:\s*["']?([^\n"']+)["']?\s*$/m)?.[1]?.trim();
     return {
       name: name.slice(0, 160),

@@ -297,7 +297,7 @@ export function limitCapabilityUsageEvents(
 ): RemoteCapabilityUsageEvent[] {
   const bySource = new Map<string, RemoteCapabilityUsageEvent>();
   for (const event of events) {
-    const key = `${event.roomId ?? ""}\u0000${event.sourceId}`;
+    const key = `${event.roomId ?? ""}\u0000${event.agent ?? ""}\u0000${event.sessionId ?? ""}\u0000${event.sourceId}`;
     const previous = bySource.get(key);
     if (!previous || richness(event) > richness(previous)) bySource.set(key, event);
   }

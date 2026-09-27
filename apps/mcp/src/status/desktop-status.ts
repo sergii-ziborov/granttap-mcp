@@ -2,6 +2,7 @@ import { hostname } from "node:os";
 import { loadConfig } from "../../../bridge/src/config";
 import { connectionRuntimeStatus } from "../mcp-tools/connect/relay";
 import { packageVersion } from "./package-version";
+import { computerId } from "../../../bridge/src/mesh/identity/computer";
 import {
   isMachineConfigured, listPairedPhones, phoneReachability, readOnlyMachineConfigPath,
 } from "./pairing-status";
@@ -18,6 +19,7 @@ export function desktopStatusSnapshot(desktopEngineSocket?: string) {
     ok: true,
     service: "granttap-mcp" as const,
     computer: hostname(),
+    endpointId: computerId(),
     version: packageVersion(),
     paired: configured,
     phoneReachability: phoneReachability(phones),

@@ -5,6 +5,8 @@
  * levels; the relay never sees tool/command plaintext for this decision.
  */
 import { guessRisk } from "../host/adapters";
+import { isSafeReadonlyShell } from "./shell/safe-shell";
+export { isSafeReadonlyShell } from "./shell/safe-shell";
 
 export type ActionClass =
   | "read"
@@ -89,40 +91,6 @@ export function shouldAutoAllow(level: AutoAcceptLevel, cls: ActionClass): boole
  * Narrow allowlist used for anti-thrash under `safe` (rg/ls/git status).
  * Does not require the iOS app — evaluated only on the Mac hook.
  */
-export function isSafeReadonlyShell(command: string | null | undefined): boolean {
-  const raw = (command ?? "").trim();
-  if (!raw || raw.length > 500) return false;
-  if (/[\n\r]/.test(raw)) return false;
-  if (/[|&;><`]|\$\(|\bsudo\b|\bcurl\b|\bwget\b|\bnpm\b|\byarn\b|\bpnpm\b|\bxcodebuild\b|\bgit\s+push\b|\brm\b|\bmv\b|\bcp\b|\bchmod\b|\bchown\b/i.test(raw)) {
-    return false;
-  }
-  const parts = raw.split(/\s+/);
-  const bin = (parts[0] ?? "").replace(/^.*\//, "");
-  if (bin === "git") {
-    const sub = parts[1] ?? "";
-    return ["status", "diff", "log", "show", "branch", "rev-parse"].includes(sub);
-  }
-  return [
-    "rg",
-    "grep",
-    "ls",
-    "pwd",
-    "head",
-    "tail",
-    "wc",
-    "true",
-    "false",
-    "date",
-    "uname",
-    "whoami",
-    "which",
-    "type",
-    "echo",
-    "cat",
-    "find",
-  ].includes(bin);
-}
-
 /**
  * Auto-accept for Cursor beforeShellExecution.
  *

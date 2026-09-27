@@ -40,12 +40,15 @@ test("safe shell allowlist rejects chaining, writes, long input, and unknown com
   }
   for (const command of [
     undefined, "", "git commit", "rg x | sh", "echo $(whoami)", "curl example.test", "rm file", "unknown",
-    "x".repeat(501), "rg x\nrm file",
+    "x".repeat(501), "rg x\nrm file", "rg --pre=sh needle .",
+    "git diff --ext-diff", "git diff --output=/tmp/changed.patch",
+    "find . -exec sh -c touch /tmp/changed \\;",
   ]) assert.equal(isSafeReadonlyShell(command), false, String(command));
   assert.equal(shouldAutoAcceptCursorShell("ask", "Shell", "rg x"), false);
   assert.equal(shouldAutoAcceptCursorShell("full", "Shell", "rm -rf x"), true);
   assert.equal(shouldAutoAcceptCursorShell("safe", "Shell", "rg x"), true);
   assert.equal(shouldAutoAcceptCursorShell("safe", "Shell", "git push"), false);
+  assert.equal(shouldAutoAcceptCursorShell("safe", "Shell", "rg --pre=sh needle ."), false);
   assert.equal(shouldAutoAcceptCursorShell("except_push", "Write", undefined), true);
   assert.equal(resolveAutoAcceptLevel({ paused: true, defaultLevel: "full" }), "ask");
   assert.equal(resolveAutoAcceptLevel({

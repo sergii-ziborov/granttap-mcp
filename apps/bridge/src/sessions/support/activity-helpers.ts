@@ -76,7 +76,8 @@ export function visibleUserText(value: unknown): string {
     "plugins_instructions",
     "skills_instructions",
   ];
-  if (internal.some((tag) => text.startsWith(`<${tag}`)) || text.startsWith("<image name=")) {
+  if (internal.some((tag) => text.startsWith(`<${tag}`)) || text.startsWith("<image name=")
+    || text === "</image>") {
     return "";
   }
   const marker = /^##\s+My request(?: for Codex)?:\s*$/im.exec(text);

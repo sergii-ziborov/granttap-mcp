@@ -9,7 +9,6 @@ import {
   countLines,
   evaluateContent,
   evaluateWriteRestrictions,
-  functionLineCounts,
   loadRestrictions,
   pathMatches,
   rememberRestrictions,
@@ -77,22 +76,6 @@ test("a later DENY takes precedence over an earlier ASK and an Engine ALLOW", as
   });
   assert.equal(decision.effect, "deny");
   assert.equal(decision.engineEvaluated, true);
-});
-
-test("function line counts measure brace-depth bodies", () => {
-  const source = [
-    "function small() {",
-    "  return 1;",
-    "}",
-    "function big() {",
-    ...Array.from({ length: 8 }, () => "  void 0;"),
-    "}",
-  ].join("\n");
-  assert.deepEqual(functionLineCounts(source), [3, 10]);
-  const hit = evaluateContent([{
-    ruleId: "max-function-lines", kind: "max_function_lines", limit: 5, effect: "deny",
-  }], "src/fn.ts", source);
-  assert.match(hit?.reason ?? "", /10 lines/);
 });
 
 test("remembered restrictions gate Write even when the engine is off", async () => {

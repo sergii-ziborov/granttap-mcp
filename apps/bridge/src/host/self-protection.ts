@@ -25,11 +25,6 @@ const WORKSPACE_ENTRIES = new Set(["workspaces", "worktrees"]);
 const READ_TOOLS = new Set([
   "read", "readfile", "read_file", "view", "viewfile", "view_file",
 ]);
-const SHELL_TOOLS = new Set([
-  "bash", "command", "execcommand", "exec_command", "runterminalcmd",
-  "shell", "shellcommand", "shell_command", "terminal",
-]);
-const SAFE_SHELL_READERS = new Set(["cat", "grep", "head", "ls", "stat", "tail", "wc"]);
 
 function protectedRoots(): string[] {
   const configured = process.env.GRANTTAP_CONFIG_DIR ?? process.env.NODVOX_CONFIG_DIR;
@@ -90,33 +85,16 @@ function normalizedToolName(toolName: unknown): string {
   return String(toolName ?? "").split("__").at(-1)!.toLowerCase();
 }
 
-function readOnlyShell(command: unknown): boolean {
-  const text = String(command ?? "").trim();
-  if (!text || /[;`\n]|\$\(|&&|\|\|/.test(text)) return false;
-  const withoutStderrMerge = text.replaceAll(/\d*>&\d+/g, "");
-  if (/[<>]/.test(withoutStderrMerge)) return false;
-  return text.split("|").every((part) => {
-    const words = part.trim().split(/\s+/);
-    const executable = words[0] === "command" ? words[1] : words[0];
-    return Boolean(executable && SAFE_SHELL_READERS.has(executable.split("/").at(-1)!));
-  });
-}
-
-function shellCommand(toolInput: unknown, command: unknown): unknown {
-  if (typeof command === "string") return command;
-  if (!toolInput || typeof toolInput !== "object") return toolInput;
-  const input = toolInput as Record<string, unknown>;
-  return input.command ?? input.cmd;
-}
-
 function decide(toolName: unknown, toolInput: unknown, command: unknown): ProtectedAccess | null {
   const candidates = [...values(toolInput), ...values(command)];
   const access = candidates.flatMap((value) =>
     configReferences(value, protectedRoots()).map(entryAccess));
   if (access.length === 0 || access.every((value) => value === "workspace")) return null;
   const tool = normalizedToolName(toolName);
+  // A shell command can resolve an attacker-controlled executable or function
+  // with a familiar basename. Only native read tools may open diagnostic files.
   const readAllowed = access.every((value) => value === "workspace" || value === "read-only")
-    && (READ_TOOLS.has(tool) || (SHELL_TOOLS.has(tool) && readOnlyShell(shellCommand(toolInput, command))));
+    && READ_TOOLS.has(tool);
   if (readAllowed) return null;
   return {
     reason: "GrantTap protects its local pairing, key, and policy files from agent tool access. "

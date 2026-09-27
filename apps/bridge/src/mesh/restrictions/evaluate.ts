@@ -36,6 +36,15 @@ export function functionLineCounts(source: string): number[] {
   return counts;
 }
 
+function unparsedFunctionForm(filePath: string, content: string): boolean {
+  const extension = filePath.split(".").at(-1)?.toLowerCase();
+  if (extension === "py") return /^\s*(?:async\s+)?def\s+\w+/m.test(content);
+  if (!["ts", "tsx", "js", "jsx", "mjs", "cjs"].includes(extension ?? "")) return false;
+  if (/=>/.test(content)) return true;
+  return /^\s*(?:async\s+)?(?!(?:if|while|for|switch|catch)\b)[A-Za-z_$][\w$]*\s*\([^;\n]*\)\s*\{/m
+    .test(content);
+}
+
 export function pathMatches(filePath: string, glob: string): boolean {
   const normalized = filePath.split(sep).join("/");
   const pattern = glob.split(sep).join("/");
@@ -62,6 +71,7 @@ export function evaluateContent(
   const lines = countLines(content);
   const bytes = Buffer.byteLength(content);
   const functions = functionLineCounts(content);
+  const functionCoverageUnknown = unparsedFunctionForm(filePath, content);
   let approval: RestrictionViolation | undefined;
   for (const rule of rules) {
     if (!ruleApplies(rule, filePath)) continue;
@@ -76,6 +86,11 @@ export function evaluateContent(
       const worst = Math.max(0, ...functions);
       if (worst > rule.limit) {
         hit = violation(rule, filePath, `a function is ${worst} lines (limit ${rule.limit})`);
+      } else if (functionCoverageUnknown) {
+        hit = {
+          ...violation(rule, filePath, "function extent needs parser review"),
+          effect: "ask",
+        };
       }
     }
     if (hit?.effect === "deny") return hit;

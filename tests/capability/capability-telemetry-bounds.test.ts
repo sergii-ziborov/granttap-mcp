@@ -6,6 +6,7 @@ import {
   MAX_CAPABILITY_USAGE_EVENTS,
   rememberCapabilityObservation,
   rememberCapabilityUsageCandidate,
+  limitCapabilityUsageEvents,
   toRemoteCapabilityUsageEvent,
   type CapabilityObservation,
 } from "../../apps/bridge/src/sessions/telemetry";
@@ -69,4 +70,17 @@ test("usage candidates compact to the richest bounded set", () => {
   assert.ok(candidates.length <= MAX_CAPABILITY_USAGE_EVENTS,
     "compaction keeps the candidate buffer inside the event budget");
   assert.ok(candidates.some((event) => event.durationMs === 25));
+});
+
+test("provider-local call identifiers stay distinct in one relay room", () => {
+  const shared = {
+    sourceId: "session:call", sessionId: "session", roomId: "room",
+    kind: "mcp" as const, name: "github", toolName: "read",
+    createdAt: 100, outcome: "success" as const,
+  };
+  const events = limitCapabilityUsageEvents([
+    { ...shared, agent: "claude" },
+    { ...shared, agent: "codex" },
+  ] as RemoteCapabilityUsageEvent[]);
+  assert.equal(events.length, 2);
 });

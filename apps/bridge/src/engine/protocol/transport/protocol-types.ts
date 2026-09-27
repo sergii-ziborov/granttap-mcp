@@ -7,6 +7,7 @@ import type {
   InvocationEngineResult,
 } from "../engine-invocation-protocol";
 import type { MemoryEngineOperation, MemoryEngineResult } from "../engine-memory-protocol";
+import type { EngineImpactOperation, EngineImpactResult } from "../impact/engine-impact-protocol";
 import { ENGINE_PROTOCOL_VERSION } from "./protocol-base";
 
 export type ProjectBindingRole = "primary" | "dependency" | "supporting";
@@ -93,12 +94,14 @@ export type EngineContextCompilation = {
 };
 
 export type EngineOperation = EnginePolicyOperation | InvocationEngineOperation | MemoryEngineOperation
+  | EngineImpactOperation
   | { operation: "engine.ping" }
   | { operation: "engine.version" }
   | { operation: "project.resolve"; input: {
     project_id?: string; endpoint_id?: string; repository_id?: string; local_root?: string;
   } }
   | { operation: "project.get"; input: { project_id: string } }
+  | { operation: "project.list"; input: { after_project_id?: string; limit: number } }
   | { operation: "project.list_bindings"; input: { project_id: string } }
   | { operation: "graph.get_backbone"; input: { project_id: string } }
   | { operation: "graph.analyze_repository"; input: {
@@ -118,6 +121,7 @@ export type EngineRequest = {
 } & EngineOperation;
 
 export type EngineResult = EnginePolicyResult | InvocationEngineResult | MemoryEngineResult
+  | EngineImpactResult
   | { operation: "engine.pong"; engine_version: string }
   | { operation: "engine.version"; engine_version: string;
     protocol_version: typeof ENGINE_PROTOCOL_VERSION; cortex_version: string;
@@ -126,6 +130,9 @@ export type EngineResult = EnginePolicyResult | InvocationEngineResult | MemoryE
     project_id: string; compatibility_mode: boolean;
   } }
   | { operation: "project.found"; project: EngineProject }
+  | { operation: "project.listed"; page: {
+    projects: EngineProject[]; next_after_project_id: string | null;
+  } }
   | { operation: "project.bindings"; bindings: EngineProjectBinding[] }
   | { operation: "graph.backbone"; backbone: EngineProjectBackbone }
   | { operation: "graph.repository"; graph: EngineRepositoryGraph }

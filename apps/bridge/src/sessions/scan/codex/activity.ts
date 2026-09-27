@@ -14,7 +14,7 @@ import {
   type CapabilityObservation,
   type PendingCapabilityTool,
 } from "../../telemetry";
-import { recentLogs, codexSessionsRoot, safeParse, ts } from "../../support/common";
+import { safeParse, ts } from "../../support/common";
 import { codexHeadRequest } from "../../support/codex-head";
 import {
   CODEX_ACTIVITY_HEAD_BYTES,
@@ -22,39 +22,10 @@ import {
   codexActivitySourcesBySession,
   codexAggregatedObservationsBySession,
   codexLogPathBySession,
+  codexLogLines,
   codexSummaryCache,
   readCodexLogWindow,
 } from "./shared";
-
-function codexLogLines(sessionId: string): string[] | undefined {
-  const indexed = codexLogPathBySession.get(sessionId);
-  if (indexed) {
-    try {
-      return readCodexLogWindow(
-        indexed,
-        CODEX_ACTIVITY_HEAD_BYTES,
-        CODEX_ACTIVITY_TAIL_BYTES,
-      );
-    } catch {
-      codexLogPathBySession.delete(sessionId);
-    }
-  }
-  for (const file of recentLogs(codexSessionsRoot(), 5)) {
-    try {
-      const candidate = readCodexLogWindow(file);
-      if (candidate.some((line) => {
-        const row = safeParse(line);
-        return row?.type === "session_meta" &&
-          String(row.payload?.id ?? row.id ?? "") === sessionId;
-      })) {
-        return candidate;
-      }
-    } catch {
-      // Keep looking through the bounded recent-file set.
-    }
-  }
-  return undefined;
-}
 
 function cachedCodexCapabilityUsage(
   sessionId: string,
@@ -259,6 +230,12 @@ function appendCodexActivity(input: {
         if (block?.type === "input_text" || block?.type === "text") {
           const ordinal = index * 100 + blockIndex;
           pushEntry({ out: out, seen: seen, sessionId: session.sessionId, kind: "user", text: block.text, createdAt: createdAt, ordinal: ordinal, extras: childFields, idOverride: entryId(createdAt, ordinal) });
+        } else if (block?.type === "input_image" && typeof block.image_url === "string") {
+          const ordinal = blockIndex;
+          out.push({ id: entryId(createdAt, ordinal)
+            ?? `${session.sessionId}:${createdAt}:${ordinal}`,
+            kind: "user", text: "", createdAt,
+            attachments: ["Image"], ...childFields });
         }
       });
     } else if (p.type === "message" && p.role === "assistant" && Array.isArray(p.content)) {
@@ -300,6 +277,8 @@ function appendCodexActivity(input: {
     }
   });
 }
+
+export { codexImageChunk } from "./image";
 
 export function codexActivity(session: SessionInfo): ActivityEntry[] {
   let sources = codexActivitySourcesBySession.get(session.sessionId) ?? [];

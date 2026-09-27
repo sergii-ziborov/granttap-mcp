@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:net";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { lstat, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { startHttpMcpServer } from "../../apps/mcp/src/http/http-server";
+import { packageVersion } from "../../apps/mcp/src/status/package-version";
 
 async function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -101,14 +102,31 @@ test("HTTP MCP OAuth discovery matches Cursor Authorize requirements", async (t)
     schema: string;
     ok: boolean;
     service: string;
+    version: string;
     mcp: string;
     phoneReachability: string;
   };
   assert.equal(healthJson.schema, "granttap.http-health.v1");
   assert.equal(healthJson.ok, true);
   assert.equal(healthJson.service, "granttap-mcp");
+  assert.equal(healthJson.version, packageVersion());
   assert.equal(healthJson.mcp, `${base}/mcp`);
   assert.equal(healthJson.phoneReachability, "unknown");
+
+  const desktop = await fetch(`${base}/desktop/status`);
+  assert.equal(desktop.status, 200);
+  assert.equal(desktop.headers.get("cache-control"), "no-store");
+  const desktopStatus = await desktop.json() as Record<string, unknown>;
+  assert.equal(desktopStatus.schema, "granttap.desktop-status.v1");
+  assert.equal(desktopStatus.service, "granttap-mcp");
+  assert.equal(desktopStatus.relayStatus, "unknown");
+  assert.ok(Array.isArray(desktopStatus.providers));
+  assert.equal(typeof desktopStatus.desktopEngineSocket, "string");
+  const socket = await lstat(String(desktopStatus.desktopEngineSocket));
+  assert.equal(socket.isSocket(), true);
+  assert.equal(socket.mode & 0o777, 0o600);
+  assert.equal("roomPrefix" in desktopStatus, false);
+  assert.equal("pairingUri" in desktopStatus, false);
 
   const pairingWithoutAuth = await fetch(`${base}/oauth/pairing`, { method: "POST" });
   assert.equal(pairingWithoutAuth.status, 400);

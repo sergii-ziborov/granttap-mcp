@@ -12,10 +12,12 @@ import { localMeshStore } from "../mesh/local-remote/local";
 import {
   assertProjectEnvironmentKeys,
   loadEnvironment,
+  removeManagedRepoEnv,
   rememberEnvironment,
   redactEnvironment,
+  writeRepoEnv,
 } from "../mesh/context/env";
-import { loadRestrictions, rememberRestrictions } from "../mesh/restrictions";
+import { loadRestrictions, rememberRestrictions, writeRepoRestrictions } from "../mesh/restrictions";
 import type {
   EnginePolicyCoverage,
   EngineProjectPolicy,
@@ -36,21 +38,46 @@ const CAPABILITIES = [
   "agent", "mcp", "skill", "shell", "script", "file_write", "deploy", "network",
 ] as const;
 
-function projectRepositoryRoot(projectId: string, endpointId: string): string | undefined {
+type LocalRepository = { repositoryId: string; root: string };
+
+function projectRepositoryRoots(projectId: string, endpointId: string): LocalRepository[] {
   try {
     const snapshot = localMeshStore().snapshot(projectId);
-    return snapshot?.bindings?.find((item) =>
-      item.endpointId === endpointId && item.available && item.localPathHint)?.localPathHint;
+    const roots = new Map<string, LocalRepository>();
+    for (const item of snapshot?.bindings ?? []) {
+      if (item.endpointId === endpointId && item.available && item.localPathHint) {
+        roots.set(item.localPathHint, { repositoryId: item.repositoryId, root: item.localPathHint });
+      }
+    }
+    return [...roots.values()];
   } catch {
-    return undefined;
+    return [];
   }
 }
 
 export function persistMeshPolicyExtras(projectId: string, policy: ProjectPolicy, endpointId: string): void {
   assertProjectEnvironmentKeys(policy.environment);
-  const root = projectRepositoryRoot(projectId, endpointId);
-  rememberRestrictions(projectId, policy.restrictions, root);
-  rememberEnvironment(projectId, policy.environment, root);
+  const roots = projectRepositoryRoots(projectId, endpointId);
+  const restrictions = policy.restrictions;
+  let restrictionRoot = roots[0]?.root;
+  if (restrictions?.scope === "sync_from_repo") {
+    const sources = restrictions.repositoryId
+      ? roots.filter((item) => item.repositoryId === restrictions.repositoryId)
+      : roots;
+    if (sources.length !== 1) {
+      throw new Error("sync_from_repo needs one exact local repository binding");
+    }
+    restrictionRoot = sources[0]?.root;
+  }
+  rememberRestrictions(projectId, restrictions, restrictionRoot);
+  if (restrictions?.scope === "project_and_repo") {
+    for (const item of roots.slice(1)) writeRepoRestrictions(item.root, restrictions);
+  }
+  const stored = rememberEnvironment(projectId, policy.environment, roots[0]?.root);
+  for (const item of roots.slice(1)) {
+    if (stored?.shareNonSecretsWithRepo) writeRepoEnv(item.root, stored.variables);
+    else removeManagedRepoEnv(item.root);
+  }
 }
 
 function withLocalExecution(policy: ProjectPolicy): ProjectPolicy {

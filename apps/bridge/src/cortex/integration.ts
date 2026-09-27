@@ -111,10 +111,11 @@ export function cortexSnapshotEvidence(
     "high", "verified", "graph", graph.revision,
   ));
   const knowledge = activeProjectKnowledge(snapshot.projectId, snapshot.knowledge ?? []).filter((record) =>
-    record.taskId === taskId || record.visibility === "project").slice(0, 16);
+    record.taskId === taskId || record.visibility === "project");
   for (const record of knowledge) evidence.push(item(
     `knowledge.${record.recordId}`, "weavatrix.memory", JSON.stringify(record),
-    "high", "unverified", "memory", `memory:${record.streamVersion}`,
+    record.source === "user_decision" ? "critical" : "high",
+    "unverified", "memory", `memory:${record.streamVersion}`,
   ));
   for (const event of unrecordedKnowledgeEvents(
     snapshot.events.filter((value) => value.taskId === taskId),
@@ -147,10 +148,11 @@ export function cortexScopedEvidence(view: ScopedMeshView): EngineContextEvidenc
     `repository.${graph.repositoryId}`, "weavatrix.repository", JSON.stringify(graph),
     "high", "verified", "graph", graph.revision,
   ));
-  const knowledge = activeScopedKnowledge(view.project.projectId, view.knowledge ?? [], taskId).slice(0, 16);
+  const knowledge = activeScopedKnowledge(view.project.projectId, view.knowledge ?? [], taskId);
   for (const record of knowledge) evidence.push(item(
     `knowledge.${record.recordId}`, "weavatrix.memory", JSON.stringify(record),
-    "high", "unverified", "memory", `memory:${record.streamVersion}`,
+    record.source === "user_decision" ? "critical" : "high",
+    "unverified", "memory", `memory:${record.streamVersion}`,
   ));
   for (const event of unrecordedKnowledgeEvents(
     view.events, view.knowledge ?? [], view.supersededKnowledgeRecordIds,

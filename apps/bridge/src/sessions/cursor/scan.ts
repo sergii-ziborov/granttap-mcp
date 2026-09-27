@@ -45,7 +45,7 @@ function childFromComposer(composer: ComposerRow, parentThreadId: string): Child
     state: composerState(composer.status, lastActivityAt),
     startedAt: composer.createdAt || lastActivityAt,
     lastActivityAt,
-    tokensSession: composer.contextTokensUsed ?? 0,
+    tokensSession: 0,
     tokensLastTurn: 0,
   };
 }
@@ -142,7 +142,7 @@ function addComposerSession(context: ScanContext, composer: ComposerRow): void {
   const lastActivityAt = Math.max(
     composerActivityAt(composer), root.lastActivityAt, childLast,
   );
-  const tokensSession = root.files.length ? root.tokensSession : composer.contextTokensUsed ?? 0;
+  const tokensSession = root.tokensSession;
   const session = aggregateChildThreads({
     sessionId: composer.id,
     agent: "cursor",
@@ -158,10 +158,9 @@ function addComposerSession(context: ScanContext, composer: ComposerRow): void {
     ...(lastMessageAt ? { lastMessageAt } : {}),
     tokensSession,
     tokensLastTurn: root.files.length ? root.tokensLastTurn : 0,
-    contextTokensUsed: composer.contextTokensUsed ?? root.contextTokensUsed ?? tokensSession,
+    contextTokensUsed: composer.contextTokensUsed,
     model: composer.model ?? root.model,
   }, child.children);
-  session.contextTokensUsed = Math.max(session.contextTokensUsed ?? 0, session.tokensSession);
   context.usage.set(composer.id, mergeCapabilityUsage([root, ...child.summaries]));
   if (context.now - lastActivityAt <= TOKEN_WINDOW_MS) context.tokensRecent += session.tokensSession;
   context.sessions.push(session);
@@ -193,10 +192,8 @@ function addOrphanSession(context: ScanContext, file: CursorLogFile): void {
     ...(lastMessageAt ? { lastMessageAt } : {}),
     tokensSession: root.tokensSession,
     tokensLastTurn: root.tokensLastTurn,
-    contextTokensUsed: root.contextTokensUsed,
     model: root.model,
   }, child.children);
-  session.contextTokensUsed = Math.max(session.contextTokensUsed ?? 0, session.tokensSession);
   context.usage.set(sessionId, mergeCapabilityUsage([root, ...child.summaries]));
   if (context.now - lastActivityAt <= TOKEN_WINDOW_MS) context.tokensRecent += session.tokensSession;
   context.sessions.push(session);
