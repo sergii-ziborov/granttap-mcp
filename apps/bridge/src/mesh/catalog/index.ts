@@ -28,8 +28,6 @@ export type RepositoryFacts = {
   revision?: string;
 };
 
-const repositoryCache = new Map<string, RepositoryFacts>();
-
 function git(cwd: string, args: string[]): string | undefined {
   try {
     return execFileSync("git", ["-C", cwd, ...args], {
@@ -70,14 +68,6 @@ export function workingTreeState(cwd: string): "clean" | "dirty" | "unknown" {
 }
 
 export function inspectRepository(cwd: string): RepositoryFacts {
-  const cached = repositoryCache.get(cwd);
-  if (cached?.worktree) {
-    // Identity is stable for this checkout; HEAD is not. Keep a new reading
-    // instead of mutating a facts object already given to a caller.
-    const fresh = { ...cached, revision: git(cached.root, ["rev-parse", "HEAD"]) };
-    repositoryCache.set(cwd, fresh);
-    return fresh;
-  }
   const root = git(cwd, ["rev-parse", "--show-toplevel"]) ?? cwd;
   const rawRemote = git(root, ["remote", "get-url", "origin"]);
   const baseRemote = rawRemote ? sanitizedRepositoryRemote(rawRemote) : undefined;
@@ -88,9 +78,6 @@ export function inspectRepository(cwd: string): RepositoryFacts {
     worktree: git(root, ["rev-parse", "--show-toplevel"]),
     revision: git(root, ["rev-parse", "HEAD"]),
   };
-  // An unconfirmed workspace can become a Git checkout during the Task.
-  // Do not retain a negative probe and suppress that discovery forever.
-  if (facts.worktree) repositoryCache.set(cwd, facts);
   return facts;
 }
 
@@ -146,7 +133,18 @@ export function linkSessionsToProjects(
     new Set(visible.map((session) => session.sessionId)),
     new Set(sessions.flatMap((session) => provider(session.agent) ?? [])),
   );
-  return visible.map((session) => linkSession({ store, session, computerId, inspect }));
+  // Share one consistent reading within this catalog batch, then discard it.
+  // A new Git checkout or origin must be discovered on the next refresh.
+  const repositories = new Map<string, RepositoryFacts>();
+  const inspectOnce = (cwd: string): RepositoryFacts => {
+    let facts = repositories.get(cwd);
+    if (!facts) {
+      facts = inspect(cwd);
+      repositories.set(cwd, facts);
+    }
+    return facts;
+  };
+  return visible.map((session) => linkSession({ store, session, computerId, inspect: inspectOnce }));
 }
 
 function linkSession(input: {
