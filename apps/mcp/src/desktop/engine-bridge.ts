@@ -10,8 +10,9 @@ import {
 import { DesktopTaskActivityRunner } from "./task-activity-runner";
 import { desktopReadOperation } from "./operations";
 import { DesktopControllerEnrollment } from "./pairing";
+import { DesktopNetworkController } from "./network";
 
-const DESKTOP_OPERATIONS = new Set([
+export const DESKTOP_OPERATIONS = new Set([
   "engine.version", "project.list", "project.resolve", "project.get",
   "project.list_bindings", "policy.get", "policy.coverage",
   "graph.get_backbone", "memory.history", "invocation.history",
@@ -26,9 +27,11 @@ const DESKTOP_OPERATIONS = new Set([
   "desktop.controller_enrollment",
   "desktop.live_catalog",
   "desktop.codex_hook_trust",
+  "desktop.network_status", "desktop.network_configure", "desktop.own_relay",
 ]);
 
-function desktopOperationTimeout(operation: unknown, input: unknown): number {
+export function desktopOperationTimeout(operation: unknown, input: unknown): number {
+  if (operation === "desktop.own_relay") return 250_000;
   if (operation === "desktop.controller_enrollment") return 30_000;
   if (operation === "desktop.codex_hook_trust") return 25_000;
   if (operation === "desktop.policy_set") return 60_000;
@@ -59,6 +62,7 @@ export async function startDesktopEngineBridge(options: {
   const activity = new DesktopTaskActivityRunner();
   const enrichment = new DesktopTaskActivityRunner();
   const controllerEnrollment = new DesktopControllerEnrollment(options.onPairingChanged);
+  const network = new DesktopNetworkController(undefined, options.onPairingChanged);
   const clients = new Set<Socket>();
   const server = createServer((socket) => {
     clients.add(socket);
@@ -88,7 +92,7 @@ export async function startDesktopEngineBridge(options: {
         if (input !== undefined && (input === null || typeof input !== "object"
           || Array.isArray(input))) { socket.destroy(); return; }
         const read = desktopReadOperation({ operation, queryInput: input,
-          storePath: options.storePath, engine, activity, enrichment, controllerEnrollment });
+          storePath: options.storePath, engine, activity, enrichment, controllerEnrollment, network });
         void read.then(
           (result) => {
             if (!result) { socket.destroy(); return; }

@@ -12,6 +12,8 @@ import { installMonitorHelper, reloadMonitorHelper } from "../../../../bridge/sr
 import { recordPhoneSeen } from "../../../../bridge/src/pairing/presence";
 import { completeEnrollment } from "../../connection-center/enrollment";
 import { confirmPendingController, controllerPeerGate } from "../../../../bridge/src/pairing/controllers";
+import { applyNetworkRoute } from "../../../../bridge/src/device-network/settings";
+import { startEndpointPublisher } from "../../../../bridge/src/device-network/directory";
 
 const ASK_TIMEOUT_MS = Number(
   process.env.GRANTTAP_ASK_TIMEOUT_MS ?? process.env.NODVOX_ASK_TIMEOUT_MS ?? 180_000,
@@ -19,6 +21,7 @@ const ASK_TIMEOUT_MS = Number(
 let client: RelayClient | null = null;
 let monitor: SessionMonitor | null = null;
 let phoneLastSeenAt: number | null = null;
+let stopEndpointPublisher = () => {};
 
 export type TaskInteractionScope = {
   provider: "claude" | "codex" | "cursor" | "grok";
@@ -31,7 +34,7 @@ export type TaskInteractionScope = {
 export async function relay(): Promise<RelayClient | null> {
   try {
     if (!client) {
-      const config = loadConfig(machineConfigPath());
+      const config = applyNetworkRoute(loadConfig(machineConfigPath()));
       client = new RelayClient(config, { autoReconnect: true, peerAllowed: controllerPeerGate(config) });
       client.onMessage((payload, peerPublicKey) => {
         if (payload.type === "pairing.join") {
@@ -56,6 +59,7 @@ export async function relay(): Promise<RelayClient | null> {
         return false;
       });
       monitor = startSessionMonitor(client);
+      stopEndpointPublisher = startEndpointPublisher(config);
     }
     await client.connect();
     await publishHeldHeartbeat(client).catch(() => {});
@@ -67,6 +71,7 @@ export async function relay(): Promise<RelayClient | null> {
 }
 
 export function resetRelay(): void {
+  stopEndpointPublisher();
   monitor?.close();
   monitor = null;
   client?.close();

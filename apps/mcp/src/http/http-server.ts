@@ -23,6 +23,8 @@ import { installOAuthBrowserRoutes } from "./oauth-routes";
 import { createMcpSessionHandler } from "./mcp-handler";
 import { startDesktopEngineBridgeProcess } from "../desktop/process/bridge-process";
 
+import { installDesktopNativeRoutes } from "../desktop/native-access/routes";
+
 export const DEFAULT_HTTP_HOST = "127.0.0.1";
 export const DEFAULT_HTTP_PORT = 17342;
 
@@ -65,6 +67,7 @@ export async function startHttpMcpServer(options: ServeOptions = {}): Promise<{
     serviceDocumentationUrl: new URL("https://granttap.com"),
   }));
   installOAuthBrowserRoutes(app, provider, issuerUrl);
+  installDesktopNativeRoutes(app, desktopBridge.socketPath, issuerUrl.origin);
   const authMiddleware = requireBearerAuth({
     verifier: provider,
     requiredScopes: ["mcp:tools"],

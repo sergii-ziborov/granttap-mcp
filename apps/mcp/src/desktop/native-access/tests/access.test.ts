@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createHash } from 'node:crypto';
+import test from 'node:test';
+import { DesktopNativeAccess } from '../access';
+
+test('native desktop grant needs human approval and one-use PKCE, persists only scoped access', () => {
+  const path = join(mkdtempSync(join(tmpdir(), 'granttap-native-access-')), 'grants.json');
+  let now = 10_000;
+  const access = new DesktopNativeAccess(path, () => now);
+  const verifier = 'ab'.repeat(32);
+  const challenge = createHash('sha256').update(verifier).digest('base64url');
+  const pending = access.begin(challenge, 'state123');
+  assert.throws(() => access.exchange('fake', verifier));
+  assert.throws(() => access.approve(pending.id, 'wrong'));
+  const code = access.approve(pending.id, pending.confirmation);
+  assert.throws(() => access.exchange(code, 'cd'.repeat(32)));
+  const fresh = access.begin(challenge, 'state123');
+  const token = access.exchange(access.approve(fresh.id, fresh.confirmation), verifier);
+  assert.equal(new DesktopNativeAccess(path, () => now).verify(token), true);
+  assert.equal(access.verify('bad'), false);
+  assert.throws(() => access.exchange(code, verifier));
+  now += 31 * 24 * 3_600_000;
+  assert.equal(access.verify(token), false);
+  const expired = access.begin(challenge, 'state123');
+  now += 301_000;
+  assert.throws(() => access.approve(expired.id, expired.confirmation));
+  assert.throws(() => access.begin('unsafe<script>', 'state123'));
+});

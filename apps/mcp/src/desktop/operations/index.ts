@@ -15,14 +15,19 @@ import { desktopInvocationHistory } from "../invocation";
 import { desktopUsage } from "../projection/usage";
 import { desktopInstalledSkills } from "../projection/installed-skills";
 import type { DesktopControllerEnrollment } from "../pairing";
+import type { DesktopNetworkController } from "../network";
 
 export function desktopReadOperation(input: {
   operation: string; queryInput: unknown; storePath?: string;
   engine: Pick<EngineClient, "request">; activity: DesktopTaskActivityRunner;
   enrichment: DesktopTaskActivityRunner;
   controllerEnrollment?: DesktopControllerEnrollment;
+  network?: DesktopNetworkController;
 }): Promise<unknown> {
   const { operation, queryInput, storePath, engine, activity, enrichment } = input;
+  if (["desktop.network_status", "desktop.network_configure", "desktop.own_relay"].includes(operation)) {
+    return input.network?.read(operation, queryInput) ?? Promise.resolve(undefined);
+  }
   if (operation === "desktop.controller_enrollment") {
     return input.controllerEnrollment?.read(queryInput) ?? Promise.resolve(undefined);
   }

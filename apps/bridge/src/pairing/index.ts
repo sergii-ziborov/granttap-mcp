@@ -19,6 +19,7 @@ import type { PeerConfig } from "../../../../packages/core/relay-client";
 import type { PairingJoin } from "../../../../packages/protocol/messages/pairing-join";
 import { clearPhoneSeen } from "./presence";
 import { prunePendingControllers, rememberPendingController } from "./controllers";
+import { applyNetworkRoute } from "../device-network/settings";
 
 export const DEFAULT_RELAY = DEFAULT_RELAY_URL;
 export const PAIRING_CODE_TTL_MINUTES = 15;
@@ -207,8 +208,10 @@ export async function createOneTimePairing(
   }
   const mailboxId = randomId(16);
   const transferKey = generateTransferKey();
-  const sealed = sealWithTransferKey(phoneCfg, transferKey);
-  const httpBase = relayHttpBase(relayUrl);
+  const routedPhone = applyNetworkRoute(phoneCfg);
+  const sealed = sealWithTransferKey(routedPhone, transferKey);
+  const mailboxRelay = routedPhone.directoryUrl ?? routedPhone.relayUrl;
+  const httpBase = relayHttpBase(mailboxRelay);
 
   let response: Response;
   try {
@@ -250,12 +253,12 @@ export async function createOneTimePairing(
 
   return {
     machineCfg,
-    phoneCfg,
+    phoneCfg: routedPhone,
     mailboxId,
     transferKey,
     manualToken: `${mailboxId}.${transferKey}`,
     httpBase,
-    qrPayload: oneTimePairingUri(relayUrl, mailboxId, transferKey),
+    qrPayload: oneTimePairingUri(mailboxRelay, mailboxId, transferKey),
     cursor,
     claude,
     codex,

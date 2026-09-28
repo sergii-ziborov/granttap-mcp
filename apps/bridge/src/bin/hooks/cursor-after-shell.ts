@@ -10,6 +10,7 @@ import {
 import { isProviderEnabled, loadConfig, machineConfigPath } from "../../config";
 import { cursorRootSessionId } from "../../sessions/cursor";
 import { controllerPeerGate } from "../../pairing/controllers";
+import { applyNetworkRoute } from "../../device-network/settings";
 
 const SHELL_TOOLS = new Set([
   "bash",
@@ -77,7 +78,7 @@ async function main(): Promise<void> {
   if (cancelled.length > 0) {
     try {
       const config = loadConfig(machineConfigPath());
-      const client = new RelayClient(config, { peerAllowed: controllerPeerGate(config) });
+      const client = new RelayClient(applyNetworkRoute(config), { peerAllowed: controllerPeerGate(config) });
       await client.connect();
       try {
         for (const { request, accepted } of cancelled) {

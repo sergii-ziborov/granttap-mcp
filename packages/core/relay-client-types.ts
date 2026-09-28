@@ -14,6 +14,8 @@ export type PeerConfig = {
   extraPeerPublicKeys?: string[];
   /** Relay-only random credential for push-token registration; never an E2EE key. */
   pushAuth?: string;
+  /** Address discovery only; direct message traffic uses relayUrl. */
+  directoryUrl?: string;
 };
 
 /** Persistent processes reconnect in the background; one-shot hooks leave this off. */

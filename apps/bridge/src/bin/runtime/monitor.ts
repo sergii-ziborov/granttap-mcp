@@ -7,20 +7,24 @@ import { meshSnapshots } from "../../mesh/runtime";
 import { recoverLocalGraphBindings } from "../../mesh/runtime/graph/binding-sync";
 import { startSessionMonitor } from "../../monitor";
 import { controllerPeerGate } from "../../pairing/controllers";
+import { applyNetworkRoute } from "../../device-network/settings";
+import { startEndpointPublisher } from "../../device-network/directory";
 
 let client: RelayClient;
 let monitor: ReturnType<typeof startSessionMonitor>;
 const engine = new EngineSupervisor();
 let stopping = false;
+let stopEndpointPublisher = () => {};
 
 try {
-  const cfg = loadConfig(machineConfigPath());
+  const cfg = applyNetworkRoute(loadConfig(machineConfigPath()));
   client = new RelayClient(cfg, {
     autoReconnect: true,
     replayPath: join(configDir(), `replay-${cfg.room}.json`),
     peerAllowed: controllerPeerGate(cfg),
   });
   monitor = startSessionMonitor(client);
+  stopEndpointPublisher = startEndpointPublisher(cfg);
 } catch (error) {
   process.stderr.write(
     `[granttap-mcp] monitor is not paired: ${error instanceof Error ? error.message : String(error)}\n`,
@@ -32,6 +36,7 @@ const stop = (): void => {
   if (stopping) return;
   stopping = true;
   monitor.close();
+  stopEndpointPublisher();
   client.close();
   void engine.stop().finally(() => process.exit(0));
 };
