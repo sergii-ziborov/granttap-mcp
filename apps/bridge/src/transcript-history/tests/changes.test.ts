@@ -57,3 +57,15 @@ test("password redaction retains continued command context inside a patch", () =
   assert.ok(change?.diff.includes("-project App.xcodeproj"));
   assert.equal(change?.diffTruncated, undefined);
 });
+
+test("redaction expansion cannot exceed the review payload limit", () => {
+  const secretPatch = "*** Begin Patch\n*** Add File: /repo/build.sh\n" + "+TOKEN=x\n".repeat(1200) + "*** End Patch";
+  const change = recordedFileChanges([
+    row("response_item", { type: "custom_tool_call", name: "apply_patch", call_id: "expanded", input: secretPatch }),
+    row("response_item", { type: "custom_tool_call_output", call_id: "expanded", output: "Success. Updated the following files" }),
+  ]).get("expanded")?.[0];
+  assert.ok(change?.diff.length && change.diff.length <= 16_384);
+  assert.equal(change?.diffTruncated, true);
+  assert.equal(change?.linesAdded, 1200);
+  assert.ok(!change?.diff.includes("TOKEN=x"));
+});

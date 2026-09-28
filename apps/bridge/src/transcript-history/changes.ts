@@ -53,7 +53,11 @@ function patchFiles(patch: string): RecordedFileChange[] {
       if (source.length > remaining) current.diffTruncated = true;
     }
   }
-  return files.slice(0, 64).map((file) => ({ ...file, diff: redactSecrets(file.diff) }));
+  return files.slice(0, 64).map((file) => {
+    const clean = redactSecrets(file.diff);
+    return { ...file, diff: clean.slice(0, 16_384),
+      ...(clean.length > 16_384 ? { diffTruncated: true } : {}) };
+  });
 }
 
 /** Only patches with an explicit successful result become reported changes. */
