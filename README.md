@@ -46,7 +46,13 @@ GrantTap reports the depth each provider actually exposes. Visibility does not
 imply deterministic remote blocking or full mobile continuation.
 
 The Mac app checks this runtime's local health endpoint without account login
-or QR scanning. The iPhone and iPad app provides the mobile Project controller;
+or QR scanning. A Mac App Store sandbox build then asks for explicit local
+access using the runtime's bounded PKCE consent flow; development builds retain
+private Unix IPC. Mac Settings can configure encrypted address discovery or
+install/start/stop the pinned personal relay. Runtime code remains outside the
+Apple sandbox. Mac purchase terms, optional Personal subscriptions and required
+TLS/VPN reachability are documented in the Apple client repository.
+The iPhone and iPad app provides the mobile Project controller;
 Apple Watch carries the compact attention and reply flow through iPhone.
 The machine runtime and separately distributed Engine supply Project records,
 policy coverage, Invocation history, and the distributed evidence graph.
