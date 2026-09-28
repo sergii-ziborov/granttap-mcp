@@ -13,6 +13,7 @@ export { estimateTokens, parseMcpToolName } from "../telemetry";
 
 export const MAX_ACTIVITY_ENTRIES = 24;
 export const MAX_ACTIVITY_TEXT = 700;
+export const MAX_MESSAGE_TEXT = 16_384;
 
 export function compact(value: unknown, max = MAX_ACTIVITY_TEXT): string {
   const text = String(value ?? "").replace(/\s+/g, " ").trim();
@@ -235,7 +236,8 @@ export function pushEntry(input: PushEntryInput): void {
   // The host's own notices arrive as "user" turns; they are shown as status.
   const notification = kind === "user" ? harnessUserNotice(text) : undefined;
   const shownKind: ActivityEntry["kind"] = notification ? "status" : kind;
-  const clean = activityText(notification ?? (kind === "user" ? visibleUserText(text) : text));
+  const limit = shownKind === "tool" || shownKind === "status" ? MAX_ACTIVITY_TEXT : MAX_MESSAGE_TEXT;
+  const clean = activityText(notification ?? (kind === "user" ? visibleUserText(text) : text), limit);
   if (!clean) return;
   const duplicateKey = `${extras.childThreadId ?? "root"}:${shownKind}:${extras.toolName ?? ""}:${clean}`;
   if (seen.has(duplicateKey)) return;

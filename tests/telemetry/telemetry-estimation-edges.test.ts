@@ -85,7 +85,7 @@ test("activity helpers bound visible messages and normalize provider capability 
   assert.equal(out.length, 2);
   assert.equal(out[0].text, "Show status");
   assert.equal(out[1].id, "custom");
-  assert.equal(out[1].text.length, 700);
+  assert.equal(out[1].text, "x".repeat(800));
 });
 
 test("Cursor MCP resolution accepts one exact configured server and abstains on ambiguity", async () => {

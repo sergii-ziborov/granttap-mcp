@@ -26,3 +26,11 @@ Knowledge, graph, and invocation reads remain Engine responses.
 Tests are in `../../../../tests/http/desktop-engine-bridge.test.ts`.
 
 This MCP component is covered by the repository [MIT License](../../../../LICENSE).
+
+`image/artifacts.ts` recognises explicit local image links in visible messages,
+excluding code examples and remote URLs. `desktop.task_image` reads bounded
+PNG/JPEG/WebP chunks only inside the exact Task execution workspace. Symlink
+escapes, unlisted references and ambiguous converted filenames are refused. A
+unique sibling with the same stem preserves a historical link after image format
+conversion. Desktop responses preserve full bounded messages and stay below
+the socket frame budget. Tests also live in `tests/desktop/image`.

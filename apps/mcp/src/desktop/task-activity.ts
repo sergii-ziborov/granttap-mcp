@@ -5,6 +5,8 @@ import { scanSessionActivity } from "../../../bridge/src/sessions";
 import { codexActivity } from "../../../bridge/src/sessions/scan/codex";
 import type { SessionActivity, SessionInfo } from "../../../../packages/protocol/schema";
 
+import { artifactImages } from "./image/artifacts";
+
 type ActivitySources = {
   sessions?: () => SessionInfo[];
   activity?: (session: SessionInfo) => SessionActivity;
@@ -40,13 +42,23 @@ export function desktopTaskActivity(
       ? { entries: codexActivity(matched), state: matched.state }
       : scanSessionActivity(matched)) : undefined;
   const rootEntries = activity?.entries.filter((entry) => !entry.childThreadId) ?? [];
-  const entries = rootEntries.slice(-256).map((entry) => ({
+  const candidates = rootEntries.slice(-256).map((entry) => ({
     id: entry.id.slice(0, 256), kind: entry.kind,
-    text: entry.text.slice(0, 2_048), created_at: entry.createdAt,
+    text: entry.text.slice(0, 16_384), created_at: entry.createdAt,
     tool_name: entry.toolName?.slice(0, 160) ?? null,
     summary: entry.summary?.slice(0, 200) ?? null,
     attachments: entry.attachments ?? null,
+    images: artifactImages({ ...entry, text: entry.text.slice(0, 16_384) })
+      .map(({ id, name, markdown }) => ({ id, name, markdown })),
   }));
+  const entries: typeof candidates = [];
+  let bytes = 0;
+  for (const entry of candidates.reverse()) {
+    const size = Buffer.byteLength(JSON.stringify(entry)) + 1;
+    if (bytes + size > 480 * 1024) break;
+    bytes += size;
+    entries.unshift(entry);
+  }
   return {
     operation: "desktop.task_activity" as const,
     project_id: projectId, task_id: taskId,

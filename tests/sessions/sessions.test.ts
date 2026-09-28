@@ -80,7 +80,7 @@ test("session activity exposes visible text/tools but never thinking blocks", as
   assert.match(completed.entries.at(-1)?.text ?? "", /Done/);
 });
 
-test("session detail is bounded to 24 entries and 700 characters per entry", async (t) => {
+test("session detail is bounded to 24 complete messages within the message limit", async (t) => {
   const claudeRoot = await mkdtemp(join(tmpdir(), "granttap-claude-bounded-"));
   const codexRoot = await mkdtemp(join(tmpdir(), "granttap-codex-bounded-"));
   const project = join(claudeRoot, "project");
@@ -114,7 +114,8 @@ test("session detail is bounded to 24 entries and 700 characters per entry", asy
   assert.ok(session);
   const activity = scanSessionActivity(session);
   assert.equal(activity.entries.length, 24);
-  assert.equal(activity.entries.every((entry) => entry.text.length <= 700), true);
+  assert.equal(activity.entries.every((entry) => entry.text.length <= 16_384), true);
+  assert.ok(activity.entries.at(-1)?.text.endsWith("x".repeat(1_200)));
 });
 
 test("older local chats are excluded from live usage but included in bounded history", async (t) => {
