@@ -1,41 +1,11 @@
-/**
- * Auto-registration of the agent hooks — the part that used to be "copy this
- * snippet into your config yourself".
- *
- *   Claude Code  ~/.claude/settings.json   hooks.PreToolUse
- *   Codex        ~/.codex/config.toml      [features] hooks + [[hooks.PermissionRequest]]
- *
- * Rules: back the file up once before first touching it, never register twice
- * (any existing "granttap" hook counts), and if a TOML merge would be ambiguous,
- * say so instead of corrupting the file.
+/** Install the GrantTap-owned hooks without changing unrelated handlers.
+ * Configuration alone does not establish Codex hook trust.
  */
-import {
-  accessSync,
-  constants,
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
-import { resolveClaudeBinary } from "../providers/claude-bin";
-import { describeCommand, inspectTools, updatingTools } from "../tools/updater";
-import { resolveCursorAgentBin } from "../reply/process/cursor-agent-bin";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { delimiter, dirname, join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
-import type { CodingAgent } from "../../../../packages/protocol/schema";
-import {
-  CLOBBER_LIVE_HELPER_DETAIL,
-  insideTemporaryDirectory,
-  plistUsesTemporaryIO,
-  refusesClobberingLiveHelper,
-  refusesLiveLaunchd,
-} from "./launchd-safety";
-import { configDir, loadRuntimeConfig, verifiableEngine } from "../config";
 import { isCursorHelperNode, resolveMonitorNodeBin } from "../config/runtime/node-bin";
-import { inspectWindowsTask, installWindowsTask } from "./windows-service";
 import {
   type HookRoute,
   type InstallResult,
@@ -191,6 +161,7 @@ export function installCodexHook(): InstallResult {
   const dir =
     process.env.GRANTTAP_CODEX_DIR ??
     process.env.NODVOX_CODEX_DIR ??
+    process.env.CODEX_HOME ??
     join(homedir(), ".codex");
   const path = join(dir, "config.toml");
   mkdirSync(dir, { recursive: true });

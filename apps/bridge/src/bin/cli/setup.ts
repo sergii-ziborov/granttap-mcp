@@ -1,3 +1,4 @@
+import { refreshCodexHooks, codexHooksReady } from "../../codex-hook-trust";
 import QRCode from "qrcode";
 import {
   CODEX_TRUST_INSTRUCTION,
@@ -75,6 +76,7 @@ async function main(): Promise<void> {
       cursorConfig = removeCursorUserGrantTap();
     }
   }
+  const codexTrust = await refreshCodexHooks(true);
   const pairingResult = await pairIfNeeded();
   const paired = isMachineConfigured();
   const installed = new Set(before.agents.filter((item) => item.installed).map((item) => item.agent));
@@ -93,7 +95,7 @@ async function main(): Promise<void> {
         ? "Needs attention" : "Authorize in Claude Code" : "Not installed"}`,
     `Codex               ${installed.has("codex")
       ? codexHook.status === "manual" || httpService?.status === "manual"
-        ? "Needs attention" : !paired ? "Needs connection" : "Authorize in Codex; review hooks"
+        ? "Needs attention" : !paired ? "Needs connection" : codexHooksReady(codexTrust.hooks) ? "Hooks trusted and enabled" : "Authorize in Codex; review hooks"
       : "Not installed"}`,
     `Cursor              ${before.cursor.installed ? `Beta · ${cursorReady ? "Use GrantTap plugin" : "Needs repair"}` : "Not installed"}`,
     `Grok Build          ${installed.has("grok")
@@ -104,7 +106,8 @@ async function main(): Promise<void> {
     `Project Governance  ${engine ? "Ready" : "No engine found"}`,
     "",
     paired && installed.has("codex")
-      ? `Next: authorize GrantTap in Codex, then ${CODEX_TRUST_INSTRUCTION}`
+      ? codexHooksReady(codexTrust.hooks) ? "Codex confirmed both GrantTap hooks are trusted and enabled."
+        : `Next: review GrantTap hooks in GrantTap Settings → This Mac → Codex hooks, or ${CODEX_TRUST_INSTRUCTION}`
       : paired && before.cursor.installed
         ? "Next: keep the GrantTap plugin. Pair and change settings in the GrantTap app, not Cursor MCP settings."
         : !paired

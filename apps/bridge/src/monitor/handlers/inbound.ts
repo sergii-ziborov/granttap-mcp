@@ -1,3 +1,4 @@
+import { handleHookTrust } from "../../codex-hook-trust";
 import type { Payload } from "../../../../../packages/protocol/schema";
 import type { RelayClient } from "../../../../../packages/core/relay-client";
 import { storeAttachment } from "../../delivery/attachment-store";
@@ -56,6 +57,9 @@ export async function handleMonitorMessage(
     if (!leadership.acquire()) return false;
     if (payload.type === "controller.pair.request") {
       return handleControllerPairRequest(client, payload, input.peerPublicKey);
+    }
+    if (payload.type === "provider.hook.trust") {
+      return handleHookTrust(client, payload, input.peerPublicKey, publish);
     }
     if (payload.type === "knowledge.write") {
       return handleInboundKnowledgeWrite(client, payload, input.peerPublicKey, publish);

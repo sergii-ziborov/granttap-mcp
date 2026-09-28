@@ -1,3 +1,4 @@
+import { AgentIntegrationStatus } from "../provider-hooks";
 import { z } from "zod";
 import { CodingAgent } from "../primitives";
 import { ActivityEntry, McpServerInfo, SkillInfo } from "../capabilities";
@@ -89,18 +90,7 @@ export const SessionInfo = z.object({
 });
 export type SessionInfo = z.infer<typeof SessionInfo>;
 
-export const AgentIntegrationStatus = z.object({
-  agent: CodingAgent,
-  installed: z.boolean(),
-  hookConfigured: z.boolean(),
-  // The tool itself: which version answers on this computer, how it is kept
-  // current, and whether a newer copy already sits on the same disk.
-  version: z.string().trim().min(1).max(64).optional(),
-  updateCommand: z.string().trim().min(1).max(200).optional(),
-  newerOnThisMac: z.string().trim().min(1).max(64).optional(),
-  updating: z.boolean().optional(),
-});
-export type AgentIntegrationStatus = z.infer<typeof AgentIntegrationStatus>;
+export { AgentIntegrationStatus } from "../provider-hooks";
 
 /**
  * The phone asks this computer to run one tool's own updater. The tool is the

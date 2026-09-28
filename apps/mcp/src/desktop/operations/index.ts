@@ -1,3 +1,4 @@
+import { desktopHookTrust } from "../provider-hooks";
 import { desktopProjectAutoAccept } from "../policy/auto-accept";
 import { desktopProjectPolicy } from "../policy";
 import { desktopProjectCatalog } from "../project-catalog";
@@ -31,6 +32,7 @@ export function desktopReadOperation(input: {
   if (operation === "desktop.policy_status" || operation === "desktop.policy_set") {
     return desktopProjectPolicy(operation, queryInput, { storePath, engine });
   }
+  if (operation === "desktop.codex_hook_trust") return desktopHookTrust(queryInput);
   if (operation === "desktop.capability_usage") return desktopUsage();
   if (operation === "desktop.installed_skills") {
     return Promise.resolve(desktopInstalledSkills(queryInput, storePath));

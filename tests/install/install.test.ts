@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { observedComputerId } from "../../apps/bridge/src/mesh/identity/computer";
 import {
   hookCommand,
   inspectAgentIntegrations,
@@ -240,7 +241,7 @@ test("agent integration inspection is read-only and reports binaries and hooks s
   });
 
   assert.deepEqual(inspectAgentIntegrations(), [
-    { agent: "codex", installed: true, hookConfigured: true },
+    { agent: "codex", endpointId: observedComputerId(), installed: true, hookConfigured: true },
     { agent: "claude", installed: true, hookConfigured: true, updateCommand: "claude update" },
     { agent: "cursor", installed: false, hookConfigured: false },
     { agent: "grok", installed: false, hookConfigured: false },
@@ -262,7 +263,7 @@ test("agent integration inspection is read-only and reports binaries and hooks s
     ].join("\n")),
   ]);
   assert.deepEqual(inspectAgentIntegrations(), [
-    { agent: "codex", installed: true, hookConfigured: false },
+    { agent: "codex", endpointId: observedComputerId(), installed: true, hookConfigured: false },
     { agent: "claude", installed: true, hookConfigured: false, updateCommand: "claude update" },
     { agent: "cursor", installed: false, hookConfigured: false },
     { agent: "grok", installed: false, hookConfigured: false },

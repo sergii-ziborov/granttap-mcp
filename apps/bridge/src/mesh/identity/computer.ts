@@ -82,6 +82,11 @@ export function computerId(env: NodeJS.ProcessEnv = process.env): string {
   return computerIdentity(env).computerId;
 }
 
+/** Diagnostics observe identity without minting or updating a durable record. */
+export function observedComputerId(env: NodeJS.ProcessEnv = process.env): string {
+  return env.GRANTTAP_COMPUTER_ID?.trim() || read(configDir())?.computerId || hostname().trim() || "computer";
+}
+
 /** Names this computer used to go by, which the Mesh may still hold records under. */
 export function formerComputerNames(
   env: NodeJS.ProcessEnv = process.env,

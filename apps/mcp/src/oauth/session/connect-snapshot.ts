@@ -1,3 +1,4 @@
+import { codexHooksReady } from "../../../../bridge/src/codex-hook-trust";
 /**
  * Public consent snapshot for granttap.com. No pairing keys, tokens, or codes.
  */
@@ -55,7 +56,7 @@ export function buildConnectSnapshot(clientName?: string): ConnectSnapshot {
       .map((item) => ({
         id: item.agent,
         installed: item.installed,
-        ready: item.hookConfigured,
+        ready: item.hookConfigured && (item.agent !== "codex" || codexHooksReady(item.hooks)),
       })),
     relayStatus: runtime.relayStatus,
     mesh: publicMeshSummary(),

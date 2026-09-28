@@ -1,3 +1,5 @@
+import { codexHooksReady } from "../../../bridge/src/codex-hook-trust";
+import type { ProviderHook } from "../../../../packages/protocol/messages/provider-hooks";
 import {
   CODEX_TRUST_INSTRUCTION,
   inspectAgentIntegrations,
@@ -18,6 +20,8 @@ export type ProviderConnectionStatus = {
   id: ProviderId;
   status: ProviderConnectionState;
   detail: string;
+  hooks?: ProviderHook[];
+  hooksCheckedAt?: number;
 };
 
 export type ProviderStatusSnapshot = {
@@ -122,10 +126,19 @@ function agentStatus(
   const runtime = runtimeRequirement(agent, readiness);
   if (runtime) return runtime;
   if (agent === "codex") {
+    const hooks = integration.hooks;
+    const ready = codexHooksReady(hooks);
+    const pending = hooks?.filter(row => row.trustStatus === "untrusted" || row.trustStatus === "modified")
+      .map(row => row.event).join(", ");
+    const disabled = hooks?.filter(row => row.trustStatus === "trusted" && !row.enabled)
+      .map(row => row.event).join(", ");
     return {
-      id: agent,
-      status: "action_required",
-      detail: CODEX_TRUST_INSTRUCTION,
+      id: agent, status: ready ? "connected" : "action_required", hooks,
+      hooksCheckedAt: integration.hooksCheckedAt,
+      detail: ready ? "Codex confirmed both GrantTap hooks are trusted and enabled."
+        : pending ? `${pending}: review required. ${CODEX_TRUST_INSTRUCTION}`
+        : disabled ? `${disabled}: disabled in Codex. Enable the GrantTap hook after review.`
+        : "Codex hook trust is not confirmed. Refresh or review GrantTap hooks in Codex Settings → Hooks or /hooks.",
     };
   }
   return {
@@ -150,10 +163,11 @@ function grokStatus(readiness: ProviderReadiness): ProviderConnectionStatus {
 }
 
 export function providerStatuses(readiness: ProviderReadiness): ProviderConnectionStatus[] {
+  const codex = readiness.integrations.find(row => row.agent === "codex");
   return [
     cursorStatus(readiness),
     agentStatus("claude", readiness),
-    agentStatus("codex", readiness),
+    { ...agentStatus("codex", readiness), hooks: codex?.hooks, hooksCheckedAt: codex?.hooksCheckedAt },
     grokStatus(readiness),
   ];
 }

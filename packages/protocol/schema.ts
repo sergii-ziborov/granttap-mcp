@@ -1,5 +1,6 @@
 /** Public encrypted wire protocol entry point. */
 import { z } from "zod";
+import { ProviderHookTrust, ProviderHookTrustResult } from "./messages/provider-hooks";
 import {
   ApprovalDecision,
   ApprovalRequest,
@@ -60,6 +61,7 @@ import {
   SessionsHistoryPage,
 } from "./messages/sessions";
 
+export * from "./messages/provider-hooks";
 export * from "./messages/approvals";
 export * from "./messages/capabilities";
 export * from "./messages/interaction";
@@ -134,6 +136,8 @@ export const Payload = z.union([
   SessionControlResult,
   ToolUpdate,
   ToolUpdateResult,
+  ProviderHookTrust,
+  ProviderHookTrustResult,
   MeshEvent,
   MeshClaimRelease,
   MeshClaimReleaseResult,

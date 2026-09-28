@@ -1,3 +1,4 @@
+import { codexPolicyReady } from "../codex-hook-trust";
 import { join } from "node:path";
 import type { RelayClient } from "../../../../packages/core/relay-client";
 import type { ProjectPolicySet } from "../../../../packages/protocol/schema";
@@ -42,7 +43,8 @@ export function projectPolicyRuntimeDependencies(): ProjectPolicyRuntimeDependen
       const configured = loadRuntimeConfig().providerSettings;
       return inspectAgentIntegrations()
         .filter((item) => item.installed && configured[item.agent])
-        .map((item) => ({ provider: item.agent, hookConfigured: item.hookConfigured }));
+        .map((item) => ({ provider: item.agent,
+          hookConfigured: item.hookConfigured && (item.agent !== "codex" || codexPolicyReady(item.hooks)) }));
     },
     now: Date.now,
     send: async (relay, payload) => {

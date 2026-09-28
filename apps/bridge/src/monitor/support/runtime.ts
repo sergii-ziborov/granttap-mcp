@@ -1,86 +1,31 @@
+import { refreshCodexHooks } from "../../codex-hook-trust";
 import { hostname } from "node:os";
 import { RelayClient } from "../../../../../packages/core/relay-client";
 import type { Payload, SessionInfo, SessionsStatus } from "../../../../../packages/protocol/schema";
-import { pruneAttachments, storeAttachment, takeAttachment } from "../../delivery/attachment-store";
-import {
-  configDir,
-  loadRuntimeConfig,
-  saveRuntimeConfig,
-  setSessionMcpAllowed,
-  setSessionPaused,
-  setSessionShellAllowed,
-  setSessionSkillAllowed,
-} from "../../config";
+import { loadRuntimeConfig } from "../../config";
 import { monitorLeadership } from "./leadership";
 import { mcpServersForSession, workspaceSkills } from "../../capabilities";
-import {
-  createClaudeSession,
-  createCodexSession,
-  createCursorSession,
-  createGrokSession,
-  deliverToSession,
-  stopDeliveries,
-} from "../../reply";
-import { abandonDelivery, beginDelivery, completeDelivery } from "../../delivery";
 import { inspectAgentIntegrations } from "../../install";
-import { handleToolUpdate } from "../../tools/update-handler";
-import { noteDeliveredRun } from "../../mesh/delivery/run-digest";
-import { applyConfigSet, currentConfigRevision, loadConfigCommandState } from "../../config/commands";
-import { acceptInstanceEpoch, currentInstanceEpoch } from "../../host/instance-epoch";
-import { applyHostGrant } from "../../mesh/runtime/execution-policy";
-import { evaluateCreateTask } from "../../mesh/tasks/create-task";
-import { recordDelegation } from "../../mesh/handoff/delegation-loop";
-import { enqueuePinnedTask } from "../../mesh/tasks/queue";
-import { computerId } from "../../mesh/identity/computer";
+import { currentConfigRevision } from "../../config/commands";
+import { currentInstanceEpoch } from "../../host/instance-epoch";
 import { localMeshStore } from "../../mesh/local-remote/local";
 import { refreshMcpLoad } from "../../machine-load/mcp/refresh";
 import { approvalsStatus } from "../../approvals/state";
-import { primeSessionKeys, sendProjectPayload, sendSessionPayload } from "../../host/session-keys";
+import { primeSessionKeys } from "../../host/session-keys";
 import { sendMeshPayload } from "../../host/session-keys";
-import {
-  handleMeshPayload, meshCatalog, meshSnapshots, meshSnapshotsWithEngine, prepareMeshHandoff,
-} from "../../mesh/runtime";
-import { releaseClaimByPerson, releaseResult } from "../../mesh/admin";
+import { meshCatalog, meshSnapshots, meshSnapshotsWithEngine } from "../../mesh/runtime";
 import { deriveObservedClaims } from "../../mesh/observed/claims";
 import { ingestRuntimeInvocations } from "../../engine/invocation/ingest";
-import { handleInvocationQuery } from "../../engine/invocation/query";
-import { cachedSessionActivity } from "./session-activity";
 import { HEARTBEAT_INTERVAL_MS, publishHeartbeat } from "./heartbeat";
-import { applyPairingJoin } from "../../pairing";
-import { recordPhoneSeen } from "../../pairing/presence";
 import { confirmPendingController } from "../../pairing/controllers";
 import { startPublishLoop } from "./publish-loop";
 import { singleFlightPublisher } from "./single-flight";
 import { createMachineLoadPublisher } from "../../machine-load";
 import { startMachineLoadLoop } from "../../machine-load/host/loop";
-import {
-  handleProjectPolicySet,
-  publishProjectPolicyStatuses,
-} from "../../project-policy/runtime";
-import {
-  scanCapabilityUsage,
-  scanSessionHistory,
-  scanSessions,
-  scanThreadActivity,
-  scopeCapabilityUsageToRoom,
-  TOKEN_WINDOW_HOURS,
-} from "../../sessions";
+import { publishProjectPolicyStatuses } from "../../project-policy/runtime";
+import { scanCapabilityUsage, scanSessionHistory, scanSessions, scopeCapabilityUsageToRoom, TOKEN_WINDOW_HOURS } from "../../sessions";
 import { boundedCatalogHistory, INTERVAL_MS, publishSessionEvents } from "../handlers/catalog";
-import { sendDeliveryReceipt } from "../handlers/receipts";
-import {
-  handleAccessSet,
-  handleCompact,
-  handleConfigSet,
-  handleHostGrant,
-  handleMcpSet,
-  handleSessionControl,
-  handleShellSet,
-  handleSkillSet,
-  handleSubscription,
-} from "../handlers/session-commands";
-import { handleTaskCreate } from "../handlers/task-create";
 import { sweepAttachments } from "../handlers/receipts";
-import { handleUserMessage } from "../handlers/user-message";
 import { handleMonitorMessage } from "../handlers/inbound";
 
 const HISTORY_INTERVAL_MS = 10_000;
@@ -175,6 +120,7 @@ async function publishMonitorTick(input: {
   await publishHeartbeat(client).catch(() => {});
   if (!leadership.acquire()) return { lastHistoryPublishedAt, lastCapabilityPublishedAt };
   const includeHistory = forceHistory || Date.now() - lastHistoryPublishedAt >= HISTORY_INTERVAL_MS;
+  await refreshCodexHooks();
   const status = monitorSnapshot({ includeHistory, forceHistory, subscriptions, history });
   await client.send(status, "phone", { ttlMs: INTERVAL_MS * 24, reliable: false });
   if (includeHistory) lastHistoryPublishedAt = Date.now();

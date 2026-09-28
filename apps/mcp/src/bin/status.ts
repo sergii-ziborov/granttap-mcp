@@ -1,3 +1,4 @@
+import { refreshCodexHooks } from "../../../bridge/src/codex-hook-trust";
 import {
   inspectCursorOAuthReadiness,
   inspectProviderStatusSnapshot,
@@ -13,6 +14,7 @@ async function main(): Promise<void> {
     process.stderr.write("Usage: granttap status [--json]\n");
     process.exitCode = 1;
   } else {
+    await refreshCodexHooks(true);
     const cursorOAuth = await inspectCursorOAuthReadiness();
     const snapshot = inspectProviderStatusSnapshot(new Date(), cursorOAuth);
     if (args[0] === "--json") {

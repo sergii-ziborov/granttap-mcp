@@ -25,10 +25,12 @@ const DESKTOP_OPERATIONS = new Set([
   "desktop.invocation_history",
   "desktop.controller_enrollment",
   "desktop.live_catalog",
+  "desktop.codex_hook_trust",
 ]);
 
 function desktopOperationTimeout(operation: unknown, input: unknown): number {
   if (operation === "desktop.controller_enrollment") return 30_000;
+  if (operation === "desktop.codex_hook_trust") return 25_000;
   if (operation === "desktop.policy_set") return 60_000;
   if (operation === "desktop.policy_status") return 30_000;
   if (operation === "desktop.capability_usage"

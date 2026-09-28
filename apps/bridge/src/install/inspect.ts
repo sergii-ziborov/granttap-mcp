@@ -1,3 +1,4 @@
+import { observedComputerId } from "../mesh/identity/computer";
 /**
  * Auto-registration of the agent hooks — the part that used to be "copy this
  * snippet into your config yourself".
@@ -39,6 +40,9 @@ import { isCursorHelperNode, resolveMonitorNodeBin } from "../config/runtime/nod
 import { inspectWindowsTask, installWindowsTask } from "./windows-service";
 import { monitorPlistLooksInstalled } from "./monitor-helper";
 import { codexHooksExplicitlyDisabled } from "./hooks";
+import { cachedCodexHooks, codexHookSet } from "../codex-hook-trust";
+import type { ProviderHook } from "../../../../packages/protocol/messages/provider-hooks";
+export { codexHookSet } from "../codex-hook-trust";
 
 export { isCursorHelperNode, resolveMonitorNodeBin };
 
@@ -76,6 +80,9 @@ export type AgentIntegrationStatus = {
   agent: CodingAgent;
   installed: boolean;
   hookConfigured: boolean;
+  endpointId?: string;
+  hooks?: ProviderHook[];
+  hooksCheckedAt?: number;
   version?: string;
   updateCommand?: string;
   newerOnThisMac?: string;
@@ -143,86 +150,11 @@ function claudeHookConfigured(): boolean {
   }
 }
 
-export function codexHookSet(config: string): { permission: boolean; policy: boolean } {
-  type Event = "PermissionRequest" | "PreToolUse";
-  let event: Event | null = null;
-  let matcherAll = false;
-  let inCommandHook = false;
-  let commandType = false;
-  let command: string | null = null;
-  let timeout: number | null = null;
-  let permission = false;
-  let policy = false;
-  const finishCommandHook = () => {
-    if (!event || !matcherAll || !inCommandHook || !commandType) return;
-    if (event === "PermissionRequest"
-      && timeout === 120
-      && commandIsCurrentRoute(command, "codex")) {
-      permission = true;
-    }
-    if (event === "PreToolUse"
-      && timeout === 30
-      && commandIsCurrentRoute(command, "codex-policy")) {
-      policy = true;
-    }
-  };
-  for (const line of config.split(/\r?\n/)) {
-    const parent = line.match(/^\s*\[\[hooks\.(PermissionRequest|PreToolUse)\]\]\s*(?:#.*)?$/i);
-    if (parent) {
-      finishCommandHook();
-      event = parent[1]!.toLowerCase() === "permissionrequest"
-        ? "PermissionRequest"
-        : "PreToolUse";
-      matcherAll = false;
-      inCommandHook = false;
-      commandType = false;
-      command = null;
-      timeout = null;
-      continue;
-    }
-    const child = line.match(
-      /^\s*\[\[hooks\.(PermissionRequest|PreToolUse)\.hooks\]\]\s*(?:#.*)?$/i,
-    );
-    if (child) {
-      finishCommandHook();
-      const childEvent: Event = child[1]!.toLowerCase() === "permissionrequest"
-        ? "PermissionRequest"
-        : "PreToolUse";
-      inCommandHook = event === childEvent;
-      commandType = false;
-      command = null;
-      timeout = null;
-      continue;
-    }
-    if (/^\s*\[/.test(line)) {
-      finishCommandHook();
-      event = null;
-      matcherAll = false;
-      inCommandHook = false;
-      commandType = false;
-      command = null;
-      timeout = null;
-      continue;
-    }
-    if (event && !inCommandHook) {
-      const matcher = line.match(/^\s*matcher\s*=\s*["'](.*)["']\s*(?:#.*)?$/i)?.[1];
-      if (matcher != null) matcherAll = matcher.trim() === ".*";
-    } else if (inCommandHook) {
-      const type = line.match(/^\s*type\s*=\s*["'](.*)["']\s*(?:#.*)?$/i)?.[1];
-      if (type != null) commandType = type.trim().toLowerCase() === "command";
-      const value = line.match(/^\s*command\s*=\s*["'](.*)["']\s*(?:#.*)?$/i)?.[1];
-      if (value != null) command = value;
-      const rawTimeout = line.match(/^\s*timeout\s*=\s*(\d+)\s*(?:#.*)?$/i)?.[1];
-      if (rawTimeout != null) timeout = Number(rawTimeout);
-    }
-  }
-  finishCommandHook();
-  return { permission, policy };
-}
 
 function codexHookConfigured(): boolean {
   const dir = process.env.GRANTTAP_CODEX_DIR
     ?? process.env.NODVOX_CODEX_DIR
+    ?? process.env.CODEX_HOME
     ?? join(homedir(), ".codex");
   const path = join(dir, "config.toml");
   if (!existsSync(path)) return false;
@@ -284,8 +216,10 @@ export function inspectAgentIntegrations(): AgentIntegrationStatus[] {
     if (updating.has(agent)) extra.updating = true;
     return extra;
   };
+  const hookReport = cachedCodexHooks();
   return [
-    { agent: "codex", installed: executableAvailable(codex), hookConfigured: codexHookConfigured(), ...tool("codex") },
+    { agent: "codex", endpointId: observedComputerId(), installed: executableAvailable(codex), hookConfigured: codexHookConfigured(),
+      ...(hookReport ? { hooks: hookReport.hooks, hooksCheckedAt: hookReport.checkedAt } : {}), ...tool("codex") },
     { agent: "claude", installed: executableAvailable(claude), hookConfigured: claudeHookConfigured(), ...tool("claude") },
     { agent: "cursor", installed: executableAvailable(cursor), hookConfigured: cursorStatus.hookConfigured, ...tool("cursor") },
     // Grok Build's headless session contract is direct; GrantTap does not
