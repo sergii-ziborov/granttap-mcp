@@ -4,6 +4,7 @@ import { configDir, loadRuntimeConfig } from "../../../../bridge/src/config";
 import { readStoreState } from "../../../../bridge/src/mesh/store/state";
 import { inspectRepository } from "../../../../bridge/src/mesh/catalog";
 import { computerId } from "../../../../bridge/src/mesh/identity/computer";
+import { readDesktopAttachments } from "./attachments";
 import { admitNewTask, loadExecutionPolicy } from "../../../../bridge/src/mesh/runtime/execution-policy";
 import {
   createClaudeSession, createCodexSession, createCursorSession, createGrokSession,
@@ -35,7 +36,7 @@ export function desktopTaskCreate(
     || typeof bindingId !== "string" || !bindingId || bindingId.length > 128
     || query.endpoint_id !== endpoint
     || typeof operationId !== "string" || !/^[0-9a-f-]{36}$/i.test(operationId)
-    || typeof text !== "string" || !text.trim() || text.length > 8_000
+    || typeof text !== "string" || (!text.trim() && query.attachments_json === undefined) || text.length > 8_000
     || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(text)
     || typeof provider !== "string" || !(provider in providers)
     || model !== undefined && (typeof model !== "string" || model.length > 128)) {
@@ -81,8 +82,10 @@ export function desktopTaskCreate(
   }
   const prior = pending.get(operationId);
   if (prior) return prior;
+  const attachments = readDesktopAttachments(query.attachments_json);
+  if (!attachments || !text.trim() && attachments.length === 0) return Promise.resolve(undefined);
   const start = create ?? providers[agent];
-  const result = start(text.trim(), workspace, 240_000, [], model as string | undefined,
+  const result = start(text.trim(), workspace, 240_000, attachments, model as string | undefined,
     operationId).then((reply) => ({
       operation: "desktop.task_create", created: reply.ok,
       session_id: reply.ok ? reply.sessionId ?? null : null,

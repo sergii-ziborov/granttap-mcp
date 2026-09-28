@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -31,4 +31,38 @@ test("local Task send keeps the exact Mesh and native execution link", async () 
   });
   await desktopTaskSend(request, storePath, deliver);
   assert.deepEqual(calls, ["session-a:Continue"]);
+});
+
+test("local Task accepts a source file without a caption and rejects untrusted attachment paths", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "granttap-message-"));
+  const storePath = join(directory, "project-mesh.json");
+  await writeFile(storePath, JSON.stringify({ version: 1,
+    projects: [{ projectId: "files", name: "Files", createdAt: 1 }],
+    tasks: [{ taskId: "task", projectId: "files", title: "Test", goal: "test",
+      state: "working", createdAt: 1, updatedAt: 2 }],
+    executions: [{ taskId: "task", sessionId: "session", provider: "codex",
+      computerId: "computer", workspace: directory, startedAt: 1, activeAt: 2 }],
+  }));
+  const path = join(directory, "0");
+  await writeFile(path, "let answer = 42\n", { mode: 0o600 });
+  await chmod(directory, 0o700);
+  const files = [{ name: "Answer.swift", mimeType: "text/plain", path }];
+  const request = { project_id: "files", task_id: "task", session_id: "session",
+    delivery_id: randomUUID(), text: "", attachments_json: JSON.stringify(files) };
+  const delivered: unknown[] = [];
+  const deliver = async (_session: unknown, _text: string, _timeout?: number, attachments?: unknown[]) => {
+    delivered.push(attachments);
+    return { ok: true as const, text: "Done" };
+  };
+  try {
+    const result = await desktopTaskSend(request, storePath, deliver);
+    assert.equal((result as { accepted?: boolean })?.accepted, true);
+    assert.deepEqual(delivered, [[{ name: "Answer.swift", mimeType: "text/plain",
+      data: Buffer.from("let answer = 42\n").toString("base64") }]]);
+    assert.equal(await desktopTaskSend({ ...request, delivery_id: randomUUID(), text: "Inspect",
+      attachments_json: JSON.stringify([{ ...files[0], path: storePath }]) }, storePath, deliver), undefined);
+    assert.equal(await desktopTaskSend({ ...request, delivery_id: randomUUID(), text: "Inspect",
+      attachments_json: "bad JSON" }, storePath, deliver), undefined);
+    assert.equal(delivered.length, 1, "invalid attachments must not be silently dropped");
+  } finally { await rm(directory, { recursive: true, force: true }); }
 });

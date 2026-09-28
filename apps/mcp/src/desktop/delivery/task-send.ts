@@ -3,6 +3,7 @@ import { configDir, loadRuntimeConfig } from "../../../../bridge/src/config";
 import { readStoreState } from "../../../../bridge/src/mesh/store/state";
 import { deliverToSession } from "../../../../bridge/src/reply";
 import type { CodingAgent, SessionInfo } from "../../../../../packages/protocol/schema";
+import { readDesktopAttachments } from "./attachments";
 
 type Delivery = typeof deliverToSession;
 const pending = new Map<string, Promise<unknown>>();
@@ -19,7 +20,7 @@ export function desktopTaskSend(input: unknown,
     || typeof taskId !== "string" || !taskId || taskId.length > 128
     || typeof sessionId !== "string" || !sessionId || sessionId.length > 128
     || typeof deliveryId !== "string" || !/^[0-9a-f-]{36}$/i.test(deliveryId)
-    || typeof text !== "string" || !text.trim() || text.length > 8_000
+    || typeof text !== "string" || (!text.trim() && query.attachments_json === undefined) || text.length > 8_000
     || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(text)) {
     return Promise.resolve(undefined);
   }
@@ -40,6 +41,8 @@ export function desktopTaskSend(input: unknown,
   const key = `${projectId}:${taskId}:${sessionId}:${deliveryId}`;
   const prior = pending.get(key);
   if (prior) return prior;
+  const attachments = readDesktopAttachments(query.attachments_json);
+  if (!attachments || !text.trim() && attachments.length === 0) return Promise.resolve(undefined);
   const session: SessionInfo = {
     sessionId, agent: provider, cwd: execution.workspace,
     state: execution.endedAt == null ? "working" : "idle",
@@ -47,7 +50,7 @@ export function desktopTaskSend(input: unknown,
     lastActivityAt: execution.activeAt ?? execution.updatedAt ?? execution.startedAt,
     tokensSession: 0, tokensLastTurn: 0,
   };
-  const operation = deliver(session, text.trim(), 240_000).then((result) => ({
+  const operation = deliver(session, text.trim(), 240_000, attachments).then((result) => ({
     operation: "desktop.task_send", accepted: result.ok,
     error: result.ok ? null : result.error.slice(0, 500),
   }), () => ({ operation: "desktop.task_send", accepted: false,

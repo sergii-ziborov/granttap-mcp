@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -44,4 +44,19 @@ test("Mac creates a Task only through this Mesh's exact local repository binding
     create, () => true) as { created: boolean };
   assert.equal(repeat.created, true);
   assert.equal(calls, 1);
+  const batch = mkdtempSync(join(tmpdir(), "granttap-message-"));
+  try {
+    const path = join(batch, "0");
+    writeFileSync(path, Buffer.from([0, 255]), { mode: 0o600 });
+    const attached = await desktopTaskCreate({ ...request, operation_id: randomUUID(), text: "",
+      attachments_json: JSON.stringify([{ name: "document.bin", mimeType: "application/octet-stream", path }]),
+    }, storePath, endpoint, async (_text, _cwd, _timeout, attachments) => {
+      assert.deepEqual(attachments, [{ name: "document.bin", mimeType: "application/octet-stream", data: "AP8=" }]);
+      return { ok: true as const, text: "Started", sessionId: "with-file" };
+    }, () => true) as { created: boolean };
+    assert.equal(attached.created, true);
+    assert.equal(await desktopTaskCreate({ ...request, operation_id: randomUUID(),
+      attachments_json: "invalid" }, storePath, endpoint, create, () => true), undefined);
+    assert.equal(calls, 1, "bad attachments must never start a text-only Task");
+  } finally { rmSync(batch, { recursive: true, force: true }); }
 });
