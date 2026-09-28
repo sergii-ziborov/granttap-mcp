@@ -45,7 +45,9 @@ export async function startHttpMcpServer(options: ServeOptions = {}): Promise<{
   if (!Number.isInteger(port) || port < 1 || port > 65_535) {
     throw new Error("GrantTap HTTP MCP port must be an integer between 1 and 65535");
   }
-  const desktopBridge = await startDesktopEngineBridgeProcess();
+  const desktopBridge = await startDesktopEngineBridgeProcess({
+    onPairingChanged: () => { resetRelay(); void relay(); },
+  });
 
   const mcpUrl = new URL(`http://${host === "::1" ? "[::1]" : host}:${port}/mcp`);
   const issuerUrl = new URL(`http://${host === "::1" ? "[::1]" : host}:${port}`);

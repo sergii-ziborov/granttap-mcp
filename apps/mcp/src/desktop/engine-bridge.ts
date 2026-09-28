@@ -9,6 +9,7 @@ import {
 } from "../../../bridge/src/engine/protocol/engine-protocol";
 import { DesktopTaskActivityRunner } from "./task-activity-runner";
 import { desktopReadOperation } from "./operations";
+import { DesktopControllerEnrollment } from "./pairing";
 
 const DESKTOP_OPERATIONS = new Set([
   "engine.version", "project.list", "project.resolve", "project.get",
@@ -22,9 +23,11 @@ const DESKTOP_OPERATIONS = new Set([
   "desktop.task_create",
   "desktop.mesh_create",
   "desktop.invocation_history",
+  "desktop.controller_enrollment",
 ]);
 
 function desktopOperationTimeout(operation: unknown, input: unknown): number {
+  if (operation === "desktop.controller_enrollment") return 30_000;
   if (operation === "desktop.policy_set") return 60_000;
   if (operation === "desktop.policy_status") return 30_000;
   if (operation === "desktop.capability_usage"
@@ -43,6 +46,7 @@ export async function startDesktopEngineBridge(options: {
   engineSocketPath?: string;
   storePath?: string;
   client?: Pick<EngineClient, "request" | "close">;
+  onPairingChanged?: () => void;
 } = {}): Promise<{ socketPath: string; close: () => Promise<void> }> {
   const directory = await mkdtemp(join(tmpdir(), "granttap-desktop-"));
   const socketPath = join(directory, "engine.sock");
@@ -51,6 +55,7 @@ export async function startDesktopEngineBridge(options: {
   });
   const activity = new DesktopTaskActivityRunner();
   const enrichment = new DesktopTaskActivityRunner();
+  const controllerEnrollment = new DesktopControllerEnrollment(options.onPairingChanged);
   const clients = new Set<Socket>();
   const server = createServer((socket) => {
     clients.add(socket);
@@ -80,7 +85,7 @@ export async function startDesktopEngineBridge(options: {
         if (input !== undefined && (input === null || typeof input !== "object"
           || Array.isArray(input))) { socket.destroy(); return; }
         const read = desktopReadOperation({ operation, queryInput: input,
-          storePath: options.storePath, engine, activity, enrichment });
+          storePath: options.storePath, engine, activity, enrichment, controllerEnrollment });
         void read.then(
           (result) => {
             if (!result) { socket.destroy(); return; }
@@ -122,6 +127,7 @@ export async function startDesktopEngineBridge(options: {
       clients.forEach((socket) => socket.destroy());
       activity.close();
       enrichment.close();
+      controllerEnrollment.close();
       await new Promise<void>((resolve) => server.close(() => resolve()));
       engine.close();
       await rm(directory, { recursive: true, force: true });

@@ -11,9 +11,10 @@ function testFiles(directory) {
   });
 }
 
-const files = testFiles("tests").sort();
+const files = [...testFiles("tests"), ...testFiles("apps")].sort();
 if (files.length === 0) throw new Error("No test files found");
-const result = spawnSync(process.execPath, ["--import", "tsx", "--test", ...files], {
+// Keep test workers bounded when Apple simulators share the development host.
+const result = spawnSync(process.execPath, ["--import", "tsx", "--test", "--test-concurrency=4", ...files], {
   stdio: "inherit",
   env: process.env,
 });

@@ -13,13 +13,18 @@ import { desktopMeshCreate } from "../delivery/mesh-create";
 import { desktopInvocationHistory } from "../invocation";
 import { desktopUsage } from "../projection/usage";
 import { desktopInstalledSkills } from "../projection/installed-skills";
+import type { DesktopControllerEnrollment } from "../pairing";
 
 export function desktopReadOperation(input: {
   operation: string; queryInput: unknown; storePath?: string;
   engine: Pick<EngineClient, "request">; activity: DesktopTaskActivityRunner;
   enrichment: DesktopTaskActivityRunner;
+  controllerEnrollment?: DesktopControllerEnrollment;
 }): Promise<unknown> {
   const { operation, queryInput, storePath, engine, activity, enrichment } = input;
+  if (operation === "desktop.controller_enrollment") {
+    return input.controllerEnrollment?.read(queryInput) ?? Promise.resolve(undefined);
+  }
   if (operation === "desktop.project_auto_accept") {
     return Promise.resolve(desktopProjectAutoAccept(queryInput, { storePath }));
   }

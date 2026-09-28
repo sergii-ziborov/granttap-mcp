@@ -1,7 +1,9 @@
 import { startDesktopEngineBridge } from "../engine-bridge";
 
 let closing = false;
-const bridge = await startDesktopEngineBridge();
+const bridge = await startDesktopEngineBridge({
+  onPairingChanged: () => { process.send?.({ type: "pairing-changed" }); },
+});
 process.send?.({ type: "ready", socketPath: bridge.socketPath });
 
 async function close(): Promise<void> {

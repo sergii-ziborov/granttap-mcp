@@ -6,7 +6,9 @@ const requireFromHere = createRequire(import.meta.url);
 const childPath = fileURLToPath(new URL("./bridge-child.ts", import.meta.url));
 
 /** Run desktop reads away from the monitor's synchronous provider scans. */
-export async function startDesktopEngineBridgeProcess(): Promise<{
+export async function startDesktopEngineBridgeProcess(options: {
+  onPairingChanged?: () => void;
+} = {}): Promise<{
   socketPath: string;
   close: () => Promise<void>;
 }> {
@@ -16,6 +18,10 @@ export async function startDesktopEngineBridgeProcess(): Promise<{
       "--import", pathToFileURL(requireFromHere.resolve("tsx")).href,
     ],
     stdio: ["ignore", "ignore", "ignore", "ipc"],
+  });
+  child.on("message", (message: unknown) => {
+    if (message && typeof message === "object"
+      && (message as { type?: string }).type === "pairing-changed") options.onPairingChanged?.();
   });
   const socketPath = await new Promise<string>((resolve, reject) => {
     const timeout = setTimeout(() => {
