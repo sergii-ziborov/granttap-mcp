@@ -223,6 +223,7 @@ test("authorize installs a persistent loopback service, verifies health, then ex
   assert.match(plist, /granttap-mcp\.mjs<\/string>\s*<string>internal<\/string>\s*<string>serve<\/string>/);
   assert.match(plist, /<key>RunAtLoad<\/key>\s*<true\/>/);
   assert.match(plist, /<key>KeepAlive<\/key>\s*<true\/>/);
+  assert.match(plist, /<key>ProcessType<\/key>\s*<string>Interactive<\/string>/);
   assert.doesNotMatch(plist, /Cursor\.app|\/helpers\/node/);
   assert.match(plist, new RegExp(`<string>${port}<\\/string>`));
   const packageVersion = (JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8")) as { version: string }).version;

@@ -86,7 +86,9 @@ function createPlist(nodeBin: string, executable: string, mcpUrl: URL, logsDir: 
     ...environment.flatMap(([key, value]) => [`    <key>${xml(key)}</key>`, `    <string>${xml(value)}</string>`]),
     "  </dict>", "  <key>WorkingDirectory</key>", `  <string>${xml(packageRoot)}</string>`,
     "  <key>RunAtLoad</key>", "  <true/>", "  <key>KeepAlive</key>", "  <true/>",
-    "  <key>ProcessType</key>", "  <string>Background</string>", "  <key>ThrottleInterval</key>",
+    // HTTP and the desktop socket serve user requests without XPC transactions.
+    // Background scheduling also throttles the transcript-reading children.
+    "  <key>ProcessType</key>", "  <string>Interactive</string>", "  <key>ThrottleInterval</key>",
     "  <integer>30</integer>", "  <key>Umask</key>", "  <integer>63</integer>",
     "  <key>StandardOutPath</key>", `  <string>${xml(logPath)}</string>`, "  <key>StandardErrorPath</key>",
     `  <string>${xml(logPath)}</string>`, "</dict>", "</plist>", "",

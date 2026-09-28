@@ -1,8 +1,9 @@
 import { createInterface } from "node:readline";
 import { desktopTaskActivity } from "./task-activity";
 import { desktopTaskImage } from "./image";
-import { scanCapabilityUsage } from "../../../bridge/src/sessions";
+import { scanCapabilityUsage, scanSessions, scanSessionHistory } from "../../../bridge/src/sessions";
 import { desktopSelectedMesh } from "./projection/selected-mesh";
+import { desktopUsageSessions } from "./projection/session-usage";
 
 let usageCache: { at: number; result: unknown } | undefined;
 const activityCache = new Map<string, { at: number; result: ReturnType<typeof desktopTaskActivity> }>();
@@ -22,7 +23,9 @@ function cachedActivity(query: unknown, storePath?: string) {
 
 function cachedUsage(): unknown {
   if (usageCache && Date.now() - usageCache.at < 120_000) return usageCache.result;
-  const result = { ...scanCapabilityUsage(), operation: "desktop.capability_usage" };
+  const sessions = [...scanSessions().sessions, ...scanSessionHistory()];
+  const result = { ...scanCapabilityUsage(sessions), operation: "desktop.capability_usage",
+    sessions: desktopUsageSessions(sessions) };
   usageCache = { at: Date.now(), result };
   return result;
 }

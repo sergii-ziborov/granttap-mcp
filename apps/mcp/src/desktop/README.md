@@ -1,5 +1,10 @@
 # Desktop local channel
 
+The local capability usage response includes bounded native session token and
+context facts through `projection/session-usage.ts`. Sessions are deduplicated
+by provider and native ID; conversation text and paths never enter this payload.
+The Apple client keeps local computer identity when applying these observations.
+
 `engine-bridge.ts` is the MCP-owned, same-user Unix-socket entry point for the
 native Mac app. Its path is announced by the loopback `/desktop/status` response.
 The socket and its private parent directory are created at runtime and removed
