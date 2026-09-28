@@ -21,6 +21,15 @@ function fixture() {
   return { parent, repo };
 }
 
+test("a workspace first observed without Git is reclassified after repository creation", () => {
+  const root = mkdtempSync(join(tmpdir(), "granttap-repository-created-"));
+  assert.equal(inspectRepository(root).worktree, undefined);
+  execFileSync("git", ["init", "-q", root]);
+  const fresh = inspectRepository(root);
+  assert.equal(fresh.worktree, realpathSync(root));
+  assert.equal(fresh.revision, undefined, "an empty Git repository is still a repository");
+});
+
 test("Codex tool workdirs identify one verified repository under a non-Git workspace", () => {
   const { parent, repo } = fixture();
   const call = { type: "response_item", payload: { type: "custom_tool_call", name: "exec",

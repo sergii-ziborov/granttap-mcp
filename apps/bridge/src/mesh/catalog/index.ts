@@ -71,7 +71,7 @@ export function workingTreeState(cwd: string): "clean" | "dirty" | "unknown" {
 
 export function inspectRepository(cwd: string): RepositoryFacts {
   const cached = repositoryCache.get(cwd);
-  if (cached) {
+  if (cached?.worktree) {
     // Identity is stable for this checkout; HEAD is not. Keep a new reading
     // instead of mutating a facts object already given to a caller.
     const fresh = { ...cached, revision: git(cached.root, ["rev-parse", "HEAD"]) };
@@ -88,7 +88,9 @@ export function inspectRepository(cwd: string): RepositoryFacts {
     worktree: git(root, ["rev-parse", "--show-toplevel"]),
     revision: git(root, ["rev-parse", "HEAD"]),
   };
-  repositoryCache.set(cwd, facts);
+  // An unconfirmed workspace can become a Git checkout during the Task.
+  // Do not retain a negative probe and suppress that discovery forever.
+  if (facts.worktree) repositoryCache.set(cwd, facts);
   return facts;
 }
 
