@@ -10,7 +10,8 @@ import {
   type CodexChildSource,
 } from "./shared";
 import { codexCapabilityUsage } from "./activity";
-import { safeParse, stateFor, ts } from "../../support/common";
+import { safeParse, ts } from "../../support/common";
+import { codexTurnState, observeCodexTurn, type CodexTurnClock } from "./turn-state";
 import type { SessionInfo } from "../../../../../../packages/protocol/schema";
 import { childTitle } from "../../support/child-threads";
 import { visibleUserText } from "../../support/activity-helpers";
@@ -33,9 +34,11 @@ type CodexParseState = {
   contextTokensUsed?: number;
   contextWindow?: number;
   workdirs: string[];
+  turn: CodexTurnClock;
 };
 
 function applyCodexLine(d: any, state: CodexParseState): void {
+  observeCodexTurn(d, state.turn);
   state.workdirs.push(...workdirsFromCodexCall(d));
   const t = ts(d.timestamp);
   if (t) {
@@ -128,7 +131,7 @@ export function parseCodexFile(file: string): CodexCandidate | undefined {
   if (cached && cached.mtimeMs === fileStat.mtimeMs && cached.size === fileStat.size) {
     return {
       file,
-      session: { ...cached.session, state: stateFor(cached.session.lastActivityAt) },
+      session: { ...cached.session, state: codexTurnState(cached.turn ?? {}, cached.session.lastActivityAt) },
       observations: cached.observations,
       child: cached.child,
     };
@@ -141,7 +144,7 @@ export function parseCodexFile(file: string): CodexCandidate | undefined {
   }
   const state: CodexParseState = {
     sessionId: "", startedAt: 0, lastActivityAt: 0, lastMessageAt: 0,
-    tokensSession: 0, tokensLastTurn: 0, workdirs: [],
+    tokensSession: 0, tokensLastTurn: 0, workdirs: [], turn: {},
   };
   for (const line of lines) {
     if (!line) continue;
@@ -162,7 +165,7 @@ export function parseCodexFile(file: string): CodexCandidate | undefined {
     model: state.model,
     summary: state.summary,
     accessLevel: state.accessLevel,
-    state: stateFor(state.lastActivityAt),
+    state: codexTurnState(state.turn, state.lastActivityAt),
     startedAt: state.startedAt || state.lastActivityAt,
     lastActivityAt: state.lastActivityAt,
     ...(state.lastMessageAt ? { lastMessageAt: state.lastMessageAt } : {}),
@@ -180,6 +183,7 @@ export function parseCodexFile(file: string): CodexCandidate | undefined {
     tokensSession: state.tokensSession,
     observations,
     child,
+    turn: state.turn,
   });
   return { file, session, observations, child };
 }

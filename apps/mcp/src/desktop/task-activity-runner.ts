@@ -49,6 +49,13 @@ export class DesktopTaskActivityRunner {
     return request;
   }
 
+  liveCatalog(storePath?: string): Promise<unknown> {
+    if (this.closed || this.queue.length + (this.pending ? 1 : 0) >= 8) {
+      return Promise.resolve(undefined);
+    }
+    return this.enqueue({ operation: "desktop.live_catalog" }, storePath);
+  }
+
   enrichedSnapshot(projectId: string): Promise<unknown> {
     if (this.closed || this.queue.length + (this.pending ? 1 : 0) >= 8
       || !projectId || projectId.length > 128) return Promise.resolve(undefined);
@@ -128,6 +135,7 @@ export class DesktopTaskActivityRunner {
       if (message.id !== this.pending?.id) return;
       const result = message.result as Record<string, unknown> | null;
       this.finish(result?.operation === "desktop.task_activity"
+        || result?.operation === "desktop.live_catalog"
         || result?.operation === "desktop.capability_usage"
         || result?.type === "mesh.snapshot"
         || result?.operation === "desktop.task_image" ? result : undefined);
@@ -153,6 +161,7 @@ export class DesktopTaskActivityRunner {
       this.finish(undefined);
       if (wasSent) this.child?.kill("SIGKILL");
     }, this.pending.payload.includes("desktop.capability_usage") ? 60_000
+      : this.pending.payload.includes("desktop.live_catalog") ? 35_000
       : this.pending.payload.includes("desktop.mesh_snapshot") ? 40_000
       : this.pending.payload.includes("desktop.task_activity")
         || this.pending.payload.includes("desktop.task_image") ? 35_000 : 12_000);

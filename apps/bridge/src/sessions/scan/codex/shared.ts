@@ -55,6 +55,7 @@ export type CachedCodexSummary = {
   tokensSession: number;
   observations: CapabilityObservation[];
   child?: CodexChildSource;
+  turn?: import("./turn-state").CodexTurnClock;
 };
 
 export type CodexChildSource = {

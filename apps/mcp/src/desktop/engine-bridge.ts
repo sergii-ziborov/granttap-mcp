@@ -24,6 +24,7 @@ const DESKTOP_OPERATIONS = new Set([
   "desktop.mesh_create",
   "desktop.invocation_history",
   "desktop.controller_enrollment",
+  "desktop.live_catalog",
 ]);
 
 function desktopOperationTimeout(operation: unknown, input: unknown): number {
@@ -33,7 +34,7 @@ function desktopOperationTimeout(operation: unknown, input: unknown): number {
   if (operation === "desktop.capability_usage"
     || operation === "desktop.mesh_snapshots") return 75_000;
   if (operation === "desktop.task_activity"
-    || operation === "desktop.task_image") return 45_000;
+    || operation === "desktop.task_image" || operation === "desktop.live_catalog") return 45_000;
   if (operation === "desktop.task_send"
     || operation === "desktop.task_create") return 250_000;
   if (operation === "desktop.mesh_snapshot"

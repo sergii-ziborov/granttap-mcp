@@ -38,6 +38,7 @@ export function desktopReadOperation(input: {
   if (operation === "desktop.mesh_snapshots") {
     return Promise.resolve(desktopMeshSnapshots(storePath));
   }
+  if (operation === "desktop.live_catalog") return activity.liveCatalog(storePath);
   if (operation === "desktop.machine_load") return desktopMachineLoad();
   if (operation === "desktop.task_activity") return activity.read(queryInput, storePath);
   if (operation === "desktop.task_image") return activity.image(queryInput, storePath);

@@ -4,6 +4,7 @@ import { desktopTaskImage } from "./image";
 import { scanCapabilityUsage, scanSessions, scanSessionHistory } from "../../../bridge/src/sessions";
 import { desktopSelectedMesh } from "./projection/selected-mesh";
 import { desktopUsageSessions } from "./projection/session-usage";
+import { desktopLiveCatalog } from "./live-catalog";
 
 let usageCache: { at: number; result: unknown } | undefined;
 const activityCache = new Map<string, { at: number; result: ReturnType<typeof desktopTaskActivity> }>();
@@ -38,6 +39,9 @@ for await (const line of createInterface({ input: process.stdin, crlfDelay: Infi
     const result = request.query && typeof request.query === "object"
       && (request.query as { operation?: string }).operation === "desktop.capability_usage"
       ? cachedUsage()
+      : request.query && typeof request.query === "object"
+        && (request.query as { operation?: string }).operation === "desktop.live_catalog"
+        ? desktopLiveCatalog(request.storePath) ?? null
       : request.query && typeof request.query === "object"
         && (request.query as { operation?: string }).operation === "desktop.mesh_snapshot"
         ? await desktopSelectedMesh(
