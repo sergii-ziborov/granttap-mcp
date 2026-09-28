@@ -4,12 +4,14 @@ import { readStoreState } from "../../../bridge/src/mesh/store/state";
 import { scanSessionActivity } from "../../../bridge/src/sessions";
 import { codexActivity } from "../../../bridge/src/sessions/scan/codex";
 import type { SessionActivity, SessionInfo } from "../../../../packages/protocol/schema";
+import { readTranscriptHistory } from "../../../bridge/src/transcript-history";
 
 import { artifactImages } from "./image/artifacts";
 
 type ActivitySources = {
   sessions?: () => SessionInfo[];
   activity?: (session: SessionInfo) => SessionActivity;
+  history?: (session: SessionInfo, cursor?: string) => SessionActivity | undefined;
 };
 
 /** One Task's native conversation, resolved through its exact Mesh execution links. */
@@ -20,6 +22,8 @@ export function desktopTaskActivity(
 ) {
   if (input === null || typeof input !== "object" || Array.isArray(input)) return undefined;
   const { project_id: projectId, task_id: taskId } = input as Record<string, unknown>;
+  const cursor = (input as Record<string, unknown>).history_cursor;
+  if (cursor !== undefined && (typeof cursor !== "string" || cursor.length > 512)) return undefined;
   if (typeof projectId !== "string" || !projectId || projectId.length > 128
     || typeof taskId !== "string" || !taskId || taskId.length > 128) return undefined;
   const loaded = readStoreState(storePath);
@@ -38,6 +42,7 @@ export function desktopTaskActivity(
   const matched = links.flatMap((link) => sessions.filter((session) =>
     session.sessionId === link.sessionId && session.agent === link.provider))[0];
   const activity = matched ? sources.activity?.(matched)
+    ?? (sources.history ?? readTranscriptHistory)(matched, cursor as string | undefined)
     ?? (matched.agent === "codex"
       ? { entries: codexActivity(matched), state: matched.state }
       : scanSessionActivity(matched)) : undefined;
@@ -50,6 +55,11 @@ export function desktopTaskActivity(
     attachments: entry.attachments ?? null,
     images: artifactImages({ ...entry, text: entry.text.slice(0, 16_384) })
       .map(({ id, name, markdown }) => ({ id, name, markdown })),
+    call_text: entry.callText, result_text: entry.resultText,
+    detail_truncated: entry.detailTruncated, file_changes: entry.fileChanges,
+    file_changes_complete: entry.fileChangesComplete,
+    lines_added: entry.linesAdded, lines_removed: entry.linesRemoved,
+    diff_preview: entry.diffPreview, outcome: entry.outcome,
   }));
   const entries: typeof candidates = [];
   let bytes = 0;
@@ -66,5 +76,6 @@ export function desktopTaskActivity(
     agent: matched?.agent ?? null,
     state: activity?.state ?? null,
     entries, truncated: rootEntries.length > entries.length,
+    history: activity && "history" in activity ? activity.history : undefined,
   };
 }

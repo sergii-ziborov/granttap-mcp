@@ -74,6 +74,7 @@ export const ActivityEntry = z.object({
   capabilities: z.array(ObservedCapability).max(32).optional(),
   durationMs: z.number().int().nonnegative().optional(),
   childThreadId: z.string().max(256).optional(),
+  outcome: CapabilityOutcome.optional(),
   childThreadTitle: z.string().max(160).optional(),
   childThreadDepth: z.number().int().min(1).max(16).optional(),
   /** What a file tool changed, as git counts it. */
@@ -83,6 +84,15 @@ export const ActivityEntry = z.object({
   diffPreview: z.string().max(4_000).optional(),
   /** What the agent said the call was for, when the tool takes a description. */
   summary: z.string().max(200).optional(),
+  callText: z.string().max(16_384).optional(),
+  resultText: z.string().max(16_384).optional(),
+  detailTruncated: z.boolean().optional(),
+  fileChangesComplete: z.boolean().optional(),
+  fileChanges: z.array(z.object({
+    path: z.string().max(2048), linesAdded: z.number().int().nonnegative(),
+    linesRemoved: z.number().int().nonnegative(), diff: z.string().max(16_384),
+    diffTruncated: z.boolean().optional(),
+  })).max(64).optional(),
 });
 export type ActivityEntry = z.infer<typeof ActivityEntry>;
 

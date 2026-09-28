@@ -82,7 +82,7 @@ export async function handleMonitorMessage(
     } else if (payload.type === "session.subscribe") {
       return handleInboundSubscription(client, payload, subscriptions, publish);
     } else if (payload.type === "session.events") {
-      void publishSessionEvents(client, payload.sessionId, undefined, payload.threadId).catch(() => false);
+      void publishSessionEvents(client, payload.sessionId, undefined, payload.threadId, payload).catch(() => false);
       return true;
     } else if (payload.type === "sessions.refresh") {
       return handleInboundRefresh(client, payload, publish);

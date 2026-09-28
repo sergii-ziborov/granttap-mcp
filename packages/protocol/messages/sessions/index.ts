@@ -38,6 +38,10 @@ export const SessionActivity = z.object({
   threadId: z.string().max(256).optional(),
   entries: z.array(ActivityEntry),
   generatedAt: z.number(),
+  history: z.object({
+    cursor: z.string().max(512).optional(), hasMore: z.boolean(),
+    requestedCursor: z.string().max(512).optional(),
+  }).optional(),
 });
 export type SessionActivity = z.infer<typeof SessionActivity>;
 

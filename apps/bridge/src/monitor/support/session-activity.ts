@@ -1,5 +1,6 @@
 import type { SessionActivity, SessionInfo } from "../../../../../packages/protocol/schema";
 import { scanSessionActivity } from "../../sessions";
+import { readTranscriptHistory } from "../../transcript-history";
 
 type ActivityReader = (session: SessionInfo) => SessionActivity;
 
@@ -57,4 +58,10 @@ export function sessionActivityCache(
   };
 }
 
-export const cachedSessionActivity = sessionActivityCache(scanSessionActivity);
+export const cachedSessionActivity = sessionActivityCache((session) => {
+  const history = readTranscriptHistory(session);
+  if (!history) return scanSessionActivity(session);
+  if (!session.childThreads?.length) return history;
+  const children = scanSessionActivity(session).entries.filter((entry) => entry.childThreadId);
+  return { ...history, entries: [...history.entries, ...children].sort((a, b) => a.createdAt - b.createdAt) };
+});

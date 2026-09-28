@@ -11,9 +11,9 @@ const activityCache = new Map<string, { at: number; result: ReturnType<typeof de
 
 function cachedActivity(query: unknown, storePath?: string) {
   if (!query || typeof query !== "object") return undefined;
-  const input = query as { project_id?: unknown; task_id?: unknown };
+  const input = query as { project_id?: unknown; task_id?: unknown; history_cursor?: unknown };
   if (typeof input.project_id !== "string" || typeof input.task_id !== "string") return undefined;
-  const key = JSON.stringify([storePath ?? "", input.project_id, input.task_id]);
+  const key = JSON.stringify([storePath ?? "", input.project_id, input.task_id, input.history_cursor]);
   const cached = activityCache.get(key);
   if (cached && Date.now() - cached.at < 30_000) return cached.result;
   const result = desktopTaskActivity(query, storePath);

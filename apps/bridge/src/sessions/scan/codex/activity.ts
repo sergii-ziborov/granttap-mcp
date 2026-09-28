@@ -1,9 +1,13 @@
+import { appendCodexActivity } from "./activity/rows";
+export { appendCodexActivity } from "./activity/rows";
+import { recordedFileChanges } from "../../../transcript-history/changes";
+import { recordedToolDetails } from "../../../transcript-history/tool-details";
 import { statSync } from "node:fs";
-import type { ActivityEntry, ChildThreadInfo, SessionInfo } from "../../../../../../packages/protocol/schema";
-import { classifyTool, estimateTokens, pushEntry, toolDescription, toolSummary } from "../../support/activity-helpers";
+import type { ActivityEntry, SessionInfo } from "../../../../../../packages/protocol/schema";
+import { estimateTokens, pushEntry } from "../../support/activity-helpers";
 import { childEntryFields } from "../../support/child-threads";
-import { diffPreviewFromInput, sensitivePath, statsFromInput } from "../../support/edit-stats";
-import { redactSecrets } from "../../telemetry/command-preview";
+
+
 import { recordObservedWrite, writtenPaths } from "../../../mesh/observed/writes";
 import {
   activityTelemetry,
@@ -198,85 +202,6 @@ function ingestCodexCapabilityRow(input: {
     nestedByCall.delete(callId);
 }
 
-function appendCodexActivity(input: {
-  out: ActivityEntry[];
-  seen: Set<string>;
-  session: SessionInfo;
-  lines: string[];
-  observations: Map<string, CapabilityObservation>;
-  child?: ChildThreadInfo;
-}): void {
-  const { out, seen, session, lines, observations, child } = input;
-  const sourceThreadId = child?.threadId ?? session.sessionId;
-  const childFields = child ? childEntryFields(child) : {};
-  const entryId = (createdAt: number, ordinal: number): string | undefined =>
-    child ? `${sourceThreadId}:${createdAt}:${ordinal}` : undefined;
-  lines.forEach((line, index) => {
-    const d = safeParse(line);
-    if (!d) return;
-    const p = d.payload ?? {};
-    const createdAt = ts(d.timestamp) || session.lastActivityAt;
-    if (d.type === "event_msg" && p.type === "user_message") {
-      pushEntry({ out: out, seen: seen, sessionId: session.sessionId, kind: "user", text: p.message ?? p.text, createdAt: createdAt, ordinal: index, extras: childFields, idOverride: entryId(createdAt, index) });
-      return;
-    }
-    if (d.type === "event_msg" && p.type === "agent_message") {
-      pushEntry({ out: out, seen: seen, sessionId: session.sessionId, kind: "message", text: p.message ?? p.text, createdAt: createdAt, ordinal: index, extras: childFields, idOverride: entryId(createdAt, index) });
-      return;
-    }
-    if (d.type !== "response_item") return;
-    if (p.type === "message" && p.role === "user" && Array.isArray(p.content)) {
-      p.content.forEach((block: any, blockIndex: number) => {
-        if (block?.type === "input_text" || block?.type === "text") {
-          const ordinal = index * 100 + blockIndex;
-          pushEntry({ out: out, seen: seen, sessionId: session.sessionId, kind: "user", text: block.text, createdAt: createdAt, ordinal: ordinal, extras: childFields, idOverride: entryId(createdAt, ordinal) });
-        } else if (block?.type === "input_image" && typeof block.image_url === "string") {
-          const ordinal = blockIndex;
-          out.push({ id: entryId(createdAt, ordinal)
-            ?? `${session.sessionId}:${createdAt}:${ordinal}`,
-            kind: "user", text: "", createdAt,
-            attachments: ["Image"], ...childFields });
-        }
-      });
-    } else if (p.type === "message" && p.role === "assistant" && Array.isArray(p.content)) {
-      p.content.forEach((block: any, blockIndex: number) => {
-        if (block?.type === "output_text" || block?.type === "text") {
-          const ordinal = index * 100 + blockIndex;
-          pushEntry({ out: out, seen: seen, sessionId: session.sessionId, kind: "message", text: block.text, createdAt: createdAt, ordinal: ordinal, extras: childFields, idOverride: entryId(createdAt, ordinal) });
-        }
-      });
-    } else if (["function_call", "custom_tool_call", "local_shell_call"].includes(p.type)) {
-      const args = codexToolInput(p);
-      const toolName = String(p.name ?? p.type);
-      const callId = String(p.call_id ?? p.id ?? `${createdAt}:${index}`);
-      const sourceId = `${sourceThreadId}:${callId}`;
-      const pending: PendingCapabilityTool = {
-        sourceId,
-        sessionId: session.sessionId,
-        toolName,
-        input: args,
-        createdAt,
-        cwd: session.cwd ?? undefined,
-      };
-      const observation =
-        observations.get(sourceId) ?? pendingCapabilityObservation(pending);
-      const classified = classifyTool(toolName, args);
-      pushEntry({ out: out, seen: seen, sessionId: session.sessionId, kind: "tool", text: toolSummary(toolName, args), createdAt: createdAt, ordinal: index, extras: {
-          ...childFields,
-          ...classified,
-          ...(statsFromInput(toolName, args) ?? {}),
-          ...(toolDescription(args) ? { summary: toolDescription(args) } : {}),
-          ...(statsFromInput(toolName, args)
-            && !sensitivePath((args as Record<string, unknown> | undefined)?.file_path ?? (args as Record<string, unknown> | undefined)?.path)
-            ? { diffPreview: diffPreviewFromInput(toolName, args, redactSecrets) }
-            : {}),
-          ...(observation
-            ? activityTelemetry(observation)
-            : { estimatedContextTokens: estimateTokens(args) }),
-        }, idOverride: observation ? sourceId : entryId(createdAt, index) });
-    }
-  });
-}
 
 export { codexImageChunk } from "./image";
 
@@ -293,7 +218,7 @@ export function codexActivity(session: SessionInfo): ActivityEntry[] {
       codexCapabilityUsage(session, lines).map((item) => [item.sourceId, item]),
     );
     const out: ActivityEntry[] = [];
-    appendCodexActivity({ out, seen: new Set<string>(), session, lines, observations });
+    appendCodexActivity({ out, seen: new Set<string>(), session, lines, observations, changes: recordedFileChanges(lines), details: recordedToolDetails(lines) });
     return out;
   }
   const observations = new Map(
@@ -318,7 +243,8 @@ export function codexActivity(session: SessionInfo): ActivityEntry[] {
     } catch {
       continue;
     }
-    appendCodexActivity({ out, seen, session, lines, observations, child: source.child });
+    appendCodexActivity({ out, seen, session, lines, observations, child: source.child,
+      changes: recordedFileChanges(lines), details: recordedToolDetails(lines) });
   }
   // V8 sort is stable: preserve transcript/source order when providers stamp a
   // whole batch with the same millisecond. Source ids are not chronological.

@@ -2,6 +2,7 @@ import type { SessionInfo, SessionsStatus } from "../../../../../packages/protoc
 import type { RelayClient } from "../../../../../packages/core/relay-client";
 import { sendSessionPayload } from "../../host/session-keys";
 import { cachedSessionActivity } from "../support/session-activity";
+import { readTranscriptHistory } from "../../transcript-history";
 import {
   scanSessionHistory,
   scanSessions,
@@ -51,10 +52,13 @@ export async function publishSessionEvents(
   sessionId: string,
   status?: SessionsStatus,
   threadId?: string,
+  history?: { history?: boolean; historyCursor?: string },
 ): Promise<boolean> {
   const session = resolveSession(sessionId, status);
   if (!session) return false;
-  const activity = threadId ? scanThreadActivity(session, threadId) : cachedSessionActivity(session);
+  const activity = threadId ? scanThreadActivity(session, threadId)
+    : (history?.history ? readTranscriptHistory(session, history.historyCursor) : undefined)
+      ?? cachedSessionActivity(session);
   await sendSessionPayload(client, activity, sessionId, "phone", {
     ttlMs: INTERVAL_MS * 24,
     reliable: false,

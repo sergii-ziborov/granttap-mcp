@@ -82,10 +82,12 @@ test("activity helpers bound visible messages and normalize provider capability 
   pushEntry({ out: out, seen: seen, sessionId: "session", kind: "user", text: "## My request for Codex:\nShow status", createdAt: 2, ordinal: 0 });
   pushEntry({ out: out, seen: seen, sessionId: "session", kind: "user", text: "## My request for Codex:\nShow status", createdAt: 3, ordinal: 0 });
   pushEntry({ out: out, seen: seen, sessionId: "session", kind: "message", text: "x".repeat(800), createdAt: 4, ordinal: 0, extras: {}, idOverride: "custom" });
-  assert.equal(out.length, 2);
+  assert.equal(out.length, 3);
   assert.equal(out[0].text, "Show status");
-  assert.equal(out[1].id, "custom");
-  assert.equal(out[1].text, "x".repeat(800));
+  assert.equal(out[1].text, "Show status");
+  assert.notEqual(out[0].id, out[1].id);
+  assert.equal(out[2].id, "custom");
+  assert.equal(out[2].text, "x".repeat(800));
 });
 
 test("Cursor MCP resolution accepts one exact configured server and abstains on ambiguity", async () => {

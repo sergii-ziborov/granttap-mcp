@@ -1,5 +1,6 @@
 import { safeParse, ts } from "../../../support/common";
 import { codexLogLines } from "../shared";
+import { nativeImageLines } from "../../../../transcript-history/images";
 
 type CachedImage = { key: string; bytes: Buffer; mime: string; until: number };
 let cachedImage: CachedImage | undefined;
@@ -19,7 +20,7 @@ export function codexImageChunk(sessionId: string, entryId: string, offset: numb
   if (!providedLines && cachedImage?.key === key && cachedImage.until > Date.now()) {
     return chunk(cachedImage, offset);
   }
-  const lines = providedLines ?? codexLogLines(sessionId);
+  const lines = providedLines ?? nativeImageLines(sessionId, entryId) ?? codexLogLines(sessionId);
   if (!lines) return undefined;
   for (const line of lines) {
     const row = safeParse(line);
