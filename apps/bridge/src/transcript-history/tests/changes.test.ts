@@ -31,3 +31,29 @@ test("Codex completed FileChange items are authoritative and failed items stay a
     [["/repo/a.ts", 1, 1], ["/repo/b.ts", 1, 0]]);
   assert.equal(recordedFileChanges([row("event_msg", { type: "item_completed", item: { ...item, status: "failed" } })]).size, 0);
 });
+
+test("successful patch reviews preserve build flags and disclose clipped previews", () => {
+  const command = "+xcodebuild -project App.xcodeproj -parallel-testing-enabled NO";
+  const longPatch = "*** Begin Patch\n*** Add File: /repo/build.sh\n" + command + "\n"
+    + Array.from({ length: 200 }, () => "+" + "x".repeat(100)).join("\n") + "\n*** End Patch";
+  const change = recordedFileChanges([
+    row("response_item", { type: "custom_tool_call", name: "apply_patch", call_id: "long", input: longPatch }),
+    row("response_item", { type: "custom_tool_call_output", call_id: "long", output: "Success. Updated the following files" }),
+  ]).get("long")?.[0];
+  assert.ok(change?.diff.startsWith(command));
+  assert.equal(change?.linesAdded, 201);
+  assert.equal(change?.diffTruncated, true);
+  assert.ok((change?.diff.length ?? Infinity) <= 16_384);
+});
+
+test("password redaction retains continued command context inside a patch", () => {
+  const buildPatch = "*** Begin Patch\n*** Add File: /repo/build.sh\n+mysql \\\n+  -p'synthetic secret'\n+xcodebuild \\\n+  -project App.xcodeproj\n*** End Patch";
+  const change = recordedFileChanges([
+    row("response_item", { type: "custom_tool_call", name: "apply_patch", call_id: "continued", input: buildPatch }),
+    row("response_item", { type: "custom_tool_call_output", call_id: "continued", output: "Success. Updated the following files" }),
+  ]).get("continued")?.[0];
+  assert.ok(change?.diff.includes("-p[REDACTED]"));
+  assert.ok(!change?.diff.includes("synthetic secret"));
+  assert.ok(change?.diff.includes("-project App.xcodeproj"));
+  assert.equal(change?.diffTruncated, undefined);
+});

@@ -21,6 +21,15 @@ const SENSITIVE_NAME =
 const SENSITIVE_CONFIG_KEY = `[^\\s=;&|]*(?:${SENSITIVE_NAME})[^\\s=;&|]*`;
 const SHELL_ARGUMENT_VALUE = `(?:"[^"]*"|'[^']*'|[^\\s;&|]+)`;
 
+/** A short -p is a password only for commands that define it that way. */
+function redactAttachedPasswords(raw: string): string {
+  const programs = "(?:mysql(?:admin|dump|check|import|show|pump|slap)?|mariadb(?:-dump|-admin)?|7z(?:a|r|z)?|sshpass)";
+  const argumentsInCommand = `(?:"[^"]*"|'[^']*'|\\\\\\r?\\n[+-]?|[^"'\\n;&|])*`;
+  return raw.replace(new RegExp(`\\b${programs}(?=\\s|$)${argumentsInCommand}`, "gi"), (command) =>
+    command.replace(new RegExp(`((?:^|\\s)-p)(?!\\s|$)${SHELL_ARGUMENT_VALUE}`, "g"),
+      `$1${REDACTED_COMMAND_VALUE}`));
+}
+
 /** Secrets out of one line of anything the phone will see, breaks kept. */
 export function redactSecrets(raw: string): string {
   return redactCommandSecrets(raw);
@@ -34,7 +43,7 @@ function redactCommandSecrets(raw: string): string {
   );
   value = value.replace(
     new RegExp(
-      `(\\b[A-Za-z_][A-Za-z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|PWD|CREDENTIAL|AUTH)[A-Za-z0-9_]*\\s*=\\s*)(?:"[^"]*"|'[^']*'|[^\\s;&|]+)`,
+      `(\\b(?:[A-Za-z_][A-Za-z0-9_]*)?(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|PWD|CREDENTIAL|AUTH)[A-Za-z0-9_]*\\s*=\\s*)(?:"[^"]*"|'[^']*'|[^\\s;&|]+)`,
       "gi",
     ),
     `$1${REDACTED_COMMAND_VALUE}`,
@@ -46,10 +55,7 @@ function redactCommandSecrets(raw: string): string {
     ),
     `$1${REDACTED_COMMAND_VALUE}`,
   );
-  value = value.replace(
-    new RegExp(`((?:^|\\s)-p)(?!\\s|$)${SHELL_ARGUMENT_VALUE}`, "g"),
-    `$1${REDACTED_COMMAND_VALUE}`,
-  );
+  value = redactAttachedPasswords(value);
   value = value.replace(
     new RegExp(
       `(\\b(?:aws\\s+configure\\s+set|npm\\s+(?:config\\s+)?set)\\s+${SENSITIVE_CONFIG_KEY}(?:\\s*=\\s*|\\s+))${SHELL_ARGUMENT_VALUE}`,

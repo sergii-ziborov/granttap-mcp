@@ -47,10 +47,13 @@ function patchFiles(patch: string): RecordedFileChange[] {
     } else if (current && !line.startsWith("***")) {
       if (line.startsWith("+")) current.linesAdded++;
       if (line.startsWith("-")) current.linesRemoved++;
-      if (current.diff.length < 16_000) current.diff += redactSecrets(line) + "\n";
+      const source = line + "\n";
+      const remaining = 16_384 - current.diff.length;
+      current.diff += source.slice(0, Math.max(0, remaining));
+      if (source.length > remaining) current.diffTruncated = true;
     }
   }
-  return files.slice(0, 64).map((file) => ({ ...file, diff: file.diff.slice(0, 16_384) }));
+  return files.slice(0, 64).map((file) => ({ ...file, diff: redactSecrets(file.diff) }));
 }
 
 /** Only patches with an explicit successful result become reported changes. */
