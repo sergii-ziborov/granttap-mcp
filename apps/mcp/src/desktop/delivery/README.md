@@ -12,3 +12,5 @@ images and arbitrary documents; the native client removes its batch after reply.
 
 Tests: `tests/desktop/desktop-task-send.test.ts`, local `tests/attachments.test.ts`.
 Parent: [Desktop local channel](../README.md).
+
+This MCP component is covered by the repository [MIT License](../../../../../LICENSE).
