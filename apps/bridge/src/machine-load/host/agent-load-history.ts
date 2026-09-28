@@ -63,13 +63,13 @@ export function attributedAgentResource(
   startedAt: number,
   endedAt: number,
 ): CapabilityResourceUsage | undefined {
-  if (!(endedAt > startedAt)) return undefined;
+  const span = endedAt - startedAt;
+  if (!Number.isFinite(span) || span <= 0 || span > 30 * 24 * 60 * 60_000) return undefined;
   const covering = samples.filter((sample) =>
     sample.at >= startedAt - MAX_GAP_MS && sample.at <= endedAt + MAX_GAP_MS
     && sample.byAgent[agent] != null);
   if (covering.length === 0) return undefined;
 
-  const span = endedAt - startedAt;
   const share = span / covering.length;
   let cpuMs = 0;
   let peak = 0;
@@ -87,6 +87,7 @@ export function attributedAgentResource(
   if (rounded <= 0 && peak <= 0) return undefined;
   return {
     attribution: "attributed",
+    sampleWindowMs: Math.round(span),
     cpuTimeMs: rounded > 0 ? rounded : undefined,
     peakRssBytes: peak > 0 ? peak : undefined,
     processCount: processes > 0 ? processes : undefined,

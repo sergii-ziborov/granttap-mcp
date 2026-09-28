@@ -23,6 +23,7 @@ test("a built-in call is costed from the samples taken while it ran", (t) => {
   assert.equal(resource?.attribution, "attributed");
   // Each sample stands for half the call: 5s at 50% plus 5s at 100%.
   assert.equal(resource?.cpuTimeMs, 7_500);
+  assert.equal(resource?.sampleWindowMs, 10_000);
   // Memory is a level, so the largest is what the call reached.
   assert.equal(resource?.peakRssBytes, 300_000_000);
   assert.equal(resource?.processCount, 2);
@@ -50,6 +51,9 @@ test("a call with no duration is not costed", (t) => {
   // Zero and negative spans would divide the machine's cost by nothing.
   assert.equal(attributedAgentResource("claude", START, START), undefined);
   assert.equal(attributedAgentResource("claude", START + 10, START), undefined);
+  assert.equal(attributedAgentResource("claude", START, Infinity), undefined);
+  assert.equal(attributedAgentResource("claude", NaN, START), undefined);
+  assert.equal(attributedAgentResource("claude", START, START + 31 * 24 * 60 * 60_000), undefined);
 });
 
 test("an idle agent reports its memory without inventing cpu time", (t) => {

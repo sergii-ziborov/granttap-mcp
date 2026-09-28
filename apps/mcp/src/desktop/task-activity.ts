@@ -51,6 +51,9 @@ export function desktopTaskActivity(
     id: entry.id.slice(0, 256), kind: entry.kind,
     text: entry.text.slice(0, 16_384), created_at: entry.createdAt,
     tool_name: entry.toolName?.slice(0, 160) ?? null,
+    capabilities: entry.capabilities, duration_ms: entry.durationMs,
+    estimated_context_tokens: entry.estimatedContextTokens,
+    mcp_server: entry.mcpServer, skill: entry.skill,
     summary: entry.summary?.slice(0, 200) ?? null,
     attachments: entry.attachments ?? null,
     images: artifactImages({ ...entry, text: entry.text.slice(0, 16_384) })
