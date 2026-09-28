@@ -26,11 +26,12 @@ export const DESKTOP_OPERATIONS = new Set([
   "desktop.invocation_history",
   "desktop.controller_enrollment",
   "desktop.live_catalog",
-  "desktop.codex_hook_trust",
+  "desktop.codex_hook_trust", "desktop.provider_storage",
   "desktop.network_status", "desktop.network_configure", "desktop.own_relay",
 ]);
 
 export function desktopOperationTimeout(operation: unknown, input: unknown): number {
+  if (operation === "desktop.provider_storage") return 120_000;
   if (operation === "desktop.own_relay") return 250_000;
   if (operation === "desktop.controller_enrollment") return 30_000;
   if (operation === "desktop.codex_hook_trust") return 25_000;

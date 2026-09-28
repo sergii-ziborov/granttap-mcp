@@ -21,3 +21,10 @@ The unpublished Rust workspace also depends on separately licensed components,
 including `mcport` (MIT), `blazingly-json` (MIT), `serde` (MIT OR Apache-2.0), and
 BlindPlane crates (MIT OR Apache-2.0). Binary distributions must retain the
 complete license texts required by the exact dependency versions they contain.
+
+## Optional SweepLoom integration
+
+Provider storage inspection may invoke a separately installed SweepLoom CLI
+([source](https://github.com/Weavatrix/sweeploom), MPL-2.0). No SweepLoom source or
+binary is included in this npm package. Its license remains independent; the
+GrantTap MIT license does not apply to SweepLoom.

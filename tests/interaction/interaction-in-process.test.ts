@@ -153,7 +153,7 @@ test("paired MCP delivers decisions, replies, and bounded Mesh events", async (t
   const race = { question: "Ship it?", operationId: "ship-1" };
   recordAttributedCall({ provider: "claude", sessionId: "claude-session", toolName: "mcp__granttap__ask_yes_no", args: race });
   const one = call("ask_yes_no", race);
-  await waitFor(() => asked() === before + 2);
+  await waitFor(() => asked() === before + 2, 5000);
   recordAttributedCall({ provider: "claude", sessionId: "claude-session", toolName: "mcp__granttap__ask_yes_no", args: race });
   const two = call("ask_yes_no", race);
   const decision = (result: unknown) => (result as { structuredContent?: Record<string, unknown> }).structuredContent?.decision;

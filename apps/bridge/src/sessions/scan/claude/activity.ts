@@ -1,3 +1,4 @@
+import { claudeMessageIdentity } from "./message-identity";
 import { readFileSync, statSync } from "node:fs";
 import type { ActivityEntry, ChildThreadInfo, SessionInfo } from "../../../../../../packages/protocol/schema";
 import { safeParse, ts } from "../../support/common";
@@ -201,7 +202,7 @@ function appendClaudeToolUse(input: {
     }, idOverride: observation ? sourceId : undefined });
 }
 
-function appendClaudeActivity(input: {
+export function appendClaudeActivity(input: {
   out: ActivityEntry[];
   seen: Set<string>;
   session: SessionInfo;
@@ -222,13 +223,20 @@ function appendClaudeActivity(input: {
     const content = d.message?.content;
     if (d.type === "user" || d.message?.role === "user") {
       if (typeof content === "string") {
-        pushEntry({ out: out, seen: seen, sessionId: session.sessionId, kind: "user", text: content, createdAt: createdAt, ordinal: index, extras: childFields });
+        pushEntry({ out: out, seen: seen, sessionId: session.sessionId, kind: "user", text: content, createdAt: createdAt, ordinal: index, extras: childFields,
+            idOverride: claudeMessageIdentity(sourceThreadId, d, line) });
       } else if (Array.isArray(content)) {
         content.forEach((block: any, blockIndex: number) => {
           // Tool results and system/reminder blocks are transport context, not
           // words the person typed. Only explicit visible text belongs in chat.
-          if (block?.type === "text") {
-            pushEntry({ out: out, seen: seen, sessionId: session.sessionId, kind: "user", text: block.text, createdAt: createdAt, ordinal: index * 100 + blockIndex, extras: childFields });
+          if (block?.type === "image" || block?.type === "document") {
+            const attachment = block.type === "image" ? "Image" : "Document";
+            pushEntry({ out, seen, sessionId: session.sessionId, kind: "user", text: attachment,
+              createdAt, ordinal: index * 100 + blockIndex, extras: { ...childFields, attachments: [attachment] },
+              idOverride: claudeMessageIdentity(sourceThreadId, d, line, blockIndex) });
+          } else if (block?.type === "text") {
+            pushEntry({ out: out, seen: seen, sessionId: session.sessionId, kind: "user", text: block.text, createdAt: createdAt, ordinal: index * 100 + blockIndex, extras: childFields,
+              idOverride: claudeMessageIdentity(sourceThreadId, d, line, blockIndex) });
           }
         });
       }
@@ -236,13 +244,15 @@ function appendClaudeActivity(input: {
     }
     if (d.type !== "assistant" && d.message?.role !== "assistant") return;
     if (typeof content === "string") {
-      pushEntry({ out: out, seen: seen, sessionId: session.sessionId, kind: "message", text: content, createdAt: createdAt, ordinal: index, extras: childFields });
+      pushEntry({ out: out, seen: seen, sessionId: session.sessionId, kind: "message", text: content, createdAt: createdAt, ordinal: index, extras: childFields,
+            idOverride: claudeMessageIdentity(sourceThreadId, d, line) });
       return;
     }
     if (!Array.isArray(content)) return;
     content.forEach((block: any, blockIndex: number) => {
       if (block?.type === "text") {
-        pushEntry({ out: out, seen: seen, sessionId: session.sessionId, kind: "message", text: block.text, createdAt: createdAt, ordinal: index * 100 + blockIndex, extras: childFields });
+        pushEntry({ out: out, seen: seen, sessionId: session.sessionId, kind: "message", text: block.text, createdAt: createdAt, ordinal: index * 100 + blockIndex, extras: childFields,
+              idOverride: claudeMessageIdentity(sourceThreadId, d, line, blockIndex) });
       } else if (block?.type === "tool_use") {
         appendClaudeToolUse({
           out, seen, session, observations, patches, childFields, sourceThreadId,

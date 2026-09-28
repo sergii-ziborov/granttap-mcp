@@ -16,3 +16,13 @@ summaries and truncated diffs carry explicit flags. `tool-details.ts` keeps
 readable bounded call/result text independently of the compact timeline label.
 
 Behavior tests live in `tests/`. Licensed under the [MIT License](../../../../LICENSE).
+
+## Claude history
+
+Claude uses the same backward native JSONL cursor and bounded visible pages as
+Codex. Source UUIDs (or a row digest for older logs) identify user/assistant
+messages independently of their position in a moving window. The shared Apple
+client walks pages until it has the current and previous user requests, and
+fetches the next older boundary immediately when navigating backward.
+`tests/claude-history.test.ts` covers a long turn, repeated requests, stable
+page retries and live snapshot identities.

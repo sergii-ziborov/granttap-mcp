@@ -1,7 +1,9 @@
 # Capability Telemetry
 
 This module identifies MCP, skill, and CLI usage; redacts CLI previews; estimates
-bounded context cost; and limits encrypted usage payloads. `index.ts` is
+bounded context cost; and limits encrypted usage payloads. The wire budget covers the complete status
+envelope, including period totals and authenticated room routing, while trimming
+only the recent event feed. `index.ts` is
 the public entry point. Named secret arguments remain redacted; attached `-p`
 values are redacted for password-taking commands rather than ordinary build,
 port and path options. Behavior tests live in `tests/`, with provider integration

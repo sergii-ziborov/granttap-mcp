@@ -1,3 +1,4 @@
+import { ProviderStorage } from "../provider-storage";
 import { desktopHookTrust } from "../provider-hooks";
 import { desktopProjectAutoAccept } from "../policy/auto-accept";
 import { desktopProjectPolicy } from "../policy";
@@ -17,6 +18,8 @@ import { desktopInstalledSkills } from "../projection/installed-skills";
 import type { DesktopControllerEnrollment } from "../pairing";
 import type { DesktopNetworkController } from "../network";
 
+const providerStorage = new ProviderStorage();
+
 export function desktopReadOperation(input: {
   operation: string; queryInput: unknown; storePath?: string;
   engine: Pick<EngineClient, "request">; activity: DesktopTaskActivityRunner;
@@ -25,6 +28,7 @@ export function desktopReadOperation(input: {
   network?: DesktopNetworkController;
 }): Promise<unknown> {
   const { operation, queryInput, storePath, engine, activity, enrichment } = input;
+  if (operation === "desktop.provider_storage") return providerStorage.read(queryInput);
   if (["desktop.network_status", "desktop.network_configure", "desktop.own_relay"].includes(operation)) {
     return input.network?.read(operation, queryInput) ?? Promise.resolve(undefined);
   }

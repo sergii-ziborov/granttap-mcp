@@ -1,6 +1,7 @@
 import type { ActivityEntry, SessionActivity, SessionInfo } from "../../../../packages/protocol/schema";
 import { appendCodexActivity, codexCapabilityUsage } from "../sessions/scan/codex/activity";
 import { codexLogLines, codexLogPathBySession } from "../sessions/scan/codex/shared";
+import { appendClaudeActivity, claudeCapabilityUsage, claudeLogPath } from "../sessions/scan/claude";
 import { previousNativeLines } from "./native-lines";
 import { recordedFileChanges } from "./changes";
 import { recordedToolDetails } from "./tool-details";
@@ -24,15 +25,19 @@ function boundedEntry(entry: ActivityEntry): ActivityEntry {
 
 /** Native root-chat pages. New live entries do not move a saved older cursor. */
 export function readTranscriptHistory(session: SessionInfo, cursor?: string): SessionActivity | undefined {
-  if (session.agent !== "codex") return undefined;
-  let path = codexLogPathBySession.get(session.sessionId);
-  if (!path) { codexLogLines(session.sessionId); path = codexLogPathBySession.get(session.sessionId); }
+  if (session.agent !== "codex" && session.agent !== "claude") return undefined;
+  let path = session.agent === "claude" ? claudeLogPath(session.sessionId)
+    : codexLogPathBySession.get(session.sessionId);
+  if (!path && session.agent === "codex") {
+    codexLogLines(session.sessionId); path = codexLogPathBySession.get(session.sessionId);
+  }
   if (!path) return undefined;
   let window;
   try { window = previousNativeLines(path, session.sessionId, cursor); } catch { return undefined; }
   if (!window) return undefined;
   const lines = window.lines.map((line) => line.text);
-  const observations = new Map(codexCapabilityUsage(session, lines).map((item) => [item.sourceId, item]));
+  const usage = session.agent === "claude" ? claudeCapabilityUsage(session, lines) : codexCapabilityUsage(session, lines);
+  const observations = new Map(usage.map((item) => [item.sourceId, item]));
   const out: ActivityEntry[] = [];
   const seen = new Set<string>();
   const changes = recordedFileChanges(lines);
@@ -40,7 +45,11 @@ export function readTranscriptHistory(session: SessionInfo, cursor?: string): Se
   const offsets = new Map<string, number>();
   for (const line of window.lines) {
     const before = out.length;
-    appendCodexActivity({ out, seen, session, lines: [line.text], observations, changes, details });
+    if (session.agent === "claude") {
+      appendClaudeActivity({ out, seen, session, lines: [line.text], observations });
+    } else {
+      appendCodexActivity({ out, seen, session, lines: [line.text], observations, changes, details });
+    }
     for (const entry of out.slice(before)) offsets.set(entry.id, line.offset);
   }
   let from = Math.max(0, out.length - 40);

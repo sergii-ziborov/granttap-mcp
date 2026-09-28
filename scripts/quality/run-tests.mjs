@@ -11,10 +11,14 @@ function testFiles(directory) {
   });
 }
 
+const concurrency = Number(process.env.GRANTTAP_TEST_CONCURRENCY ?? 4);
+if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 4) {
+  throw new Error("GRANTTAP_TEST_CONCURRENCY must be an integer from 1 to 4");
+}
 const files = [...testFiles("tests"), ...testFiles("apps")].sort();
 if (files.length === 0) throw new Error("No test files found");
 // Keep test workers bounded when Apple simulators share the development host.
-const result = spawnSync(process.execPath, ["--import", "tsx", "--test", "--test-concurrency=4", ...files], {
+const result = spawnSync(process.execPath, ["--import", "tsx", "--test", `--test-concurrency=${concurrency}`, ...files], {
   stdio: "inherit",
   env: process.env,
 });

@@ -203,6 +203,7 @@ export function classifyTool(
 type EntryExtras = Partial<
     Pick<
       ActivityEntry,
+      | "attachments"
       | "toolName"
       | "mcpServer"
       | "skill"
@@ -239,7 +240,8 @@ export function pushEntry(input: PushEntryInput): void {
   const limit = shownKind === "tool" || shownKind === "status" ? MAX_ACTIVITY_TEXT : MAX_MESSAGE_TEXT;
   const clean = activityText(notification ?? (kind === "user" ? visibleUserText(text) : text), limit);
   if (!clean) return;
-  const duplicateKey = `${createdAt}:${extras.childThreadId ?? "root"}:${shownKind}:${extras.toolName ?? ""}:${clean}`;
+  const duplicateKey = idOverride ? `${idOverride}:${shownKind}`
+    : `${createdAt}:${extras.childThreadId ?? "root"}:${shownKind}:${extras.toolName ?? ""}:${clean}`;
   if (seen.has(duplicateKey)) return;
   seen.add(duplicateKey);
   out.push({

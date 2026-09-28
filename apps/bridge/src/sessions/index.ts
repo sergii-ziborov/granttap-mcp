@@ -290,12 +290,9 @@ export function scanCapabilityUsage(
       rememberCapabilityUsageCandidate(candidates, event);
     }
   }
-  return {
-    type: "capability.usage.status",
-    events: limitCapabilityUsageEvents(candidates),
-    totals: totals.rows(),
-    generatedAt: Date.now(),
-  };
+  const envelope = { type: "capability.usage.status" as const,
+    totals: totals.rows(), generatedAt: Date.now() };
+  return { ...envelope, events: limitCapabilityUsageEvents(candidates, envelope) };
 }
 
 /** Bind every local observation to the authenticated relay room before publish. */
@@ -318,5 +315,6 @@ export function scopeCapabilityUsageToRoom(
       deepLinkTarget: { kind: "chat", roomId, sessionId },
     });
   }
-  return { ...status, events: limitCapabilityUsageEvents(scoped) };
+  const { events: _events, ...envelope } = status;
+  return { ...envelope, events: limitCapabilityUsageEvents(scoped, envelope) };
 }

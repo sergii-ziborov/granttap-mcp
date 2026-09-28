@@ -598,6 +598,9 @@ npm run package:allowlist
 npm run test:coverage   # macOS only — see below
 ```
 
+Set `GRANTTAP_TEST_CONCURRENCY=1` when running checks alongside heavy builds;
+the default is four test workers, and the same assertions and coverage gates apply.
+
 `npm test` runs everywhere. Both suites run with an isolated `HOME`, so a
 developer's own Claude/Codex/Cursor data can never inflate a local result: the
 numbers on this machine and in CI are the same. The coverage contract is

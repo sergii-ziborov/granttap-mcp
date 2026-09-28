@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { cursorCapabilityUsage, scanCursor } from "../../apps/bridge/src/sessions/cursor";
-import { scanCapabilityUsage } from "../../apps/bridge/src/sessions";
+import { scanCapabilityUsage, scopeCapabilityUsageToRoom } from "../../apps/bridge/src/sessions";
 import { MAX_CAPABILITY_USAGE_EVENTS, MAX_CAPABILITY_USAGE_PAYLOAD_BYTES } from "../../apps/bridge/src/sessions/telemetry";
 
 function setEnv(t: test.TestContext, name: string, value: string): void {
@@ -25,7 +25,7 @@ test("Cursor cache enforces observation count and wire payload bounds", async (t
   const cursorSessionId = "cursor-usage-bound";
   const cursorSessionDir = join(cursorRoot, "workspace", "agent-transcripts", cursorSessionId);
   await mkdir(cursorSessionDir, { recursive: true });
-  const now = Date.now();
+  const now = Date.now() - 1_000;
   await writeFile(join(cursorSessionDir, `${cursorSessionId}.jsonl`), jsonl([
     { timestamp: now, role: "user", message: { content: "Bound Cursor telemetry" } },
     {
@@ -48,5 +48,9 @@ test("Cursor cache enforces observation count and wire payload bounds", async (t
 
   const status = scanCapabilityUsage([cursorScan.sessions[0]!]);
   assert.ok(status.events.length <= MAX_CAPABILITY_USAGE_EVENTS);
+  assert.ok(status.totals!.length > 0, "the envelope includes period totals");
   assert.ok(Buffer.byteLength(JSON.stringify(status), "utf8") <= MAX_CAPABILITY_USAGE_PAYLOAD_BYTES);
+  const scoped = scopeCapabilityUsageToRoom(status, "authenticated-room");
+  assert.ok(Buffer.byteLength(JSON.stringify(scoped), "utf8") <= MAX_CAPABILITY_USAGE_PAYLOAD_BYTES);
+  assert.deepEqual(scoped.totals, status.totals, "limiting the feed preserves full period totals");
 });
