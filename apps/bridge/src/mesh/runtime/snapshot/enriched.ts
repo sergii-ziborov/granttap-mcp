@@ -7,6 +7,8 @@ import { projectCortexIntegration } from "../../../cortex/integration";
 import { projectKnowledge, queueProjectKnowledgeSync } from "../../../engine/runtime/engine-memory";
 import { localMeshStore } from "../../local-remote/local";
 import { activeProjectKnowledge, supersededProjectKnowledgeIds } from "../../knowledge/active";
+import { repositoryDetails } from "../../repository-details";
+import { computerId } from "../../identity/computer";
 
 /** The same Engine-backed projection for the phone publisher and local Mac reader. */
 export async function enrichMeshSnapshot(
@@ -20,13 +22,14 @@ export async function enrichMeshSnapshot(
     projectId: snapshot.projectId,
     events: localMeshStore().historyEventsForProject(snapshot.projectId),
   });
-  const [backbone, repositoryGraphs, knowledge] = await Promise.all([
+  const [backbone, repositoryGraphs, knowledge, details] = await Promise.all([
     projectBackbone(snapshot.projectId),
     projectRepositoryGraphs(snapshot.projectId, bindings, {
       background: options.refreshGraph !== true,
       priority: snapshot.tasks.reduce((latest, task) => Math.max(latest, task.updatedAt), 0),
     }),
     projectKnowledge(snapshot.projectId),
+    repositoryDetails(snapshot, computerId()),
   ]);
   const sharedKnowledge = knowledge?.filter((item) => item.visibility === "project");
   if (sharedKnowledge) localMeshStore().cacheKnowledge(snapshot.projectId, sharedKnowledge);
@@ -38,6 +41,7 @@ export async function enrichMeshSnapshot(
     ...supersededProjectKnowledgeIds(snapshot.projectId, allMemory),
   ])].sort().slice(-128);
   const enriched = { ...snapshot, backbone, repositoryGraphs: [...repositoryGraphs, ...identityFailures],
+    repositoryDetails: details,
     knowledge: activeProjectKnowledge(snapshot.projectId, allMemory)
       .sort((a, b) => b.recordedAt - a.recordedAt).slice(0, 16),
     ...(correctedIds.length > 0 ? { supersededKnowledgeRecordIds: correctedIds } : {}) };

@@ -16,6 +16,7 @@ import {
 } from "./tasks";
 import { MeshEvent } from "./events";
 import { ProjectKnowledgeRecord } from "./knowledge";
+import { ProjectRepositoryDetails } from "./repository-details";
 
 export const IntegrationVia = z.enum(["database", "kafka", "api"]);
 export type IntegrationVia = z.infer<typeof IntegrationVia>;
@@ -239,6 +240,7 @@ export const MeshSnapshot = z.object({
   modelCatalog: z.array(EndpointModelCatalog).max(32).optional(),
   backbone: ProjectBackbone.optional(),
   repositoryGraphs: z.array(ProjectRepositoryGraph).max(64).optional(),
+  repositoryDetails: z.array(ProjectRepositoryDetails).max(64).optional(),
   cortex: z.array(ProjectCortexIntegration).max(32).optional(),
   knowledge: z.array(ProjectKnowledgeRecord).max(32).optional(),
   supersededKnowledgeRecordIds: z.array(Identifier).max(128).optional(),
@@ -249,6 +251,12 @@ export const MeshSnapshot = z.object({
   events: z.array(MeshEvent).max(128),
   generatedAt: z.number().nonnegative(),
 }).strict().superRefine((value, ctx) => {
+  const detailKeys = new Set(value.repositoryDetails?.map((item) => `${item.endpointId}\0${item.repositoryId}`));
+  if (detailKeys.size !== (value.repositoryDetails?.length ?? 0)
+    || value.repositoryDetails?.some((item) => item.projectId !== value.projectId
+      || (value.publisherEndpointId != null && item.endpointId !== value.publisherEndpointId))) {
+    ctx.addIssue({code:z.ZodIssueCode.custom,path:["repositoryDetails"],message:"invalid repository detail scope"});
+  }
   if (value.sessionId !== value.projectId || value.project.projectId !== value.projectId) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["sessionId"], message: "project scope mismatch" });
   }

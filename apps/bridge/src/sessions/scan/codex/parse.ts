@@ -40,6 +40,7 @@ type CodexParseState = {
 function applyCodexLine(d: any, state: CodexParseState): void {
   observeCodexTurn(d, state.turn);
   state.workdirs.push(...workdirsFromCodexCall(d));
+  state.workdirs = state.workdirs.slice(-64);
   const t = ts(d.timestamp);
   if (t) {
     if (!state.startedAt || t < state.startedAt) state.startedAt = t;

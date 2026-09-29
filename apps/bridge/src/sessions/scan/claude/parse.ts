@@ -5,6 +5,8 @@ import { aggregateChildThreads, childTitle } from "../../support/child-threads";
 import { rememberCapabilityObservation } from "../../telemetry";
 import { safeParse, stateFor, ts } from "../../support/common";
 import { claudeCapabilityUsage } from "./activity";
+import { claudeRepositoryPaths } from "./repository-observation";
+import { observedCheckoutRoot } from "../../support/repository-checkout";
 import {
   childLogsFingerprint,
   claudeChildLogPaths,
@@ -28,9 +30,12 @@ type ClaudeParseState = {
   tokensSession: number;
   tokensLastTurn: number;
   contextTokensUsed?: number;
+  repositoryPaths: string[];
 };
 
 function applyClaudeLine(d: any, state: ClaudeParseState): void {
+  state.repositoryPaths.push(...claudeRepositoryPaths(d));
+  state.repositoryPaths = state.repositoryPaths.slice(-64);
   if (d.sessionId && !state.sessionId) state.sessionId = String(d.sessionId);
   if (d.cwd && !state.cwd) state.cwd = String(d.cwd);
   if (d.gitBranch && !state.branch) state.branch = String(d.gitBranch);
@@ -131,7 +136,7 @@ export function parseClaudeFile(file: string): {
   const lines = text.split("\n");
   const state: ClaudeParseState = {
     sessionId: "", startedAt: 0, lastActivityAt: 0, lastMessageAt: 0,
-    tokensSession: 0, tokensLastTurn: 0,
+    tokensSession: 0, tokensLastTurn: 0, repositoryPaths: [],
   };
   for (const line of lines) {
     if (!line) continue;
@@ -144,6 +149,7 @@ export function parseClaudeFile(file: string): {
     agent: "claude",
     title: state.title,
     cwd: state.cwd,
+    worktree: state.cwd ? observedCheckoutRoot(state.cwd, state.repositoryPaths) : undefined,
     branch: state.branch,
     model: state.model,
     summary: state.summary,

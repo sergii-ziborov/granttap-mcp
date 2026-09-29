@@ -26,6 +26,7 @@ export type RepositoryFacts = {
   baseRemote?: string;
   worktree?: string;
   revision?: string;
+  branch?: string;
 };
 
 function git(cwd: string, args: string[]): string | undefined {
@@ -77,6 +78,7 @@ export function inspectRepository(cwd: string): RepositoryFacts {
     canonicalRepositoryId: canonicalRepositoryIdentity(rawRemote, root),
     worktree: git(root, ["rev-parse", "--show-toplevel"]),
     revision: git(root, ["rev-parse", "HEAD"]),
+    branch: git(root, ["symbolic-ref", "--quiet", "--short", "HEAD"]),
   };
   return facts;
 }
@@ -222,7 +224,7 @@ function linkSession(input: {
     workspace: cwd,
     repositoryId: repository.canonicalRepositoryId,
     activeAt: session.lastActivityAt,
-    branch: session.branch,
+    branch: repository.branch ?? session.branch,
     worktree: repository.worktree,
     uncommitted: hasUncommittedWork(repository.worktree ?? cwd),
     startedAt: session.startedAt,

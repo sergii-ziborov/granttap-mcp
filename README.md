@@ -626,3 +626,14 @@ Third-party dependencies retain their own terms; see
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 GrantTap is not affiliated with Anthropic, OpenAI, Apple, Anysphere, or xAI.
+
+## Repository facts and execution checkout
+
+Version 0.8.29 adds optional encrypted repository Git observations: canonical
+identity, branch/HEAD, dirty state, recent commits, contributors and branch
+totals. Both phone publication and the native Mac reader use the same bounded
+read-only Git source. Missing data is explicit. Claude and Codex can detect
+sustained structured work in a different checkout without interpreting chat
+titles. Task identity and its original coordination/access scope survive.
+
+See [repository observations](apps/bridge/src/mesh/repository-details/README.md).
