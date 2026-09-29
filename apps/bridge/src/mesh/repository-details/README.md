@@ -21,3 +21,5 @@ The Apple client uses this evidence for placement, preserving durable Task
 identity and access scope.
 
 Behavior tests live in `tests/`. See the [runtime README](../../../../../README.md).
+
+Licensed under the [MIT License](../../../../../LICENSE).
