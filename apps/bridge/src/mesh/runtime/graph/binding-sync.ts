@@ -1,5 +1,5 @@
-import { resolve } from "node:path";
-import type { MeshSnapshot } from "../../../../../../packages/protocol/schema";
+import { realpathSync } from "node:fs";
+import type { MeshSnapshot, ProjectRepositoryGraph } from "../../../../../../packages/protocol/schema";
 import { queueProjectBindingSync } from "../../../engine/runtime/engine-projects";
 import { inspectRepository } from "../../catalog";
 import { computerId } from "../../identity/computer";
@@ -12,16 +12,23 @@ export async function refreshLocalGraphBindings(
     inspect: typeof inspectRepository;
     sync: typeof queueProjectBindingSync;
   } = { endpoint: computerId, inspect: inspectRepository, sync: queueProjectBindingSync },
-): Promise<void> {
+): Promise<ProjectRepositoryGraph[]> {
   const localEndpoint = dependencies.endpoint();
   const candidates = (snapshot.bindings ?? []).filter((binding) =>
     binding.endpointId === localEndpoint && binding.available && binding.localPathHint);
+  const failures: ProjectRepositoryGraph[] = [];
   await Promise.all(candidates.map(async (binding) => {
     try {
       const path = binding.localPathHint!;
       const facts = dependencies.inspect(path);
-      if (!facts.worktree || resolve(facts.root) !== resolve(path)
-        || facts.canonicalRepositoryId !== binding.repositoryId) return;
+      if (!facts.worktree || realpathSync(facts.root) !== realpathSync(path)
+        || facts.canonicalRepositoryId !== binding.repositoryId) {
+        failures.push({ projectId: snapshot.projectId, repositoryId: binding.repositoryId,
+          revision: "unverified", weavatrixVersion: "unknown", analysisStatus: "UNAVAILABLE",
+          analysisErrorCode: facts.worktree ? "REPOSITORY_IDENTITY_MISMATCH" : "REPOSITORY_IDENTITY_UNVERIFIED",
+          nodes: [], relations: [], totalNodes: 0, totalRelations: 0, truncated: false });
+        return;
+      }
       await dependencies.sync(snapshot.project, {
         summary: binding,
         localRoot: facts.root,
@@ -30,6 +37,7 @@ export async function refreshLocalGraphBindings(
       });
     } catch { /* A stale checkout cannot prevent other verified bindings from recovery. */ }
   }));
+  return failures;
 }
 
 /** Rehydrate previously admitted Git checkouts after Engine restart. */

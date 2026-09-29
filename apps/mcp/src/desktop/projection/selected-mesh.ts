@@ -5,7 +5,6 @@ import { enrichMeshSnapshot } from "../../../../bridge/src/mesh/runtime/snapshot
 import { localMeshStore } from "../../../../bridge/src/mesh/local-remote/local";
 import { withDesktopModels } from "../models";
 import { MeshSnapshot } from "../../../../../packages/protocol/schema";
-import { refreshLocalGraphBindings } from "../../../../bridge/src/mesh/runtime/graph/binding-sync";
 
 /**
  * Selected Mac Mesh: start with durable state, then attach only capabilities
@@ -30,6 +29,5 @@ export async function desktopSelectedMesh(
     skills: skills.length > 0 ? skills : undefined,
     mcpServers: mcpServers.length > 0 ? mcpServers : undefined,
   });
-  await refreshLocalGraphBindings(local);
   return MeshSnapshot.parse(await enrichMeshSnapshot(withDesktopModels(local), options));
 }

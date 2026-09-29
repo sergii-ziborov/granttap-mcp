@@ -12,6 +12,8 @@ test("selected Mac refresh admits its checkout and returns completed Engine anal
   const checkout = `${root}/checkout`;
   mkdirSync(checkout);
   execFileSync("git", ["init", "--quiet", checkout]);
+  execFileSync("git", ["-C", checkout, "-c", "user.name=sergii-ziborov",
+    "-c", "user.email=sergii.ziborov@gmail.com", "commit", "--quiet", "--allow-empty", "-m", "Fixture"]);
   execFileSync("git", ["-C", checkout, "remote", "add", "origin", "https://github.com/example/refresh.git"]);
   const names = ["GRANTTAP_CONFIG_DIR", "GRANTTAP_COMPUTER_ID", "GRANTTAP_ENGINE_ENABLED",
     "GRANTTAP_CODEX_DIR", "GRANTTAP_CLAUDE_DIR"];
@@ -24,7 +26,9 @@ test("selected Mac refresh admits its checkout and returns completed Engine anal
     projects: [{ projectId: "refresh", name: "Refresh", canonicalRepositoryId: "github.com/example/refresh", createdAt: 1 }],
     tasks: [], executions: [], bindings: [{ bindingId: "checkout", projectId: "refresh",
       endpointId: "test-mac", repositoryId: "github.com/example/refresh", displayName: "Refresh",
-      available: true, localPathHint: checkout }],
+      available: true, localPathHint: checkout },
+      { bindingId: "old-local-alias", projectId: "refresh", endpointId: "test-mac",
+        repositoryId: `local:${checkout}`, displayName: "Refresh", available: true, localPathHint: checkout }],
   }));
   const calls: string[] = [];
   const sockets = new Set<import("node:net").Socket>();
@@ -51,6 +55,10 @@ test("selected Mac refresh admits its checkout and returns completed Engine anal
     const result = MeshSnapshot.parse(await worker.enrichedSnapshot("refresh", true));
     assert.equal(result.repositoryGraphs?.[0]?.analysisStatus, "COMPLETE");
     assert.equal(result.repositoryGraphs?.[0]?.totalNodes, 4);
+    const alias = result.repositoryGraphs?.find((report) => report.repositoryId.startsWith("local:"));
+    assert.equal(alias?.analysisErrorCode, "REPOSITORY_IDENTITY_MISMATCH");
+    assert.equal(alias?.totalNodes, 0);
+    assert.ok(calls.indexOf("project.upsert_binding") >= 0);
     assert.ok(calls.indexOf("project.upsert_binding") < calls.indexOf("graph.analyze_repository"));
     assert.equal(await worker.enrichedSnapshot("foreign", true), undefined);
     assert.equal(calls.filter((call) => call === "graph.analyze_repository").length, 1);

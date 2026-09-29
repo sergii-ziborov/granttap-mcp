@@ -1,3 +1,4 @@
+import { refreshLocalGraphBindings } from "../graph/binding-sync";
 import type { MeshSnapshot } from "../../../../../../packages/protocol/schema";
 import {
   projectBackbone, projectRepositoryGraphs, waitForProjectBindingSync,
@@ -11,6 +12,9 @@ import { activeProjectKnowledge, supersededProjectKnowledgeIds } from "../../kno
 export async function enrichMeshSnapshot(
   snapshot: MeshSnapshot, options: { refreshGraph?: boolean } = {},
 ): Promise<MeshSnapshot> {
+  const identityFailures = await refreshLocalGraphBindings(snapshot);
+  const excludedRepositories = new Set(identityFailures.map((report) => report.repositoryId));
+  const bindings = (snapshot.bindings ?? []).filter((binding) => !excludedRepositories.has(binding.repositoryId));
   await waitForProjectBindingSync(snapshot.projectId);
   queueProjectKnowledgeSync({
     projectId: snapshot.projectId,
@@ -18,7 +22,7 @@ export async function enrichMeshSnapshot(
   });
   const [backbone, repositoryGraphs, knowledge] = await Promise.all([
     projectBackbone(snapshot.projectId),
-    projectRepositoryGraphs(snapshot.projectId, snapshot.bindings ?? [], {
+    projectRepositoryGraphs(snapshot.projectId, bindings, {
       background: options.refreshGraph !== true,
       priority: snapshot.tasks.reduce((latest, task) => Math.max(latest, task.updatedAt), 0),
     }),
@@ -33,7 +37,7 @@ export async function enrichMeshSnapshot(
     ...(snapshot.supersededKnowledgeRecordIds ?? []),
     ...supersededProjectKnowledgeIds(snapshot.projectId, allMemory),
   ])].sort().slice(-128);
-  const enriched = { ...snapshot, backbone, repositoryGraphs,
+  const enriched = { ...snapshot, backbone, repositoryGraphs: [...repositoryGraphs, ...identityFailures],
     knowledge: activeProjectKnowledge(snapshot.projectId, allMemory)
       .sort((a, b) => b.recordedAt - a.recordedAt).slice(0, 16),
     ...(correctedIds.length > 0 ? { supersededKnowledgeRecordIds: correctedIds } : {}) };
