@@ -31,6 +31,8 @@ export const DESKTOP_OPERATIONS = new Set([
 ]);
 
 export function desktopOperationTimeout(operation: unknown, input: unknown): number {
+  if (operation === "desktop.mesh_snapshot"
+    && (input as { refresh_graph?: unknown } | undefined)?.refresh_graph === "true") return 120_000;
   if (operation === "desktop.provider_storage") return 120_000;
   if (operation === "desktop.own_relay") return 250_000;
   if (operation === "desktop.controller_enrollment") return 30_000;

@@ -21,6 +21,7 @@ export async function desktopMachineLoad(
         processes: value.processes,
         cpu_percent: value.cpuPercent,
         memory_bytes: value.memoryBytes,
+        chats: (value.chats ?? []).slice(0, 128),
         groups: (value.groups ?? []).slice(0, 8).map((group) => ({
           name: group.name,
           count: group.count,

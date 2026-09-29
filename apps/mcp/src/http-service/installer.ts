@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileS
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { isCursorHelperNode, resolveMonitorNodeBin, type InstallResult } from "../../../bridge/src/install";
-import { configDir, normalizeRelayUrl } from "../../../bridge/src/config";
+import { configDir, normalizeRelayUrl, loadRuntimeConfig, verifiableEngine } from "../../../bridge/src/config";
 import { installWindowsTask } from "../../../bridge/src/install/windows-service";
 import { configuredCursorHttpMcpUrl } from "../cursor-config";
 import { HTTP_SERVICE_LABEL, httpMcpLaunchAgentPath, isEphemeralNpxInstall, packageRoot, xml } from "./common";
@@ -104,6 +104,12 @@ function serviceEnvironment(nodeBin: string, mcpUrl: URL, packageVersion: string
     ["GRANTTAP_PACKAGE_VERSION", packageVersion],
     ["PATH", path],
   ];
+  const engine = verifiableEngine(loadRuntimeConfig());
+  if (engine) values.push(
+    ["GRANTTAP_ENGINE_ENABLED", "1"],
+    ["GRANTTAP_ENGINE_BINARY", engine.path],
+    ["GRANTTAP_ENGINE_SHA256", engine.sha256],
+  );
   const rawRelayUrl = process.env.GRANTTAP_RELAY_URL ?? process.env.NODVOX_RELAY_URL;
   if (!rawRelayUrl) return values;
   try {

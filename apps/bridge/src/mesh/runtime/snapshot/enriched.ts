@@ -8,7 +8,9 @@ import { localMeshStore } from "../../local-remote/local";
 import { activeProjectKnowledge, supersededProjectKnowledgeIds } from "../../knowledge/active";
 
 /** The same Engine-backed projection for the phone publisher and local Mac reader. */
-export async function enrichMeshSnapshot(snapshot: MeshSnapshot): Promise<MeshSnapshot> {
+export async function enrichMeshSnapshot(
+  snapshot: MeshSnapshot, options: { refreshGraph?: boolean } = {},
+): Promise<MeshSnapshot> {
   await waitForProjectBindingSync(snapshot.projectId);
   queueProjectKnowledgeSync({
     projectId: snapshot.projectId,
@@ -17,7 +19,7 @@ export async function enrichMeshSnapshot(snapshot: MeshSnapshot): Promise<MeshSn
   const [backbone, repositoryGraphs, knowledge] = await Promise.all([
     projectBackbone(snapshot.projectId),
     projectRepositoryGraphs(snapshot.projectId, snapshot.bindings ?? [], {
-      background: true,
+      background: options.refreshGraph !== true,
       priority: snapshot.tasks.reduce((latest, task) => Math.max(latest, task.updatedAt), 0),
     }),
     projectKnowledge(snapshot.projectId),

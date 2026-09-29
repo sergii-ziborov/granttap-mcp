@@ -45,7 +45,8 @@ for await (const line of createInterface({ input: process.stdin, crlfDelay: Infi
       : request.query && typeof request.query === "object"
         && (request.query as { operation?: string }).operation === "desktop.mesh_snapshot"
         ? await desktopSelectedMesh(
-          (request.query as { project_id: string }).project_id
+          (request.query as { project_id: string }).project_id,
+          { refreshGraph: (request.query as { refresh_graph?: boolean }).refresh_graph === true }
         ) ?? null
       : request.query && typeof request.query === "object"
         && (request.query as { operation?: string }).operation === "desktop.task_image"

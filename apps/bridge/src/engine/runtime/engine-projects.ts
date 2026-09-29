@@ -191,7 +191,10 @@ export async function projectRepositoryGraphs(
       options.priority ?? 0,
     ))
     : await Promise.all(repositories.map((binding) =>
-      analyzeRepositoryGraph(client, projectId, binding.repositoryId, 30_000)));
+      analyzeRepositoryGraph(client, projectId, binding.repositoryId, 30_000).then((graph) => {
+        repositoryGraphJobs.remember(JSON.stringify([projectId, binding.repositoryId, binding.revision]), graph);
+        return graph;
+      })));
   return boundRepositoryGraphs(graphs.filter((item): item is ProjectRepositoryGraph => item != null));
 }
 

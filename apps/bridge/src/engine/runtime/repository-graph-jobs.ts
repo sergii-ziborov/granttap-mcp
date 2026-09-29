@@ -34,14 +34,30 @@ export class RepositoryGraphJobs<T> {
     return previous?.value;
   }
 
+  /** An explicit refresh supersedes an older queued or running observation. */
+  remember(key: string, value: T | undefined): void {
+    for (let index = this.queue.length - 1; index >= 0; index--) {
+      if (this.queue[index]!.key === key) this.queue.splice(index, 1);
+    }
+    if (!this.entries.has(key) && this.entries.size >= this.capacity * 2) {
+      const oldest = [...this.entries].find(([, entry]) => !entry.pending)?.[0];
+      if (!oldest) return;
+      this.entries.delete(oldest);
+    }
+    this.entries.set(key, { value, pending: false,
+      retryAt: this.now() + (value === undefined ? this.failureMs : this.successMs) });
+  }
+
   private async drain(): Promise<void> {
     if (this.running) return;
     this.running = true;
     try {
       while (this.queue.length > 0) {
         const job = this.queue.shift()!;
+        const entry = this.entries.get(job.key);
         let value: T | undefined;
         try { value = await job.run(); } catch { /* Retry after backoff. */ }
+        if (this.entries.get(job.key) !== entry) continue;
         this.entries.set(job.key, {
           value,
           retryAt: this.now() + (value === undefined ? this.failureMs : this.successMs),

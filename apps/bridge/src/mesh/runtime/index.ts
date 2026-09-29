@@ -260,7 +260,7 @@ export function requestProjectCapability(input: ProjectCapabilityRequestSet): bo
 }
 
 export async function meshSnapshotsWithEngine(): Promise<MeshSnapshot[]> {
-  return Promise.all(meshSnapshots().map(enrichMeshSnapshot));
+  return Promise.all(meshSnapshots().map((snapshot) => enrichMeshSnapshot(snapshot)));
 }
 
 export async function meshSnapshotWithEngine(projectId: string): Promise<MeshSnapshot | undefined> {

@@ -56,10 +56,11 @@ export class DesktopTaskActivityRunner {
     return this.enqueue({ operation: "desktop.live_catalog" }, storePath);
   }
 
-  enrichedSnapshot(projectId: string): Promise<unknown> {
+  enrichedSnapshot(projectId: string, refreshGraph = false): Promise<unknown> {
     if (this.closed || this.queue.length + (this.pending ? 1 : 0) >= 8
       || !projectId || projectId.length > 128) return Promise.resolve(undefined);
-    return this.enqueue({ operation: "desktop.mesh_snapshot", project_id: projectId });
+    return this.enqueue({ operation: "desktop.mesh_snapshot", project_id: projectId,
+      refresh_graph: refreshGraph });
   }
 
   image(query: unknown, storePath?: string): Promise<unknown> {
@@ -162,6 +163,7 @@ export class DesktopTaskActivityRunner {
       if (wasSent) this.child?.kill("SIGKILL");
     }, this.pending.payload.includes("desktop.capability_usage") ? 60_000
       : this.pending.payload.includes("desktop.live_catalog") ? 35_000
+      : this.pending.payload.includes('"refresh_graph":true') ? 110_000
       : this.pending.payload.includes("desktop.mesh_snapshot") ? 40_000
       : this.pending.payload.includes("desktop.task_activity")
         || this.pending.payload.includes("desktop.task_image") ? 35_000 : 12_000);

@@ -5,13 +5,16 @@ import { enrichMeshSnapshot } from "../../../../bridge/src/mesh/runtime/snapshot
 import { localMeshStore } from "../../../../bridge/src/mesh/local-remote/local";
 import { withDesktopModels } from "../models";
 import { MeshSnapshot } from "../../../../../packages/protocol/schema";
+import { refreshLocalGraphBindings } from "../../../../bridge/src/mesh/runtime/graph/binding-sync";
 
 /**
  * Selected Mac Mesh: start with durable state, then attach only capabilities
  * from this computer's admitted repository bindings. Avoid the global provider
  * session scan used by the phone publisher.
  */
-export async function desktopSelectedMesh(projectId: string): Promise<MeshSnapshot | undefined> {
+export async function desktopSelectedMesh(
+  projectId: string, options: { refreshGraph?: boolean } = {},
+): Promise<MeshSnapshot | undefined> {
   const snapshot = localMeshStore().snapshot(projectId);
   if (!snapshot) return undefined;
   const endpointId = computerId();
@@ -27,5 +30,6 @@ export async function desktopSelectedMesh(projectId: string): Promise<MeshSnapsh
     skills: skills.length > 0 ? skills : undefined,
     mcpServers: mcpServers.length > 0 ? mcpServers : undefined,
   });
-  return MeshSnapshot.parse(await enrichMeshSnapshot(withDesktopModels(local)));
+  await refreshLocalGraphBindings(local);
+  return MeshSnapshot.parse(await enrichMeshSnapshot(withDesktopModels(local), options));
 }

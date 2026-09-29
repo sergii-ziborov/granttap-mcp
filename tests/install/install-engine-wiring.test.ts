@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { installMonitorHelper } from "../../apps/bridge/src/install";
 import { saveRuntimeConfig } from "../../apps/bridge/src/config";
+import { installHttpMcpService } from "../../apps/mcp/src/http-service";
 
 async function sandbox(t: { after: (fn: () => void) => void }): Promise<{
   agentsDir: string; root: string;
@@ -49,6 +50,10 @@ test("a configured engine is wired into the LaunchAgent that publishes", async (
   // Governance is what the phone is waiting for, and it needs both rollout flags.
   assert.match(plist, /<key>GRANTTAP_ENGINE_ENABLED<\/key>\s*<string>1<\/string>/);
   assert.match(plist, /<key>GRANTTAP_PROJECT_POLICY_ENABLED<\/key>\s*<string>1<\/string>/);
+  assert.equal(installHttpMcpService().status, "installed");
+  const desktop = await readFile(join(agentsDir, "com.granttap.mcp-http.plist"), "utf8");
+  assert.match(desktop, /<key>GRANTTAP_ENGINE_ENABLED<\/key>\s*<string>1<\/string>/);
+  assert.match(desktop, new RegExp(`<key>GRANTTAP_ENGINE_SHA256</key>\\s*<string>${CHECKSUM}</string>`));
 });
 
 test("no engine configured leaves the rollout flags off", async (t) => {
@@ -61,6 +66,9 @@ test("no engine configured leaves the rollout flags off", async (t) => {
   assert.doesNotMatch(plist, /GRANTTAP_ENGINE_ENABLED/);
   assert.doesNotMatch(plist, /GRANTTAP_PROJECT_POLICY_ENABLED/);
   assert.doesNotMatch(plist, /GRANTTAP_ENGINE_BINARY/);
+  installHttpMcpService();
+  const desktop = await readFile(join(agentsDir, "com.granttap.mcp-http.plist"), "utf8");
+  assert.doesNotMatch(desktop, /GRANTTAP_ENGINE_ENABLED/);
 });
 
 test("a malformed engine declaration is refused rather than half-applied", async (t) => {

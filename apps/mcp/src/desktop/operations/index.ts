@@ -73,7 +73,9 @@ export function desktopReadOperation(input: {
     return Promise.resolve(storePath
       ? desktopFixtureSnapshot(queryInput, storePath)
       : (queryInput as { enrich?: unknown }).enrich === "true"
-        ? enrichment.enrichedSnapshot(projectId) : localMeshStore().snapshot(projectId));
+        ? enrichment.enrichedSnapshot(projectId,
+          (queryInput as { refresh_graph?: unknown }).refresh_graph === "true")
+        : localMeshStore().snapshot(projectId));
   }
   if (operation === "project.list") {
     const catalog = desktopProjectCatalog(queryInput, storePath);

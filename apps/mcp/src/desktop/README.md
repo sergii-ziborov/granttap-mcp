@@ -34,3 +34,10 @@ escapes, unlisted references and ambiguous converted filenames are refused. A
 unique sibling with the same stem preserves a historical link after image format
 conversion. Desktop responses preserve full bounded messages and stay below
 the socket frame budget. Tests also live in `tests/desktop/image`.
+
+Selected architecture refresh uses `desktop.mesh_snapshot` with `enrich=true` and
+`refresh_graph=true`. It re-admits verified local bindings and waits for the
+Engine result; subsequent background observations retain that refreshed report.
+Normal selected reads remain asynchronous and bounded. Local process samples
+include bounded native chat attribution so shared host load is not assigned to
+unrelated projects. Worker/socket regression tests live in `projection/tests`.
