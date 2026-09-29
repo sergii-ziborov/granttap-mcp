@@ -3,6 +3,7 @@ import { projectSharedSkills } from "../../../../bridge/src/capabilities/skills"
 import { computerId } from "../../../../bridge/src/mesh/identity/computer";
 import { enrichMeshSnapshot } from "../../../../bridge/src/mesh/runtime/snapshot/enriched";
 import { localMeshStore } from "../../../../bridge/src/mesh/local-remote/local";
+import { withDesktopModels } from "../models";
 import { MeshSnapshot } from "../../../../../packages/protocol/schema";
 
 /**
@@ -26,5 +27,5 @@ export async function desktopSelectedMesh(projectId: string): Promise<MeshSnapsh
     skills: skills.length > 0 ? skills : undefined,
     mcpServers: mcpServers.length > 0 ? mcpServers : undefined,
   });
-  return MeshSnapshot.parse(await enrichMeshSnapshot(local));
+  return MeshSnapshot.parse(await enrichMeshSnapshot(withDesktopModels(local)));
 }

@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { configDir } from "../../../bridge/src/config/runtime/paths";
 import { readStoreState } from "../../../bridge/src/mesh/store/state";
 import { selectSnapshotTasks } from "../../../bridge/src/mesh/snapshot/window";
+import { desktopModelCatalog, withDesktopModels } from "./models";
 import { MeshSnapshot } from "../../../../packages/protocol/schema";
 
 type DesktopExecution = {
@@ -78,10 +79,12 @@ export function desktopFixtureSnapshot(
 
 /** Durable Mesh list; live Engine enrichment is requested for the selected Mesh only. */
 export function desktopMeshSnapshots(storePath = join(configDir(), "project-mesh.json")) {
+  const models = desktopModelCatalog();
   return {
     operation: "desktop.mesh_snapshots" as const,
     snapshots: (desktopWorkspace(storePath)?.projects ?? []).flatMap((project) =>
-      desktopFixtureSnapshot({ project_id: project.project_id }, storePath) ?? []),
+      desktopFixtureSnapshot({ project_id: project.project_id }, storePath) ?? [])
+      .map((snapshot) => withDesktopModels(snapshot, models)),
   };
 }
 
