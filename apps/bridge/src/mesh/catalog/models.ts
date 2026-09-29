@@ -1,4 +1,5 @@
 import type { AdvertisedModel, EndpointModelCatalog, MeshProvider } from "../../../../../packages/protocol/schema";
+import { readCodexModelCatalog } from "../../provider-model-catalog";
 
 const PROVIDERS = new Set(["claude", "codex", "cursor", "grok"]);
 
@@ -46,4 +47,16 @@ export function allowedModelIds(
   if (granted === undefined) return advertised;
   const allow = new Set(granted);
   return advertised.filter((item) => allow.has(item));
+}
+
+/** Native availability replaces old Codex observations; other providers retain their evidence. */
+export function catalogFromEndpoint(
+  endpointId: string, sessions: Parameters<typeof catalogFromSessions>[1], now = Date.now(),
+): EndpointModelCatalog {
+  const observed = catalogFromSessions(endpointId, sessions, now);
+  const native = readCodexModelCatalog(endpointId, { now });
+  const models = [...native.models, ...observed.models.filter(item => native.stale || item.provider !== "codex")];
+  return { endpointId, observedAt: now, models: models.slice(0, 64),
+    ...(native.stale ? { stale: true, reason: native.reason } : {}),
+  };
 }

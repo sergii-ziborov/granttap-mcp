@@ -115,6 +115,8 @@ export const AdvertisedModel = z.object({
   endpointId: Identifier,
   source: z.enum(["observed", "advertised"]),
   label: Label.optional(),
+  description: z.string().trim().min(1).max(240).optional(),
+  priority: z.number().int().nonnegative().max(10_000).optional(),
   observedAt: z.number().nonnegative(),
 }).strict();
 export type AdvertisedModel = z.infer<typeof AdvertisedModel>;

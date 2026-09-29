@@ -48,7 +48,7 @@ export function codexHookRpc(options: HookRpcOptions = {}): HookRpc {
       }
     });
     send({ id: 1, method: "initialize", params: {
-      clientInfo: { name: "granttap_hook_review", title: "GrantTap", version: "0.8.25" },
+      clientInfo: { name: "granttap_hook_review", title: "GrantTap", version: "0.8.26" },
       capabilities: { experimentalApi: true },
     } });
   });

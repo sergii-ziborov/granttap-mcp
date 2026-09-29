@@ -15,13 +15,14 @@ export function desktopTaskSend(input: unknown,
   if (!input || typeof input !== "object" || Array.isArray(input)) return Promise.resolve(undefined);
   const query = input as Record<string, unknown>;
   const { project_id: projectId, task_id: taskId, session_id: sessionId,
-    delivery_id: deliveryId, text } = query;
+    delivery_id: deliveryId, text, model } = query;
   if (typeof projectId !== "string" || !projectId || projectId.length > 128
     || typeof taskId !== "string" || !taskId || taskId.length > 128
     || typeof sessionId !== "string" || !sessionId || sessionId.length > 128
     || typeof deliveryId !== "string" || !/^[0-9a-f-]{36}$/i.test(deliveryId)
     || typeof text !== "string" || (!text.trim() && query.attachments_json === undefined) || text.length > 8_000
-    || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(text)) {
+    || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(text)
+    || model !== undefined && (typeof model !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,159}$/.test(model))) {
     return Promise.resolve(undefined);
   }
   const loaded = readStoreState(storePath);
@@ -50,7 +51,8 @@ export function desktopTaskSend(input: unknown,
     lastActivityAt: execution.activeAt ?? execution.updatedAt ?? execution.startedAt,
     tokensSession: 0, tokensLastTurn: 0,
   };
-  const operation = deliver(session, text.trim(), 240_000, attachments).then((result) => ({
+  const options = model === undefined ? {} : { model: model as string };
+  const operation = deliver(session, text.trim(), 240_000, attachments, options).then((result) => ({
     operation: "desktop.task_send", accepted: result.ok,
     error: result.ok ? null : result.error.slice(0, 500),
   }), () => ({ operation: "desktop.task_send", accepted: false,

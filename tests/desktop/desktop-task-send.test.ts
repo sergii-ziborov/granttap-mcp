@@ -17,12 +17,15 @@ test("local Task send keeps the exact Mesh and native execution link", async () 
       computerId: "computer-a", workspace: directory, startedAt: 1, activeAt: 2 }],
   }));
   const calls: string[] = [];
-  const deliver = async (session: { sessionId: string }, text: string) => {
+  const options: unknown[] = [];
+  const deliver = async (session: { sessionId: string }, text: string, _time?: number,
+    _attachments?: unknown[], turn?: unknown) => {
     calls.push(`${session.sessionId}:${text}`);
+    options.push(turn);
     return { ok: true as const, text: "Done" };
   };
   const request = { project_id: "mesh-a", task_id: "task-a", session_id: "session-a",
-    delivery_id: randomUUID(), text: "Continue" };
+    delivery_id: randomUUID(), text: "Continue", model: "gpt-6-astra" };
   assert.equal(await desktopTaskSend({ ...request, project_id: "other" }, storePath, deliver), undefined);
   assert.equal(await desktopTaskSend({ ...request, session_id: "other" }, storePath, deliver), undefined);
   assert.equal(await desktopTaskSend({ ...request, text: "" }, storePath, deliver), undefined);
@@ -31,6 +34,8 @@ test("local Task send keeps the exact Mesh and native execution link", async () 
   });
   await desktopTaskSend(request, storePath, deliver);
   assert.deepEqual(calls, ["session-a:Continue"]);
+  assert.deepEqual(options, [{ model: "gpt-6-astra" }], "confirmed model must reach the exact resumed execution");
+  assert.equal(await desktopTaskSend({ ...request, delivery_id: randomUUID(), model: "--invalid" }, storePath, deliver), undefined);
 });
 
 test("local Task accepts a source file without a caption and rejects untrusted attachment paths", async () => {

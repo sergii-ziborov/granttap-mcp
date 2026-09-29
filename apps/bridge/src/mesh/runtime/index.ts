@@ -24,7 +24,7 @@ import {
 import { isProviderEnabled } from "../../config/runtime";
 import { sendMeshPayload } from "../../host/session-keys";
 import { linkSessionsToProjects, workingTreeState } from "../catalog";
-import { catalogFromSessions } from "../catalog/models";
+import { catalogFromEndpoint } from "../catalog/models";
 import { projectMcpServers } from "../catalog/project/capabilities";
 import { configuredProjectMcpServers, mergeConfiguredMcpServers } from "../catalog/project/configured-mcp";
 import { saveProjectCapabilityRequest } from "../catalog/project/requests";
@@ -162,7 +162,7 @@ export function createMeshRuntime(deps: MeshRuntimeDependencies) {
     projectId: string,
     store = deps.store(),
     sessions = deps.sessions(),
-    models = catalogFromSessions(deps.computer(), sessions),
+    models = catalogFromEndpoint(deps.computer(), sessions),
   ): MeshSnapshot | undefined => {
     const snapshot = store.snapshot(projectId, deps.computer());
     if (!snapshot) return undefined;
@@ -202,7 +202,7 @@ export function createMeshRuntime(deps: MeshRuntimeDependencies) {
     snapshots(): MeshSnapshot[] {
       const store = deps.store();
       const sessions = deps.sessions();
-      const models = catalogFromSessions(deps.computer(), sessions);
+      const models = catalogFromEndpoint(deps.computer(), sessions);
       return store.projectIds().flatMap((projectId) =>
         composeSnapshot(projectId, store, sessions, models) ?? []);
     },

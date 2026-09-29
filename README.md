@@ -242,7 +242,12 @@ Task can be handed to it.
 
 A Project can pin new tasks to one confirmed computer. The endpoint id is
 the stored computer identity, not the display name. Models offered on the
-phone come from that host's catalog. If the pinned host is offline, the
+phone come from that host's catalog. Codex picker metadata is read from the
+installed provider's account-scoped model cache, refreshed on each catalog
+cycle. Visible models keep their descriptions, provider ordering and fetch
+timestamp; hidden review/internal models are excluded. Expired data stays
+unknown. Local Mac replies, like relay replies, pass the chosen model to the
+existing native session. If the pinned host is offline, the
 Project either refuses the create or queues it until a deadline — it does
 not silently start the task elsewhere. A command issued for a previous
 instance of the computer (a restore or clone that kept pairing keys) is
