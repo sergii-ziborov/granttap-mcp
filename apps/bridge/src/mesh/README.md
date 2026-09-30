@@ -69,5 +69,14 @@ not invent aliases. `task-queue.ts` holds a create until the offline deadline.
 `instance-epoch` (bridge) rejects commands issued for a previous instance after
 restore or clone. Display names and device aliases are never routing keys.
 
+The Mesh brief guides an agent with Project scope, relevant restrictions,
+repository topology, dependencies, and neighboring work. The local hook and
+Engine enforce Governance decisions. GrantTap measures
+resource use from local operating-system samples; Engine and Weavatrix derive
+architecture from repository evidence. An agent's answer or Task summary may
+be retained as attributed task knowledge, but it does not become a verified
+architecture result or a source of CPU, memory, timing, or token measurements.
+These projections must not require an extra model turn to produce a report.
+
 License: this module is distributed under the MIT License
 in the repository-root `LICENSE` file.
