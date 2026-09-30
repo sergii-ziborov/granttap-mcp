@@ -2,7 +2,8 @@
  * The coding-app browser talks only to granttap.com.
  * This helper publishes the public consent snapshot there. A QR scan — a
  * phone marked seen — is the Approve. Deny stays a website action.
- * Pairing keys never leave the computer.
+ * Consent snapshots contain no pairing keys; account recovery sends only a
+ * sealed phone half through a separate short-lived mailbox.
  */
 import { PENDING_TTL_MS } from "./pending";
 import type { ConnectSnapshot } from "../session/connect-snapshot";

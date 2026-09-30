@@ -22,7 +22,15 @@ export async function enrollMacAccount(accountToken: string, origin: string,
     if (existing.accountId !== me.accountId) {
       throw new Error("This Mac is linked to a different account. Revoke it first.");
     }
-    return { accountId: existing.accountId, machineId: existing.machineId };
+    const linked = await request(`${origin}/api/account/machines`, {
+      headers, signal: AbortSignal.timeout(8_000), redirect: "error",
+    });
+    if (!linked.ok) throw new Error("Account computer list is unavailable.");
+    const list = await linked.json() as { machines?: Array<{ id?: string }> };
+    if (!Array.isArray(list.machines)) throw new Error("Invalid account computer list.");
+    if (list.machines.some(machine => machine.id === existing.machineId)) {
+      return { accountId: existing.accountId, machineId: existing.machineId };
+    }
   }
   const registration = await request(`${origin}/api/account/machines`, {
     method: "POST", headers: { ...headers, "content-type": "application/json" },
