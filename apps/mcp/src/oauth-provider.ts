@@ -31,6 +31,7 @@ import {
   watchConnectDecision,
   websiteOrigin,
 } from "./oauth/consent/website-session";
+import type { ConsentMethod } from "./oauth/consent/website-session";
 
 type StoredCode = {
   clientId: string;
@@ -39,6 +40,7 @@ type StoredCode = {
 };
 type CompletedConsent = {
   approve: boolean;
+  method: ConsentMethod;
   redirectUrl: string;
   expiresAt: number;
 };
@@ -111,8 +113,8 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
     res.redirect(302, website.href);
     if (origin) {
       const snapshot = () => buildConnectSnapshot(client.client_name);
-      watchConnectDecision(origin, pendingId, snapshot, (approve) =>
-        this.completeConsent(pendingId, approve));
+      watchConnectDecision(origin, pendingId, snapshot, (approve, method) =>
+        this.completeConsent(pendingId, approve, method));
       void publishConnectRequestRetry(origin, pendingId, snapshot());
     }
   }
@@ -124,16 +126,18 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
     for (const pendingId of this.pending.keys()) {
       const snapshot = () =>
         buildConnectSnapshot(this.getPending(pendingId)?.client.client_name);
-      watchConnectDecision(origin, pendingId, snapshot, (approve) =>
-        this.completeConsent(pendingId, approve));
+      watchConnectDecision(origin, pendingId, snapshot, (approve, method) =>
+        this.completeConsent(pendingId, approve, method));
       void publishConnectRequestRetry(origin, pendingId, snapshot());
     }
   }
 
   /** Complete consent: issue code and redirect to the requesting MCP client. */
-  completeConsent(pendingId: string, approve: boolean): { redirectUrl: string } {
+  completeConsent(pendingId: string, approve: boolean,
+                  method: ConsentMethod = "phone"): { redirectUrl: string } {
     const remembered = this.completed.get(pendingId);
-    if (remembered && remembered.expiresAt > Date.now() && remembered.approve === approve) {
+    if (remembered && remembered.expiresAt > Date.now()
+        && remembered.approve === approve && remembered.method === method) {
       return { redirectUrl: remembered.redirectUrl };
     }
     const pending = this.getPending(pendingId);
@@ -148,12 +152,13 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
       const redirectUrl = target.toString();
       this.completed.set(pendingId, {
         approve: false,
+        method,
         redirectUrl,
         expiresAt: Date.now() + CODE_TTL_MS,
       });
       return { redirectUrl };
     }
-    if (!isMachineConfigured()) {
+    if (method !== "passkey" && !isMachineConfigured()) {
       throw new Error("GrantTap is not paired on this Mac yet. Scan the QR in GrantTap.");
     }
 
@@ -167,10 +172,11 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
     });
     target.searchParams.set("code", code);
     if (pending.params.state) target.searchParams.set("state", pending.params.state);
-    wakePairingRoomAfterApprove(true);
+    if (isMachineConfigured()) wakePairingRoomAfterApprove(true);
     const redirectUrl = target.toString();
     this.completed.set(pendingId, {
       approve: true,
+      method,
       redirectUrl,
       expiresAt: Date.now() + CODE_TTL_MS,
     });

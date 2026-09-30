@@ -7,7 +7,8 @@
 import { PENDING_TTL_MS } from "./pending";
 import type { ConnectSnapshot } from "../session/connect-snapshot";
 
-export type ConnectDecision = "approve" | "deny";
+export type ConnectDecision = "approve" | "deny" | "passkey";
+export type ConsentMethod = "phone" | "passkey";
 
 type ConnectRow = ConnectSnapshot & {
   decision?: ConnectDecision;
@@ -111,7 +112,7 @@ export function watchConnectDecision(
   origin: string,
   requestId: string,
   snapshot: ConnectSnapshot | (() => ConnectSnapshot),
-  complete: (approve: boolean) => { redirectUrl: string },
+  complete: (approve: boolean, method: ConsentMethod) => { redirectUrl: string },
   options: { pollMs?: number } = {},
 ): void {
   const current = (): ConnectSnapshot => (typeof snapshot === "function" ? snapshot() : snapshot);
@@ -126,9 +127,10 @@ export function watchConnectDecision(
       try {
         const live = current();
         const row = await readConnectRequest(origin, requestId);
-        if (row?.decision === "approve" || row?.decision === "deny") {
+        if (row?.decision === "approve" || row?.decision === "deny" || row?.decision === "passkey") {
           try {
-            const { redirectUrl } = complete(row.decision !== "deny");
+            const { redirectUrl } = complete(row.decision !== "deny",
+              row.decision === "passkey" ? "passkey" : "phone");
             await publishConnectRedirect(origin, requestId, redirectUrl);
             return;
           } catch (error) {

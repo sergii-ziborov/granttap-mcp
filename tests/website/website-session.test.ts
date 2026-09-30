@@ -10,6 +10,7 @@ import type { OAuthClientInformationFull } from "@modelcontextprotocol/sdk/share
 import type { Response } from "express";
 import { createPairing, machineConfigPath, phonePairingPath, saveConfig } from "../../apps/bridge/src/config";
 import { GrantTapOAuthProvider } from "../../apps/mcp/src/oauth-provider";
+import { listenConsentSite } from "./consent-site";
 import {
   phoneScanApproves,
   publishConnectError,
@@ -20,60 +21,6 @@ import {
   watchConnectDecision,
   websiteOrigin,
 } from "../../apps/mcp/src/oauth/consent/website-session";
-
-function listen(): Promise<{ origin: string; store: Map<string, Record<string, unknown>>; close: () => Promise<void> }> {
-  const store = new Map<string, Record<string, unknown>>();
-  const server = createServer(async (req, res) => {
-    const url = new URL(req.url ?? "/", "http://127.0.0.1");
-    const id = url.pathname.split("/")[4] ?? "";
-    if (req.method === "PUT" && url.pathname.startsWith("/api/connect/requests/")) {
-      const body = JSON.parse(await readBody(req)) as Record<string, unknown>;
-      store.set(id, { ...store.get(id), ...body });
-      res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ ok: true }));
-      return;
-    }
-    if (req.method === "POST" && url.pathname.endsWith("/redirect")) {
-      const body = JSON.parse(await readBody(req)) as { redirectUrl?: string };
-      store.set(id, { ...store.get(id), redirectUrl: body.redirectUrl });
-      res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ ok: true }));
-      return;
-    }
-    if (req.method === "GET" && url.pathname.startsWith("/api/connect/requests/")) {
-      const row = store.get(id);
-      if (!row) {
-        res.writeHead(404);
-        res.end();
-        return;
-      }
-      res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify(row));
-      return;
-    }
-    res.writeHead(404);
-    res.end();
-  });
-  return new Promise((resolve) => {
-    server.listen(0, "127.0.0.1", () => {
-      const { port } = server.address() as AddressInfo;
-      resolve({
-        origin: `http://127.0.0.1:${port}`,
-        store,
-        close: () => new Promise((done) => server.close(() => done())),
-      });
-    });
-  });
-}
-
-function readBody(req: import("node:http").IncomingMessage): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    req.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
-    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
-    req.on("error", reject);
-  });
-}
 
 test("website origin stays off under node:test unless explicitly set", () => {
   const previous = process.env.GRANTTAP_WEBSITE_ORIGIN;
@@ -92,7 +39,7 @@ test("website origin stays off under node:test unless explicitly set", () => {
 });
 
 test("helper publishes consent to the website and writes the Cursor redirect there", async (t) => {
-  const site = await listen();
+  const site = await listenConsentSite();
   const root = await mkdtemp(join(tmpdir(), "granttap-website-session-"));
   process.env.GRANTTAP_CONFIG_DIR = root;
   process.env.GRANTTAP_WEBSITE_ORIGIN = site.origin;
@@ -153,7 +100,7 @@ test("helper publishes consent to the website and writes the Cursor redirect the
 });
 
 test("a leftover seen phone does not skip /connect", async (t) => {
-  const site = await listen();
+  const site = await listenConsentSite();
   process.env.GRANTTAP_WEBSITE_ORIGIN = site.origin;
   t.after(async () => {
     resetConnectWatchers();
@@ -175,8 +122,29 @@ test("a leftover seen phone does not skip /connect", async (t) => {
   assert.equal(site.store.get(pendingId)?.redirectUrl, undefined);
 });
 
+test("website passkey decision reaches local OAuth as passkey consent", async (t) => {
+  const site = await listenConsentSite();
+  t.after(async () => { resetConnectWatchers(); await site.close(); });
+  const pendingId = "76666666-6666-4666-8666-666666666666";
+  site.store.set(pendingId, { decision: "passkey" });
+  const seen: Array<{ approved: boolean; method: string }> = [];
+  watchConnectDecision(site.origin, pendingId, {
+    clientName: "Codex", computerName: "Mac", paired: false,
+    roomPrefix: "", phones: [], providers: [], relayStatus: "unknown",
+    mesh: { present: false, thisComputer: "Mac", computers: ["Mac"], openTasks: 0 },
+  }, (approved, method) => {
+    seen.push({ approved, method });
+    return { redirectUrl: "http://127.0.0.1:9/callback?code=fresh" };
+  }, { pollMs: 50 });
+  const started = Date.now();
+  while (Date.now() - started < 2_000 && seen.length === 0) {
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+  assert.deepEqual(seen, [{ approved: true, method: "passkey" }]);
+});
+
 test("a paired Mac still opens /connect so Reconnect stays available", async (t) => {
-  const site = await listen();
+  const site = await listenConsentSite();
   const root = await mkdtemp(join(tmpdir(), "granttap-already-paired-oauth-"));
   process.env.GRANTTAP_CONFIG_DIR = root;
   process.env.GRANTTAP_WEBSITE_ORIGIN = site.origin;
@@ -262,7 +230,7 @@ test("a hung website does not leave /authorize blank", async (t) => {
 });
 
 test("a failed coding-app callback is written as an error on the website", async (t) => {
-  const site = await listen();
+  const site = await listenConsentSite();
   process.env.GRANTTAP_WEBSITE_ORIGIN = site.origin;
   t.after(async () => {
     resetConnectWatchers();

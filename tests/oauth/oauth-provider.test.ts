@@ -108,6 +108,21 @@ test("OAuth provider completes consent, code exchange, verification, and revocat
   await assert.rejects(provider.exchangeRefreshToken(), /not issued/);
 });
 
+test("verified Mac passkey can authorize local MCP before phone pairing", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-oauth-mac-passkey-"));
+  process.env.GRANTTAP_CONFIG_DIR = root;
+  t.after(() => delete process.env.GRANTTAP_CONFIG_DIR);
+  const provider = new GrantTapOAuthProvider(resource);
+  const pendingId = provider.createPending(client, params);
+  assert.throws(() => provider.completeConsent(pendingId, true), /not paired/);
+  const approved = provider.completeConsent(pendingId, true, "passkey");
+  const code = new URL(approved.redirectUrl).searchParams.get("code");
+  assert.ok(code);
+  const tokens = await provider.exchangeAuthorizationCode(client, code, undefined,
+    params.redirectUri, new URL(resource));
+  assert.equal((await provider.verifyAccessToken(tokens.access_token)).clientId, client.client_id);
+});
+
 test("OAuth provider expires stale pending requests, codes, and tokens", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "granttap-oauth-expiry-"));
   process.env.GRANTTAP_CONFIG_DIR = root;

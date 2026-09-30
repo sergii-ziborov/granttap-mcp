@@ -52,6 +52,10 @@ private Unix IPC. Mac Settings can configure encrypted address discovery or
 install/start/stop the pinned personal relay. Runtime code remains outside the
 Apple sandbox. Mac purchase terms, optional Personal subscriptions and required
 TLS/VPN reachability are documented in the Apple client repository.
+The local HTTP MCP OAuth flow can be approved with a fresh GrantTap account
+passkey on Mac. This authorizes the selected coding app to use this computer's
+MCP endpoint; it does not pair a phone. Direct QR pairing remains available
+without a GrantTap account.
 The iPhone and iPad app provides the mobile Project controller;
 Apple Watch carries the compact attention and reply flow through iPhone.
 The machine runtime and separately distributed Engine supply Project records,

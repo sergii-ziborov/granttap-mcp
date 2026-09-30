@@ -23,10 +23,11 @@ checks parent messages, refreshes pending pairing while visible, and keeps
 copyable transfer material out of model-visible text and persistent UI storage.
 Non-UI clients can still use the tools and display the returned QR image.
 
-The local stdio plugin does not have a separate account login. The Codex-owned
-plugin management page is not this UI. Its native OAuth sign-in controls apply
-to OAuth-capable HTTP MCP servers; this module does not add an account service
-or replace the local provider runtime.
+The connection card itself does not log in to an account. The Codex-owned
+plugin management page is not this UI. The optional Mac passkey choice lives
+in the browser authorization page for the loopback HTTP MCP server. It grants
+the coding app an MCP token, without creating a phone pairing or changing the
+local provider runtime.
 
 Tests in `tests/` exercise isolated keys, a loopback encrypted phone connection,
 expiry, non-mutating status, and actual DOM button/host-message behavior.
