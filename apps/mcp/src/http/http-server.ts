@@ -15,7 +15,7 @@ import express from "express";
 import { relay, resetRelay } from "./create-server";
 import { resetPairingWatches } from "../oauth/consent/pairing-view";
 import { GrantTapOAuthProvider } from "../oauth-provider";
-import { resetConnectWatchers } from "../oauth/consent/website-session";
+import { resetConnectWatchers, websiteOrigin } from "../oauth/consent/website-session";
 import { isMachineConfigured, phoneReachability } from "../status/pairing-status";
 import { packageVersion } from "../status/package-version";
 import { desktopStatusSnapshot } from "../status/desktop-status";
@@ -24,6 +24,7 @@ import { createMcpSessionHandler } from "./mcp-handler";
 import { startDesktopEngineBridgeProcess } from "../desktop/process/bridge-process";
 
 import { installDesktopNativeRoutes } from "../desktop/native-access/routes";
+import { startAccountRecoveryPoller } from "../../../bridge/src/account-recovery/poller";
 
 export const DEFAULT_HTTP_HOST = "127.0.0.1";
 export const DEFAULT_HTTP_PORT = 17342;
@@ -110,12 +111,16 @@ export async function startHttpMcpServer(options: ServeOptions = {}): Promise<{
 
   provider.resumeConnectWatches();
   void relay();
+  const accountOrigin = websiteOrigin();
+  const stopAccountRecovery = accountOrigin
+    ? startAccountRecoveryPoller(accountOrigin, () => { resetRelay(); void relay(); }) : () => {};
 
   return {
     host,
     port,
     mcpUrl: mcpUrl.href,
     close: async () => {
+      stopAccountRecovery();
       await sessions.close();
       resetConnectWatchers();
       resetPairingWatches();

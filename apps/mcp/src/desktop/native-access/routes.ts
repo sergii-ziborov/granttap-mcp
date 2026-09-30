@@ -3,6 +3,8 @@ import type { Express } from 'express';
 import { DesktopNativeAccess } from './access';
 import { invokeDesktop } from './invoke';
 import { DESKTOP_OPERATIONS, desktopOperationTimeout } from '../engine-bridge';
+import { enrollMacAccount } from '../../../../bridge/src/account-recovery/enroll';
+import { websiteOrigin } from '../../oauth/consent/website-session';
 
 export function installDesktopNativeRoutes(app: Express, socketPath: string, origin: string,
   access = new DesktopNativeAccess()): void {
@@ -38,6 +40,18 @@ export function installDesktopNativeRoutes(app: Express, socketPath: string, ori
   app.post('/desktop/token', express.json({ limit: '2kb' }), (req, res) => {
     try { res.json({ access_token: access.exchange(String(req.body?.code ?? ''), String(req.body?.verifier ?? '')) }); }
     catch { res.status(401).json({ error: 'Native code could not be verified' }); }
+  });
+  app.post('/desktop/account/link', express.json({ limit: '2kb' }), async (req, res) => {
+    const nativeToken = String(req.headers.authorization ?? '').replace(/^Bearer /, '');
+    if (!access.verify(nativeToken)) {
+      res.status(401).json({ error: 'Authorize GrantTap for Mac first' }); return;
+    }
+    try {
+      res.json(await enrollMacAccount(String(req.body?.accountToken ?? ''),
+        websiteOrigin() ?? 'https://granttap.com'));
+    } catch {
+      res.status(403).json({ error: 'Account link could not be verified' });
+    }
   });
   app.post('/desktop/invoke', (req, res, next) => {
     const auth = String(req.headers.authorization ?? '');

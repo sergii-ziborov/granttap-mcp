@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -124,9 +124,15 @@ test("a leftover seen phone does not skip /connect", async (t) => {
 
 test("website passkey decision reaches local OAuth as passkey consent", async (t) => {
   const site = await listenConsentSite();
-  t.after(async () => { resetConnectWatchers(); await site.close(); });
+  const root = await mkdtemp(join(tmpdir(), "granttap-passkey-link-"));
+  process.env.GRANTTAP_CONFIG_DIR = root;
+  t.after(async () => { resetConnectWatchers(); await site.close();
+    delete process.env.GRANTTAP_CONFIG_DIR; await rm(root, { recursive: true, force: true }); });
   const pendingId = "76666666-6666-4666-8666-666666666666";
-  site.store.set(pendingId, { decision: "passkey" });
+  site.store.set(pendingId, { decision: "passkey",
+    accountId: "11111111-1111-4111-8111-111111111111",
+    machineId: "22222222-2222-4222-8222-222222222222",
+    machineToken: "A".repeat(43) });
   const seen: Array<{ approved: boolean; method: string }> = [];
   watchConnectDecision(site.origin, pendingId, {
     clientName: "Codex", computerName: "Mac", paired: false,

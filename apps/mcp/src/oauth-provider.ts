@@ -4,7 +4,7 @@
  * Authorize means: confirm this Mac's GrantTap pairing for a client (issue a
  * bearer token). E2EE keys stay in ~/.granttap — OAuth does not replace pair.
  */
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import type { Response } from "express";
 import {
   InvalidGrantError,
@@ -60,7 +60,8 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
   createPending(client: OAuthClientInformationFull, params: AuthorizationParams): string {
     this.gcPending();
     const id = randomUUID();
-    this.pending.set(id, { client, params, createdAt: Date.now() });
+    this.pending.set(id, { client, params, createdAt: Date.now(),
+      requestSecret: randomBytes(32).toString("base64url") });
     savePending(this.pending);
     return id;
   }
@@ -114,8 +115,10 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
     if (origin) {
       const snapshot = () => buildConnectSnapshot(client.client_name);
       watchConnectDecision(origin, pendingId, snapshot, (approve, method) =>
-        this.completeConsent(pendingId, approve, method));
-      void publishConnectRequestRetry(origin, pendingId, snapshot());
+        this.completeConsent(pendingId, approve, method),
+        { requestSecret: this.getPending(pendingId)?.requestSecret });
+      void publishConnectRequestRetry(origin, pendingId, snapshot(), 3,
+        this.getPending(pendingId)?.requestSecret);
     }
   }
 
@@ -127,8 +130,10 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
       const snapshot = () =>
         buildConnectSnapshot(this.getPending(pendingId)?.client.client_name);
       watchConnectDecision(origin, pendingId, snapshot, (approve, method) =>
-        this.completeConsent(pendingId, approve, method));
-      void publishConnectRequestRetry(origin, pendingId, snapshot());
+        this.completeConsent(pendingId, approve, method),
+        { requestSecret: this.getPending(pendingId)?.requestSecret });
+      void publishConnectRequestRetry(origin, pendingId, snapshot(), 3,
+        this.getPending(pendingId)?.requestSecret);
     }
   }
 

@@ -54,6 +54,10 @@ test('native HTTP bridge rejects browser forgery and unauthenticated reads, then
       body: JSON.stringify({ operation, input: { limit: '1' } }),
     });
     assert.equal((await invoke('wrong')).status, 401);
+    assert.equal((await fetch(`${origin}/desktop/account/link`, { method: 'POST',
+      headers: { authorization: 'Bearer wrong', 'content-type': 'application/json' },
+      body: JSON.stringify({ accountToken: 'a'.repeat(43) }),
+    })).status, 401);
     assert.equal((await invoke(access_token, 'provider.secret')).status, 400);
     assert.equal(requests, 0);
     assert.deepEqual(await (await invoke(access_token)).json(), { operation: 'desktop.workspace', input: { limit: '1' } });
