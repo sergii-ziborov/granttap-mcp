@@ -4,11 +4,9 @@ import type { AgentProcessLoad } from "./process-sampler";
 /**
  * What each agent's processes were costing, over a short rolling window.
  *
- * A tool call is read back from a transcript once it has finished, so it can
- * never be measured directly — but the call has a start and an end, and the
- * samples taken between them describe the machine while it ran. Integrating
- * those samples is the only honest answer to "what did this call cost", and it
- * is why the result is reported as attributed rather than measured.
+ * A tool call is read back from a transcript once it has finished. These
+ * machine-wide samples are a fallback for calls whose isolated process tree
+ * was not observed. They are explicitly attributed, never measured.
  *
  * Built-in tools are the reason this exists at all: a Bash call is a child of
  * the agent that lives for seconds, so nothing survives afterwards to inspect.
@@ -28,10 +26,10 @@ export type AgentLoadSample = {
   lanes?: Record<string, number>;
 };
 
-/** Two hours at a thirty-second cadence, so a long session still has a tail. */
+/** Eight minutes at the active two-second cadence. */
 const MAX_SAMPLES = 240;
-/** A window with no sample near it is not described by the ones far from it. */
-const MAX_GAP_MS = 120_000;
+const MAX_EDGE_GAP_MS = 5_000;
+const MAX_SAMPLE_GAP_MS = 10_000;
 
 let samples: AgentLoadSample[] = [];
 
@@ -66,9 +64,13 @@ export function attributedAgentResource(
   const span = endedAt - startedAt;
   if (!Number.isFinite(span) || span <= 0 || span > 30 * 24 * 60 * 60_000) return undefined;
   const covering = samples.filter((sample) =>
-    sample.at >= startedAt - MAX_GAP_MS && sample.at <= endedAt + MAX_GAP_MS
+    sample.at >= startedAt && sample.at <= endedAt
     && sample.byAgent[agent] != null);
   if (covering.length === 0) return undefined;
+  if (covering[0]!.at - startedAt > MAX_EDGE_GAP_MS
+    || endedAt - covering.at(-1)!.at > MAX_EDGE_GAP_MS
+    || covering.some((sample, index) => index > 0
+      && sample.at - covering[index - 1]!.at > MAX_SAMPLE_GAP_MS)) return undefined;
 
   const share = span / covering.length;
   let cpuMs = 0;

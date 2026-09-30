@@ -109,6 +109,7 @@ export function pendingCapabilityObservation(
 
 import { attributedMcpResource } from "../../machine-load/mcp/cache";
 import { attributedAgentResource } from "../../machine-load/host/agent-load-history";
+import { commandProcessResource } from "../../machine-load/command-process/history";
 
 export function observeCapability(
   pending: PendingCapabilityTool,
@@ -132,13 +133,14 @@ export function observeCapability(
       ? estimateBaselineTokens(pending.input, contextTokens, pending.cwd)
       : undefined,
     durationMs: elapsed >= 0 ? Math.min(MAX_DURATION_MS, Math.round(elapsed)) : undefined,
-    // A call cannot be measured after the fact. An MCP server outlives its
-    // calls, so it can be asked directly; a built-in tool does not, so the
-    // samples taken while it ran are what describe it.
+    // Use samples GrantTap took while the call ran. Prefer a uniquely matched
+    // command process tree; otherwise show only a clearly attributed share.
     resource: observation.mcpServer
       ? attributedMcpResource(observation.mcpServer, resultAt, Date.now())
       : agent
-        ? attributedAgentResource(agent, pending.createdAt, resultAt)
+        ? commandProcessResource(agent, pending.sessionId, pending.input,
+            pending.createdAt, resultAt)
+          ?? attributedAgentResource(agent, pending.createdAt, resultAt)
         : undefined,
   };
 }

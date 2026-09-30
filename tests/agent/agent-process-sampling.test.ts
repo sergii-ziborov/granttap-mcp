@@ -7,6 +7,7 @@ import {
   attributeProcesses,
   parsePidListing,
   parsePsOutput,
+  parsePsClock,
   withCommandLines,
 } from "../../apps/bridge/src/machine-load/host/process-sampler";
 
@@ -107,6 +108,16 @@ describe("agent process sampling", () => {
     assert.equal(rows[1]?.ppid, 12);
     assert.deepEqual(rows[2], { pid: 7, cpuPercent: 0.5, rssBytes: 10 * 1024, command: "node old-form" });
     assert.equal(rows.length, 3);
+  });
+
+  it("reads cumulative CPU and elapsed time from a real ps row shape", () => {
+    const rows = parsePsOutput(" 20 10 75.0 2048 0:02.50 0:04.00 /opt/homebrew/bin/npm\n");
+    assert.deepEqual(rows[0], {
+      pid: 20, ppid: 10, cpuPercent: 75, rssBytes: 2048 * 1024,
+      cpuTimeMs: 2_500, elapsedMs: 4_000, command: "/opt/homebrew/bin/npm",
+    });
+    assert.equal(parsePsClock("1-02:03:04.50"), 93_784_500);
+    assert.equal(parsePsClock("invalid"), undefined);
   });
 
   it("an executable path with a space in it is still the agent, and its children still its", () => {

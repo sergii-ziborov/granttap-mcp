@@ -6,6 +6,8 @@ import type {
 import { createDiskUsageSampler, type AgentDiskUsage } from "./host/disk-usage";
 import type { AgentProcessLoad } from "./host/process-sampler";
 import { sampleAgentProcesses } from "./host/process-sampler";
+import { recordAgentLoad } from "./host/agent-load-history";
+import { agentLanes } from "./mcp/refresh";
 import { providerScanCost, type ProviderScanSample } from "./mcp/scan-cost";
 
 export type MonitorSelfLoad = {
@@ -144,6 +146,7 @@ export function createMachineLoadPublisher(dependencies: {
     if (active) return active;
     active = (async () => {
       const processes = await sampleProcesses();
+      recordAgentLoad(processes, now(), agentLanes(status.sessions));
       const disk = sampleDisk(Object.keys(processes));
       const load = buildMachineLoad({ status, processes, self: sampleSelf(), disk });
       if (dependencies.log && (loggedAt === undefined || now() - loggedAt >= LOAD_LOG_INTERVAL_MS)) {

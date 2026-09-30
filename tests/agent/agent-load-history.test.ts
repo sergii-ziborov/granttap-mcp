@@ -44,6 +44,14 @@ test("a call nothing was sampled near reports nothing", (t) => {
   assert.equal(attributedAgentResource("claude", START, START + 1_000), undefined);
 });
 
+test("a nearby sample outside the call is never charged to that call", (t) => {
+  t.after(clearAgentLoad);
+  clearAgentLoad();
+  sample(START - 1_000, 100, 1_000_000);
+  sample(START + 3_000, 100, 1_000_000);
+  assert.equal(attributedAgentResource("claude", START, START + 2_000), undefined);
+});
+
 test("a call with no duration is not costed", (t) => {
   t.after(clearAgentLoad);
   clearAgentLoad();
@@ -71,7 +79,7 @@ test("the history stays bounded so a long session cannot grow without end", (t) 
   for (let index = 0; index < 400; index += 1) sample(START + index * 30_000, 10, 1_000);
   // The oldest samples fall out; the newest still answer for a recent call.
   const late = START + 399 * 30_000;
-  assert.ok(attributedAgentResource("claude", late - 10_000, late) != null);
+  assert.ok(attributedAgentResource("claude", late - 5_000, late) != null);
   assert.equal(attributedAgentResource("claude", START, START + 10_000), undefined);
 });
 

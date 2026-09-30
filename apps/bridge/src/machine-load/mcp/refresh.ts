@@ -2,8 +2,7 @@ import type { SessionInfo } from "../../../../../packages/protocol/schema";
 import { descriptorsForSession } from "../../capabilities/descriptors";
 import { attributeMcpProcesses, type McpServerCommand } from "./process-sampler";
 import { recordMcpLoad } from "./cache";
-import { recordAgentLoad } from "../host/agent-load-history";
-import { attributeProcesses, sampleProcessRows } from "../host/process-sampler";
+import { sampleProcessRows } from "../host/process-sampler";
 
 /** Every stdio server the visible sessions could have launched, deduplicated. */
 export function configuredMcpCommands(sessions: readonly SessionInfo[]): McpServerCommand[] {
@@ -53,9 +52,6 @@ export async function refreshMcpLoad(
 ): Promise<void> {
   try {
     const rows = await sampleProcessRows();
-    // Agents first: a built-in tool has nothing left to inspect once it ends,
-    // so the running sample is the only description its call will ever get.
-    recordAgentLoad(attributeProcesses(rows), now, agentLanes(sessions));
     const servers = configuredMcpCommands(sessions);
     if (servers.length === 0) return;
     recordMcpLoad(attributeMcpProcesses(rows, servers), now);

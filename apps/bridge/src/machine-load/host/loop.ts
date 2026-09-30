@@ -9,7 +9,7 @@ function configuredInterval(name: string, fallback: number): number {
 
 export const ACTIVE_LOAD_INTERVAL_MS = configuredInterval(
   "GRANTTAP_MONITOR_LOAD_ACTIVE_MS",
-  5_000,
+  2_000,
 );
 export const IDLE_LOAD_INTERVAL_MS = configuredInterval(
   "GRANTTAP_MONITOR_LOAD_IDLE_MS",
