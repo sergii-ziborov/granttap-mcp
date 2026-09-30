@@ -28,6 +28,7 @@ export type ConnectSnapshot = {
   clientName: string;
   computerName: string;
   paired: boolean;
+  passkeyCapable?: boolean;
   /** First 8 hex chars of the pairing room. Never the full id. */
   roomPrefix: string;
   phones: ReturnType<typeof listPairedPhones>;
@@ -48,6 +49,7 @@ export function buildConnectSnapshot(clientName?: string): ConnectSnapshot {
     clientName: publicClientName(clientName),
     computerName: hostname(),
     paired,
+    passkeyCapable: true,
     roomPrefix: room ? room.slice(0, 8) : "",
     phones: listPairedPhones(runtime.phoneLastSeenAt),
     providers: inspectAgentIntegrations()
