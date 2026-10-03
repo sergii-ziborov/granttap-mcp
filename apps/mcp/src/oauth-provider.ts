@@ -4,7 +4,7 @@
  * Authorize means: confirm this Mac's GrantTap pairing for a client (issue a
  * bearer token). E2EE keys stay in ~/.granttap — OAuth does not replace pair.
  */
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import type { Response } from "express";
 import {
   InvalidGrantError,
@@ -31,6 +31,7 @@ import {
   watchConnectDecision,
   websiteOrigin,
 } from "./oauth/consent/website-session";
+import type { ConsentMethod } from "./oauth/consent/website-session";
 
 type StoredCode = {
   clientId: string;
@@ -39,6 +40,7 @@ type StoredCode = {
 };
 type CompletedConsent = {
   approve: boolean;
+  method: ConsentMethod;
   redirectUrl: string;
   expiresAt: number;
 };
@@ -58,7 +60,8 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
   createPending(client: OAuthClientInformationFull, params: AuthorizationParams): string {
     this.gcPending();
     const id = randomUUID();
-    this.pending.set(id, { client, params, createdAt: Date.now() });
+    this.pending.set(id, { client, params, createdAt: Date.now(),
+      requestSecret: randomBytes(32).toString("base64url") });
     savePending(this.pending);
     return id;
   }
@@ -111,9 +114,11 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
     res.redirect(302, website.href);
     if (origin) {
       const snapshot = () => buildConnectSnapshot(client.client_name);
-      watchConnectDecision(origin, pendingId, snapshot, (approve) =>
-        this.completeConsent(pendingId, approve));
-      void publishConnectRequestRetry(origin, pendingId, snapshot());
+      watchConnectDecision(origin, pendingId, snapshot, (approve, method) =>
+        this.completeConsent(pendingId, approve, method),
+        { requestSecret: this.getPending(pendingId)?.requestSecret });
+      void publishConnectRequestRetry(origin, pendingId, snapshot(), 3,
+        this.getPending(pendingId)?.requestSecret);
     }
   }
 
@@ -124,16 +129,20 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
     for (const pendingId of this.pending.keys()) {
       const snapshot = () =>
         buildConnectSnapshot(this.getPending(pendingId)?.client.client_name);
-      watchConnectDecision(origin, pendingId, snapshot, (approve) =>
-        this.completeConsent(pendingId, approve));
-      void publishConnectRequestRetry(origin, pendingId, snapshot());
+      watchConnectDecision(origin, pendingId, snapshot, (approve, method) =>
+        this.completeConsent(pendingId, approve, method),
+        { requestSecret: this.getPending(pendingId)?.requestSecret });
+      void publishConnectRequestRetry(origin, pendingId, snapshot(), 3,
+        this.getPending(pendingId)?.requestSecret);
     }
   }
 
   /** Complete consent: issue code and redirect to the requesting MCP client. */
-  completeConsent(pendingId: string, approve: boolean): { redirectUrl: string } {
+  completeConsent(pendingId: string, approve: boolean,
+                  method: ConsentMethod = "phone"): { redirectUrl: string } {
     const remembered = this.completed.get(pendingId);
-    if (remembered && remembered.expiresAt > Date.now() && remembered.approve === approve) {
+    if (remembered && remembered.expiresAt > Date.now()
+        && remembered.approve === approve && remembered.method === method) {
       return { redirectUrl: remembered.redirectUrl };
     }
     const pending = this.getPending(pendingId);
@@ -148,12 +157,13 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
       const redirectUrl = target.toString();
       this.completed.set(pendingId, {
         approve: false,
+        method,
         redirectUrl,
         expiresAt: Date.now() + CODE_TTL_MS,
       });
       return { redirectUrl };
     }
-    if (!isMachineConfigured()) {
+    if (method !== "passkey" && !isMachineConfigured()) {
       throw new Error("GrantTap is not paired on this Mac yet. Scan the QR in GrantTap.");
     }
 
@@ -167,10 +177,11 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
     });
     target.searchParams.set("code", code);
     if (pending.params.state) target.searchParams.set("state", pending.params.state);
-    wakePairingRoomAfterApprove(true);
+    if (isMachineConfigured()) wakePairingRoomAfterApprove(true);
     const redirectUrl = target.toString();
     this.completed.set(pendingId, {
       approve: true,
+      method,
       redirectUrl,
       expiresAt: Date.now() + CODE_TTL_MS,
     });

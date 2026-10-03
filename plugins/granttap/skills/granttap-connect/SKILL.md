@@ -32,7 +32,9 @@ one-time QR under Add a device, Add another device, or Reconnect. The iPhone app
 scans it under Settings → Connections → Add a device (Scan QR). For a second
 controller, the already paired iPhone can show its own QR in Settings. The
 granttap.com/connect page handles coding-app approval and observations; it does
-not generate a QR. All coding apps on this computer share the same pairing room.
+not generate a QR. It also offers a fresh GrantTap account passkey on Mac for
+coding-app MCP authorization, which does not pair a phone. All coding apps on
+this computer share the same pairing room.
 
 For an interactive question, send the same complete prompt to the coding app
 and GrantTap under one exact correlation. The first answer with that

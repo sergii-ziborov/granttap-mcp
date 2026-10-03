@@ -13,7 +13,7 @@ iPhone and Apple Watch.
 Install the durable local GrantTap helper on each Mac or Windows computer you connect:
 
 ```bash
-npm install --global granttap-mcp@0.8.29
+npm install --global granttap-mcp@0.8.32
 granttap setup
 ```
 
@@ -24,8 +24,7 @@ codex plugin marketplace add sergii-ziborov/granttap-mcp
 codex plugin add granttap@granttap
 ```
 
-Codex **Connected accounts** lists external app accounts, not GrantTap phones.
-GrantTap has no separate account sign-in. On the plugin page, click **Try now →
+Codex **Connected accounts** does not list GrantTap phones. On the plugin page, click **Try now →
 Connect GrantTap to this computer** to open its connection card in a conversation.
 On a new computer, the card shows **Add a device** and a one-time QR. In the
 GrantTap iPhone app, open **Settings → Connections → Add a device (Scan QR)**
@@ -37,7 +36,10 @@ interactive terminal, or `granttap phone reconnect` for the same phone. These
 commands refuse to print a private QR into redirected output or agent logs.
 
 `codex mcp login granttap` authorizes Codex as an MCP client. Its browser page
-at `granttap.com/connect` shows the approval request and phone observations;
+at `granttap.com/connect` offers approval through a fresh GrantTap account
+passkey on the Mac, or through the existing phone/QR flow. Passkey approval
+authorizes this coding app to use this Mac's local MCP; it does not pair a phone.
+The page also shows phone observations;
 the connection card shows the pairing QR. The website does not receive pairing
 keys or task content. Provider sign-in remains separate. Never paste a pairing
 token or QR into chat. A Git marketplace plugin does not acquire the native
@@ -58,7 +60,7 @@ status, and confirmed Reconnect controls.
 Install the same local helper first, then install the plugin:
 
 ```bash
-npm install --global granttap-mcp@0.8.29
+npm install --global granttap-mcp@0.8.32
 granttap setup
 claude plugin marketplace add sergii-ziborov/granttap-mcp
 claude plugin install granttap@granttap
@@ -79,7 +81,7 @@ Cloud Agents start that process. They cannot fetch `http://127.0.0.1`.
 ### Grok Build
 
 ```bash
-npm install --global granttap-mcp@0.8.29
+npm install --global granttap-mcp@0.8.32
 granttap setup
 grok plugin marketplace add sergii-ziborov/granttap-mcp
 grok plugin install granttap --trust

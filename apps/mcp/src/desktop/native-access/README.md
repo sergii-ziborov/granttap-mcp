@@ -13,6 +13,9 @@ its device-only Keychain and never shares it with a provider.
 invoke only the existing allowlisted desktop operations; inputs are still
 validated by the private bridge and task/policy layers. It never grants a
 provider broader MCP scope. The installer/runtime remains outside the sandbox.
+`/desktop/account/link` uses the same native grant, verifies the app's fresh
+passkey account session with granttap.com, and stores a revocable machine
+credential locally. It returns only the account and machine identifiers.
 Tests exercise real HTTP and Unix sockets, consent forgery rejection, PKCE,
 one-use codes, expiration, restart and authenticated forwarding.
 

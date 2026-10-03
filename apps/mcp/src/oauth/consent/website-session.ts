@@ -2,18 +2,43 @@
  * The coding-app browser talks only to granttap.com.
  * This helper publishes the public consent snapshot there. A QR scan — a
  * phone marked seen — is the Approve. Deny stays a website action.
- * Pairing keys never leave the computer.
+ * Consent snapshots contain no pairing keys; account recovery sends only a
+ * sealed phone half through a separate short-lived mailbox.
  */
 import { PENDING_TTL_MS } from "./pending";
 import type { ConnectSnapshot } from "../session/connect-snapshot";
+import { loadAccountLink, saveAccountLink } from "../../../../bridge/src/account-recovery/link";
 
-export type ConnectDecision = "approve" | "deny";
+export type ConnectDecision = "approve" | "deny" | "passkey";
+export type ConsentMethod = "phone" | "passkey";
 
 type ConnectRow = ConnectSnapshot & {
   decision?: ConnectDecision;
   redirectUrl?: string;
   error?: string;
+  accountId?: string;
+  machineId?: string;
+  machineToken?: string;
 };
+
+function headers(secret?: string, json = false): Record<string, string> {
+  return { accept: "application/json", ...(json ? { "content-type": "application/json" } : {}),
+    ...(secret ? { authorization: `Bearer ${secret}` } : {}) };
+}
+
+function acceptAccountLink(row: ConnectRow): void {
+  if (row.decision !== "passkey" || !row.accountId || !row.machineId) {
+    throw new Error("Passkey did not link this Mac to an account.");
+  }
+  const existing = loadAccountLink();
+  if (row.machineToken) {
+    if (!saveAccountLink({ accountId: row.accountId, machineId: row.machineId,
+      machineToken: row.machineToken })) throw new Error("Account link could not be saved.");
+  } else if (!existing || existing.accountId !== row.accountId
+      || existing.machineId !== row.machineId) {
+    throw new Error("This account is not linked to this Mac.");
+  }
+}
 
 const watchers = new Map<string, AbortController>();
 
@@ -31,10 +56,11 @@ export async function publishConnectRequest(
   origin: string,
   requestId: string,
   snapshot: ConnectSnapshot,
+  requestSecret?: string,
 ): Promise<void> {
   const response = await fetch(`${origin}/api/connect/requests/${requestId}`, {
     method: "PUT",
-    headers: { "content-type": "application/json", accept: "application/json" },
+    headers: headers(requestSecret, true),
     body: JSON.stringify(snapshot),
     signal: AbortSignal.timeout(4_000),
   });
@@ -49,10 +75,11 @@ export async function publishConnectRequestRetry(
   requestId: string,
   snapshot: ConnectSnapshot,
   attempts = 3,
+  requestSecret?: string,
 ): Promise<boolean> {
   for (let attempt = 0; attempt < attempts; attempt++) {
     try {
-      await publishConnectRequest(origin, requestId, snapshot);
+      await publishConnectRequest(origin, requestId, snapshot, requestSecret);
       return true;
     } catch {
       if (attempt + 1 < attempts) {
@@ -66,9 +93,10 @@ export async function publishConnectRequestRetry(
 export async function readConnectRequest(
   origin: string,
   requestId: string,
+  requestSecret?: string,
 ): Promise<ConnectRow | undefined> {
   const response = await fetch(`${origin}/api/connect/requests/${requestId}`, {
-    headers: { accept: "application/json" },
+    headers: headers(requestSecret),
     signal: AbortSignal.timeout(4_000),
   });
   if (response.status === 404) return undefined;
@@ -98,10 +126,11 @@ export async function publishConnectError(
   origin: string,
   requestId: string,
   error: string,
+  requestSecret?: string,
 ): Promise<void> {
   await fetch(`${origin}/api/connect/requests/${requestId}`, {
     method: "PUT",
-    headers: { "content-type": "application/json", accept: "application/json" },
+    headers: headers(requestSecret, true),
     body: JSON.stringify({ error: error.slice(0, 300) }),
     signal: AbortSignal.timeout(4_000),
   }).catch(() => {});
@@ -111,8 +140,8 @@ export function watchConnectDecision(
   origin: string,
   requestId: string,
   snapshot: ConnectSnapshot | (() => ConnectSnapshot),
-  complete: (approve: boolean) => { redirectUrl: string },
-  options: { pollMs?: number } = {},
+  complete: (approve: boolean, method: ConsentMethod) => { redirectUrl: string },
+  options: { pollMs?: number; requestSecret?: string } = {},
 ): void {
   const current = (): ConnectSnapshot => (typeof snapshot === "function" ? snapshot() : snapshot);
   const pollMs = options.pollMs ?? 3_000;
@@ -125,10 +154,12 @@ export function watchConnectDecision(
     while (!ac.signal.aborted && Date.now() < deadline) {
       try {
         const live = current();
-        const row = await readConnectRequest(origin, requestId);
-        if (row?.decision === "approve" || row?.decision === "deny") {
+        const row = await readConnectRequest(origin, requestId, options.requestSecret);
+        if (row?.decision === "approve" || row?.decision === "deny" || row?.decision === "passkey") {
           try {
-            const { redirectUrl } = complete(row.decision !== "deny");
+            if (row.decision === "passkey") acceptAccountLink(row);
+            const { redirectUrl } = complete(row.decision !== "deny",
+              row.decision === "passkey" ? "passkey" : "phone");
             await publishConnectRedirect(origin, requestId, redirectUrl);
             return;
           } catch (error) {
@@ -136,6 +167,7 @@ export function watchConnectDecision(
               origin,
               requestId,
               error instanceof Error ? error.message : String(error),
+              options.requestSecret,
             );
             // A failed publish used to stop the watcher after deleting the
             // pending id. Approve then sat on "Waiting for this computer".
@@ -143,7 +175,7 @@ export function watchConnectDecision(
         }
         const body = JSON.stringify(live);
         if (!row || body !== lastBody) {
-          await publishConnectRequest(origin, requestId, live);
+          await publishConnectRequest(origin, requestId, live, options.requestSecret);
           lastBody = body;
         }
       } catch {

@@ -16,7 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 # User-owned stack: mcport + blindplane path deps; blazingly-json matches mcport's crates.io pin.
-mcport = { path = "../../../mcport" }
+mcport = { path = "../../../mcport", default-features = false }
 blazingly-json = "0.1.3"
 blindplane-crypto = { path = "../../../blindplane/crates/blindplane-crypto" }
 blindplane-access = { path = "../../../blindplane/crates/blindplane-access" }

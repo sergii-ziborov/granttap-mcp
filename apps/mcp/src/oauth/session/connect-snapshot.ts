@@ -10,6 +10,7 @@ import { isTerminalTaskState } from "../../../../bridge/src/mesh/admin/convergen
 import { localMeshStore } from "../../../../bridge/src/mesh/local-remote/local";
 import { connectionRuntimeStatus } from "../../mcp-tools/connect/relay";
 import { isMachineConfigured, listPairedPhones, readOnlyMachineConfigPath } from "../../status/pairing-status";
+import { loadAccountLink } from "../../../../bridge/src/account-recovery/link";
 
 export type ConnectProvider = {
   id: "codex" | "claude" | "cursor";
@@ -28,6 +29,8 @@ export type ConnectSnapshot = {
   clientName: string;
   computerName: string;
   paired: boolean;
+  passkeyCapable?: boolean;
+  machineId?: string;
   /** First 8 hex chars of the pairing room. Never the full id. */
   roomPrefix: string;
   phones: ReturnType<typeof listPairedPhones>;
@@ -48,6 +51,8 @@ export function buildConnectSnapshot(clientName?: string): ConnectSnapshot {
     clientName: publicClientName(clientName),
     computerName: hostname(),
     paired,
+    passkeyCapable: true,
+    machineId: loadAccountLink()?.machineId,
     roomPrefix: room ? room.slice(0, 8) : "",
     phones: listPairedPhones(runtime.phoneLastSeenAt),
     providers: inspectAgentIntegrations()

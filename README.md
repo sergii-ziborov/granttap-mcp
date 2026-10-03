@@ -52,6 +52,10 @@ private Unix IPC. Mac Settings can configure encrypted address discovery or
 install/start/stop the pinned personal relay. Runtime code remains outside the
 Apple sandbox. Mac purchase terms, optional Personal subscriptions and required
 TLS/VPN reachability are documented in the Apple client repository.
+The local HTTP MCP OAuth flow can be approved with a fresh GrantTap account
+passkey on Mac. This authorizes the selected coding app to use this computer's
+MCP endpoint; it does not pair a phone. Direct QR pairing remains available
+without a GrantTap account.
 The iPhone and iPad app provides the mobile Project controller;
 Apple Watch carries the compact attention and reply flow through iPhone.
 The machine runtime and separately distributed Engine supply Project records,
@@ -505,12 +509,14 @@ is left to a trusted terminal, with the command spelled out in the answer. The
 result — version before and after, the updater's own output — comes back as
 `tool.update.result`.
 
-Cost is reported as attributed rather than measured, because that is what it
-is. A call is read back from the transcript once it has finished, so it can
-never be measured directly: an MCP server outlives its calls and is sampled
-directly, while a built-in tool leaves nothing behind and is costed from the
-samples that fall inside its own start and end. A call with no sample near it
-reports nothing rather than a number borrowed from another moment.
+GrantTap derives usage from native provider transcripts and local OS samples;
+it does not ask an agent to write a resource report. An MCP server can be
+sampled directly while it runs. For a completed CLI call, a unique observed
+process tree yields measured CPU time and peak RSS. If only agent-wide samples
+cover a built-in tool call, GrantTap labels its divided share as attributed.
+Ambiguous, unsampled, and historical calls remain unknown rather than borrowing
+a number from another moment. Estimated context tokens are labeled separately
+from provider-reported model tokens.
 
 ## Local enforcement
 

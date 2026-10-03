@@ -1,4 +1,5 @@
 import { chmod, mkdtemp, rm } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer, type Socket } from "node:net";
@@ -30,6 +31,10 @@ export const DESKTOP_OPERATIONS = new Set([
   "desktop.network_status", "desktop.network_configure", "desktop.own_relay",
 ]);
 
+export function windowsDesktopPipePath(id: string): string {
+  return String.raw`\\.\pipe\granttap-desktop-${id}`;
+}
+
 export function desktopOperationTimeout(operation: unknown, input: unknown): number {
   if (operation === "desktop.mesh_snapshot"
     && (input as { refresh_graph?: unknown } | undefined)?.refresh_graph === "true") return 120_000;
@@ -57,8 +62,10 @@ export async function startDesktopEngineBridge(options: {
   client?: Pick<EngineClient, "request" | "close">;
   onPairingChanged?: () => void;
 } = {}): Promise<{ socketPath: string; close: () => Promise<void> }> {
-  const directory = await mkdtemp(join(tmpdir(), "granttap-desktop-"));
-  const socketPath = join(directory, "engine.sock");
+  const directory = process.platform === "win32" ? null
+    : await mkdtemp(join(tmpdir(), "granttap-desktop-"));
+  const socketPath = directory ? join(directory, "engine.sock")
+    : windowsDesktopPipePath(randomUUID());
   const engine = options.client ?? new EngineClient({
     socketPath: options.engineSocketPath ?? join(configDir(), "engine.sock"),
   });
@@ -121,14 +128,15 @@ export async function startDesktopEngineBridge(options: {
   try {
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject);
-      server.listen(socketPath, () => { server.removeListener("error", reject); resolve(); });
+      server.listen({ path: socketPath, readableAll: false, writableAll: false },
+        () => { server.removeListener("error", reject); resolve(); });
     });
-    await chmod(socketPath, 0o600);
+    if (directory) await chmod(socketPath, 0o600);
   } catch (error) {
     activity.close();
     enrichment.close();
     engine.close();
-    await rm(directory, { recursive: true, force: true });
+    if (directory) await rm(directory, { recursive: true, force: true });
     throw error;
   }
   return {
@@ -140,7 +148,7 @@ export async function startDesktopEngineBridge(options: {
       controllerEnrollment.close();
       await new Promise<void>((resolve) => server.close(() => resolve()));
       engine.close();
-      await rm(directory, { recursive: true, force: true });
+      if (directory) await rm(directory, { recursive: true, force: true });
     },
   };
 }

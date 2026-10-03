@@ -11,12 +11,14 @@ export type PendingAuth = {
   client: OAuthClientInformationFull;
   params: AuthorizationParams;
   createdAt: number;
+  requestSecret?: string;
 };
 
 type StoredPending = {
   client: OAuthClientInformationFull;
   createdAt: number;
   params: Omit<AuthorizationParams, "resource"> & { resource?: string };
+  requestSecret?: string;
 };
 
 function pendingPath(): string {
@@ -34,6 +36,7 @@ export function loadPending(): Map<string, PendingAuth> {
       pending.set(id, {
         client: entry.client,
         createdAt: entry.createdAt,
+        requestSecret: entry.requestSecret,
         params: {
           ...entry.params,
           resource: entry.params.resource ? new URL(entry.params.resource) : undefined,
@@ -54,6 +57,7 @@ export function savePending(pending: Map<string, PendingAuth>): void {
     raw[id] = {
       client: entry.client,
       createdAt: entry.createdAt,
+      requestSecret: entry.requestSecret,
       params: {
         ...entry.params,
         resource: entry.params.resource?.href,
