@@ -509,12 +509,14 @@ is left to a trusted terminal, with the command spelled out in the answer. The
 result — version before and after, the updater's own output — comes back as
 `tool.update.result`.
 
-Cost is reported as attributed rather than measured, because that is what it
-is. A call is read back from the transcript once it has finished, so it can
-never be measured directly: an MCP server outlives its calls and is sampled
-directly, while a built-in tool leaves nothing behind and is costed from the
-samples that fall inside its own start and end. A call with no sample near it
-reports nothing rather than a number borrowed from another moment.
+GrantTap derives usage from native provider transcripts and local OS samples;
+it does not ask an agent to write a resource report. An MCP server can be
+sampled directly while it runs. For a completed CLI call, a unique observed
+process tree yields measured CPU time and peak RSS. If only agent-wide samples
+cover a built-in tool call, GrantTap labels its divided share as attributed.
+Ambiguous, unsampled, and historical calls remain unknown rather than borrowing
+a number from another moment. Estimated context tokens are labeled separately
+from provider-reported model tokens.
 
 ## Local enforcement
 
