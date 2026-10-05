@@ -33,6 +33,7 @@ import {
 import { MachineLoad } from "./messages/machine";
 import { PairingJoin } from "./messages/pairing-join";
 import { ControllerPairOffer, ControllerPairRequest } from "./messages/device/controller-pairing";
+import { AccountMachineLink } from "./messages/device/account-machine-link";
 import { KnowledgeWrite, KnowledgeWriteResult } from "./messages/mesh/knowledge/write";
 import { MeshInvocationPage, MeshInvocationQuery } from "./messages/mesh/invocations";
 import {
@@ -68,6 +69,7 @@ export * from "./messages/interaction";
 export * from "./messages/machine";
 export * from "./messages/pairing-join";
 export * from "./messages/device/controller-pairing";
+export * from "./messages/device/account-machine-link";
 export * from "./messages/mesh/knowledge/write";
 export * from "./messages/mesh";
 export * from "./messages/mesh/invocations";
@@ -157,6 +159,7 @@ export const Payload = z.union([
   PairingJoin,
   ControllerPairRequest,
   ControllerPairOffer,
+  AccountMachineLink,
   KnowledgeWrite,
   KnowledgeWriteResult,
 ]).superRefine((payload, ctx) => {

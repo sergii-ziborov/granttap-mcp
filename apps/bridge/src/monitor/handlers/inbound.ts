@@ -36,6 +36,7 @@ import { publishSessionEvents } from "./catalog";
 import { publishHistoryPage } from "../history/pages";
 import { requestProjectGraphRefresh } from "../graph-refresh";
 import { handleControllerPairRequest, handleInboundKnowledgeWrite } from "../controller-knowledge";
+import { acceptPhoneAccountLink } from "../../account-recovery/phone-link";
 
 export async function handleMonitorMessage(
   client: RelayClient,
@@ -55,8 +56,8 @@ export async function handleMonitorMessage(
     // Codex may start one MCP server per open task. Exactly one instance owns
     // phone routing, so a single phone message can never create duplicate tasks.
     if (!leadership.acquire()) return false;
-    if (payload.type === "controller.pair.request") {
-      return handleControllerPairRequest(client, payload, input.peerPublicKey);
+    if (payload.type === "controller.pair.request" || payload.type === "account.machine.link") {
+      return handleDeviceEnrollment(client, payload, input.peerPublicKey);
     }
     if (payload.type === "provider.hook.trust") {
       return handleHookTrust(client, payload, input.peerPublicKey, publish);
@@ -136,6 +137,19 @@ export async function handleMonitorMessage(
       return handleInboundClaimRelease(client, payload, publish);
     }
     return false;
+}
+
+function handleDeviceEnrollment(
+  client: RelayClient,
+  payload: Extract<Payload, { type: "account.machine.link" | "controller.pair.request" }>,
+  peerPublicKey?: string,
+): Promise<boolean> {
+  if (payload.type === "controller.pair.request") {
+    return handleControllerPairRequest(client, payload, peerPublicKey);
+  }
+  if (!peerPublicKey) return Promise.resolve(false);
+  const origin = process.env.GRANTTAP_WEBSITE_ORIGIN || "https://granttap.com";
+  return acceptPhoneAccountLink(payload, origin).catch(() => false);
 }
 
 async function handleInboundClaimRelease(
