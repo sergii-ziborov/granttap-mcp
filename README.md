@@ -381,19 +381,20 @@ trust.
 
 ## MCP contract
 
-`tools/list` returns exactly five public tools:
+`tools/list` returns exactly six public tools:
 
 | Tool | Contract |
 | --- | --- |
+| `connection_status` | Open the connection card and inspect saved pairing, QR expiry, relay observations, and provider readiness without changing pairing |
 | `connect` | Reuse the existing production pairing or return a one-time QR |
-| `reconnect` | Replace the pairing after explicit confirmation and return a fresh one-time QR |
+| `reconnect` | After explicit confirmation, show a one-time QR to reconnect or add an independent controller device while retaining the current room |
 | `notify` | Send a non-blocking status update of at most 2,000 characters |
 | `ask_yes_no` | Ask a yes/no question and wait for the explicit answer |
 | `ask` | Ask an open question and wait for typed or spoken text |
 
 MCP `connect` accepts no custom routing, replacement, or key-rotation input.
-`reconnect` is declared destructive and requires `confirmed: true`; relay
-acceptance happens before the working local pairing is replaced.
+`reconnect` is declared destructive and requires `confirmed: true`; the
+existing pairing remains usable during a new enrollment attempt.
 Setup is CLI-only because it changes provider configuration and must not be
 available to a model through prompt injection.
 
