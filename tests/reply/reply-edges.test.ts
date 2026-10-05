@@ -142,6 +142,15 @@ test("process delivery reports spawn, exit, parse, and timeout failures", async 
   assert.equal((await runProcess(slow, [], root, 20, () => ({ ok: true, text: "x" }))).ok, false);
 });
 
+test("a fast-exiting provider does not crash delivery when its stdin pipe closes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-process-stdin-"));
+  const fast = await script(root, "fast.mjs",
+    "process.stdin.destroy(); process.stdout.write('accepted');");
+  const result = await runProcess(fast, [], root, 15_000,
+    (output) => ({ ok: true, text: output }), "prompt".repeat(200_000));
+  assert.deepEqual(result, { ok: true, text: "accepted" });
+});
+
 test("a new Task process is tracked by operation before a native session exists", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "granttap-new-task-stop-"));
   const binary = await script(root, "codex.mjs", "setTimeout(() => {}, 20_000);");

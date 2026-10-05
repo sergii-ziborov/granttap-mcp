@@ -93,7 +93,6 @@ export function runProcess(
       return;
     }
     const untrack = key ? track(key, child) : () => {};
-    if (stdin != null) child.stdin?.end(stdin);
     let stdout = "";
     let stderr = "";
     let done = false;
@@ -134,5 +133,13 @@ export function runProcess(
         }` });
       }
     });
+    if (stdin != null) {
+      child.stdin?.on("error", (error: NodeJS.ErrnoException) => {
+        // A CLI can finish with a valid result before it reads the whole prompt.
+        // Its closed pipe must not become an uncaught exception in the bridge.
+        if (error.code !== "EPIPE") finish({ ok: false, error: `${command}: ${error.message}` });
+      });
+      child.stdin?.end(stdin);
+    }
   });
 }
