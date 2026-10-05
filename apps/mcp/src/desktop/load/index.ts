@@ -1,4 +1,4 @@
-import { hostname } from "node:os";
+import { computerDisplayName } from "../../../../../packages/core/computer-name";
 import {
   sampleAgentProcesses, type AgentProcessLoad,
 } from "../../../../bridge/src/machine-load/host/process-sampler";
@@ -12,7 +12,7 @@ export async function desktopMachineLoad(
   return {
     operation: "desktop.machine_load" as const,
     source: "process_sample" as const,
-    computer: hostname(),
+    computer: computerDisplayName(),
     observed_at: now(),
     agents: Object.entries(processes)
       .filter(([agent]) => agent.length > 0)

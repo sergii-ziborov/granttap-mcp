@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { createPairing } from "../../apps/bridge/src/config";
-import { recordPhoneSeen } from "../../apps/bridge/src/pairing/presence";
+import { recordControllerName, recordPhoneSeen } from "../../apps/bridge/src/pairing/presence";
 import { rememberPendingController } from "../../apps/bridge/src/pairing/controllers";
 import { listPairedPhones, phoneReachability } from "../../apps/mcp/src/status/pairing-status";
 import { RelayClient } from "../../packages/core/relay-client";
@@ -57,6 +57,12 @@ test("controller activity identifies the exact phone without marking its peer li
   assert.equal(phoneReachability(phones), "live");
   recordPhoneSeen(now, machineCfg.peerPublicKey);
   assert.deepEqual(listPairedPhones(null, now).map((phone) => phone.status), ["seen", "seen"]);
+  assert.equal(recordControllerName(machineCfg.peerPublicKey, "  Sergii’s iPhone  "), true);
+  assert.equal(recordControllerName(second, "Travel iPad"), true);
+  assert.equal(recordControllerName(second, "bad\nname"), false);
+  assert.equal(recordControllerName(second, "phone"), false);
+  assert.deepEqual(listPairedPhones(null, now).map((phone) => phone.name),
+    ["Sergii’s iPhone", "Travel iPad"]);
 });
 
 test("corrupt pairing data is reported as unconfigured", (t) => {

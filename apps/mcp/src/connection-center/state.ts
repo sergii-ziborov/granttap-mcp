@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { hostname } from "node:os";
+import { computerDisplayName } from "../../../../packages/core/computer-name";
 import { loadConfig } from "../../../bridge/src/config";
 import { isMachineConfigured, listPairedPhones, readOnlyMachineConfigPath } from "../status/pairing-status";
 import { inspectProviderStatusSnapshot } from "../status/provider-status";
@@ -68,7 +68,7 @@ export class ConnectionState {
     return {
       structuredContent: {
         status,
-        computer: hostname(),
+        computer: computerDisplayName(),
         version: packageVersion(),
         relay: config ? new URL(config.relayUrl).host : "",
         relayStatus: runtime.relayStatus,

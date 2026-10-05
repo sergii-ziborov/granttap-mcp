@@ -2,9 +2,11 @@
 
 ![GrantTap](assets/logo.png)
 
-GrantTap pairs local coding agents with one encrypted machine connection so you
-can approve requests, answer questions, inspect work, and steer tasks from
-iPhone and Apple Watch.
+GrantTap links local coding agents to an Account Mesh that can hold many
+computers and Project Meshes. Each Task uses its selected computer route while
+you approve requests, answer questions, inspect work, and steer tasks from
+iPhone, iPad, Mac, or Apple Watch. An account can exist before any computer is
+connected.
 
 ## Install from the GrantTap marketplace
 
@@ -13,7 +15,7 @@ iPhone and Apple Watch.
 Install the durable local GrantTap helper on each Mac or Windows computer you connect:
 
 ```bash
-npm install --global granttap-mcp@0.8.35
+npm install --global granttap-mcp@0.8.36
 granttap setup
 ```
 
@@ -27,13 +29,14 @@ codex plugin add granttap@granttap
 Codex **Connected accounts** does not list GrantTap phones. On the plugin page, click **Try now →
 Connect GrantTap to this computer** to open its connection card in a conversation.
 On a new computer, the card shows **Add a device** and a one-time QR. In the
-GrantTap iPhone app, open **Settings → Connections → Add a device (Scan QR)**
-and scan it. For another iPhone or iPad, choose **Add another device** in the
+GrantTap iPhone app, open **Devices → Add a device → Scan QR** and scan it.
+For another iPhone or iPad, choose **Add another device** in the
 card; for the same phone after reinstall, choose **Reconnect**. Use **Connect
 with passkey** on the card to link this Mac to the same GrantTap account as
-your signed-in iPhone. The passkey check happens on granttap.com and keeps the
-existing QR room unchanged. A saved computer pairing does not automatically
-put a phone in Codex's account list.
+your signed-in iPhone or Mac app. The passkey check happens on granttap.com and
+keeps the existing QR room unchanged. Repeating it reuses the Mac's machine
+identity and updates its user-assigned display name. A saved computer pairing
+does not automatically put a phone in Codex's account list.
 If a coding app cannot operate the card, run `granttap phone add` in your own
 interactive terminal, or `granttap phone reconnect` for the same phone. These
 commands refuse to print a private QR into redirected output or agent logs.
@@ -63,7 +66,7 @@ status, and confirmed Reconnect controls.
 Install the same local helper first, then install the plugin:
 
 ```bash
-npm install --global granttap-mcp@0.8.35
+npm install --global granttap-mcp@0.8.36
 granttap setup
 claude plugin marketplace add sergii-ziborov/granttap-mcp
 claude plugin install granttap@granttap
@@ -84,7 +87,7 @@ Cloud Agents start that process. They cannot fetch `http://127.0.0.1`.
 ### Grok Build
 
 ```bash
-npm install --global granttap-mcp@0.8.35
+npm install --global granttap-mcp@0.8.36
 granttap setup
 grok plugin marketplace add sergii-ziborov/granttap-mcp
 grok plugin install granttap --trust

@@ -1,5 +1,5 @@
 import { refreshCodexHooks } from "../../codex-hook-trust";
-import { hostname } from "node:os";
+import { computerDisplayName } from "../../../../../packages/core/computer-name";
 import { RelayClient } from "../../../../../packages/core/relay-client";
 import type { Payload, SessionInfo, SessionsStatus } from "../../../../../packages/protocol/schema";
 import { loadRuntimeConfig } from "../../config";
@@ -18,6 +18,7 @@ import { deriveObservedClaims } from "../../mesh/observed/claims";
 import { ingestRuntimeInvocations } from "../../engine/invocation/ingest";
 import { HEARTBEAT_INTERVAL_MS, publishHeartbeat } from "./heartbeat";
 import { confirmPendingController } from "../../pairing/controllers";
+import { recordControllerName } from "../../pairing/presence";
 import { startPublishLoop } from "./publish-loop";
 import { singleFlightPublisher } from "./single-flight";
 import { createMachineLoadPublisher } from "../../machine-load";
@@ -81,7 +82,7 @@ function monitorSnapshot(input: {
   const runtime = loadRuntimeConfig();
   return {
     type: "sessions.status",
-    machine: hostname(),
+    machine: computerDisplayName(),
     sessions: decorateSessions(sessions, subscriptions),
     history: includeHistory
       ? decorateSessions(boundedCatalogHistory(history(forceHistory), subscriptions), subscriptions)
@@ -218,6 +219,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
   const off = client.onMessage(async (payload: Payload, peerPublicKey) => {
     if (payload.type === "hello" && payload.role === "phone") {
       confirmPendingController(client.room, peerPublicKey);
+      recordControllerName(peerPublicKey, payload.deviceName);
     }
     return handleMonitorMessage(client, payload, { leadership, subscriptions, publish, peerPublicKey });
   });

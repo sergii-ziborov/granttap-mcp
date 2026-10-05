@@ -1,4 +1,4 @@
-import { hostname } from "node:os";
+import { computerDisplayName } from "../../../../../packages/core/computer-name";
 import { loadConfig } from "../../../../bridge/src/config";
 import { reloadPairingHelper } from "../../../../bridge/src/install";
 import { createOneTimePairing, DEFAULT_RELAY, PAIRING_CODE_TTL_MINUTES } from "../../../../bridge/src/pairing";
@@ -37,7 +37,7 @@ export class DesktopControllerEnrollment {
 
   snapshot(now = Date.now()): DesktopControllerCode {
     const result: DesktopControllerCode = {
-      operation: "desktop.controller_enrollment", status: "idle", computer: hostname(),
+      operation: "desktop.controller_enrollment", status: "idle", computer: computerDisplayName(),
     };
     if (!this.pending) return result;
     if (!isMachineConfigured()) { this.pending = null; return result; }
@@ -77,7 +77,8 @@ export class DesktopControllerEnrollment {
       this.onPairingChanged();
       return this.snapshot();
     } catch {
-      return { operation: "desktop.controller_enrollment", status: "unavailable", computer: hostname() };
+      return { operation: "desktop.controller_enrollment", status: "unavailable",
+        computer: computerDisplayName() };
     }
   }
 }

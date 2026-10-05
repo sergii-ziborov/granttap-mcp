@@ -62,6 +62,7 @@ test("only an encrypted phone message confirms activity; relay online is distinc
   await relay();
   assert.equal(state.snapshot().structuredContent.relayStatus, "online");
   const desktop = desktopStatusSnapshot();
+  assert.equal(desktop.accountLinkSaved, false);
   assert.equal(desktop.relayStatus, "online");
   assert.equal(desktop.relayHost, new URL(server.url).host);
   assert.equal("roomPrefix" in desktop, false);

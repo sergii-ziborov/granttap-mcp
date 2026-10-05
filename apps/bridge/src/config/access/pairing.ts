@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { hostname } from "node:os";
+import { computerDisplayName } from "../../../../../packages/core/computer-name";
 import { generateKeyPair, randomId } from "../../../../../packages/core/crypto";
 import type { PeerConfig } from "../../../../../packages/core/relay-client";
 import { configDir } from "../runtime/paths";
@@ -129,7 +129,7 @@ export function createPairing(relayUrl: string): {
     relayUrl,
     room,
     role: "machine",
-    deviceName: hostname(),
+    deviceName: computerDisplayName(),
     senderId: randomId(4),
     myPublicKey: machine.publicKey,
     mySecretKey: machine.secretKey,

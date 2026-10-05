@@ -1,4 +1,4 @@
-import { hostname } from "node:os";
+import { computerDisplayName } from "../../../../../packages/core/computer-name";
 import type { RelayClient } from "../../../../../packages/core/relay-client";
 
 /**
@@ -20,7 +20,7 @@ export const HEARTBEAT_INTERVAL_MS = Number(
  */
 export async function publishHeartbeat(client: RelayClient): Promise<void> {
   await client.send(
-    { type: "machine.heartbeat", machine: hostname(), createdAt: Date.now() },
+    { type: "machine.heartbeat", machine: computerDisplayName(), createdAt: Date.now() },
     "phone",
     { ttlMs: HEARTBEAT_INTERVAL_MS * 3, reliable: false },
   );
@@ -38,7 +38,7 @@ export const HELD_HEARTBEAT_TTL_MS = 60_000;
 
 export async function publishHeldHeartbeat(client: RelayClient): Promise<void> {
   await client.send(
-    { type: "machine.heartbeat", machine: hostname(), createdAt: Date.now() },
+    { type: "machine.heartbeat", machine: computerDisplayName(), createdAt: Date.now() },
     "phone",
     { ttlMs: HELD_HEARTBEAT_TTL_MS, reliable: true },
   );

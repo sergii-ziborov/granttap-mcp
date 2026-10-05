@@ -3,7 +3,8 @@ import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { loadConfig } from "../../../bridge/src/config";
-import { hasControllerPresence, readControllerLastSeenAt, readPhoneLastSeenAt } from "../../../bridge/src/pairing/presence";
+import { hasControllerPresence, readControllerLastSeenAt, readControllerName,
+  readPhoneLastSeenAt } from "../../../bridge/src/pairing/presence";
 import { controllerPeerGate } from "../../../bridge/src/pairing/controllers";
 
 export type PairedPhone = {
@@ -59,14 +60,15 @@ export function listPairedPhones(phoneLastSeenAt: number | null = null, now = Da
     value != null && (best == null || value > best) ? value : best
   ), null);
   const seen = lastSeenAt != null && now - lastSeenAt < 60_000;
-  const primary: PairedPhone = { name, status: seen ? "seen" : "paired", lastSeenAt };
+  const primary: PairedPhone = { name: readControllerName(machine.peerPublicKey) ?? name,
+    status: seen ? "seen" : "paired", lastSeenAt };
   const allowed = controllerPeerGate(machine);
   const additional = (machine.extraPeerPublicKeys ?? [])
     .filter((key) => key && key !== machine.peerPublicKey && allowed(key))
     .map((key, index): PairedPhone => {
       const at = readControllerLastSeenAt(key);
       const suffix = createHash("sha256").update(key).digest("hex").slice(0, 6);
-      return { name: `Controller ${index + 2} · ${suffix}`,
+      return { name: readControllerName(key) ?? `Controller ${index + 2} · ${suffix}`,
         status: at != null && now - at < 60_000 ? "seen" : "paired", lastSeenAt: at };
     });
   return [primary, ...additional];

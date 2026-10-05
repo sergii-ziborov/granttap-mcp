@@ -16,20 +16,33 @@ test("Mac app passkey session links the local MCP as one revocable machine", asy
   const token = "A".repeat(43);
   const machineToken = "B".repeat(43);
   let registrations = 0;
+  let renames = 0;
   const fakeFetch: typeof fetch = async (input, init) => {
-    assert.equal((init?.headers as Record<string, string>).authorization, `Bearer ${token}`);
+    const path = String(input);
+    const authorization = (init?.headers as Record<string, string>).authorization;
+    assert.equal(authorization, `Bearer ${path.endsWith("machine/identity") || path.endsWith("machine/self")
+      ? machineToken : token}`);
     if (String(input).endsWith("/api/account/me")) return Response.json({ accountId });
-    if (init?.method !== "POST") return Response.json({ machines: [{ id: machineId }] });
+    if (path.endsWith("machine/identity")) return Response.json({ accountId, machineId });
+    if (path.endsWith("machine/self")) {
+      renames++;
+      assert.equal(init?.method, "PATCH");
+      assert.deepEqual(JSON.parse(String(init?.body)), { name: "Serhii’s MacBook Pro" });
+      return Response.json({ renamed: true });
+    }
     registrations++;
     assert.ok(String(input).endsWith("/api/account/machines"));
+    assert.deepEqual(JSON.parse(String(init?.body)), { name: "Serhii’s MacBook Pro" });
     return Response.json({ id: machineId, machineToken, name: "Mac" });
   };
-  assert.deepEqual(await enrollMacAccount(token, "https://granttap.com", fakeFetch),
+  const name = () => "Serhii’s MacBook Pro";
+  assert.deepEqual(await enrollMacAccount(token, "https://granttap.com", fakeFetch, name),
     { accountId, machineId });
   assert.deepEqual(loadAccountLink(), { accountId, machineId, machineToken });
-  assert.deepEqual(await enrollMacAccount(token, "https://granttap.com", fakeFetch),
+  assert.deepEqual(await enrollMacAccount(token, "https://granttap.com", fakeFetch, name),
     { accountId, machineId });
   assert.equal(registrations, 1);
+  assert.equal(renames, 1);
 });
 
 test("signing in again can relink a Mac whose account access was revoked", async t => {
@@ -44,7 +57,9 @@ test("signing in again can relink a Mac whose account access was revoked", async
   let revoked = false;
   const fakeFetch: typeof fetch = async (input, init) => {
     if (String(input).endsWith("/api/account/me")) return Response.json({ accountId });
-    if (init?.method !== "POST") return Response.json({ machines: revoked ? [] : [{ id: oldId }] });
+    if (String(input).endsWith("/api/account/machine/identity")) {
+      return revoked ? new Response(null, { status: 401 }) : Response.json({ accountId, machineId: oldId });
+    }
     if (!registered) { registered = true; return Response.json({ id: oldId, machineToken: "B".repeat(43) }); }
     return Response.json({ id: newId, machineToken: "C".repeat(43) });
   };

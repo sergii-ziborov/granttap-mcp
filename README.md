@@ -25,6 +25,28 @@ products or source. Their licenses do not change this repository's MIT grant.
 [Security model](SECURITY.md) ·
 [Relay source](https://github.com/sergii-ziborov/granttap-relay)
 
+## Account Mesh and devices
+
+The passkey Account Mesh is the person's relay space. It exists with zero
+computers and can contain many computers and Project Meshes. Create or join it
+from **Devices** in the iPhone, iPad, or Mac app, then use the same passkey in
+the MCP connection card to attach this computer. A previously linked computer
+reuses its machine identity; reconnecting does not create a duplicate. The
+local helper reports the Mac's user-assigned Computer Name and updates its
+account display name when that name changes. Device names are display labels,
+not routing keys: each Task keeps the computer route selected by its Mesh.
+
+Install the local helper separately from the Mac App Store app:
+
+```bash
+npm install -g granttap-mcp
+granttap setup
+```
+
+The Mac app can join the Account Mesh before the helper is present and links it
+when the installed helper becomes available. A one-time QR still provides direct
+device pairing without a passkey account.
+
 ## Mac, iPhone, iPad, and Apple Watch
 
 <p align="center">

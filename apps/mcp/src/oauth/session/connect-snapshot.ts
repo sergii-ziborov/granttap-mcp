@@ -2,7 +2,7 @@ import { codexHooksReady } from "../../../../bridge/src/codex-hook-trust";
 /**
  * Public consent snapshot for granttap.com. No pairing keys, tokens, or codes.
  */
-import { hostname } from "node:os";
+import { computerDisplayName } from "../../../../../packages/core/computer-name";
 import { inspectAgentIntegrations } from "../../../../bridge/src/install";
 import { loadConfig } from "../../../../bridge/src/config";
 import { computerId } from "../../../../bridge/src/mesh/identity/computer";
@@ -49,7 +49,7 @@ export function buildConnectSnapshot(clientName?: string): ConnectSnapshot {
   const runtime = connectionRuntimeStatus(room || undefined);
   return {
     clientName: publicClientName(clientName),
-    computerName: hostname(),
+    computerName: computerDisplayName(),
     paired,
     passkeyCapable: true,
     machineId: loadAccountLink()?.machineId,
@@ -70,7 +70,7 @@ export function buildConnectSnapshot(clientName?: string): ConnectSnapshot {
 
 /** Computers and open tasks only. No transcripts, keys, or room ids. */
 export function publicMeshSummary(): ConnectMesh {
-  const thisComputer = hostname().trim().slice(0, 80) || "This Mac";
+  const thisComputer = computerDisplayName();
   try {
     const store = localMeshStore();
     const names = new Set<string>([thisComputer, computerId().slice(0, 80)]);

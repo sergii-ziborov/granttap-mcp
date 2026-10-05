@@ -1,10 +1,12 @@
 import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { configDir } from "../config/runtime/paths";
+import { writePrivateFile } from "../config/access/write-private";
 
 type PresenceState = {
   phoneLastSeenAt?: number;
   controllers?: Record<string, number>;
+  names?: Record<string, string>;
 };
 
 function presencePath(): string {
@@ -29,6 +31,25 @@ export function readPhoneLastSeenAt(): number | null {
 export function readControllerLastSeenAt(peerPublicKey: string): number | null {
   const at = readPresence().controllers?.[peerPublicKey];
   return typeof at === "number" && Number.isFinite(at) ? at : null;
+}
+
+export function readControllerName(peerPublicKey: string): string | null {
+  const name = readPresence().names?.[peerPublicKey];
+  return typeof name === "string" && name.length > 0 && name.length <= 80
+    && !/^(phone|machine|iphone|ipad)$/i.test(name) ? name : null;
+}
+
+/** A controller chooses its own visible label; never infer it from a pairing role. */
+export function recordControllerName(peerPublicKey: string, value: string): boolean {
+  const name = value.trim();
+  if (!/^[A-Za-z0-9+/]{43}=$/.test(peerPublicKey)
+    || !name || name.length > 80 || /[\x00-\x1f\x7f]/.test(name)
+    || /^(phone|machine|iphone|ipad)$/i.test(name)) return false;
+  const previous = readPresence();
+  const names = { ...previous.names, [peerPublicKey]: name };
+  const bounded = Object.fromEntries(Object.entries(names).slice(-32));
+  writePrivateFile(presencePath(), JSON.stringify({ ...previous, names: bounded }));
+  return true;
 }
 
 export function hasControllerPresence(): boolean {

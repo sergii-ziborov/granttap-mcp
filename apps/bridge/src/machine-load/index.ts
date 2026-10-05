@@ -1,4 +1,4 @@
-import { hostname } from "node:os";
+import { computerDisplayName } from "../../../../packages/core/computer-name";
 import type {
   MachineLoad,
   SessionsStatus,
@@ -78,7 +78,7 @@ export function buildMachineLoad(input: {
   ]);
   return {
     type: "machine.load",
-    machine: input.machine ?? hostname(),
+    machine: input.machine ?? computerDisplayName(),
     monitorCpuPercent: input.self.cpuPercent,
     monitorMemoryBytes: input.self.memoryBytes,
     agents: [...agents]
