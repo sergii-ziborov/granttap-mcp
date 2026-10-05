@@ -4,16 +4,18 @@
 [![CI](https://github.com/sergii-ziborov/granttap-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/sergii-ziborov/granttap-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-GrantTap is a distributed Project control system for local coding agents.
+> **See what your coding agents are doing. Step in when they need you.**
 
-> See what your coding agents are doing. Step in when they need you.
+GrantTap connects local Claude Code and Codex work to a live control center on
+Mac, iPhone, iPad, and Apple Watch. See the Task and its latest activity, answer
+an approval or question with context, and continue the same goal as sessions or
+computers change. Cursor and Grok Build join the view where their local
+integrations support it.
 
-This repository is the canonical machine runtime: CLI, MCP server, provider
-hooks, local adapters, and TypeScript wire schemas. It connects the Mac,
-iPhone, iPad, and Apple Watch product surfaces to local agents, Project Mesh,
-Governance, auto-accept, and Engine-backed evidence. Agents and provider
-credentials stay on your computer. Native controller traffic is end-to-end
-encrypted.
+This repository supplies the local runtime: CLI, MCP server, provider hooks,
+adapters, and wire contracts. It powers Project Mesh, Governance, and observed
+usage while agents and provider credentials stay on your computer. Controller
+traffic is end-to-end encrypted.
 
 The MCP runtime, plugins, and CLI are open source under the MIT License.
 The Apple apps, Engine, relay, and website are separately licensed commercial
@@ -36,11 +38,13 @@ products or source. Their licenses do not change this repository's MIT grant.
   <img src="docs/images/apple-watch-approval.png" width="180" alt="GrantTap approval on Apple Watch">
 </p>
 
+<p align="center"><em>GrantTap iPhone and Apple Watch screens with deterministic sample work; no private user tasks are shown.</em></p>
+
 ## Supported providers
 
-- Primary: Claude Code and Codex.
-- Beta: Cursor.
-- Experimental where available: Grok Build.
+- Claude Code and Codex: primary local control and continuation paths.
+- Cursor: Task visibility and supported local controls, with narrower coverage.
+- Grok Build: observable work where the installed runtime exposes it.
 
 GrantTap reports the depth each provider actually exposes. Visibility does not
 imply deterministic remote blocking or full mobile continuation.
@@ -147,7 +151,7 @@ computers. GrantTap builds a bounded Task Capsule from explicit task/git facts,
 requires local phone authorization, creates a separate target branch/worktree,
 starts the target execution, and returns a receipt bound to the exact capsule.
 Cursor uses the same provider-neutral schema and trusted caller attribution.
-Grok Build remains Experimental and observable where available, but does not
+Grok Build remains observable where available, but does not
 yet expose a trusted caller hook, so agent-authored scoped Mesh events are not
 offered for it. Unsupported remote-start paths fail closed instead of claiming
 parity.
