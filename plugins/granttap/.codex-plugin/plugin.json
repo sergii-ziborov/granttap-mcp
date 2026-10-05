@@ -1,6 +1,6 @@
 {
   "name": "granttap",
-  "version": "0.1.13+codex.20261003102150",
+  "version": "0.1.13+codex.20261005065244",
   "description": "Pair local coding agents with GrantTap and approve, answer, or steer their work from iPhone and Apple Watch.",
   "author": {
     "name": "GrantTap",
@@ -22,7 +22,7 @@
   "interface": {
     "displayName": "GrantTap",
     "shortDescription": "Connect GrantTap by QR or Mac passkey",
-    "longDescription": "Try now / Connect GrantTap opens the connection card. Add a device, Add another device, or Reconnect shows a one-time QR for GrantTap on iPhone or iPad; QR pairing needs no account. Authenticate opens granttap.com/connect, where a fresh GrantTap account passkey on Mac can also authorize this local MCP client. Passkey authorization does not pair a phone. Pairing stays out of chat.",
+    "longDescription": "Try now / Connect GrantTap opens the connection card. Add a device, Add another device, or Reconnect shows a one-time QR for GrantTap on iPhone or iPad; QR pairing needs no account. A passkey on the phone can add existing QR-linked computers to one account for recovery without changing chat or Mesh routing. Authenticate opens granttap.com/connect to authorize this local MCP client. Pairing stays out of chat.",
     "developerName": "GrantTap",
     "category": "Developer Tools",
     "capabilities": [
