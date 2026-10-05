@@ -82,6 +82,24 @@ test("widget initializes, checks status, and requires explicit reconnect confirm
   assert.equal((ui.calls.at(-1)?.arguments as { mode: string }).mode, "reconnect");
 });
 
+test("passkey action opens a fresh account-link request and shows the saved link separately from QR pairing", async (t) => {
+  const ui = await fixture(t);
+  ui.set({ status: "paired", accountLinkSaved: false, phones: [], providers: [] },
+    { passkeyUrl: "https://granttap.com/connect#request=11111111-1111-4111-8111-111111111111" });
+  ui.button("passkey").click();
+  await ui.settle();
+  assert.equal(ui.calls.at(-1)?.name, "connect_with_passkey");
+  assert.equal(ui.el("passkey-link").getAttribute("href"),
+    "https://granttap.com/connect#request=11111111-1111-4111-8111-111111111111");
+  assert.equal(ui.el("passkey-link").classList.contains("hidden"), false);
+  assert.match(ui.el("account-status").textContent || "", /No account linked/);
+  ui.set({ status: "paired", accountLinkSaved: true, phones: [], providers: [] });
+  ui.button("refresh").click();
+  await ui.settle();
+  assert.match(ui.el("account-status").textContent || "", /Saved account link/);
+  assert.equal(ui.el("passkey-link").classList.contains("hidden"), true);
+});
+
 test("widget clears secrets when paired or expired and ignores foreign messages", async (t) => {
   const ui = await fixture(t);
   const pairing = { status: "pairing", expiresAt: Date.now() + 60000, providers: [] };

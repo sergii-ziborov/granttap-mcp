@@ -21,6 +21,16 @@ function render(value) {
   current = state;
   clearCode();
   const meta = result._meta?.granttap ?? {};
+  const passkeyUrl = typeof meta.passkeyUrl === "string" && /^https:\/\/granttap\.com\/connect#request=[0-9a-f-]{36}$/i.test(meta.passkeyUrl)
+    ? meta.passkeyUrl : "";
+  $("passkey-link").classList.toggle("hidden", !passkeyUrl || state.accountLinkSaved === true);
+  if (passkeyUrl) $("passkey-link").setAttribute("href", passkeyUrl);
+  else $("passkey-link").removeAttribute("href");
+  $("account-status").textContent = state.accountLinkSaved === true
+    ? "Saved account link on this Mac. Current server access is checked when it is used."
+    : "No account linked on this Mac. A passkey can link it without changing the QR pairing.";
+  $("passkey").textContent = state.accountLinkSaved === true
+    ? "Reauthorize with passkey" : "Connect with passkey";
   const labels = {
     disconnected: ["Not paired", "Add a device", "Tap Add a device. Scan the QR in GrantTap on iPhone, iPad, or Android."],
     pairing: ["Waiting for a device", "Scan this QR", "Keep this card open. The QR is only here — not in chat."],
@@ -91,6 +101,7 @@ $("connect").addEventListener("click", () => {
   call("connect");
 });
 $("refresh").addEventListener("click", () => call("connection_status"));
+$("passkey").addEventListener("click", () => call("connect_with_passkey"));
 $("reconnect").addEventListener("click", () => {
   pendingMode = "reconnect";
   $("confirm-copy").textContent = "Reconnect shows a new QR for the existing controller device in this room.";

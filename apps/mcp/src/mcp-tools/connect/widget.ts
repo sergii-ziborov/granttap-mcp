@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-export const CONNECTION_WIDGET_URI = "ui://granttap/connection/v3.html";
+export const CONNECTION_WIDGET_URI = "ui://granttap/connection/v4.html";
 
 import { readFileSync } from "node:fs";
 
@@ -13,7 +13,7 @@ export function registerConnectionWidget(server: McpServer): void {
     CONNECTION_WIDGET_URI,
     {
       title: "GrantTap connection center",
-      description: "GrantTap card: devices in this pairing room, Add a device, and the QR on this card only.",
+      description: "GrantTap card: QR device pairing, Mac account passkey linking, and connection status.",
       mimeType: "text/html;profile=mcp-app",
     },
     async (uri) => ({
@@ -23,7 +23,7 @@ export function registerConnectionWidget(server: McpServer): void {
         text: html,
         _meta: {
           ui: { prefersBorder: true, permissions: { clipboardWrite: {} }, csp: { connectDomains: [], resourceDomains: [] } },
-          "openai/widgetDescription": "List devices in this pairing room and add one with a QR that stays on this card.",
+          "openai/widgetDescription": "Pair a device by QR or link this Mac to your account with passkey.",
           "openai/widgetPrefersBorder": true,
         },
       }],

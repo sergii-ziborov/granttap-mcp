@@ -36,6 +36,11 @@ not generate a QR. It also offers a fresh GrantTap account passkey on Mac for
 coding-app MCP authorization, which does not pair a phone. All coding apps on
 this computer share the same pairing room.
 
+To link this Mac to the same account as the signed-in phone, use **Connect with
+passkey** in the connection card. It opens a one-time granttap.com passkey
+request and saves the verified Mac account link locally. QR pairing and Mesh
+routing stay separate. Never ask for or display the passkey itself.
+
 For an interactive question, send the same complete prompt to the coding app
 and GrantTap under one exact correlation. The first answer with that
 correlation wins.

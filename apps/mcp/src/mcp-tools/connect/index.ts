@@ -7,6 +7,7 @@ import { isMachineConfigured } from "../../status/pairing-status";
 import { ConnectionState, connectionOutput } from "../../connection-center/state";
 import { CONNECTION_WIDGET_URI } from "./widget";
 import { resetRelay, relay } from "./relay";
+import { startPasskeyAccountLink } from "../../connection-center/passkey";
 
 const widgetMeta = {
   ui: { resourceUri: CONNECTION_WIDGET_URI, visibility: ["model", "app"] },
@@ -39,6 +40,24 @@ export function registerConnectTool(server: McpServer): void {
     annotations: { ...changes, readOnlyHint: true, idempotentHint: true },
     _meta: widgetMeta,
   }, async () => connectionResult(state));
+  server.registerTool("connect_with_passkey", {
+    title: "Link this Mac to a GrantTap account",
+    description: "Open a short-lived GrantTap account passkey request for this Mac. The passkey is entered only on granttap.com; existing QR pairings remain unchanged.",
+    inputSchema: {},
+    outputSchema: connectionOutput,
+    annotations: changes,
+    _meta: widgetMeta,
+  }, async () => {
+    try {
+      const passkeyUrl = await startPasskeyAccountLink();
+      const result = connectionResult(state);
+      const meta = result._meta?.granttap;
+      const granttap = meta && typeof meta === "object" ? meta : {};
+      return { ...result, _meta: { granttap: { ...granttap, passkeyUrl } } };
+    } catch {
+      return { isError: true, content: [{ type: "text", text: "GrantTap could not start passkey linking. Check the account service and try again." }] };
+    }
+  });
   server.registerTool(
     "connect",
     {

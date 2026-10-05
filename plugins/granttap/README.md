@@ -13,7 +13,7 @@ iPhone and Apple Watch.
 Install the durable local GrantTap helper on each Mac or Windows computer you connect:
 
 ```bash
-npm install --global granttap-mcp@0.8.34
+npm install --global granttap-mcp@0.8.35
 granttap setup
 ```
 
@@ -29,8 +29,11 @@ Connect GrantTap to this computer** to open its connection card in a conversatio
 On a new computer, the card shows **Add a device** and a one-time QR. In the
 GrantTap iPhone app, open **Settings → Connections → Add a device (Scan QR)**
 and scan it. For another iPhone or iPad, choose **Add another device** in the
-card; for the same phone after reinstall, choose **Reconnect**. A saved
-computer pairing does not automatically put a phone in Codex's account list.
+card; for the same phone after reinstall, choose **Reconnect**. Use **Connect
+with passkey** on the card to link this Mac to the same GrantTap account as
+your signed-in iPhone. The passkey check happens on granttap.com and keeps the
+existing QR room unchanged. A saved computer pairing does not automatically
+put a phone in Codex's account list.
 If a coding app cannot operate the card, run `granttap phone add` in your own
 interactive terminal, or `granttap phone reconnect` for the same phone. These
 commands refuse to print a private QR into redirected output or agent logs.
@@ -60,7 +63,7 @@ status, and confirmed Reconnect controls.
 Install the same local helper first, then install the plugin:
 
 ```bash
-npm install --global granttap-mcp@0.8.34
+npm install --global granttap-mcp@0.8.35
 granttap setup
 claude plugin marketplace add sergii-ziborov/granttap-mcp
 claude plugin install granttap@granttap
@@ -81,7 +84,7 @@ Cloud Agents start that process. They cannot fetch `http://127.0.0.1`.
 ### Grok Build
 
 ```bash
-npm install --global granttap-mcp@0.8.34
+npm install --global granttap-mcp@0.8.35
 granttap setup
 grok plugin marketplace add sergii-ziborov/granttap-mcp
 grok plugin install granttap --trust
@@ -99,6 +102,7 @@ healthy pairing merely to display a new QR.
 - `connection_status` opens read-only connection controls and diagnostics.
 - `connect` pairs the computer or reuses its current pairing.
 - `reconnect` creates a fresh pairing only after explicit confirmation.
+- `connect_with_passkey` starts a one-time browser passkey request to link this Mac to an account.
 - `notify` sends a task update to GrantTap.
 - `ask_yes_no` asks for an explicit yes or no decision.
 - `ask` asks for typed or spoken input.

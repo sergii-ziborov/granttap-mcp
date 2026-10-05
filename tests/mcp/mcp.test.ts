@@ -69,7 +69,7 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
 
   const tools = await client.listTools();
   assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
-    "ask", "ask_yes_no", "connect", "connection_status", "notify", "reconnect",
+    "ask", "ask_yes_no", "connect", "connect_with_passkey", "connection_status", "notify", "reconnect",
   ]);
   for (const tool of tools.tools) {
     assert.equal(tool.annotations?.readOnlyHint, tool.name === "connection_status");
@@ -80,7 +80,7 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   const connectTool = tools.tools.find((tool) => tool.name === "connect");
   assert.deepEqual(Object.keys(connectTool?.inputSchema.properties ?? {}), []);
   const connectMeta = connectTool?._meta as { ui?: { resourceUri?: string } } | undefined;
-  assert.equal(connectMeta?.ui?.resourceUri, "ui://granttap/connection/v3.html");
+  assert.equal(connectMeta?.ui?.resourceUri, "ui://granttap/connection/v4.html");
   const reconnectTool = tools.tools.find((tool) => tool.name === "reconnect");
   assert.deepEqual(Object.keys(reconnectTool?.inputSchema.properties ?? {}), ["confirmed", "mode"]);
   const notifyTool = tools.tools.find((tool) => tool.name === "notify");
@@ -93,9 +93,9 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   assert.deepEqual(resources.resources.map((resource) => resource.uri), [
     "granttap://mesh/current",
     "granttap://mesh/map",
-    "ui://granttap/connection/v3.html",
+    "ui://granttap/connection/v4.html",
   ]);
-  const widget = await client.readResource({ uri: "ui://granttap/connection/v3.html" });
+  const widget = await client.readResource({ uri: "ui://granttap/connection/v4.html" });
   const widgetResource = widget.contents[0] as {
     mimeType?: string;
     text?: string;

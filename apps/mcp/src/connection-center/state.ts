@@ -6,6 +6,7 @@ import { inspectProviderStatusSnapshot } from "../status/provider-status";
 import { packageVersion } from "../status/package-version";
 import { connectionRuntimeStatus } from "../mcp-tools/connect/relay";
 import { beginEnrollment, cancelEnrollment, enrollmentIsOpen } from "./enrollment";
+import { loadAccountLink } from "../../../bridge/src/account-recovery/link";
 
 export const connectionOutput = {
   status: z.enum(["disconnected", "paired", "pairing", "expired", "connected"]),
@@ -23,6 +24,7 @@ export const connectionOutput = {
   expiresInMinutes: z.number().int().positive().nullable(),
   providers: z.array(z.object({ id: z.string(), status: z.string(), detail: z.string() })),
   roomPrefix: z.string(),
+  accountLinkSaved: z.boolean(),
 };
 
 export type PendingCode = {
@@ -76,6 +78,7 @@ export class ConnectionState {
         expiresInMinutes: code ? Math.max(1, Math.ceil((code.expiresAt - now) / 60_000)) : null,
         providers: inspectProviderStatusSnapshot().providers.map(({ id, status, detail }) => ({ id, status, detail })),
         roomPrefix: config?.room ? config.room.slice(0, 8) : "",
+        accountLinkSaved: loadAccountLink() !== null,
       },
       _meta: { granttap: code ? { pairingUri: code.pairingUri, qrDataUrl: code.qrDataUrl } : {} },
     };
