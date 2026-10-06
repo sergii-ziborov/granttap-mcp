@@ -62,11 +62,11 @@ const defaultDependencies: MeshRuntimeDependencies = {
   now: Date.now,
   eventId: randomUUID,
   providerEnabled: isProviderEnabled,
-  start: async (provider, prompt, cwd) => {
-    if (provider === "claude") return createClaudeSession(prompt, cwd);
-    if (provider === "codex") return createCodexSession(prompt, cwd);
-    if (provider === "cursor") return createCursorSession(prompt, cwd);
-    return createGrokSession(prompt, cwd);
+  start: async (provider, prompt, cwd, model) => {
+    if (provider === "claude") return createClaudeSession(prompt, cwd, 240_000, [], model);
+    if (provider === "codex") return createCodexSession(prompt, cwd, 240_000, [], model);
+    if (provider === "cursor") return createCursorSession(prompt, cwd, 240_000, [], model);
+    return createGrokSession(prompt, cwd, 240_000, [], model);
   },
   deliver: deliverToSession,
   hasCommit: repositoryHasCommit,

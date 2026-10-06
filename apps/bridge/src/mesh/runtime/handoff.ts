@@ -19,6 +19,7 @@ function capsulePrompt(capsule: TaskCapsule): string {
     `Base SHA: ${capsule.baseSha}`,
   ];
   if (capsule.latestCommit) lines.push(`Latest commit: ${capsule.latestCommit}`);
+  if (capsule.userComment) lines.push(`User comment: ${capsule.userComment}`);
   if (capsule.checkpoint) {
     const { status, files, excluded } = capsule.checkpoint;
     const line = status === "complete"
@@ -138,7 +139,9 @@ async function acceptHandoff(
     revision,
   );
   if (!worktree) return rejectHandoff(deps, client, event, "A separate handoff worktree could not be created.");
-  const result = await deps.start(capsule.targetProvider, capsulePrompt(capsule), worktree.path);
+  const result = await deps.start(
+    capsule.targetProvider, capsulePrompt(capsule), worktree.path, capsule.targetModel,
+  );
   if (!result.ok || !result.sessionId) {
     const reason = result.ok ? "The target agent did not create a session." : result.error;
     return rejectHandoff(deps, client, event, reason);

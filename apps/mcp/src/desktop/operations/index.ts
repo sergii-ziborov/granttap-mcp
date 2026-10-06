@@ -10,6 +10,7 @@ import type { DesktopTaskActivityRunner } from "../task-activity-runner";
 import type { EngineClient } from "../../../../bridge/src/engine/runtime/engine-client";
 import type { EngineOperation } from "../../../../bridge/src/engine/protocol/engine-protocol";
 import { desktopTaskSend } from "../delivery/task-send";
+import { desktopTaskHandoff } from "../delivery/task-handoff";
 import { desktopTaskCreate } from "../delivery/task-create";
 import { desktopMeshCreate } from "../delivery/mesh-create";
 import { desktopInvocationHistory } from "../invocation";
@@ -54,6 +55,7 @@ export function desktopReadOperation(input: {
   if (operation === "desktop.task_activity") return activity.read(queryInput, storePath);
   if (operation === "desktop.task_image") return activity.image(queryInput, storePath);
   if (operation === "desktop.task_send") return desktopTaskSend(queryInput, storePath);
+  if (operation === "desktop.task_handoff") return desktopTaskHandoff(queryInput, storePath);
   if (operation === "desktop.task_create") return desktopTaskCreate(queryInput, storePath);
   if (operation === "desktop.mesh_create") return Promise.resolve(desktopMeshCreate(queryInput, storePath));
   if (operation === "desktop.invocation_history") {

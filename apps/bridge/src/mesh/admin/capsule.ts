@@ -70,6 +70,8 @@ export function buildTaskCapsule(
     targetProvider: request.targetProvider,
     targetActorId: request.targetActorId,
     targetComputer: request.targetComputer,
+    targetModel: request.targetModel,
+    userComment: request.userComment,
     repository: project.canonicalRepositoryId,
     baseSha: head,
     branch: session.branch ?? git(cwd, ["branch", "--show-current"]),

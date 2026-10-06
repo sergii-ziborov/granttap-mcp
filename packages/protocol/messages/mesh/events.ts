@@ -18,6 +18,8 @@ export const TaskCapsule = z.object({
   targetProvider: MeshExecutionProvider,
   targetActorId: Identifier.optional(),
   targetComputer: Identifier,
+  targetModel: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,159}$/).optional(),
+  userComment: Detail.optional(),
   repository: z.string().trim().min(1).max(1_024),
   baseSha: GitSha,
   branch: z.string().trim().min(1).max(512).optional(),
@@ -206,6 +208,8 @@ export const MeshHandoffPrepare = z.object({
   targetProvider: MeshExecutionProvider,
   targetActorId: Identifier.optional(),
   targetComputer: Identifier,
+  targetModel: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,159}$/).optional(),
+  userComment: Detail.optional(),
   createdAt: z.number().nonnegative(),
   /**
    * Commit uncommitted work to a checkpoint branch first, so the Task can

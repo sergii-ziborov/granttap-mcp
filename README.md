@@ -170,7 +170,8 @@ decided by the runtime after receipt verification.
 
 The first executable handoff path is Claude Code ↔ Codex across linked
 computers. GrantTap builds a bounded Task Capsule from explicit task/git facts,
-requires local phone authorization, creates a separate target branch/worktree,
+requires authorization from the phone or the owning Mac's local desktop channel,
+creates a separate target branch/worktree,
 starts the target execution, and returns a receipt bound to the exact capsule.
 Cursor uses the same provider-neutral schema and trusted caller attribution.
 Grok Build remains observable where available, but does not
@@ -192,6 +193,10 @@ the commit fetches that branch once before refusing. A handoff can also stay on
 one computer: the same Task continues with another agent there, in a worktree
 of its own from the same commit, taken up at once by the computer that
 prepared it.
+The person can select an advertised destination model and add a bounded comment.
+Both travel inside the encrypted capsule; the destination includes the comment
+in the new execution's opening message and starts the selected model. A model
+change on the same computer and provider is a new execution of the same Task.
 
 ### Pause and resume
 

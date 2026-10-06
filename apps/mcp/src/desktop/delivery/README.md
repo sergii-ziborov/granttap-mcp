@@ -10,7 +10,13 @@ same limits as encrypted phone messages. Invalid batches are rejected rather
 than silently losing files. The existing provider attachment pipeline stages
 images and arbitrary documents; the native client removes its batch after reply.
 
-Tests: `tests/desktop/desktop-task-send.test.ts`, local `tests/attachments.test.ts`.
+`desktop.task_handoff` accepts a bounded handoff request from the authenticated
+Mac desktop channel. It verifies the exact owning local execution, then asks the
+canonical Mesh runtime to prepare the encrypted Task Capsule. A destination
+model and user comment are carried with the Task, including for another computer.
+
+Tests: `tests/desktop/desktop-task-send.test.ts`,
+`tests/desktop/delivery/task-handoff.test.ts`, local `tests/attachments.test.ts`.
 Parent: [Desktop local channel](../README.md).
 
 This MCP component is covered by the repository [MIT License](../../../../../LICENSE).

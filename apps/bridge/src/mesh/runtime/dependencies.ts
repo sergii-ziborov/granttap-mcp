@@ -22,7 +22,7 @@ export type MeshRuntimeDependencies = {
   now: () => number;
   eventId: () => string;
   providerEnabled: (provider: Exclude<MeshProvider, "grok_bot">) => boolean;
-  start: (provider: MeshProvider, prompt: string, cwd: string) => Promise<StartResult>;
+  start: (provider: MeshProvider, prompt: string, cwd: string, model?: string) => Promise<StartResult>;
   deliver: typeof deliverToSession;
   send: (
     client: RelayClient,

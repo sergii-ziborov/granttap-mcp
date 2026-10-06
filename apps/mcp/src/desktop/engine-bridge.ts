@@ -22,6 +22,7 @@ export const DESKTOP_OPERATIONS = new Set([
   "desktop.installed_skills", "desktop.policy_status", "desktop.policy_set", "desktop.project_auto_accept",
   "desktop.mesh_snapshots",
   "desktop.task_send",
+  "desktop.task_handoff",
   "desktop.task_create",
   "desktop.mesh_create",
   "desktop.invocation_history",
@@ -48,7 +49,7 @@ export function desktopOperationTimeout(operation: unknown, input: unknown): num
     || operation === "desktop.mesh_snapshots") return 75_000;
   if (operation === "desktop.task_activity"
     || operation === "desktop.task_image" || operation === "desktop.live_catalog") return 45_000;
-  if (operation === "desktop.task_send"
+  if (operation === "desktop.task_send" || operation === "desktop.task_handoff"
     || operation === "desktop.task_create") return 250_000;
   if (operation === "desktop.mesh_snapshot"
     && (input as { enrich?: unknown } | undefined)?.enrich === "true") return 45_000;

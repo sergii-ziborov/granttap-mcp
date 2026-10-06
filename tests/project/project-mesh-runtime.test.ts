@@ -109,16 +109,21 @@ function seedLocalCheckout(store: MeshStore): void {
 
 test("runtime accepts a handoff into a separate worktree and signs a receipt", async () => {
   let prompt = "";
+  let selectedModel: string | undefined;
   const run = await harness({
-    start: async (provider: MeshProvider, value: string, cwd: string) => {
+    start: async (provider: MeshProvider, value: string, cwd: string, model?: string) => {
       assert.equal(provider, "codex");
       assert.equal(cwd, "/repo-worktree");
       prompt = value;
+      selectedModel = model;
       return { ok: true, text: "Started", sessionId: "codex-target" };
     },
   });
   seedLocalCheckout(run.store);
-  assert.equal(await run.runtime.handle(client, handoff("handoff-success")), true);
+  const value = capsule({ targetModel: "gpt-6-sol", userComment: "Review the tests first." });
+  assert.equal(await run.runtime.handle(client, handoff("handoff-success", value)), true);
+  assert.equal(selectedModel, "gpt-6-sol");
+  assert.match(prompt, /User comment: Review the tests first\./);
   assert.match(prompt, /Important decisions:\n- Use connectionId/);
   assert.match(prompt, /Remaining work:\n- Run regression tests/);
   assert.doesNotMatch(prompt, /hidden reasoning:|transcript:/i);
@@ -126,7 +131,7 @@ test("runtime accepts a handoff into a separate worktree and signs a receipt", a
   assert.equal(accepted.eventType, "HANDOFF_ACCEPTED");
   assert.equal(accepted.payload.receipt?.targetSessionId, "codex-target");
   assert.equal(run.store.snapshot("project")?.tasks[0]?.ownerSessionId, "codex-target");
-  assert.equal(await run.runtime.handle(client, handoff("handoff-success")), true);
+  assert.equal(await run.runtime.handle(client, handoff("handoff-success", value)), true);
   assert.equal(run.sent.length, 1);
 });
 
