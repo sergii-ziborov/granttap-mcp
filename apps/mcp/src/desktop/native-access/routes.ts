@@ -7,7 +7,7 @@ import { enrollMacAccount } from '../../../../bridge/src/account-recovery/enroll
 import { websiteOrigin } from '../../oauth/consent/website-session';
 
 export function installDesktopNativeRoutes(app: Express, socketPath: string, origin: string,
-  access = new DesktopNativeAccess()): void {
+  access = new DesktopNativeAccess(), enroll = enrollMacAccount): void {
   app.use('/desktop', (_req, res, next) => {
     res.set({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer',
       'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; form-action 'self'; frame-ancestors 'none'" });
@@ -26,7 +26,9 @@ export function installDesktopNativeRoutes(app: Express, socketPath: string, ori
   });
   app.post('/desktop/approve', (req, res) => {
     const confirmation = String(req.body?.confirmation ?? '');
-    if (req.headers.origin !== origin || !confirmation ||
+    const requestOrigin = req.headers.origin;
+    if ((requestOrigin !== undefined && requestOrigin !== 'null' && requestOrigin !== origin)
+      || !confirmation ||
       !(req.headers.cookie ?? '').split(';').some(cookie => cookie.trim() === `granttap_desktop_consent=${confirmation}`)) {
       res.status(403).json({ error: 'Native approval requires this local consent page' }); return;
     }
@@ -51,6 +53,14 @@ export function installDesktopNativeRoutes(app: Express, socketPath: string, ori
         websiteOrigin() ?? 'https://granttap.com'));
     } catch {
       res.status(403).json({ error: 'Account link could not be verified' });
+    }
+  });
+  app.post('/desktop/account/authorize', express.json({ limit: '2kb' }), async (req, res) => {
+    try {
+      await enroll(String(req.body?.accountToken ?? ''), websiteOrigin() ?? 'https://granttap.com');
+      res.json({ access_token: access.issueVerifiedAccountGrant() });
+    } catch {
+      res.status(403).json({ error: 'Passkey account could not authorize this Mac' });
     }
   });
   app.post('/desktop/invoke', (req, res, next) => {

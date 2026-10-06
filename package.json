@@ -1,6 +1,6 @@
 {
   "name": "granttap-mcp",
-  "version": "0.8.36",
+  "version": "0.8.37",
   "description": "Personal live control center runtime for local coding agents on iPhone and Apple Watch.",
   "type": "module",
   "bin": {
@@ -33,7 +33,7 @@
     "prepublishOnly": "npm run inventory && npm run structure -- --strict && npm run package:allowlist && npm run test:coverage && npm run typecheck"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "express": "^5.2.1",
     "qrcode": "^1.5.4",
     "tsx": "^4.23.4",

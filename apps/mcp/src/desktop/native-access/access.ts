@@ -44,6 +44,15 @@ export class DesktopNativeAccess {
     this.codes.delete(code);
     if (!row || row.expires <= this.now() || !/^[A-Za-z0-9_-]{43,128}$/.test(verifier)
       || digest(verifier) !== row.challenge) throw new Error('Invalid native code');
+    return this.issueGrant();
+  }
+
+  /** Called only after the local route verifies a passkey account with the relay. */
+  issueVerifiedAccountGrant(): string {
+    return this.issueGrant();
+  }
+
+  private issueGrant(): string {
     const token = random();
     const grants = this.grants().filter(grant => grant.expires > this.now()).slice(-7);
     grants.push({ digest: digest(token), expires: this.now() + 30 * 24 * 3_600_000 });
