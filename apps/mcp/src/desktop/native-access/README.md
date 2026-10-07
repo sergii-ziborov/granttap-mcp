@@ -10,6 +10,9 @@ may send an opaque Origin. The callback is fixed to
 and codes expire after five minutes. A private file stores only token hashes,
 up to eight active grants, expiring after 30 days. The app keeps its token in
 its device-only Keychain and never shares it with a provider.
+The fallback consent page is styled and localized by the loopback service;
+the stylesheet has no script or external dependency. A Mac app with a verified
+passkey account uses `/desktop/account/authorize` instead of opening that page.
 
 `/desktop/invoke` requires that grant before parsing a bounded request. It can
 invoke only the existing allowlisted desktop operations; inputs are still

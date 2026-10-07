@@ -36,6 +36,19 @@ test('native HTTP bridge rejects browser forgery and unauthenticated reads, then
     const challenge = createHash('sha256').update(verifier).digest('base64url');
     const authorization = await fetch(`${origin}/desktop/authorize?challenge=${challenge}&state=state123`);
     const html = await authorization.text();
+    assert.match(html, /<link rel="stylesheet" href="\/desktop\/consent\.css">/);
+    assert.match(html, /<main class="consent-card">/);
+    assert.match(html, /Allow this Mac app/);
+    const russian = await fetch(`${origin}/desktop/authorize?challenge=${challenge}&state=state456`, {
+      headers: { 'accept-language': 'ru-RU,ru;q=0.9' },
+    });
+    assert.match(await russian.text(), /lang="ru"[\s\S]*Разрешить на этом Mac/);
+    assert.match(authorization.headers.get('content-security-policy') ?? '', /style-src 'self'/);
+    assert.doesNotMatch(authorization.headers.get('content-security-policy') ?? '', /unsafe-inline/);
+    const stylesheet = await fetch(`${origin}/desktop/consent.css`);
+    assert.equal(stylesheet.status, 200);
+    assert.match(stylesheet.headers.get('content-type') ?? '', /text\/css/);
+    assert.match(await stylesheet.text(), /consent-card/);
     const hidden = (name: string) => new RegExp(`name="${name}" value="([^"]+)"`).exec(html)![1]!;
     const cookie = authorization.headers.get('set-cookie')!.split(';')[0]!;
     const body = new URLSearchParams({ id: hidden('id'), confirmation: hidden('confirmation'), state: hidden('state') });

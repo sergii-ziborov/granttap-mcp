@@ -5,23 +5,23 @@ import { invokeDesktop } from './invoke';
 import { DESKTOP_OPERATIONS, desktopOperationTimeout } from '../engine-bridge';
 import { enrollMacAccount } from '../../../../bridge/src/account-recovery/enroll';
 import { websiteOrigin } from '../../oauth/consent/website-session';
+import { desktopConsentPage, desktopConsentStyles } from './consent-page';
 
 export function installDesktopNativeRoutes(app: Express, socketPath: string, origin: string,
   access = new DesktopNativeAccess(), enroll = enrollMacAccount): void {
   app.use('/desktop', (_req, res, next) => {
     res.set({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer',
-      'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; form-action 'self'; frame-ancestors 'none'" });
+      'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; style-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'" });
     next();
   });
+  app.get('/desktop/consent.css', (_req, res) => res.type('css').send(desktopConsentStyles));
   app.get('/desktop/authorize', (req, res) => {
     try {
       const row = access.begin(String(req.query.challenge ?? ''), String(req.query.state ?? ''));
       res.cookie('granttap_desktop_consent', row.confirmation, {
         httpOnly: true, sameSite: 'strict', path: '/desktop/approve', maxAge: 300_000,
       });
-      res.type('html').send(`<!doctype html><html lang="en"><meta charset="utf-8"><title>GrantTap for Mac</title>
-<h1>Allow GrantTap for Mac on this computer</h1><p>The app can inspect tasks, send your messages, handle approvals and configure your local relay. This does not authorize another computer or a coding provider.</p>
-<form action="/desktop/approve" method="post"><input type="hidden" name="id" value="${row.id}"><input type="hidden" name="confirmation" value="${row.confirmation}"><input type="hidden" name="state" value="${row.state}"><button type="submit">Allow this Mac app</button></form></html>`);
+      res.type('html').send(desktopConsentPage(row, req.headers['accept-language']));
     } catch { res.status(400).json({ error: 'Invalid native authorization' }); }
   });
   app.post('/desktop/approve', (req, res) => {
