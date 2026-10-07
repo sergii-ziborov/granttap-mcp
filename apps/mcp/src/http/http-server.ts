@@ -25,6 +25,7 @@ import { startDesktopEngineBridgeProcess } from "../desktop/process/bridge-proce
 
 import { installDesktopNativeRoutes } from "../desktop/native-access/routes";
 import { startAccountRecoveryPoller } from "../../../bridge/src/account-recovery/poller";
+import { reloadMonitorHelper } from "../../../bridge/src/install";
 
 export const DEFAULT_HTTP_HOST = "127.0.0.1";
 export const DEFAULT_HTTP_PORT = 17342;
@@ -33,6 +34,12 @@ type ServeOptions = {
   host?: string;
   port?: number;
 };
+
+function refreshRecoveredPairing(): void {
+  reloadMonitorHelper();
+  resetRelay();
+  void relay();
+}
 
 export async function startHttpMcpServer(options: ServeOptions = {}): Promise<{
   host: string;
@@ -113,7 +120,7 @@ export async function startHttpMcpServer(options: ServeOptions = {}): Promise<{
   void relay();
   const accountOrigin = websiteOrigin();
   const stopAccountRecovery = accountOrigin
-    ? startAccountRecoveryPoller(accountOrigin, () => { resetRelay(); void relay(); }) : () => {};
+    ? startAccountRecoveryPoller(accountOrigin, refreshRecoveredPairing) : () => {};
 
   return {
     host,
