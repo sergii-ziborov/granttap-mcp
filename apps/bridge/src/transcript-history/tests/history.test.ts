@@ -1,14 +1,39 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
-import { codexLogPathBySession } from "../../sessions/scan/codex/shared";
+import { codexLogPathBySession, codexLogPathForSession } from "../../sessions/scan/codex/shared";
 import { readTranscriptHistory } from "../index";
 import type { SessionInfo } from "../../../../../packages/protocol/schema";
 
 const session: SessionInfo = { sessionId: "history-test", agent: "codex", state: "idle",
   startedAt: 1, lastActivityAt: 100, tokensSession: 0, tokensLastTurn: 0 };
+
+test("native history finds a known session by date and ID without a catalog scan", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "granttap-direct-history-"));
+  const sessionId = "11111111-2222-3333-4444-555555555555";
+  const startedAt = Date.parse("2026-10-08T23:59:00Z");
+  const day = join(root, "2026", "10", "09");
+  mkdirSync(day, { recursive: true });
+  const path = join(day, `rollout-2026-10-09T00-00-00-${sessionId}.jsonl`);
+  writeFileSync(path, JSON.stringify({ timestamp: "2026-10-08T23:59:00Z", type: "event_msg",
+    payload: { type: "user_message", message: "Earlier request" } }) + "\n");
+  const previousRoot = process.env.GRANTTAP_CODEX_SESSIONS_DIR;
+  process.env.GRANTTAP_CODEX_SESSIONS_DIR = root;
+  t.after(() => {
+    if (previousRoot === undefined) delete process.env.GRANTTAP_CODEX_SESSIONS_DIR;
+    else process.env.GRANTTAP_CODEX_SESSIONS_DIR = previousRoot;
+    codexLogPathBySession.delete(sessionId);
+    rmSync(root, { recursive: true });
+  });
+  codexLogPathBySession.set(sessionId, join(root, "missing.jsonl"));
+  assert.equal(codexLogPathForSession(sessionId, startedAt), path);
+  codexLogPathBySession.delete(sessionId);
+  assert.equal(readTranscriptHistory({ ...session, sessionId, startedAt })?.entries[0]?.text,
+    "Earlier request");
+  assert.equal(codexLogPathForSession("../escape", startedAt), undefined);
+});
 
 test("native history pages retain repeated user turns, stable ids and earlier context", (t) => {
   const root = mkdtempSync(join(tmpdir(), "granttap-history-"));

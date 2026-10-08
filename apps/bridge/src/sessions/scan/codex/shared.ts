@@ -8,7 +8,8 @@ import { recordObservedWrite, writtenPaths } from "../../../mesh/observed/writes
  *   `event_msg` entries of type `token_count` carry
  *   `total_token_usage` and `last_token_usage` outright.
  */
-import { closeSync, openSync, readFileSync, readSync, statSync } from "node:fs";
+import { closeSync, lstatSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 import type {
   ActivityEntry,
   ChildThreadInfo,
@@ -91,6 +92,37 @@ export const CODEX_SUMMARY_HEAD_BYTES = 128 * 1024;
 export const CODEX_SUMMARY_TAIL_BYTES = 512 * 1024;
 export const CODEX_ACTIVITY_HEAD_BYTES = 256 * 1024;
 export const CODEX_ACTIVITY_TAIL_BYTES = 16 * 1024 * 1024;
+
+/** Resolve the native rollout directly before considering a catalog-wide scan. */
+export function codexLogPathForSession(sessionId: string, startedAt: number,
+                                       root = codexSessionsRoot()): string | undefined {
+  const indexed = codexLogPathBySession.get(sessionId);
+  if (indexed) {
+    try { if (lstatSync(indexed).isFile()) return indexed; } catch { /* Find its new path. */ }
+    codexLogPathBySession.delete(sessionId);
+  }
+  if (!/^[a-zA-Z0-9-]{1,128}$/.test(sessionId) || !Number.isFinite(startedAt)
+    || startedAt <= 0) return undefined;
+  const start = ts(startedAt);
+  for (const dayOffset of [0, -1, 1]) {
+    const day = new Date(start + dayOffset * 86_400_000);
+    if (Number.isNaN(day.getTime())) continue;
+    const [year, month, date] = day.toISOString().slice(0, 10).split("-");
+    const directory = join(root, year!, month!, date!);
+    let names: string[];
+    try { names = readdirSync(directory); } catch { continue; }
+    for (const name of names) {
+      if (!name.startsWith("rollout-") || !name.endsWith(`-${sessionId}.jsonl`)) continue;
+      const path = join(directory, name);
+      try {
+        if (!lstatSync(path).isFile()) continue;
+        codexLogPathBySession.set(sessionId, path);
+        return path;
+      } catch { /* A file may disappear during a catalog refresh. */ }
+    }
+  }
+  return undefined;
+}
 
 /**
  * Codex rollouts may contain a single screenshot/tool-result line larger than a
@@ -175,6 +207,7 @@ export function codexLogLines(sessionId: string): string[] | undefined {
         return row?.type === "session_meta" &&
           String(row.payload?.id ?? row.id ?? "") === sessionId;
       })) {
+        codexLogPathBySession.set(sessionId, file);
         return candidate;
       }
     } catch {

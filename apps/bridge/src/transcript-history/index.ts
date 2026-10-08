@@ -1,6 +1,6 @@
 import type { ActivityEntry, SessionActivity, SessionInfo } from "../../../../packages/protocol/schema";
 import { appendCodexActivity, codexCapabilityUsage } from "../sessions/scan/codex/activity";
-import { codexLogLines, codexLogPathBySession } from "../sessions/scan/codex/shared";
+import { codexLogLines, codexLogPathForSession } from "../sessions/scan/codex/shared";
 import { appendClaudeActivity, claudeCapabilityUsage, claudeLogPath } from "../sessions/scan/claude";
 import { previousNativeLines } from "./native-lines";
 import { recordedFileChanges } from "./changes";
@@ -27,9 +27,10 @@ function boundedEntry(entry: ActivityEntry): ActivityEntry {
 export function readTranscriptHistory(session: SessionInfo, cursor?: string): SessionActivity | undefined {
   if (session.agent !== "codex" && session.agent !== "claude") return undefined;
   let path = session.agent === "claude" ? claudeLogPath(session.sessionId)
-    : codexLogPathBySession.get(session.sessionId);
+    : codexLogPathForSession(session.sessionId, session.startedAt);
   if (!path && session.agent === "codex") {
-    codexLogLines(session.sessionId); path = codexLogPathBySession.get(session.sessionId);
+    codexLogLines(session.sessionId);
+    path = codexLogPathForSession(session.sessionId, session.startedAt);
   }
   if (!path) return undefined;
   let window;

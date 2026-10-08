@@ -15,7 +15,7 @@ connected.
 Install the durable local GrantTap helper on each Mac or Windows computer you connect:
 
 ```bash
-npm install --global granttap-mcp@0.8.40
+npm install --global granttap-mcp@0.8.41
 granttap setup
 ```
 
@@ -66,7 +66,7 @@ status, and confirmed Reconnect controls.
 Install the same local helper first, then install the plugin:
 
 ```bash
-npm install --global granttap-mcp@0.8.40
+npm install --global granttap-mcp@0.8.41
 granttap setup
 claude plugin marketplace add sergii-ziborov/granttap-mcp
 claude plugin install granttap@granttap
@@ -87,7 +87,7 @@ Cloud Agents start that process. They cannot fetch `http://127.0.0.1`.
 ### Grok Build
 
 ```bash
-npm install --global granttap-mcp@0.8.40
+npm install --global granttap-mcp@0.8.41
 granttap setup
 grok plugin marketplace add sergii-ziborov/granttap-mcp
 grok plugin install granttap --trust
