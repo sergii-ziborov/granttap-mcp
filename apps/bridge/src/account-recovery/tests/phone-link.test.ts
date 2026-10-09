@@ -41,25 +41,16 @@ test("a mismatched account cannot replace a linked Mac", async t => {
   assert.deepEqual(loadAccountLink(), { accountId, machineId, machineToken });
 });
 
-test("the same account replaces an old Mac credential and revokes it", async t => {
+test("a QR link cannot replace this Mac's existing account machine", async t => {
   const root = await mkdtemp(join(tmpdir(), "granttap-phone-account-refresh-"));
   process.env.GRANTTAP_CONFIG_DIR = root;
   t.after(async () => { delete process.env.GRANTTAP_CONFIG_DIR;
     await rm(root, { recursive: true, force: true }); });
   const old = { accountId, machineId: crypto.randomUUID(), machineToken: "C".repeat(43) };
   saveAccountLink(old);
-  let revoked = false;
-  const request: typeof fetch = async (input, init) => {
-    if (String(input).endsWith("machine/self")) {
-      assert.equal(init?.method, "DELETE");
-      assert.equal((init?.headers as Record<string, string>).authorization,
-        `Bearer ${old.machineToken}`);
-      revoked = true;
-      return Response.json({ revoked: true });
-    }
-    return Response.json({ accountId, machineId });
-  };
-  assert.equal(await acceptPhoneAccountLink(payload, "https://granttap.com", request), true);
-  assert.equal(revoked, true);
-  assert.deepEqual(loadAccountLink(), { accountId, machineId, machineToken });
+  let contacted = false;
+  assert.equal(await acceptPhoneAccountLink(payload, "https://granttap.com",
+    async () => { contacted = true; return Response.json({ accountId, machineId }); }), false);
+  assert.equal(contacted, false);
+  assert.deepEqual(loadAccountLink(), old);
 });

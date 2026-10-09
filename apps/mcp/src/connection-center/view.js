@@ -21,9 +21,10 @@ function render(value) {
   current = state;
   clearCode();
   const meta = result._meta?.granttap ?? {};
-  const passkeyUrl = typeof meta.passkeyUrl === "string" && /^https:\/\/granttap\.com\/connect#request=[0-9a-f-]{36}$/i.test(meta.passkeyUrl)
-    ? meta.passkeyUrl : "";
-  $("passkey-link").classList.toggle("hidden", !passkeyUrl || state.accountLinkSaved === true);
+  const candidate = state.passkeyUrl || meta.passkeyUrl;
+  const passkeyUrl = typeof candidate === "string" && /^https:\/\/granttap\.com\/connect#request=[0-9a-f-]{36}$/i.test(candidate)
+    ? candidate : "";
+  $("passkey-link").classList.toggle("hidden", !passkeyUrl);
   if (passkeyUrl) $("passkey-link").setAttribute("href", passkeyUrl);
   else $("passkey-link").removeAttribute("href");
   $("account-status").textContent = state.accountLinkSaved === true

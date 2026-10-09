@@ -25,6 +25,7 @@ export const connectionOutput = {
   providers: z.array(z.object({ id: z.string(), status: z.string(), detail: z.string() })),
   roomPrefix: z.string(),
   accountLinkSaved: z.boolean(),
+  passkeyUrl: z.string().url().optional(),
 };
 
 export type PendingCode = {

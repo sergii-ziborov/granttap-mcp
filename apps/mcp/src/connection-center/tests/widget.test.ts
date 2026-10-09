@@ -100,6 +100,17 @@ test("passkey action opens a fresh account-link request and shows the saved link
   assert.equal(ui.el("passkey-link").classList.contains("hidden"), true);
 });
 
+test("saved account can reauthorize when the host strips MCP metadata", async (t) => {
+  const ui = await fixture(t);
+  const passkeyUrl = "https://granttap.com/connect#request=11111111-1111-4111-8111-111111111111";
+  ui.set({ status: "paired", accountLinkSaved: true, phones: [], providers: [], passkeyUrl });
+  ui.button("passkey").click();
+  await ui.settle();
+  assert.equal(ui.calls.at(-1)?.name, "connect_with_passkey");
+  assert.equal(ui.el("passkey-link").getAttribute("href"), passkeyUrl);
+  assert.equal(ui.el("passkey-link").classList.contains("hidden"), false);
+});
+
 test("widget clears secrets when paired or expired and ignores foreign messages", async (t) => {
   const ui = await fixture(t);
   const pairing = { status: "pairing", expiresAt: Date.now() + 60000, providers: [] };

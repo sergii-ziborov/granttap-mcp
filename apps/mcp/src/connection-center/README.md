@@ -27,6 +27,8 @@ Connect with passkey on the card creates a short-lived, authenticated website
 request. A fresh passkey assertion on granttap.com links this Mac to the user's
 account; the site returns a machine token only to the local MCP watcher, which
 saves it privately. The QR pairing room and provider runtime remain unchanged.
+The card keeps reauthorization available for an already linked Mac and reads
+the one-time URL from structured tool output when a host omits MCP metadata.
 The separate coding-app OAuth page can also use passkey to authorize that MCP
 client. The Codex-owned plugin management page is not this card.
 

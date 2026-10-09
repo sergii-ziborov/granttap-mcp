@@ -53,7 +53,9 @@ export function registerConnectTool(server: McpServer): void {
       const result = connectionResult(state);
       const meta = result._meta?.granttap;
       const granttap = meta && typeof meta === "object" ? meta : {};
-      return { ...result, _meta: { granttap: { ...granttap, passkeyUrl } } };
+      return { ...result,
+        structuredContent: { ...result.structuredContent, passkeyUrl },
+        _meta: { granttap: { ...granttap, passkeyUrl } } };
     } catch {
       return { isError: true, content: [{ type: "text", text: "GrantTap could not start passkey linking. Check the account service and try again." }] };
     }
