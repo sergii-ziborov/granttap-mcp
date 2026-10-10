@@ -211,6 +211,15 @@ test("a finished delivery is digested from the transcript window and carried as 
   assert.ok(store.snapshot("project-pay")!.events.some((event) => event.eventId === "run-1"), "the Task carries it");
   assert.equal(unreadRuns("claude-api").length, 1, "and the chat's journal has it");
 
+  const failed = noteDeliveredRun({ session, prompt: "Retry schema",
+    result: { ok: false, error: "Schema rejected" }, startedAt: at, endedAt: at + 10,
+    deps: { activity: () => ({ entries: [] }), writes: () => [],
+      scope: () => ({ execution: snapshot.executions.find(item => item.sessionId === "claude-api")!, snapshot }),
+      store: () => store, meshEnabled: () => true, now: () => at + 12, eventId: () => "failed-run" },
+  })!;
+  assert.equal(failed.event?.payload.failed, true);
+  assert.equal(failed.event?.payload.reason, "Schema rejected");
+
   // A timeout is journaled as cut off; without the Mesh, only the journal is written.
   const cut = noteDeliveredRun({
     session,
@@ -225,7 +234,7 @@ test("a finished delivery is digested from the transcript window and carried as 
   })!;
   assert.equal(cut.record.cutOff, true);
   assert.equal(cut.event, undefined);
-  assert.equal(unreadRuns("claude-api").length, 2);
+  assert.equal(unreadRuns("claude-api").length, 3);
 });
 
 test("the prompt hook is registered beside the approval hook, once", async () => {

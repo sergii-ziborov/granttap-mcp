@@ -89,6 +89,13 @@ export function recordsFromEvent(event: MeshEvent): KnowledgeRecordInput[] {
     return [{ ...base, record_id: event.eventId, category: "decision",
       content: event.payload.answer, source: "agent_report", visibility: "task" }];
   }
+  if (event.payload.failed && (event.eventType === "TASK_PROGRESS"
+    || event.eventType === "TASK_COMPLETED")) {
+    const content = event.payload.reason || event.payload.summary;
+    return content ? [{ ...base, record_id: event.eventId, category: "attempt",
+      content, source: "agent_report",
+      visibility: event.eventType === "TASK_COMPLETED" ? "project" : "task" }] : [];
+  }
   if (event.eventType === "TASK_COMPLETED" && event.payload.summary) {
     return [{ ...base, record_id: event.eventId, category: "result",
       content: event.payload.summary, source: "agent_report", visibility: "project" }];

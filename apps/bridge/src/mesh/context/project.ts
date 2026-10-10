@@ -3,6 +3,7 @@
  * answer with expand links, not a second copy of the full view.
  */
 import type { ScopedMeshView } from "../snapshot/scoped-view";
+import { selectCompactContext } from "./selection";
 import { compileMeshContext } from "./packet";
 import { projectKnowledge } from "../../engine/runtime/engine-memory";
 import {
@@ -43,6 +44,7 @@ export type CompactProjectContext = {
     ownerSessionId?: string;
   };
   repository: { repositoryId?: string; worktree?: string; owner?: string };
+  restrictions?: ScopedMeshView["restrictions"];
   peerTasks: ScopedMeshView["peerTasks"];
   events: CompactContextEvent[];
   eventsCut: ContextCut;
@@ -120,6 +122,7 @@ export function renderCompactProjectContext(
       worktree: view.execution.workspace,
       owner: view.execution.computerId,
     },
+    restrictions: view.restrictions,
     peerTasks: view.peerTasks,
     events: shownEvents,
     eventsCut: cut(events.length, shownEvents.length, expand.full, "compact event window"),
@@ -153,7 +156,7 @@ export async function renderProjectContext(
     supersededKnowledgeRecordIds,
     events: unrecordedKnowledgeEvents(view.events, all, supersededKnowledgeRecordIds) };
   const contextPacket = await compileMeshContext(scoped);
-  if (mode === "compact") return { ...renderCompactProjectContext(scoped), contextPacket };
+  if (mode === "compact") return selectCompactContext(renderCompactProjectContext(scoped), contextPacket);
   if (mode === "legacy") {
     return { schema: "granttap.mesh-scope.legacy.v2", mode: "legacy", view: scoped, contextPacket };
   }

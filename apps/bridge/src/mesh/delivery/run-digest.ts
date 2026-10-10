@@ -110,7 +110,8 @@ export function noteDeliveredRun(input: {
       eventType: "TASK_PROGRESS",
       createdAt,
       expiresAt: createdAt + 24 * 60 * 60_000,
-      payload: { summary: `Phone: ${describeRun(record)}`.slice(0, 1_000) },
+      payload: { summary: `Phone: ${describeRun(record)}`.slice(0, 1_000),
+        ...(!result.ok ? { failed: true, reason: result.error.slice(0, 1_000) } : {}) },
     };
     return deps.store().acceptEvent(event) ? { record, event } : { record };
   } catch {

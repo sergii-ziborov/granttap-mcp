@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { selectCompactContext } from "../../apps/bridge/src/mesh/context/selection";
 import { compileMeshContext } from "../../apps/bridge/src/mesh/context/packet";
 import { parseProjectContextMode, renderCompactProjectContext, renderProjectContext } from "../../apps/bridge/src/mesh/context/project";
 import { planBroadcast, retryable } from "../../apps/bridge/src/mesh/delivery";
@@ -124,4 +125,37 @@ test("broadcast plans a distinct result for each recipient", async () => {
   const legacy = await renderProjectContext(view(), "legacy") as { mode: string; contextPacket?: unknown };
   assert.equal(legacy.mode, "legacy");
   assert.ok(legacy.contextPacket);
+});
+
+
+test("Cortex compact delivery never appends a larger duplicate packet", () => {
+  const scoped = view();
+  const baseline = renderCompactProjectContext(scoped);
+  const packet = { schema: "granttap.mesh-context.v2" as const, taskId: "task-1",
+    state: "degraded" as const, compiler: "cortex-context" as const,
+    included: ["event.event-1"], content: "duplicate ".repeat(2000) };
+  const selected = selectCompactContext(baseline, packet);
+  assert.equal(selected.schema, baseline.schema);
+  assert.deepEqual(selected.events, baseline.events);
+  assert.equal("content" in selected.contextPacket, false);
+  assert.ok(JSON.stringify(selected).length < JSON.stringify({ ...baseline, contextPacket: packet }).length);
+});
+
+test("Cortex can replace repeated evidence only with complete coverage and a smaller response", () => {
+  const scoped = view({ events: Array.from({ length: 8 }, (_,i) => ({
+    ...view().events[0]!, eventId: `event-${i}`, payload: { summary: "Shared result ".repeat(500) },
+  })) });
+  const baseline = renderCompactProjectContext(scoped);
+  const packet = { schema: "granttap.mesh-context.v2" as const, taskId: "task-1",
+    state: "degraded" as const, compiler: "cortex-context" as const,
+    included: scoped.events.map(e => `event.${e.eventId}`),
+    content: scoped.events.map(e => `[event.${e.eventId}] Shared result`).join("\n") };
+  const selected = selectCompactContext(baseline, packet);
+  assert.equal(selected.schema, "granttap.project-context.compiled.v1");
+  assert.deepEqual(selected.events.map(e => e.eventId), baseline.events.map(e => e.eventId));
+  assert.deepEqual(selected.claims, baseline.claims);
+  assert.deepEqual(selected.task, baseline.task);
+  assert.ok(JSON.stringify(selected).length < JSON.stringify(baseline).length);
+  assert.equal(selectCompactContext(baseline, { ...packet, included: [] }).schema, baseline.schema);
+  assert.equal(selectCompactContext(baseline, { ...packet, content: undefined }).schema, baseline.schema);
 });
