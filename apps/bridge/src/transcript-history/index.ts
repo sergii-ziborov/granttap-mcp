@@ -75,7 +75,8 @@ export function readTranscriptHistory(session: SessionInfo, cursor?: string): Se
     bounded.unshift(entry);
   }
   entries = bounded;
-  const offset = entries[0] ? offsets.get(entries[0].id)! : window.start;
+  const offset = entries[0] ? offsets.get(entries[0].id)!
+    : window.lines[0]?.offset ?? window.start;
   return { type: "session.activity", sessionId: session.sessionId, agent: session.agent,
     state: session.state, entries, generatedAt: Date.now(), history: {
       hasMore: offset > 0, ...(offset > 0 ? { cursor: window.cursorAt(offset) } : {}),

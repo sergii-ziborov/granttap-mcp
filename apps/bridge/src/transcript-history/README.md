@@ -3,6 +3,9 @@
 Public entry: `index.ts`. Native Codex root conversations are read in bounded
 backward pages with file-bound cursors. Pages retain their ids while the native
 log grows and include the user question before the first answer when available.
+Ordinary reads use 1 MiB windows; reads expand up to 16 MiB when needed to fit
+a complete native row. Cursor creation uses file identity and offsets without
+rereading the body. Apple clients automatically retain all pages of active chats.
 Provider reasoning is not exposed. Unsupported providers retain their existing
 transcript reader.
 

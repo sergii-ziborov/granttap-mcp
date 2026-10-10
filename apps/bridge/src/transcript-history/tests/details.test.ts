@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, appendFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { recordedToolDetails } from "../tool-details";
-import { previousNativeLines } from "../native-lines";
+import { nativeHistoryCursor, previousNativeLines } from "../native-lines";
 import { codexLogPathBySession } from "../../sessions/scan/codex/shared";
 import { nativeImageLines } from "../images";
 import { codexImageChunk } from "../../sessions/scan/codex/image";
@@ -35,12 +35,33 @@ test("native cursors stay stable as the log grows and reject another log", (t) =
   writeFileSync(other, "first\nsecond\n");
   const window = previousNativeLines(path, "s")!;
   const cursor = window.cursorAt(6);
+  assert.equal(nativeHistoryCursor(path, "s", 6), cursor);
+  assert.equal(nativeHistoryCursor(path, "s", -1), undefined);
+  assert.equal(nativeHistoryCursor(path, "s", 1000), undefined);
   assert.deepEqual(window.lines.map((line) => [line.text, line.offset]), [["first", 0], ["second", 6]]);
   appendFileSync(path, " end\nnewest\n");
   assert.deepEqual(previousNativeLines(path, "s", cursor)?.lines.map((line) => line.text), ["first"]);
   assert.equal(previousNativeLines(other, "s", cursor), undefined);
   assert.equal(previousNativeLines(path, "other", cursor), undefined);
   assert.equal(previousNativeLines(path, "s", Buffer.from(JSON.stringify({ identity: "wrong", offset: -1 })).toString("base64url")), undefined);
+});
+
+test("ordinary native pages read a small window and retain every older row", t => {
+  const root = mkdtempSync(join(tmpdir(), "granttap-small-window-"));
+  t.after(() => rmSync(root, { recursive: true }));
+  const path = join(root, "log.jsonl");
+  const rows = Array.from({length: 64}, (_, i) => `${i}:` + "x".repeat(64 * 1024));
+  writeFileSync(path, rows.join("\n") + "\n");
+  let window = previousNativeLines(path, "small")!;
+  assert.ok(window.end - window.start <= 1024 * 1024);
+  const recovered: string[] = [];
+  while (true) {
+    recovered.unshift(...window.lines.map(line => line.text));
+    const offset = window.lines[0]?.offset ?? window.start;
+    if (!offset) break;
+    window = previousNativeLines(path, "small", window.cursorAt(offset))!;
+  }
+  assert.deepEqual(recovered, rows);
 });
 
 test("older native images remain reachable beyond the latest transcript window", (t) => {

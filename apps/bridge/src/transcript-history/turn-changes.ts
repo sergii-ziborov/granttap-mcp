@@ -1,6 +1,6 @@
 import { safeParse } from "../sessions/support/common";
 import { nativeChanges, recordedFileChanges, type RecordedFileChange } from "./changes";
-import { previousNativeLines, type NativeLine } from "./native-lines";
+import { nativeHistoryCursor, previousNativeLines, type NativeLine } from "./native-lines";
 
 type Summary = { files: RecordedFileChange[]; complete: boolean };
 const summaries = new Map<string, Summary>();
@@ -35,7 +35,7 @@ export function completedTurnChanges(path: string, sessionId: string, finalId: s
   const native = new Map<string, RecordedFileChange[]>();
   const legacy: string[] = [];
   let legacyBytes = 0, complete = false, bounded = false;
-  let cursor = previousNativeLines(path, sessionId)?.cursorAt(finalOffset);
+  let cursor = nativeHistoryCursor(path, sessionId, finalOffset);
   for (let page = 0; page < 32 && cursor; page++) {
     const window = previousNativeLines(path, sessionId, cursor);
     if (!window) break;
