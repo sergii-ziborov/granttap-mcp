@@ -66,6 +66,10 @@ export const ActivityEntry = z.object({
   kind: z.enum(["user", "message", "tool", "final", "status"]),
   text: z.string(),
   createdAt: z.number(),
+  images: z.array(z.object({
+    id: z.string().min(1).max(512), name: z.string().min(1).max(256),
+    markdown: z.string().min(1).max(2400),
+  })).max(32).optional(),
   attachments: z.array(z.string().max(160)).max(8).optional(),
   toolName: z.string().optional(),
   mcpServer: z.string().optional(),

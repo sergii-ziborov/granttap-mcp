@@ -3,6 +3,7 @@ import type { RelayClient } from "../../../../../packages/core/relay-client";
 import { sendSessionPayload } from "../../host/session-keys";
 import { cachedSessionActivity } from "../support/session-activity";
 import { readTranscriptHistory } from "../../transcript-history";
+import { activityWithImages } from '../../session-images';
 import {
   scanSessionHistory,
   scanSessions,
@@ -59,7 +60,7 @@ export async function publishSessionEvents(
   const activity = threadId ? scanThreadActivity(session, threadId)
     : (history?.history ? readTranscriptHistory(session, history.historyCursor) : undefined)
       ?? cachedSessionActivity(session);
-  await sendSessionPayload(client, activity, sessionId, "phone", {
+  await sendSessionPayload(client, activityWithImages(activity), sessionId, "phone", {
     ttlMs: INTERVAL_MS * 24,
     reliable: false,
   });

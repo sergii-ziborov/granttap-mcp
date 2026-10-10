@@ -49,14 +49,14 @@ export function desktopTaskActivity(
   const rootEntries = activity?.entries.filter((entry) => !entry.childThreadId) ?? [];
   const candidates = rootEntries.slice(-256).map((entry) => ({
     id: entry.id.slice(0, 256), kind: entry.kind,
-    text: entry.text.slice(0, 16_384), created_at: entry.createdAt,
+    text: entry.text, created_at: entry.createdAt,
     tool_name: entry.toolName?.slice(0, 160) ?? null,
     capabilities: entry.capabilities, duration_ms: entry.durationMs,
     estimated_context_tokens: entry.estimatedContextTokens,
     mcp_server: entry.mcpServer, skill: entry.skill,
     summary: entry.summary?.slice(0, 200) ?? null,
     attachments: entry.attachments ?? null,
-    images: artifactImages({ ...entry, text: entry.text.slice(0, 16_384) })
+    images: artifactImages({ ...entry, text: entry.text })
       .map(({ id, name, markdown }) => ({ id, name, markdown })),
     call_text: entry.callText, result_text: entry.resultText,
     detail_truncated: entry.detailTruncated, file_changes: entry.fileChanges,

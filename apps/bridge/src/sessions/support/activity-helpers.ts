@@ -230,6 +230,7 @@ export type PushEntryInput = {
   ordinal: number;
   extras?: EntryExtras;
   idOverride?: string;
+  fullText?: boolean;
 };
 
 export function pushEntry(input: PushEntryInput): void {
@@ -237,7 +238,8 @@ export function pushEntry(input: PushEntryInput): void {
   // The host's own notices arrive as "user" turns; they are shown as status.
   const notification = kind === "user" ? harnessUserNotice(text) : undefined;
   const shownKind: ActivityEntry["kind"] = notification ? "status" : kind;
-  const limit = shownKind === "tool" || shownKind === "status" ? MAX_ACTIVITY_TEXT : MAX_MESSAGE_TEXT;
+  const limit = shownKind === "tool" || shownKind === "status" ? MAX_ACTIVITY_TEXT
+    : input.fullText ? Infinity : MAX_MESSAGE_TEXT;
   const clean = activityText(notification ?? (kind === "user" ? visibleUserText(text) : text), limit);
   if (!clean) return;
   const duplicateKey = idOverride ? `${idOverride}:${shownKind}`

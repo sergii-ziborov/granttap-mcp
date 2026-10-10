@@ -6,7 +6,7 @@ type CachedImage = { key: string; bytes: Buffer; mime: string; until: number };
 let cachedImage: CachedImage | undefined;
 
 function chunk(image: CachedImage, offset: number) {
-  if (offset > image.bytes.length) return undefined;
+  if (offset >= image.bytes.length) return undefined;
   const end = Math.min(image.bytes.length, offset + 64 * 1_024);
   return { mime_type: image.mime, total_bytes: image.bytes.length,
     offset, data_base64: image.bytes.subarray(offset, end).toString("base64") };
@@ -36,7 +36,7 @@ export function codexImageChunk(sessionId: string, entryId: string, offset: numb
       const bytes = Buffer.from(match[2]!, "base64");
       if (bytes.length > 8 * 1_024 * 1_024) return undefined;
       const image = { key, bytes, mime: match[1]!, until: Date.now() + 30_000 };
-      if (!providedLines) cachedImage = image;
+      cachedImage = image;
       return chunk(image, offset);
     }
   }

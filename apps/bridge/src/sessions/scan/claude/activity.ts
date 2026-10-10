@@ -2,7 +2,7 @@ import { claudeMessageIdentity } from "./message-identity";
 import { readFileSync, statSync } from "node:fs";
 import type { ActivityEntry, ChildThreadInfo, SessionInfo } from "../../../../../../packages/protocol/schema";
 import { safeParse, ts } from "../../support/common";
-import { classifyTool, estimateTokens, pushEntry, toolDescription, toolSummary } from "../../support/activity-helpers";
+import { classifyTool, estimateTokens, pushEntry as appendEntry, type PushEntryInput, toolDescription, toolSummary } from "../../support/activity-helpers";
 import { childEntryFields } from "../../support/child-threads";
 import { diffPreviewFromInput, patchStatsByToolUse, sensitivePath, statsFromInput } from "../../support/edit-stats";
 import { redactSecrets } from "../../telemetry/command-preview";
@@ -190,7 +190,7 @@ function appendClaudeToolUse(input: {
   const diffPreview = stats && !sensitivePath(toolInput?.file_path ?? toolInput?.path)
     ? patch?.preview ?? diffPreviewFromInput(String(block.name ?? ""), block.input, redactSecrets)
     : undefined;
-  pushEntry({ out: out, seen: seen, sessionId: session.sessionId, kind: "tool", text: toolSummary(block.name, block.input), createdAt: createdAt, ordinal: index * 100 + blockIndex, extras: {
+  appendEntry({ out: out, seen: seen, sessionId: session.sessionId, kind: "tool", text: toolSummary(block.name, block.input), createdAt: createdAt, ordinal: index * 100 + blockIndex, extras: {
       ...childFields,
       ...classified,
       ...(stats ?? {}),
@@ -209,7 +209,9 @@ export function appendClaudeActivity(input: {
   lines: string[];
   observations: Map<string, CapabilityObservation>;
   child?: ChildThreadInfo;
+  fullText?: boolean;
 }): void {
+  const pushEntry = (entry: PushEntryInput) => appendEntry({ ...entry, fullText: input.fullText });
   const { out, seen, session, lines, observations, child } = input;
   const sourceThreadId = child?.threadId ?? session.sessionId;
   const childFields = child ? childEntryFields(child) : {};

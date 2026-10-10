@@ -1,6 +1,34 @@
 import { artifactImages, artifactImageChunk } from "./artifacts";
 import { desktopTaskActivity } from "../task-activity";
-import { codexImageChunk } from "../../../../bridge/src/sessions/scan/codex/activity";
+import type { ActivityEntry, SessionInfo, SessionActivity } from '../../../../../packages/protocol/schema';
+import { nativeTranscriptImage } from '../../../../bridge/src/transcript-history';
+import { readStoreState } from '../../../../bridge/src/mesh/store/state';
+import { configDir } from '../../../../bridge/src/config';
+import { join } from 'node:path';
+
+export function transcriptImages(entry: ActivityEntry) {
+  return artifactImages(entry).map(({ id, name, markdown }) => ({ id, name, markdown }));
+}
+
+export function sessionImageChunk(session: SessionInfo, activity: SessionActivity,
+  imageId: string, offset: number, cursor?: string, storePath?: string) {
+  if (activity.sessionId !== session.sessionId) return undefined;
+  const native = activity.entries.some(entry => entry.id === imageId && entry.kind === 'user'
+    && entry.attachments?.includes('Image'));
+  if (native) return nativeTranscriptImage(session, imageId, offset, cursor);
+  const artifact = activity.entries.flatMap(artifactImages).find(image => image.id === imageId);
+  if (!artifact) return undefined;
+  const loaded = readStoreState(storePath ?? join(configDir(), 'project-mesh.json'));
+  if (loaded.status !== 'ok') return undefined;
+  const links = loaded.state.executions.filter(link => link.sessionId === session.sessionId
+    && link.provider === session.agent);
+  const taskIds = new Set(links.map(link => link.taskId));
+  if (taskIds.size !== 1) return undefined;
+  const tasks = loaded.state.tasks.filter(task => taskIds.has(task.taskId));
+  if (tasks.length !== 1) return undefined;
+  return artifactImageChunk({ projectId: tasks[0]!.projectId, taskId: tasks[0]!.taskId,
+    sessionId: session.sessionId, provider: session.agent, image: artifact, offset, storePath });
+}
 
 /** Only an image row in the exact Task's linked native conversation is readable. */
 export function desktopTaskImage(input: unknown, storePath?: string,
@@ -21,9 +49,13 @@ export function desktopTaskImage(input: unknown, storePath?: string,
       sessionId: activity.session_id, provider: activity.agent, image: artifact, offset, storePath });
     return chunk ? { operation: "desktop.task_image", image_id: imageId, ...chunk } : undefined;
   }
-  if (activity.agent !== "codex"
+  if (!["codex", "claude"].includes(activity.agent)
     || !activity.entries.some((entry) => entry.id === imageId
       && entry.kind === "user" && entry.attachments?.includes("Image"))) return undefined;
-  const chunk = codexImageChunk(activity.session_id, imageId, offset);
+  const cursor = query.history_cursor;
+  if (cursor !== undefined && (typeof cursor !== "string" || cursor.length > 512)) return undefined;
+  const session: SessionInfo = { sessionId: activity.session_id, agent: activity.agent,
+    state: "idle", startedAt: 0, lastActivityAt: 0, tokensSession: 0, tokensLastTurn: 0 };
+  const chunk = nativeTranscriptImage(session, imageId, offset, cursor as string | undefined);
   return chunk ? { operation: "desktop.task_image", image_id: imageId, ...chunk } : undefined;
 }

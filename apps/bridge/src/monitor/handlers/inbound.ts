@@ -33,6 +33,7 @@ import {
 import { handleTaskCreate } from "./task-create";
 import { handleUserMessage } from "./user-message";
 import { publishSessionEvents } from "./catalog";
+import { publishSessionImage } from '../../session-images';
 import { publishHistoryPage } from "../history/pages";
 import { requestProjectGraphRefresh } from "../graph-refresh";
 import { handleControllerPairRequest, handleInboundKnowledgeWrite } from "../controller-knowledge";
@@ -82,9 +83,8 @@ export async function handleMonitorMessage(
       return true;
     } else if (payload.type === "session.subscribe") {
       return handleInboundSubscription(client, payload, subscriptions, publish);
-    } else if (payload.type === "session.events") {
-      void publishSessionEvents(client, payload.sessionId, undefined, payload.threadId, payload).catch(() => false);
-      return true;
+    } else if (payload.type === "session.events" || payload.type === "session.image.query") {
+      return handleSessionRead(client, payload);
     } else if (payload.type === "sessions.refresh") {
       return handleInboundRefresh(client, payload, publish);
     } else if (payload.type === "sessions.history.query") {
@@ -271,5 +271,12 @@ function handleInboundSubscription(
   if (handleSubscription(subscriptions, payload)) {
     void publish(true).catch(() => {});
   }
+  return true;
+}
+
+async function handleSessionRead(client: RelayClient,
+  payload: Extract<Payload, { type: 'session.events' | 'session.image.query' }>): Promise<boolean> {
+  if (payload.type === 'session.image.query') await publishSessionImage(client, payload);
+  else void publishSessionEvents(client, payload.sessionId, undefined, payload.threadId, payload).catch(() => false);
   return true;
 }

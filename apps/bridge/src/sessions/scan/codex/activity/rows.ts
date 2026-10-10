@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { ActivityEntry, ChildThreadInfo, SessionInfo } from "../../../../../../../packages/protocol/schema";
 import { safeParse, ts } from "../../../support/common";
-import { classifyTool, estimateTokens, pushEntry, toolDescription, toolSummary } from "../../../support/activity-helpers";
+import { classifyTool, estimateTokens, pushEntry as appendEntry, type PushEntryInput, toolDescription, toolSummary } from "../../../support/activity-helpers";
 import { childEntryFields } from "../../../support/child-threads";
 import { diffPreviewFromInput, sensitivePath, statsFromInput } from "../../../support/edit-stats";
 import { redactSecrets } from "../../../telemetry/command-preview";
@@ -22,9 +22,11 @@ export function appendCodexActivity(input: {
   lines: string[];
   observations: Map<string, CapabilityObservation>;
   child?: ChildThreadInfo;
+  fullText?: boolean;
   changes?: Map<string, RecordedFileChange[]>;
   details?: Map<string, ToolCallDetail>;
 }): void {
+  const pushEntry = (entry: PushEntryInput) => appendEntry({ ...entry, fullText: input.fullText });
   const { out, seen, session, lines, observations, child, changes, details } = input;
   const sourceThreadId = child?.threadId ?? session.sessionId;
   const childFields = child ? childEntryFields(child) : {};

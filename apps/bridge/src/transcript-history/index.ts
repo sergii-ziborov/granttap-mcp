@@ -7,9 +7,10 @@ import { recordedFileChanges } from "./changes";
 import { recordedToolDetails } from "./tool-details";
 import { completedTurnChanges } from "./turn-changes";
 export { nativeImageLines } from "./images";
+export { nativeTranscriptImage } from './images/native';
 
 function boundedEntry(entry: ActivityEntry): ActivityEntry {
-  const result = { ...entry, text: entry.text.slice(0, 16_384) };
+  const result = { ...entry };
   if (!entry.fileChanges) return result;
   result.fileChanges = [];
   let bytes = 0;
@@ -47,9 +48,9 @@ export function readTranscriptHistory(session: SessionInfo, cursor?: string): Se
   for (const line of window.lines) {
     const before = out.length;
     if (session.agent === "claude") {
-      appendClaudeActivity({ out, seen, session, lines: [line.text], observations });
+      appendClaudeActivity({ out, seen, session, lines: [line.text], observations, fullText: true });
     } else {
-      appendCodexActivity({ out, seen, session, lines: [line.text], observations, changes, details });
+      appendCodexActivity({ out, seen, session, lines: [line.text], observations, changes, details, fullText: true });
     }
     for (const entry of out.slice(before)) offsets.set(entry.id, line.offset);
   }
