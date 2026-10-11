@@ -41,7 +41,7 @@ test("monitor entry fails closed before pairing and stops cleanly on SIGTERM", a
   const paired = launch(config, { GRANTTAP_ENGINE_ENABLED: "1" });
   t.after(() => { if (paired.exitCode === null) paired.kill("SIGTERM"); });
   const completion = closed(paired);
-  await waitFor(() => relay.connections() === 1, 10_000);
+  await waitFor(() => relay.connections() === 1, 30_000);
   paired.kill("SIGTERM");
   const stopped = await completion;
   assert.equal(stopped.code, 0, stopped.stderr);

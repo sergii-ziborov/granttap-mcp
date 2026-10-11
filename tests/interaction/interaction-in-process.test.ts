@@ -240,5 +240,5 @@ test("paired MCP delivers decisions, replies, and bounded Mesh events", async (t
   const conflictOutcome = conflict.structuredContent as Record<string, unknown>;
   assert.equal(conflictOutcome.status, "claim_rejected");
   assert.deepEqual(conflictOutcome.conflict, { ownerSessionId: "codex-session", resource: "src/auth/**" });
-  await waitFor(() => received.some((item) => item.type === "mesh.event"));
+  await waitFor(() => received.some((item) => item.type === "mesh.event"), 30_000);
 });

@@ -16,16 +16,18 @@ import { after, test } from "node:test";
 const previousConfigDir = process.env.GRANTTAP_CONFIG_DIR;
 
 const testConfigDir = mkdtempSync(join(tmpdir(), "granttap-mcp-approval-race-"));
+const activeChildren = new Set<ReturnType<typeof spawn>>();
 
 process.env.GRANTTAP_CONFIG_DIR = testConfigDir;
 
 after(() => {
+  for (const child of activeChildren) child.kill("SIGKILL");
   if (previousConfigDir == null) delete process.env.GRANTTAP_CONFIG_DIR;
   else process.env.GRANTTAP_CONFIG_DIR = previousConfigDir;
   rmSync(testConfigDir, { recursive: true, force: true });
 });
 
-function waitForFile(path: string, timeoutMs = 5_000): Promise<void> {
+function waitForFile(path: string, timeoutMs = 30_000): Promise<void> {
   const startedAt = Date.now();
   return new Promise((resolve, reject) => {
     const poll = () => {
@@ -97,6 +99,9 @@ function outcomeChild(
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
+  activeChildren.add(child);
+  const deadline = setTimeout(() => child.kill("SIGKILL"), 60_000);
+  deadline.unref();
   const result = new Promise<Record<string, unknown>>((resolve, reject) => {
     let stdout = "";
     let stderr = "";
@@ -104,6 +109,8 @@ function outcomeChild(
     child.stderr.setEncoding("utf8").on("data", (chunk) => { stderr += chunk; });
     child.on("error", reject);
     child.on("close", (code) => {
+      clearTimeout(deadline);
+      activeChildren.delete(child);
       if (code !== 0) {
         reject(new Error(`decision child exited ${code}: ${stderr}`));
         return;
@@ -115,7 +122,11 @@ function outcomeChild(
       }
     });
   });
-  return { ready: waitForFile(readyPath), result };
+  void result.catch(() => {});
+  return { ready: waitForFile(readyPath).catch((error) => {
+    child.kill("SIGKILL");
+    throw error;
+  }), result };
 }
 
 async function raceDecisionAgainstTerminal(

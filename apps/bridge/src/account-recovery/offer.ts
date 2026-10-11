@@ -30,7 +30,8 @@ export function createRecoveryOffer(request: RecoveryRequest, machineId: string)
     const extra = machineCfg.extraPeerPublicKeys ?? [];
     if (extra.length >= 16) throw new Error("This computer has reached its controller device limit.");
     const keys = generateKeyPair();
-    phoneCfg = { ...phoneCfg, senderId: randomId(8), myPublicKey: keys.publicKey,
+    phoneCfg = { ...phoneCfg, peerPublicKey: machineCfg.myPublicKey,
+      senderId: randomId(8), myPublicKey: keys.publicKey,
       mySecretKey: keys.secretKey };
     machineCfg = { ...machineCfg, extraPeerPublicKeys: [...extra, keys.publicKey] };
   }

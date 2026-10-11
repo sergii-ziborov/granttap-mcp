@@ -15,7 +15,12 @@ const concurrency = Number(process.env.GRANTTAP_TEST_CONCURRENCY ?? 4);
 if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 4) {
   throw new Error("GRANTTAP_TEST_CONCURRENCY must be an integer from 1 to 4");
 }
-const files = [...testFiles("tests"), ...testFiles("apps")].sort();
+const allFiles = [...testFiles("tests"), ...testFiles("apps")].sort();
+const requested = process.argv.slice(2);
+if (requested.some((file) => !allFiles.includes(file))) {
+  throw new Error("Requested test file is outside the repository test inventory");
+}
+const files = requested.length ? [...new Set(requested)].sort() : allFiles;
 if (files.length === 0) throw new Error("No test files found");
 // Keep test workers bounded when Apple simulators share the development host.
 const result = spawnSync(process.execPath, ["--import", "tsx", "--test", `--test-concurrency=${concurrency}`, ...files], {

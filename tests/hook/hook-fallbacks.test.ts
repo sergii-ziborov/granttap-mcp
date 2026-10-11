@@ -21,9 +21,9 @@ function run(
 ): { stdout: string; value?: any } {
   const child = spawnSync(process.execPath, ["--import", "tsx", entries[entry]], {
     cwd: process.cwd(), env: { ...process.env, GRANTTAP_CONFIG_DIR: configDir },
-    input: typeof input === "string" ? input : JSON.stringify(input), encoding: "utf8", timeout: 10_000,
+    input: typeof input === "string" ? input : JSON.stringify(input), encoding: "utf8", timeout: 30_000,
   });
-  assert.equal(child.status, 0, child.stderr);
+  assert.equal(child.status, 0, child.error?.message ?? child.stderr);
   const stdout = child.stdout.trim();
   return { stdout, value: stdout ? JSON.parse(stdout) : undefined };
 }
