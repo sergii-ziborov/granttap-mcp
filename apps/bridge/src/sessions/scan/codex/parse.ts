@@ -62,7 +62,10 @@ function applyCodexLine(d: any, state: CodexParseState): void {
     if (p?.cwd) state.cwd = String(p.cwd);
     if (p?.model) state.model = String(p.model);
     if (p?.git?.branch) state.branch = String(p.git.branch);
-    if (typeof p?.title === "string" && p.title.trim()) state.title = p.title.trim().slice(0, 120);
+    if (typeof p?.title === "string") {
+      const title = visibleUserText(p.title);
+      if (title) state.title = title.slice(0, 120);
+    }
     state.child = codexChildSource(p);
   }
 

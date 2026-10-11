@@ -61,7 +61,13 @@ export function stripAttachmentNote(text: string): string {
 }
 
 export function visibleUserText(value: unknown): string {
-  const text = stripAttachmentNote(stripTranscriptMarkup(String(value ?? "")).trim());
+  // Codex records the selected Page as a user row, including a null selection.
+  // Remove the host-owned block, retaining any real request alongside it.
+  const contextFree = String(value ?? "").replace(
+    /^(?:\s*<external_codex_apps_open_page\b[^>]*>[\s\S]*?(?:<\/external_codex_apps_open_page\s*>|$))+/i,
+    "",
+  );
+  const text = stripAttachmentNote(stripTranscriptMarkup(contextFree).trim());
   if (!text) return "";
   // The host's own notes about what it showed the model: nobody typed them.
   if (text.startsWith("[Image: original ") || text.startsWith("<local-command-caveat>")) return "";
