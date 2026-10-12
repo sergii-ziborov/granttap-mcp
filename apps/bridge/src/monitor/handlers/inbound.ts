@@ -270,7 +270,7 @@ function handleInboundSubscription(
   // The transcript goes first, before a potentially slow catalog rescan.
   void publishSessionEvents(client, payload.sessionId).catch(() => false);
   if (handleSubscription(subscriptions, payload)) {
-    void publish(true).catch(() => {});
+    void publish().catch(() => {});
   }
   return true;
 }

@@ -3,7 +3,8 @@ import { join } from "node:path";
 import { RelayClient } from "../../../../../packages/core/relay-client";
 import { configDir, loadConfig, machineConfigPath } from "../../config";
 import { EngineSupervisor } from "../../engine/runtime/engine-supervisor";
-import { meshSnapshots } from "../../mesh/runtime";
+import { meshSnapshotsAsync } from "../../mesh/runtime";
+import { publishedCatalog } from "../../session-catalog";
 import { recoverLocalGraphBindings } from "../../mesh/runtime/graph/binding-sync";
 import { startSessionMonitor } from "../../monitor";
 import { controllerPeerGate } from "../../pairing/controllers";
@@ -50,7 +51,9 @@ void engine.ensureAvailable().then((health) => {
   if (health.state === "healthy") {
     // A new Engine binary starts with its own registry. Re-admit existing,
     // locally verified Git bindings so linked repositories have a graph again.
-    void recoverLocalGraphBindings(meshSnapshots())
+    const known = publishedCatalog(client);
+    void meshSnapshotsAsync(known ? [...known.sessions, ...(known.history ?? [])] : [])
+      .then(recoverLocalGraphBindings)
       .then(() => monitor.publish())
       .catch(() => undefined);
   }

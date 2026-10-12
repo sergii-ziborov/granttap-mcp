@@ -26,7 +26,8 @@ import { boundedCatalogHistory, INTERVAL_MS, publishSessionEvents } from "../han
 import { sweepAttachments } from "../handlers/receipts";
 import { handleMonitorMessage } from "../handlers/inbound";
 
-const HISTORY_INTERVAL_MS = 10_000;
+const HISTORY_INTERVAL_MS = 60_000;
+const resumedHeads = new WeakSet<RelayClient>();
 import { publishMonitorMeshes, stopMonitorMeshes } from "../mesh-publication";
 
 export type SessionMonitor = {
@@ -118,18 +119,20 @@ async function publishMonitorTick(input: {
   if (!client.isConnected) return { lastHistoryPublishedAt, lastCapabilityPublishedAt };
   await publishHeartbeat(client).catch(() => {});
   if (!leadership.acquire()) return { lastHistoryPublishedAt, lastCapabilityPublishedAt };
-  if (lastHistoryPublishedAt === 0) {
-    await resumePublishedChats(client,
-      (session, status) => publishSessionEvents(client, session.sessionId, status));
-  }
-  const includeHistory = forceHistory || Date.now() - lastHistoryPublishedAt >= HISTORY_INTERVAL_MS;
+  const initial = lastHistoryPublishedAt === 0;
+  const includeHistory = forceHistory || (!initial && Date.now() - lastHistoryPublishedAt >= HISTORY_INTERVAL_MS);
   const status = monitorSnapshot({ includeHistory, forceHistory, subscriptions, history });
   rememberPublishedCatalog(client, status);
   await client.send(status, "phone", { ttlMs: INTERVAL_MS * 24, reliable: false });
+  if (initial && !resumedHeads.has(client)) {
+    resumedHeads.add(client);
+    void resumePublishedChats(client,
+      (session, saved) => publishSessionEvents(client, session.sessionId, saved)).catch(() => {});
+  }
   // Provider review is independent of task visibility; a hung hook RPC must
   // never hold the current catalog behind its discovery timeout.
   void refreshCodexHooks().catch(() => {});
-  if (includeHistory) lastHistoryPublishedAt = Date.now();
+  if (includeHistory || initial) lastHistoryPublishedAt = Date.now();
   loadLoop.updateStatus(status);
   void refreshMcpLoad(status.sessions).catch(() => {});
   for (const sessionId of subscriptions) {
