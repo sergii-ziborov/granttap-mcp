@@ -28,7 +28,8 @@ export type LocalProjectBinding = {
 
 let sharedClient: EngineClient | undefined;
 const pendingBindingSyncs = new Map<string, Promise<boolean>>();
-const MAX_REPOSITORY_GRAPH_WIRE_BYTES = 256 * 1_024;
+// The Apple Mesh envelope is 256KiB; leave room for Tasks, bindings and receipts.
+const MAX_REPOSITORY_GRAPH_WIRE_BYTES = 192 * 1_024 - 128;
 const MAX_SINGLE_GRAPH_WIRE_BYTES = 192 * 1_024;
 const repositoryGraphJobs = new RepositoryGraphJobs<ProjectRepositoryGraph>(Date.now,120_000,300_000,32,
   new RepositoryGraphCache(()=>join(configDir(),"repository-graph-cache")));
@@ -272,9 +273,10 @@ async function analyzeRepositoryGraph(
 function boundRepositoryGraphs(graphs: ProjectRepositoryGraph[]): ProjectRepositoryGraph[] {
   const result: ProjectRepositoryGraph[] = [];
   let remaining = MAX_REPOSITORY_GRAPH_WIRE_BYTES;
-  for (const graph of graphs) {
+  for (const [index, graph] of graphs.entries()) {
     if (remaining < 1_024) break;
-    const bounded = fitRepositoryGraph(graph, Math.min(remaining, MAX_SINGLE_GRAPH_WIRE_BYTES));
+    const fairShare = Math.floor(remaining / (graphs.length - index));
+    const bounded = fitRepositoryGraph(graph, Math.min(fairShare, MAX_SINGLE_GRAPH_WIRE_BYTES));
     if (!bounded) continue;
     result.push(bounded);
     remaining -= Buffer.byteLength(JSON.stringify(bounded), "utf8");

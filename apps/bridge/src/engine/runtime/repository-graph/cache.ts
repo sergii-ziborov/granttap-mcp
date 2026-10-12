@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync, renameSync, statSync, readdirSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { ProjectRepositoryGraph } from '../../../../../../packages/protocol/schema';
+import { fitRepositoryGraph } from './fit';
 /** Private computer-side observations; no hand-authored architecture enters this cache. */
 export class RepositoryGraphCache {
     constructor(private readonly directory: string | (() => string), private readonly now: () => number = Date.now) { }
@@ -27,7 +28,9 @@ export class RepositoryGraphCache {
     write(key: string, value: ProjectRepositoryGraph): void {
         if (!['COMPLETE', 'INCOMPLETE'].includes(value.analysisStatus ?? ''))
             return;
-        const json = JSON.stringify({ key, value, savedAt: this.now() });
+        const bounded = fitRepositoryGraph(value, 192 * 1024);
+        if (!bounded) return;
+        const json = JSON.stringify({ key, value: bounded, savedAt: this.now() });
         if (Buffer.byteLength(json) > 256 * 1024)
             return;
         try {
