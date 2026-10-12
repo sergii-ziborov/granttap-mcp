@@ -114,6 +114,7 @@ export const CLAUDE_MATCHERS = [
   "Write",
   "MultiEdit",
   "NotebookEdit",
+  "AskUserQuestion",
   "Skill",
   "mcp__.*",
   "skill__.*",

@@ -20,6 +20,8 @@ export type PeerConfig = {
 
 /** Persistent processes reconnect in the background; one-shot hooks leave this off. */
 export type RelayClientOptions = {
+  /** Fresh managed admission at each socket upgrade; own relays need no ticket. */
+  upgradeHeaders?: () => Promise<Record<string, string>>;
   autoReconnect?: boolean;
   minReconnectMs?: number;
   maxReconnectMs?: number;

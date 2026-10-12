@@ -1,4 +1,5 @@
 import { handleHookTrust } from "../../codex-hook-trust";
+import { handleConfigurationCommand } from "../../configuration-delivery";
 import type { Payload } from "../../../../../packages/protocol/schema";
 import type { RelayClient } from "../../../../../packages/core/relay-client";
 import { storeAttachment } from "../../delivery/attachment-store";
@@ -72,7 +73,7 @@ export async function handleMonitorMessage(
       // Ahead of its message, so the message itself travels light.
       return storeAttachment(payload, client.room);
     } else if (payload.type === "config.set") {
-      handleConfigSet(payload);
+      await handleConfigurationCommand(client, payload);
       void publish().catch(() => {});
       return true;
     } else if (payload.type === "project.task.create") {
@@ -164,14 +165,14 @@ async function handleInboundClaimRelease(
   return true;
 }
 
-function handleInboundRefresh(
+async function handleInboundRefresh(
   client: RelayClient, payload: Extract<Payload, { type: "sessions.refresh" }>,
   publish: (forceHistory?: boolean) => Promise<void>,
-): boolean {
+): Promise<boolean> {
   // An explicit refresh may pay for the full history scan; routine Mesh
   // snapshots use the cached history and fresh live sessions.
   invalidateMeshSessionHistory();
-  void publish(true).catch(() => {});
+  await publish(true).catch(() => {});
   if (payload.graphProjectId && loadRuntimeConfig().meshEnabled) {
     requestProjectGraphRefresh(client, payload.graphProjectId);
   }
@@ -277,6 +278,6 @@ function handleInboundSubscription(
 async function handleSessionRead(client: RelayClient,
   payload: Extract<Payload, { type: 'session.events' | 'session.image.query' }>): Promise<boolean> {
   if (payload.type === 'session.image.query') await publishSessionImage(client, payload);
-  else void publishSessionEvents(client, payload.sessionId, undefined, payload.threadId, payload).catch(() => false);
+  else await publishSessionEvents(client, payload.sessionId, undefined, payload.threadId, payload).catch(() => false);
   return true;
 }

@@ -2,7 +2,7 @@ import { refreshCodexHooks } from "../../codex-hook-trust";
 import { computerDisplayName } from "../../../../../packages/core/computer-name";
 import { RelayClient } from "../../../../../packages/core/relay-client";
 import type { Payload, SessionInfo, SessionsStatus } from "../../../../../packages/protocol/schema";
-import { loadRuntimeConfig } from "../../config";
+import { loadRuntimeConfig, autoAcceptLevelFor } from "../../config";
 import { monitorLeadership } from "./leadership";
 import { mcpServersForSession, workspaceSkills } from "../../capabilities";
 import { inspectAgentIntegrations } from "../../install";
@@ -93,7 +93,8 @@ function monitorSnapshot(input: {
     gatingEnabled: runtime.enabled,
     excludedSessions: runtime.excludedSessions,
     autoAcceptDefault: runtime.autoAcceptDefault,
-    autoAcceptBySession: runtime.autoAcceptBySession,
+    autoAcceptBySession: Object.fromEntries(Object.keys(runtime.autoAcceptBySession)
+      .map(id => [id, autoAcceptLevelFor(id)])),
     autoAcceptByProject: runtime.autoAcceptByProject,
     autoAcceptPaused: runtime.autoAcceptPaused,
     providerSettings: runtime.providerSettings,
@@ -121,9 +122,11 @@ async function publishMonitorTick(input: {
   await publishHeartbeat(client).catch(() => {});
   if (!leadership.acquire()) return { lastHistoryPublishedAt, lastCapabilityPublishedAt };
   const includeHistory = forceHistory || Date.now() - lastHistoryPublishedAt >= HISTORY_INTERVAL_MS;
-  await refreshCodexHooks();
   const status = monitorSnapshot({ includeHistory, forceHistory, subscriptions, history });
   await client.send(status, "phone", { ttlMs: INTERVAL_MS * 24, reliable: false });
+  // Provider review is independent of task visibility; a hung hook RPC must
+  // never hold the current catalog behind its discovery timeout.
+  void refreshCodexHooks().catch(() => {});
   if (includeHistory) lastHistoryPublishedAt = Date.now();
   loadLoop.updateStatus(status);
   void refreshMcpLoad(status.sessions).catch(() => {});
@@ -227,6 +230,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
   const stopCatalog = startPublishLoop({
     connected: () => client.isConnected,
     intervalMs: INTERVAL_MS,
+    immediate: true,
     publish: () => publish().catch(() => {}),
   });
   // Liveness rides its own loop. Queueing it behind the single-flight catalog

@@ -1,6 +1,7 @@
 #!/usr/bin/env -S npx tsx
 /** Cursor afterShellExecution: retire the exact chat's orphaned phone card. */
 import { RelayClient } from "../../../../../packages/core/relay-client";
+import { managedAdmissionOptions } from "../../managed-admission";
 import {
   markApprovalTerminal,
   pendingApprovalRegistrations,
@@ -78,7 +79,8 @@ async function main(): Promise<void> {
   if (cancelled.length > 0) {
     try {
       const config = loadConfig(machineConfigPath());
-      const client = new RelayClient(applyNetworkRoute(config), { peerAllowed: controllerPeerGate(config) });
+      const routed = applyNetworkRoute(config);
+      const client = new RelayClient(routed, { ...managedAdmissionOptions(routed), peerAllowed: controllerPeerGate(config) });
       await client.connect();
       try {
         for (const { request, accepted } of cancelled) {

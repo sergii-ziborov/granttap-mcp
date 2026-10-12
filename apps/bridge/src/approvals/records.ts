@@ -39,7 +39,7 @@ export function requestDigest(requestId: string): string {
 }
 
 export function requestFingerprint(request: ApprovalRequest): string {
-  const stable = JSON.stringify([
+  const fields: unknown[] = [
     request.type,
     request.requestId,
     request.agent,
@@ -50,7 +50,10 @@ export function requestFingerprint(request: ApprovalRequest): string {
     request.cwd ?? null,
     normalizedSessionId(request.sessionId) ?? null,
     request.risk,
-  ]);
+  ];
+  if (request.inputFingerprint || request.details) fields.push(request.inputFingerprint ?? request.details);
+  if (request.questions) fields.push(request.questions);
+  const stable = JSON.stringify(fields);
   return createHash("sha256").update(stable).digest("hex");
 }
 

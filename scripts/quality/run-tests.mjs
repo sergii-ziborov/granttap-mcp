@@ -15,7 +15,7 @@ const concurrency = Number(process.env.GRANTTAP_TEST_CONCURRENCY ?? 4);
 if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 4) {
   throw new Error("GRANTTAP_TEST_CONCURRENCY must be an integer from 1 to 4");
 }
-const allFiles = [...testFiles("tests"), ...testFiles("apps")].sort();
+const allFiles = [...testFiles("tests"), ...testFiles("apps"), ...testFiles("packages")].sort();
 const requested = process.argv.slice(2);
 if (requested.some((file) => !allFiles.includes(file))) {
   throw new Error("Requested test file is outside the repository test inventory");

@@ -9,6 +9,7 @@ import { startSessionMonitor } from "../../monitor";
 import { controllerPeerGate } from "../../pairing/controllers";
 import { applyNetworkRoute } from "../../device-network/settings";
 import { startEndpointPublisher } from "../../device-network/directory";
+import { managedAdmissionOptions } from "../../managed-admission";
 
 let client: RelayClient;
 let monitor: ReturnType<typeof startSessionMonitor>;
@@ -19,6 +20,7 @@ let stopEndpointPublisher = () => {};
 try {
   const cfg = applyNetworkRoute(loadConfig(machineConfigPath()));
   client = new RelayClient(cfg, {
+    ...managedAdmissionOptions(cfg),
     autoReconnect: true,
     replayPath: join(configDir(), `replay-${cfg.room}.json`),
     peerAllowed: controllerPeerGate(cfg),

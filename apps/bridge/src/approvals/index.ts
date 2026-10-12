@@ -21,6 +21,7 @@ import {
 import { primeSessionKeys, sendSessionPayload } from "../host/session-keys";
 import { controllerPeerGate } from "../pairing/controllers";
 import { applyNetworkRoute } from "../device-network/settings";
+import { managedAdmissionOptions } from "../managed-admission";
 
 /**
  * Nobody answered — relay unreachable, or the phone never responded before the
@@ -46,7 +47,9 @@ export async function requestApproval(
   opts: RequestApprovalOpts = {},
 ): Promise<ApprovalDecision> {
   const timeoutMs = opts.timeoutMs ?? 60_000;
-  const client = opts.client ?? new RelayClient(applyNetworkRoute(cfg), { peerAllowed: controllerPeerGate(cfg) });
+  const routed = applyNetworkRoute(cfg);
+  const client = opts.client ?? new RelayClient(routed, {
+    ...managedAdmissionOptions(routed), peerAllowed: controllerPeerGate(cfg) });
   const ownsClient = !opts.client;
   let cancelDecisionWait = () => {};
   const registration = registerPendingApproval(req);

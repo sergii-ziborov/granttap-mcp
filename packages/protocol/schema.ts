@@ -46,6 +46,7 @@ import {
 } from "./messages/project-policy";
 import {
   ConfigSet,
+  ConfigCommandResult,
   SessionAccessSet,
   SessionActivity,
   SessionCompact,
@@ -132,6 +133,7 @@ export const Payload = z.union([
   SessionsHistoryQuery,
   SessionsHistoryPage,
   ConfigSet,
+  ConfigCommandResult,
   SessionAccessSet,
   SessionMcpSet,
   SessionSkillSet,

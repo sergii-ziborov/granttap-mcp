@@ -1,14 +1,19 @@
 import { z } from "zod";
+import { ApprovalQuestions } from "./approval-questions";
 import { AgentId, DangerLevel, Risk } from "./primitives";
 
 export const ApprovalRequest = z.object({
   type: z.literal("approval.request"),
   requestId: z.string(),
   agent: AgentId,
-  kind: z.literal("permission"),
+  kind: z.enum(["permission", "question"]),
+  questions: ApprovalQuestions.optional(),
   tool: z.string(),
   title: z.string(),
   command: z.string().optional(),
+  details: z.string().max(16_384).optional(),
+  policyRevision: z.number().int().nonnegative().optional(),
+  inputFingerprint: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   cwd: z.string().optional(),
   sessionId: z.string().optional(),
   projectId: z.string().min(1).max(128).optional(),
@@ -40,7 +45,7 @@ export function approvalAction(request: ApprovalRequest): ActionRequest {
     id: request.requestId,
     sessionId: request.sessionId,
     agent: request.agent,
-    kind: "permission",
+    kind: request.kind,
     title: request.title,
     command: request.command,
     risk: request.danger ?? (request.risk === "high" ? "dangerous"

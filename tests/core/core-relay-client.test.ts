@@ -1,4 +1,5 @@
 import { encryptedEnvelope } from "../support/transport/encrypted-envelope";
+import { recordingRelay } from "../support/transport/recording-relay";
 import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -99,20 +100,20 @@ test("a phone in a shared room opens a second computer's envelopes", async () =>
   assert.equal(received[0]?.type, "machine.heartbeat");
 });
 
-test("one computer sends a separate encrypted copy to each controller phone", async () => {
+test("one computer sends a separate encrypted copy to each controller phone", async t => {
   const machine = generateKeyPair();
   const first = generateKeyPair();
   const second = generateKeyPair();
-  const base = { relayUrl: "ws://127.0.0.1:1", room: "room-controllers" };
+  const relay = await recordingRelay(t);
+  const base = { relayUrl: relay.url, room: "room-controllers" };
   const sender = new RelayClient({ ...base, role: "machine", deviceName: "Mac",
     senderId: "mac", myPublicKey: machine.publicKey, mySecretKey: machine.secretKey,
     peerPublicKey: first.publicKey, extraPeerPublicKeys: [second.publicKey] });
-  const raw: string[] = [];
-  (sender as unknown as { ws: { readyState: number; send(raw: string): void } }).ws = {
-    readyState: 1, send: (value) => raw.push(value),
-  };
+  await relay.connect(sender, 2);
+  const raw = relay.frames;
   const payload: Payload = { type: "machine.heartbeat", machine: "Mac", createdAt: Date.now() };
   await sender.send(payload, "phone");
+  await relay.until(items => items.length === 2);
   assert.equal(raw.length, 2);
   for (const [index, keys] of [first, second].entries()) {
     const recipient = new RelayClient({ ...base, role: "phone", deviceName: "iPhone",
@@ -125,20 +126,20 @@ test("one computer sends a separate encrypted copy to each controller phone", as
   }
 });
 
-test("a revoked controller receives no new copy and cannot deliver a payload", async () => {
+test("a revoked controller receives no new copy and cannot deliver a payload", async t => {
   const machine = generateKeyPair();
   const first = generateKeyPair();
   const expired = generateKeyPair();
-  const cfg: PeerConfig = { relayUrl: "ws://127.0.0.1:1", room: "room-expired-controller",
+  const relay = await recordingRelay(t);
+  const cfg: PeerConfig = { relayUrl: relay.url, room: "room-expired-controller",
     role: "machine", deviceName: "Mac", senderId: "mac", myPublicKey: machine.publicKey,
     mySecretKey: machine.secretKey, peerPublicKey: first.publicKey,
     extraPeerPublicKeys: [expired.publicKey] };
   const client = new RelayClient(cfg, { peerAllowed: (key) => key !== expired.publicKey });
-  const sent: string[] = [];
-  (client as unknown as { ws: { readyState: number; send(raw: string): void } }).ws = {
-    readyState: 1, send: (raw) => sent.push(raw),
-  };
+  await relay.connect(client);
+  const sent = relay.frames;
   await client.send({ type: "machine.heartbeat", machine: "Mac", createdAt: Date.now() });
+  await relay.until(items => items.length === 1);
   assert.equal(sent.length, 1);
   const received: Payload[] = [];
   client.onMessage((payload) => { received.push(payload); return true; });
@@ -151,11 +152,12 @@ test("a revoked controller receives no new copy and cannot deliver a payload", a
   assert.deepEqual(received, [hello]);
 });
 
-test("relay ACK waits until one consumer actually accepts the decrypted payload", async () => {
+test("relay ACK waits until one consumer actually accepts the decrypted payload", async t => {
   const machine = generateKeyPair();
   const phone = generateKeyPair();
+  const relay = await recordingRelay(t);
   const cfg: PeerConfig = {
-    relayUrl: "ws://127.0.0.1:1",
+    relayUrl: relay.url,
     room: "room-ack",
     role: "machine",
     deviceName: "machine",
@@ -165,11 +167,8 @@ test("relay ACK waits until one consumer actually accepts the decrypted payload"
     peerPublicKey: phone.publicKey,
   };
   const client = new RelayClient(cfg);
-  const acknowledgements: string[] = [];
-  (client as unknown as { ws: { readyState: number; send(raw: string): void } }).ws = {
-    readyState: 1,
-    send: (raw) => acknowledgements.push(raw),
-  };
+  await relay.connect(client);
+  const acknowledgements = relay.frames;
   const payload: Payload = {
     type: "approval.decision",
     requestId: "approval-1",
@@ -184,6 +183,7 @@ test("relay ACK waits until one consumer actually accepts the decrypted payload"
   let accepted = 0;
   client.onMessage(() => { accepted += 1; return true; });
   await receiveRaw(client, { ...envelope, deliveryId: "retry-id" });
+  await relay.until(items => items.length === 1);
   assert.equal(accepted, 1);
   assert.deepEqual(JSON.parse(acknowledgements[0]!), {
     type: "relay.ack",

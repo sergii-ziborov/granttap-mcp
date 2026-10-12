@@ -10,6 +10,7 @@
  * the Cloudflare Durable Object deployment.
  */
 import WebSocket from "ws";
+import { OutboundFrameQueue, sendEncryptedPayload } from "./outbound-scheduler";
 import { createHash } from "node:crypto";
 import { Envelope, Payload, type Role } from "../protocol/schema";
 import { openFromPeersWithIdentity, openWithTransferKey, peerPublicKeys, seal, sealWithTransferKey } from "./crypto";
@@ -24,6 +25,7 @@ type Listener = (p: Payload, peerPublicKey: string) => boolean | void | Promise<
 
 export class RelayClient {
   private ws?: WebSocket;
+  private frames?: OutboundFrameQueue;
   private listeners = new Set<Listener>();
   private intentionalClose = false;
   private connectPromise?: Promise<void>;
@@ -71,18 +73,23 @@ export class RelayClient {
     if (this.connectPromise) return this.connectPromise;
 
     this.intentionalClose = false;
-    const pending = new Promise<void>((resolve, reject) => {
+    const pending = Promise.resolve().then(() => this.opts.upgradeHeaders?.() ?? {})
+      .then(headers => new Promise<void>((resolve, reject) => {
       // The room rides in the URL: the Cloudflare relay must pick a Durable
       // Object before the socket upgrades. The Node relay simply ignores it.
       const url = new URL(this.cfg.relayUrl);
       url.searchParams.set("room", this.cfg.room);
       const ws = new WebSocket(
         url.toString(),
-        this.cfg.pushAuth
-          ? { headers: { Authorization: `Bearer ${this.cfg.pushAuth}` } }
-          : undefined,
+        { headers: { ...headers,
+          ...(this.cfg.pushAuth ? { Authorization: `Bearer ${this.cfg.pushAuth}` } : {}) } },
       );
       this.ws = ws;
+      const frames = new OutboundFrameQueue(frame => new Promise((resolve, reject) => {
+        if (ws.readyState !== WebSocket.OPEN) { reject(new Error("relay not connected")); return; }
+        ws.send(frame, error => error ? reject(error) : resolve());
+      }));
+      this.frames = frames;
       let opened = false;
       const timer = setTimeout(() => {
         ws.terminate();
@@ -113,13 +120,14 @@ export class RelayClient {
         if (!opened) reject(err);
       });
       ws.on("close", () => {
+        frames.cancel();
         clearTimeout(timer);
         this.stopLivenessChecks();
         if (this.ws === ws) this.ws = undefined;
         if (!opened) reject(new Error(`relay connection closed (${this.cfg.relayUrl})`));
         this.scheduleReconnect();
       });
-    });
+    })).catch(error => { this.scheduleReconnect(); throw error; });
     this.connectPromise = pending.finally(() => {
       this.connectPromise = undefined;
     });
@@ -214,7 +222,7 @@ export class RelayClient {
 
   private ackDelivery(deliveryId: string | undefined): void {
     if (deliveryId && this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ type: "relay.ack", deliveryId }));
+      void this.frames?.send(JSON.stringify({ type: "relay.ack", deliveryId }), true).catch(() => {});
     }
   }
 
@@ -225,17 +233,8 @@ export class RelayClient {
   ): Promise<void> {
     const ws = this.ws;
     if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error("relay not connected");
-    const peers = peerPublicKeys(this.cfg.peerPublicKey, this.cfg.extraPeerPublicKeys)
-      .filter((peerPublicKey) => this.peerIsAllowed(peerPublicKey));
-    if (peers.length === 0) throw new Error("no authorized pairing peers");
-    for (const peerPublicKey of peers) {
-      ws.send(sealEnvelope(
-        { ...this.cfg, peerPublicKey },
-        payload,
-        to,
-        peers.length === 1 ? options : { ...options, deliveryId: undefined },
-      ));
-    }
+    if (!this.frames) throw new Error("relay not connected");
+    await sendEncryptedPayload(this.frames, this.cfg, key => this.peerIsAllowed(key), { payload, to, options });
   }
 
   /** Add a newly issued controller without waiting for the monitor to restart. */
@@ -256,7 +255,8 @@ export class RelayClient {
     if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error("relay not connected");
     if (!peerPublicKeys(this.cfg.peerPublicKey, this.cfg.extraPeerPublicKeys).includes(peerPublicKey)
       || !this.peerIsAllowed(peerPublicKey)) throw new Error("controller peer is not authorized");
-    ws.send(sealEnvelope({ ...this.cfg, peerPublicKey }, payload, this.otherRole(), options));
+    if (!this.frames) throw new Error("relay not connected");
+    await this.frames.send(sealEnvelope({ ...this.cfg, peerPublicKey }, payload, this.otherRole(), options), true);
   }
 
   setSessionKey(sessionId: string, key: string): void {
@@ -311,6 +311,7 @@ export class RelayClient {
   }
 
   close(): void {
+    this.frames?.cancel();
     this.stopLivenessChecks();
     this.intentionalClose = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);

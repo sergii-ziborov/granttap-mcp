@@ -19,6 +19,8 @@ import {
   type CortexProjectConfig,
 } from "../../cortex/config";
 import { configDir, runtimeConfigPath } from "./paths";
+import { taskAutomationLevel, taskAutomationProject } from "../../task-automation";
+import { governedRevision } from "../../policy/governed-projects";
 
 export type RuntimeConfig = {
   enabled: boolean;
@@ -213,7 +215,7 @@ export function saveRuntimeConfig(cfg: Partial<RuntimeConfig>): void {
   writePrivateFile(runtimeConfigPath(), JSON.stringify(merged, null, 2) + "\n");
 }
 
-function projectIdForSession(sessionId: string | null | undefined): string | null | undefined {
+export function projectIdForSession(sessionId: string | null | undefined): string | null | undefined {
   if (!sessionId) return undefined;
   try {
     const loaded = readStoreState(join(configDir(), "project-mesh.json"));
@@ -235,10 +237,16 @@ function projectIdForSession(sessionId: string | null | undefined): string | nul
   }
 }
 
-export function autoAcceptLevelFor(sessionId: string | null | undefined): AutoAcceptLevel {
+export function autoAcceptLevelFor(sessionId: string | null | undefined,
+  observedProjectId?: string): AutoAcceptLevel {
   const cfg = loadRuntimeConfig();
-  const projectId = projectIdForSession(sessionId);
-  if (projectId === null) return "ask";
+  const mappedProject = projectIdForSession(sessionId);
+  if (mappedProject === null || (observedProjectId && mappedProject && observedProjectId !== mappedProject)) return "ask";
+  const projectId = observedProjectId ?? mappedProject ?? taskAutomationProject(sessionId);
+  if (!cfg.autoAcceptPaused && projectId) {
+    const grant = taskAutomationLevel(sessionId ?? undefined, projectId, governedRevision(projectId) ?? 0);
+    if (grant) return grant;
+  }
   return resolveAutoAcceptLevel({
     paused: cfg.autoAcceptPaused,
     // A Mesh execution without an explicit Project level must fail closed.
@@ -255,8 +263,9 @@ export function shouldAutoAcceptTool(
   sessionId: string | null | undefined,
   tool: string,
   command: string | null | undefined,
+  observedProjectId?: string,
 ): boolean {
-  const level = autoAcceptLevelFor(sessionId);
+  const level = autoAcceptLevelFor(sessionId, observedProjectId);
   return shouldAutoAllow(level, classifyAction(tool, command ?? undefined));
 }
 

@@ -328,6 +328,20 @@ invites, change the relay, expand Project scope, or reach `setup`; revoking the
 endpoint from the iPhone stops new Mesh operations immediately while local Task
 history stays on the device.
 
+## Decisions and Claude questions
+
+Tap an approval card to inspect the exact tool parameters and configure Auto
+allow for that chat. Apply waits for a receipt from the owning computer; an
+unconfirmed command is never shown as applied. The grant remains tied to the
+chat, Project, and current policy revision. Global DENY, paused automation, and
+new governance revisions still take precedence.
+
+Claude Code `AskUserQuestion` is delivered as a question form, including all
+options and descriptions, multiple selections, and an Other answer. Complete
+answers return through the same encrypted durable channel with Claude's original
+question array. Questions always need a human answer; Auto allow cannot answer
+them. A lost connection keeps Claude's local question flow available.
+
 ## Install
 
 The local runtime and plugins are available under the [MIT License](LICENSE).

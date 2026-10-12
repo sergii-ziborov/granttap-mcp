@@ -153,8 +153,8 @@ export function handleSubscription(subscriptions: Set<string>, message: SessionS
   return subscriptions.size !== before;
 }
 
-export function handleConfigSet(message: ConfigSet): void {
-  applyConfigSet(message);
+export function handleConfigSet(message: ConfigSet) {
+  return applyConfigSet(message);
 }
 
 export function handleHostGrant(message: HostGrant): void {

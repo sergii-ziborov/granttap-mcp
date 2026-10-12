@@ -54,7 +54,7 @@ function visibleText(line: string): string | undefined {
 }
 
 /** Recover the text prefix of an oversized first user row without reading its image bytes. */
-export function codexHeadRequest(path: string): CodexHeadRequest | undefined {
+export function codexHeadRequest(path: string, preferHumanTitle = false): CodexHeadRequest | undefined {
   let fd: number;
   try {
     fd = openSync(path, "r");
@@ -65,13 +65,25 @@ export function codexHeadRequest(path: string): CodexHeadRequest | undefined {
     const buffer = Buffer.allocUnsafe(TITLE_HEAD_BYTES);
     const count = readSync(fd, buffer, 0, buffer.length, 0);
     const source = buffer.subarray(0, count).toString("utf8");
+    let provisional: CodexHeadRequest | undefined;
     for (const line of source.split("\n")) {
       const text = visibleText(line);
       if (!text) continue;
-      return { text, createdAt: ts(jsonStringAfter(line, "timestamp")) };
+      const request = { text, createdAt: ts(jsonStringAfter(line, "timestamp")) };
+      if (preferHumanTitle && isProvisionalPageTitle(text)) { provisional ??= request; continue; }
+      return request;
     }
-    return undefined;
+    return provisional;
   } finally {
     closeSync(fd);
   }
+}
+
+/** A selected-page placeholder may name a genuine JSON-only request, but yields to human text. */
+export function isProvisionalPageTitle(text: string): boolean {
+  try {
+    const value = JSON.parse(text);
+    return !!value && typeof value === "object" && !Array.isArray(value)
+      && Object.keys(value).length === 1 && Object.hasOwn(value, "page_id") && value.page_id == null;
+  } catch { return false; }
 }

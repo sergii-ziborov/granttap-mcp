@@ -201,7 +201,7 @@ test("agent integration inspection is read-only and reports binaries and hooks s
     writeFile(fakeCodex, "#!/bin/sh\n", { mode: 0o755 }),
     writeFile(join(claudeDir, "settings.json"), JSON.stringify({
       hooks: { PreToolUse: [{
-        matcher: "Bash|Edit|Write|MultiEdit|NotebookEdit|mcp__.*|Skill|skill__.*",
+        matcher: "Bash|Edit|Write|MultiEdit|NotebookEdit|mcp__.*|Skill|skill__.*|AskUserQuestion",
         hooks: [{ type: "command", command: hookCommand("claude") }],
       }] },
     })),

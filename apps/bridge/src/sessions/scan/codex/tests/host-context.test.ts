@@ -82,3 +82,18 @@ test("Codex drops consecutive host blocks and incomplete context-only rows", t =
   assert.equal(session.title, "Continue the task");
   assert.ok(readTranscriptHistory(session)!.entries.every(entry => entry.text === "Continue the task"));
 });
+
+test("Codex stale page metadata titles yield to a real user request without deleting JSON messages", t => {
+  const session = fixture(t, "stale-page-title", ["Fix the Mac connection"], '{"page_id":null}');
+  assert.equal(session.title, "Fix the Mac connection");
+  assert.ok(readTranscriptHistory(session)!.entries.some(entry => entry.text === "Fix the Mac connection"));
+});
+
+test("Codex a provisional page JSON title yields to the real request while its message remains", t => {
+  const metadata = '{"page_id":null}';
+  const session = fixture(t, "page-then-person", [metadata, "Repair the phone link"], metadata);
+  assert.equal(session.title, "Repair the phone link");
+  const entries = readTranscriptHistory(session)!.entries;
+  assert.ok(entries.some(entry => entry.text === metadata));
+  assert.ok(entries.some(entry => entry.text === "Repair the phone link"));
+});

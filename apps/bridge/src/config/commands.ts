@@ -6,6 +6,8 @@ import { configDir } from "./runtime/paths";
 import { loadRuntimeConfig, saveRuntimeConfig, type RuntimeConfig } from "./runtime";
 import { writePrivateFile } from "./access/write-private";
 import { acceptInstanceEpoch } from "../host/instance-epoch";
+import { applyControllerGrant, type GrantRejection } from "../task-automation/controller-grant";
+import { revokeTaskAutomation } from "../task-automation";
 
 const CLOCK_SKEW_MS = 2 * 60_000;
 const MAX_COMMANDS = 256;
@@ -13,7 +15,7 @@ const MAX_COMMANDS = 256;
 export type ConfigCommandResult =
   | { kind: "applied"; revision: number }
   | { kind: "replay"; revision: number }
-  | { kind: "rejected"; reason: "expired" | "conflict" | "digest_mismatch" | "legacy_blocked" | "stale_instance" };
+  | { kind: "rejected"; reason: "expired" | "conflict" | "digest_mismatch" | "legacy_blocked" | "stale_instance" | GrantRejection };
 
 type CommandRecord = {
   operationId: string;
@@ -146,6 +148,17 @@ export function applyConfigSet(
   if (!acceptInstanceEpoch(message.instanceEpoch, state.requireFreshCommands)) {
     return { kind: "rejected", reason: "stale_instance" };
   }
+  const session = message.autoAcceptSession;
+  if (session?.authorizeProjectAsk) {
+    if (!message.operationId || !message.expiresAt || !message.instanceEpoch) {
+      return { kind: "rejected", reason: "legacy_blocked" };
+    }
+    const reason = applyControllerGrant(session, now);
+    if (reason) return { kind: "rejected", reason };
+  } else if (session) {
+    revokeTaskAutomation(session.sessionId);
+  }
+  if (message.excludeSession) revokeTaskAutomation(message.excludeSession);
   applyRuntimePatch(message);
   state.revision += 1;
   if (message.operationId) {

@@ -15,7 +15,7 @@ import { codexTurnState, observeCodexTurn, type CodexTurnClock } from "./turn-st
 import type { SessionInfo } from "../../../../../../packages/protocol/schema";
 import { childTitle } from "../../support/child-threads";
 import { visibleUserText } from "../../support/activity-helpers";
-import { codexHeadRequest } from "../../support/codex-head";
+import { codexHeadRequest, isProvisionalPageTitle } from "../../support/codex-head";
 
 type CodexParseState = {
   sessionId: string;
@@ -23,6 +23,7 @@ type CodexParseState = {
   branch?: string;
   model?: string;
   title?: string;
+  provisionalTitle?: string;
   summary?: string;
   accessLevel?: SessionInfo["accessLevel"];
   child?: CodexChildSource;
@@ -36,6 +37,13 @@ type CodexParseState = {
   workdirs: string[];
   turn: CodexTurnClock;
 };
+
+function adoptRequestTitle(state: CodexParseState, text: string | undefined): void {
+  const title = childTitle(text);
+  if (!title) return;
+  if (isProvisionalPageTitle(title)) state.provisionalTitle ??= title;
+  else state.title = title;
+}
 
 function applyCodexLine(d: any, state: CodexParseState): void {
   observeCodexTurn(d, state.turn);
@@ -64,7 +72,7 @@ function applyCodexLine(d: any, state: CodexParseState): void {
     if (p?.git?.branch) state.branch = String(p.git.branch);
     if (typeof p?.title === "string") {
       const title = visibleUserText(p.title);
-      if (title) state.title = title.slice(0, 120);
+      if (title && !isProvisionalPageTitle(title)) state.title = title.slice(0, 120);
     }
     state.child = codexChildSource(p);
   }
@@ -78,7 +86,7 @@ function applyCodexLine(d: any, state: CodexParseState): void {
   }
 
   if (!state.title && d.type === "event_msg" && d.payload?.type === "user_message") {
-    state.title = childTitle(visibleUserText(d.payload.message ?? d.payload.text));
+    adoptRequestTitle(state, visibleUserText(d.payload.message ?? d.payload.text));
   }
   if (
     !state.title &&
@@ -92,7 +100,7 @@ function applyCodexLine(d: any, state: CodexParseState): void {
       .map((block: any) => visibleUserText(block.text))
       .filter(Boolean)
       .join("\n");
-    if (visible) state.title = childTitle(visible);
+    if (visible) adoptRequestTitle(state, visible);
   }
 
   if (d.type === "event_msg" && d.payload?.type === "agent_message") {
@@ -155,7 +163,8 @@ export function parseCodexFile(file: string): CodexCandidate | undefined {
     const d = safeParse(line);
     if (d) applyCodexLine(d, state);
   }
-  if (!state.title) state.title = childTitle(codexHeadRequest(file)?.text);
+  if (!state.title) adoptRequestTitle(state, codexHeadRequest(file, true)?.text);
+  state.title ??= state.provisionalTitle;
   state.lastActivityAt = Math.max(state.lastActivityAt, fileStat.mtimeMs);
   state.startedAt ||= fileStat.birthtimeMs || state.lastActivityAt;
   if (!state.sessionId) state.sessionId = file.split("/").pop()?.replace(".jsonl", "") ?? "codex";

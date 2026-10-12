@@ -15,7 +15,9 @@
  *                (Codex PreToolUse can only deny and only wraps `shell`.)
  */
 import type { ApprovalDecision, ApprovalRequest, Risk } from "../../../../packages/protocol/schema";
+import { createHash } from "node:crypto";
 import { randomId } from "../../../../packages/core/crypto";
+import { approvalPresentation } from "./approval-presentation";
 
 /** Heuristic risk tag so the watch can color/rank the request at a glance. */
 export function guessRisk(tool: string, command: string | undefined): Risk {
@@ -64,13 +66,16 @@ function extractCommand(tool: string, ti: Record<string, unknown>): string {
 function toRequest(agent: string, input: HookInput, idHint?: string): ApprovalRequest {
   const tool = input.tool_name ?? "tool";
   const command = extractCommand(tool, input.tool_input ?? {});
+  const presentation = approvalPresentation(tool, input.tool_input ?? {});
   return {
     type: "approval.request",
     requestId: idHint ?? randomId(6),
     agent,
     kind: "permission",
     tool,
-    title: shortTitle(tool, command),
+    title: command === tool ? presentation.title ?? shortTitle(tool, command) : shortTitle(tool, command),
+    details: presentation.details,
+    inputFingerprint: createHash("sha256").update(JSON.stringify(input.tool_input ?? {})).digest("hex"),
     command,
     cwd: input.cwd,
     sessionId: input.session_id,

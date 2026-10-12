@@ -1,3 +1,4 @@
+import { questionAnswers } from "../../../../packages/protocol/messages/approval-questions";
 import { randomUUID } from "node:crypto";
 import type { RelayClient } from "../../../../packages/core/relay-client";
 import {
@@ -86,6 +87,8 @@ export function acceptApprovalDecision(
   if (requestSessionId !== decisionSessionId) {
     return { matched: false, newlyResolved: false };
   }
+  if (record.request.kind === "question" && decision.decision === "allow"
+    && !questionAnswers(record.request.questions, decision.note)) return { matched: false, newlyResolved: false };
   const existingOutcome = recordOutcome(record);
   if (existingOutcome) return acceptance(record, existingOutcome, false);
   if (record.state !== "pending") return { matched: false, newlyResolved: false };

@@ -26,6 +26,8 @@ import {
 import { recordAttributedCall } from "../../mesh/identity/call-scope";
 import { classifyAction } from "../../policy";
 import { consumeCodexProjectAsk } from "../../policy/codex-project-ask";
+import { evaluateEffectiveAction, legacyGrantTapFlowAllowed } from "../../policy/effective-action";
+import { permitsProjectAskAutomation } from "../../task-automation";
 import { protectedGrantTapAccess } from "../../host/self-protection";
 
 async function readStdin(): Promise<string> {
@@ -85,8 +87,14 @@ async function main(): Promise<void> {
     toolInput: input.tool_input,
   });
 
+  const policy = await evaluateEffectiveAction({ provider: "codex", sessionId: input.session_id,
+    cwd: input.cwd, toolName: input.tool_name, toolInput: input.tool_input });
+  if (policy.effect === "deny") { process.stdout.write(denyOutput(policy.reason)); return; }
+  const governedAsk = !!projectAsk || !legacyGrantTapFlowAllowed(policy);
+  const chatAutomation = permitsProjectAskAutomation(policy, input.session_id);
+
   // Gating paused or this session exempt → stay silent (Codex uses its own flow).
-  if (!projectAsk && isGatingSkipped(input.session_id)) return;
+  if (!governedAsk && isGatingSkipped(input.session_id)) return;
 
   let cfg;
   try {
@@ -97,8 +105,8 @@ async function main(): Promise<void> {
   }
 
   // Local policy, evaluated after pairing is confirmed — see claude-hook.
-  const req = codexToRequest(input);
-  if (!projectAsk && shouldAutoAcceptTool(input.session_id, req.tool, req.command)) {
+  const req = { ...codexToRequest(input), projectId: policy.projectId, policyRevision: policy.policy_revision };
+  if ((!governedAsk || chatAutomation) && shouldAutoAcceptTool(input.session_id, req.tool, req.command, policy.projectId)) {
     const level = autoAcceptLevelFor(input.session_id);
     const cls = classifyAction(req.tool, req.command);
     process.stdout.write(
@@ -126,7 +134,7 @@ async function main(): Promise<void> {
   // Routine relay failure stays in Codex's native flow. A Project ASK cannot
   // fall through to provider approval because that would weaken the parent rule.
   if (isUnanswered(decision)) {
-    if (projectAsk) {
+    if (governedAsk) {
       process.stdout.write(denyOutput("Project approval was required but no decision was received"));
     }
     return;

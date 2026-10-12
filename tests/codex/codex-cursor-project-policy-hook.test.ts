@@ -10,7 +10,7 @@ import {
   writeProjectHookRuntime,
 } from "../project-policy-hook-harness";
 
-test("Codex Project ASK is exact, single-use, and never waits in both hooks", async (t) => {
+test("Codex Project ASK stays governed after marker consumption and never waits in both hooks", async (t) => {
   const root = await projectRuntime(t, "granttap-codex-project-policy-");
   const askCall = codexCall("call-ask", "shell_command", { command: "echo safe" });
   const preTool = runProjectHook("codexPolicy", root, askCall);
@@ -20,12 +20,13 @@ test("Codex Project ASK is exact, single-use, and never waits in both hooks", as
   assert.equal(permission.value?.hookSpecificOutput?.decision?.behavior, "deny");
   assert.match(permission.stdout, /Project approval was required/);
   const replay = runProjectHook("codex", root, askCall);
-  assert.equal(replay.value?.hookSpecificOutput?.decision?.behavior, "allow");
+  assert.equal(replay.value?.hookSpecificOutput?.decision?.behavior, "deny",
+    "Consuming a marker must not bypass the current project rules");
 
   const exact = codexCall("call-exact", "shell_command", { command: "npm test" });
   assert.equal(runProjectHook("codexPolicy", root, exact).stdout, "");
   const different = runProjectHook("codex", root, { ...exact, tool_use_id: "call-other" });
-  assert.equal(different.value?.hookSpecificOutput?.decision?.behavior, "allow");
+  assert.equal(different.value?.hookSpecificOutput?.decision?.behavior, "deny");
   assert.equal(
     runProjectHook("codex", root, exact).value?.hookSpecificOutput?.decision?.behavior,
     "deny",

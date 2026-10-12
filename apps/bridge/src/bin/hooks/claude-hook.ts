@@ -15,6 +15,8 @@
 import { recordProjectDecision } from "../../policy/decision-log";
 import { claudeToRequest, decisionToClaudeOutput, type HookInput } from "../../host/adapters";
 import { isUnanswered, requestApproval } from "../../approvals";
+import { questionRequest, claudeQuestionOutput } from "../../claude-questions";
+import { permitsProjectAskAutomation } from "../../task-automation";
 import {
   autoAcceptLevelFor,
   blockedSessionCapability,
@@ -100,15 +102,17 @@ async function handlePreToolUse(input: HookInput): Promise<void> {
 
   // Claude already granted this chat unconditional tool access. GrantTap's
   // Project ASK/DENY is a parent boundary, so bypass mode cannot weaken it.
-  if (legacyFlow && input.permission_mode === "bypassPermissions") return;
+  if (legacyFlow && input.permission_mode === "bypassPermissions" && input.tool_name !== "AskUserQuestion") return;
 
   // Gating paused, or this session is exempt → abstain (empty output = Claude
   // uses its normal permission flow, exactly as if GrantTap weren't installed).
   if (legacyFlow && isGatingSkipped(input.session_id)) return;
-  await continuePermissionFlow(input, legacyFlow);
+  await continuePermissionFlow(input, legacyFlow,
+    permitsProjectAskAutomation(projectDecision, input.session_id), projectDecision);
 }
 
-async function continuePermissionFlow(input: HookInput, legacyFlow: boolean): Promise<void> {
+async function continuePermissionFlow(input: HookInput, legacyFlow: boolean, taskAutomation = false,
+  scope: { projectId?: string; policy_revision?: number } = {}): Promise<void> {
   let cfg;
   try {
     cfg = loadConfig(machineConfigPath());
@@ -127,8 +131,12 @@ async function continuePermissionFlow(input: HookInput, legacyFlow: boolean): Pr
   // keep Claude's own prompts rather than be silently auto-allowed by a product
   // the user never finished setting up. Once paired, this is what keeps routine
   // work independent of whether the phone is awake, reachable, or even running.
-  const req = claudeToRequest(input);
-  if (legacyFlow && shouldAutoAcceptTool(input.session_id, req.tool, req.command)) {
+  if (input.tool_name === "AskUserQuestion") {
+    await answerNativeQuestion(input, cfg, scope);
+    return;
+  }
+  const req = { ...claudeToRequest(input), projectId: scope.projectId, policyRevision: scope.policy_revision };
+  if ((legacyFlow || taskAutomation) && shouldAutoAcceptTool(input.session_id, req.tool, req.command, scope.projectId)) {
     writeAutoApproval(input, req);
     return;
   }
@@ -150,6 +158,21 @@ async function continuePermissionFlow(input: HookInput, legacyFlow: boolean): Pr
   }
 
   process.stdout.write(JSON.stringify(decisionToClaudeOutput(decision)));
+}
+
+async function answerNativeQuestion(input: HookInput, config: Parameters<typeof requestApproval>[0],
+  scope: { projectId?: string; policy_revision?: number }): Promise<void> {
+  const request = questionRequest(input);
+  if (!request) return; // Unsupported native shape keeps Claude's question UI.
+  request.projectId = scope.projectId;
+  request.policyRevision = scope.policy_revision;
+  const decision = await requestApproval(config, request, {
+    timeoutMs: Math.min(180_000, Number(process.env.GRANTTAP_APPROVAL_TIMEOUT_MS ?? 120_000)),
+  });
+  if (isUnanswered(decision)) return;
+  const output = claudeQuestionOutput(input, decision, request);
+  if (output) process.stdout.write(JSON.stringify(output));
+  else if (decision.decision === "deny") writePermission("deny", "The user declined to answer this question");
 }
 
 function writeAutoApproval(input: HookInput, req: ReturnType<typeof claudeToRequest>): void {
