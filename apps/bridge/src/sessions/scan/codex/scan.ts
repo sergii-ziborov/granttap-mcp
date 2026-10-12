@@ -8,8 +8,13 @@ import {
 import { parseCodexFile } from "./parse";
 import { assembleCodexScan } from "./assemble";
 import { recentLogs, codexSessionsRoot, MAX_FILES, type Scan } from "../../support/common";
+import { withCheckoutObservationCache } from "../../support/repository-checkout";
 
 export function scanCodex(maxFiles = MAX_FILES): Scan {
+  return withCheckoutObservationCache(() => scanCodexCatalog(maxFiles));
+}
+
+function scanCodexCatalog(maxFiles: number): Scan {
   const root = codexSessionsRoot();
   const listed = recentLogs(root, 5, maxFiles + 1);
   const files = listed.slice(0, maxFiles);

@@ -17,3 +17,5 @@ as fresh. The phone continues its durable historical backfill independently.
 Tests live in `tests/`. This runtime module uses the repository MIT License.
 
 Engine binding recovery waits for the first connected catalog publication before projecting repository graphs. A cold Engine cannot hold the initial relay handshake behind restored Mesh analysis.
+
+Codex discovery shares repeated checkout verification only within one synchronous scan. The next scan verifies repository identity again; no long-lived checkout cache can cross a repository change. This keeps startup catalog delivery ahead of repeated Git subprocesses.

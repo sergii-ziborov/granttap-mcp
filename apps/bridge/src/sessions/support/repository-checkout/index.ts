@@ -2,11 +2,25 @@ import { execFileSync } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { isAbsolute } from "node:path";
 
+let scanRoots: Map<string, string | undefined> | undefined;
+
+/** Share verified lookups only during this synchronous catalog pass. */
+export function withCheckoutObservationCache<T>(scan: () => T): T {
+  if (scanRoots) return scan();
+  scanRoots = new Map();
+  try { return scan(); }
+  finally { scanRoots = undefined; }
+}
+
 function gitRoot(path: string): string | undefined {
+  if (scanRoots?.has(path)) return scanRoots.get(path);
+  let root: string | undefined;
   try {
-    return execFileSync("git", ["--no-optional-locks", "-C", path, "rev-parse", "--show-toplevel"],
+    root = execFileSync("git", ["--no-optional-locks", "-C", path, "rev-parse", "--show-toplevel"],
       {encoding:"utf8", stdio:["ignore","pipe","ignore"], timeout:2_000}).trim() || undefined;
-  } catch { return undefined; }
+  } catch { root = undefined; }
+  scanRoots?.set(path, root);
+  return root;
 }
 
 /** Recognize only a literal initial shell directory change, without evaluating shell code. */
