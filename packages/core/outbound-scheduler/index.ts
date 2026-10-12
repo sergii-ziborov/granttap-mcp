@@ -3,6 +3,7 @@ import type { PeerConfig, SendOptions } from "../relay-client-types";
 import type { Payload, Role } from "../../protocol/schema";
 import { peerPublicKeys } from "../crypto";
 import { sealEnvelope } from "../relay-envelope";
+export { ActiveControllerRecipients } from "./active-controllers";
 
 type Job = { frame: string; bytes: number; resolve: () => void; reject: (error: Error) => void };
 const CLOSED = () => new Error("relay connection closed before delivery");

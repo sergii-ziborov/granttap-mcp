@@ -11,3 +11,10 @@ Tests live in `tests/`; they include an actual WebSocket server with the relay's
 rate limit. A socket write is transport evidence, never an approval receipt.
 
 MIT License; see the repository LICENSE.
+# Active controllers
+
+Authenticated incoming phone traffic marks that controller active for 90 seconds.
+Replaceable snapshots target recent controllers while reliable messages retain
+every authorized recipient. A transport with no recent controller falls back to
+the complete authorized set for legacy clients and reconnection. Routing never
+deletes a pairing or replaces the controller authorization gate.
