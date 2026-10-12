@@ -8,6 +8,7 @@ import { recordedToolDetails } from "./tool-details";
 import { completedTurnChanges } from "./turn-changes";
 export { nativeImageLines } from "./images";
 export { nativeTranscriptImage } from './images/native';
+export { nativeTranscriptEntry } from './images/advertised-entry';
 
 function boundedEntry(entry: ActivityEntry): ActivityEntry {
   const result = { ...entry };

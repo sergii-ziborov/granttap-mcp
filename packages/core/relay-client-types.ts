@@ -41,6 +41,8 @@ export type RelayClientOptions = {
 };
 
 export type SendOptions = {
+  /** Reply only to the authenticated requester; absent means all authorized peers. */
+  peerPublicKey?: string;
   /** Delivery lifetime for relay hold queues. Omit only for non-expiring hello packets. */
   ttlMs?: number;
   deliveryId?: string;

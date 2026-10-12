@@ -22,7 +22,8 @@ export function readSessionImage(query: SessionImageQuery, session: SessionInfo,
   return sessionImageChunk(session, activity, query.imageId, query.offset, query.historyCursor);
 }
 
-export async function publishSessionImage(client: RelayClient, query: SessionImageQuery): Promise<boolean> {
+export async function publishSessionImage(client: RelayClient, query: SessionImageQuery,
+  peerPublicKey?: string): Promise<boolean> {
   const session = publishedSession(client, query.sessionId)
     ?? scanSessions().sessions.find(s => s.sessionId === query.sessionId)
     ?? scanSessionHistory().find(s => s.sessionId === query.sessionId);
@@ -33,6 +34,6 @@ export async function publishSessionImage(client: RelayClient, query: SessionIma
     requestId: query.requestId, imageId: query.imageId, offset: query.offset,
     ...(chunk ? { mimeType: chunk.mime_type, totalBytes: chunk.total_bytes,
       dataBase64: chunk.data_base64 } : { unavailable: true }) }), query.sessionId,
-    'phone', { ttlMs: 20_000, reliable: false });
+    'phone', { ttlMs: 20_000, reliable: false, peerPublicKey });
   return chunk !== undefined;
 }

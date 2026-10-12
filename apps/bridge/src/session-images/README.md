@@ -17,3 +17,9 @@ Native image identities remain readable after the chat head advances. Codex
 attachments are located by timestamp and content block together, so a caption
 with the same timestamp cannot hide the picture. Original bytes are delivered in
 bounded encrypted chunks and the Apple client retains them for offline use.
+
+An authenticated image query returns its key grant and chunk only to the requesting controller. Shared chat publication still retains every authorized controller, including one receiving passively.
+
+Saved native picture identities remain addressable after newer transcript pages append. Lookup walks bounded windows toward the original row, verifies the exact conversation and block identity, and stops at the file start or a non-advancing cursor. There is no page-count expiry for a previously advertised attachment.
+
+Workspace screenshots in older replies resolve the original native row and its exact advertised image identity before applying the existing Task, Execution and workspace access checks. A request never supplies a filesystem path, and looking up an older reply does not widen access outside its authorized workspace.

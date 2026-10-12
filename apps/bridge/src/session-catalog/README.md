@@ -21,3 +21,5 @@ Engine binding recovery waits for the first connected catalog publication before
 Codex discovery shares repeated checkout verification only within one synchronous scan. The next scan verifies repository identity again; no long-lived checkout cache can cross a repository change. This keeps startup catalog delivery ahead of repeated Git subprocesses.
 
 Subscribed transcript heads use a separate, single-flight transfer loop. A stalled head never occupies the current catalog publication slot; stopping the monitor cancels further queued reads. The iPhone keeps its historical backfill independent of both loops.
+
+Authenticated subscription and transcript requests pass the verified requester key to the encrypted reply. A requested page does not wait for copies addressed to other paired controllers. Shared catalogue and chat updates remain available to passive controllers.

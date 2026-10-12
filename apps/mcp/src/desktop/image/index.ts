@@ -1,7 +1,7 @@
 import { artifactImages, artifactImageChunk } from "./artifacts";
 import { desktopTaskActivity } from "../task-activity";
 import type { ActivityEntry, SessionInfo, SessionActivity } from '../../../../../packages/protocol/schema';
-import { nativeTranscriptImage } from '../../../../bridge/src/transcript-history';
+import { nativeTranscriptImage, nativeTranscriptEntry } from '../../../../bridge/src/transcript-history';
 import { readStoreState } from '../../../../bridge/src/mesh/store/state';
 import { configDir } from '../../../../bridge/src/config';
 import { join } from 'node:path';
@@ -10,16 +10,25 @@ export function transcriptImages(entry: ActivityEntry) {
   return artifactImages(entry).map(({ id, name, markdown }) => ({ id, name, markdown }));
 }
 
+function sessionArtifact(session: SessionInfo, activity: { entries: Array<Parameters<typeof artifactImages>[0]> },
+  imageId: string, cursor?: string) {
+  const current = activity.entries.flatMap(artifactImages).find(image => image.id === imageId);
+  if (current) return current;
+  const entryId = imageId.match(/^(.*):image:[a-f0-9]{24}$/)?.[1];
+  const saved = entryId ? nativeTranscriptEntry(session, entryId, cursor) : undefined;
+  return saved ? artifactImages(saved).find(image => image.id === imageId) : undefined;
+}
+
 export function sessionImageChunk(session: SessionInfo, activity: SessionActivity,
   imageId: string, offset: number, cursor?: string, storePath?: string) {
   if (activity.sessionId !== session.sessionId) return undefined;
   const native = activity.entries.some(entry => entry.id === imageId && entry.kind === 'user'
     && entry.attachments?.includes('Image'));
-  if (native || imageId.startsWith(`${session.sessionId}:`)) {
+  if (!imageId.includes(':image:') && (native || imageId.startsWith(`${session.sessionId}:`))) {
     const picture = nativeTranscriptImage(session, imageId, offset, cursor);
     if (picture) return picture;
   }
-  const artifact = activity.entries.flatMap(artifactImages).find(image => image.id === imageId);
+  const artifact = sessionArtifact(session, activity, imageId, cursor);
   if (!artifact) return undefined;
   const loaded = readStoreState(storePath ?? join(configDir(), 'project-mesh.json'));
   if (loaded.status !== 'ok') return undefined;
@@ -46,7 +55,11 @@ export function desktopTaskImage(input: unknown, storePath?: string,
   const activity = cachedActivity ?? desktopTaskActivity(query, storePath);
   if (!activity?.session_id || !activity.agent
     || activity.project_id !== query.project_id || activity.task_id !== query.task_id) return undefined;
-  const artifact = activity.entries.flatMap(artifactImages).find((image) => image.id === imageId);
+  const session: SessionInfo = { sessionId: activity.session_id, agent: activity.agent,
+    state: "idle", startedAt: 0, lastActivityAt: 0, tokensSession: 0, tokensLastTurn: 0 };
+  const cursor = query.history_cursor;
+  if (cursor !== undefined && (typeof cursor !== "string" || cursor.length > 512)) return undefined;
+  const artifact = sessionArtifact(session, activity, imageId, cursor as string | undefined);
   if (artifact) {
     const chunk = artifactImageChunk({ projectId: activity.project_id, taskId: activity.task_id,
       sessionId: activity.session_id, provider: activity.agent, image: artifact, offset, storePath });
@@ -55,10 +68,6 @@ export function desktopTaskImage(input: unknown, storePath?: string,
   if (!["codex", "claude"].includes(activity.agent)
     || !activity.entries.some((entry) => entry.id === imageId
       && entry.kind === "user" && entry.attachments?.includes("Image"))) return undefined;
-  const cursor = query.history_cursor;
-  if (cursor !== undefined && (typeof cursor !== "string" || cursor.length > 512)) return undefined;
-  const session: SessionInfo = { sessionId: activity.session_id, agent: activity.agent,
-    state: "idle", startedAt: 0, lastActivityAt: 0, tokensSession: 0, tokensLastTurn: 0 };
   const chunk = nativeTranscriptImage(session, imageId, offset, cursor as string | undefined);
   return chunk ? { operation: "desktop.task_image", image_id: imageId, ...chunk } : undefined;
 }

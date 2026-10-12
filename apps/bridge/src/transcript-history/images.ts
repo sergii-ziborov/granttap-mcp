@@ -11,7 +11,9 @@ export function nativeImageLines(sessionId: string, entryId: string): string[] |
   if (!path || !Number.isFinite(stamp) || !Number.isSafeInteger(blockIndex) || blockIndex < 0) return undefined;
   let cursor: string | undefined;
   try {
-    for (let page = 0; page < 32; page++) {
+    // A saved attachment does not expire when newer transcript windows append.
+    // Each window stays bounded and its cursor must move toward the file start.
+    while (true) {
       const window = previousNativeLines(path, sessionId, cursor);
       if (!window) return undefined;
       let earliest = Infinity;
@@ -24,7 +26,9 @@ export function nativeImageLines(sessionId: string, entryId: string): string[] |
           && p.content[blockIndex]?.type === "input_image") return [line.text];
       }
       if (window.start === 0 || earliest < stamp) return undefined;
-      cursor = window.cursorAt(window.lines[0]?.offset ?? window.start);
+      const next = window.lines[0]?.offset ?? window.start;
+      if (next >= window.end) return undefined;
+      cursor = window.cursorAt(next);
     }
   } catch { return undefined; }
   return undefined;

@@ -22,7 +22,8 @@ export function nativeTranscriptImage(session: SessionInfo, imageId: string, off
   if (!path || !['claude', 'codex'].includes(session.agent)) return undefined;
   try {
     let pageCursor = cursor;
-    for (let page = 0; page < 32; page++) {
+    // Old advertised pictures remain readable as the conversation grows.
+    while (true) {
       const window = previousNativeLines(path, session.sessionId, pageCursor);
       if (!window) return undefined;
       const lines = window.lines.map(line => line.text);
@@ -49,7 +50,9 @@ export function nativeTranscriptImage(session: SessionInfo, imageId: string, off
       }
     }
       if (window.start === 0) break;
-      pageCursor = window.cursorAt(window.lines[0]?.offset ?? window.start);
+      const next = window.lines[0]?.offset ?? window.start;
+      if (next >= window.end) break;
+      pageCursor = window.cursorAt(next);
     }
   } catch { return undefined; }
   return undefined;

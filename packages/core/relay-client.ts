@@ -10,7 +10,7 @@
  * the Cloudflare Durable Object deployment.
  */
 import WebSocket from "ws";
-import { OutboundFrameQueue, sendEncryptedPayload, ActiveControllerRecipients } from "./outbound-scheduler";
+import { OutboundFrameQueue, sendEncryptedPayload } from "./outbound-scheduler";
 import { createHash } from "node:crypto";
 import { Envelope, Payload, type Role } from "../protocol/schema";
 import { openFromPeersWithIdentity, openWithTransferKey, peerPublicKeys, seal, sealWithTransferKey } from "./crypto";
@@ -34,7 +34,6 @@ export class RelayClient {
   private livenessTimer?: NodeJS.Timeout;
   private awaitingPong = false;
   private readonly sessionKeys = new Map<string, string>();
-  private readonly activeControllers = new ActiveControllerRecipients();
   /**
    * Delivery ids are relay-controlled metadata, so replay protection is bound
    * to the authenticated ciphertext itself. Keep a bounded process-local set:
@@ -200,9 +199,6 @@ export class RelayClient {
       this.sessionKeys.set(payload.sessionId, payload.key);
     }
     if (this.processingCiphertexts.has(fingerprint)) return;
-    if (this.cfg.role === "machine" && (payload.type !== "hello" || payload.role === "phone")) {
-      this.activeControllers.observe(peerPublicKey);
-    }
     this.processingCiphertexts.add(fingerprint);
     try {
       const results = await Promise.all([...this.listeners].map(async (listener) => {
@@ -238,10 +234,11 @@ export class RelayClient {
     const ws = this.ws;
     if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error("relay not connected");
     if (!this.frames) throw new Error("relay not connected");
-    const replaceable = this.cfg.role === "machine" && to === "phone"
-      && options.reliable === false && payload.type === "session.sealed";
-    await sendEncryptedPayload(this.frames, this.cfg,
-      key => this.peerIsAllowed(key) && this.activeControllers.allows(key, replaceable),
+    if (options.peerPublicKey) {
+      await this.sendToPeer(payload, options.peerPublicKey, options);
+      return;
+    }
+    await sendEncryptedPayload(this.frames, this.cfg, key => this.peerIsAllowed(key),
       { payload, to, options });
   }
 

@@ -83,9 +83,9 @@ export async function handleMonitorMessage(
       void publish().catch(() => {});
       return true;
     } else if (payload.type === "session.subscribe") {
-      return handleInboundSubscription(client, payload, subscriptions, publish);
+      return handleInboundSubscription(client, payload, subscriptions, publish, input.peerPublicKey);
     } else if (payload.type === "session.events" || payload.type === "session.image.query") {
-      return handleSessionRead(client, payload);
+      return handleSessionRead(client, payload, input.peerPublicKey);
     } else if (payload.type === "sessions.refresh") {
       return handleInboundRefresh(client, payload, publish);
     } else if (payload.type === "sessions.history.query") {
@@ -266,9 +266,10 @@ async function handleInboundTaskCreate(
 function handleInboundSubscription(
   client: RelayClient, payload: Extract<Payload, { type: "session.subscribe" }>,
   subscriptions: Set<string>, publish: (forceHistory?: boolean) => Promise<void>,
+  peerPublicKey?: string,
 ): boolean {
   // The transcript goes first, before a potentially slow catalog rescan.
-  void publishSessionEvents(client, payload.sessionId).catch(() => false);
+  void publishSessionEvents(client, payload.sessionId, undefined, undefined, { peerPublicKey }).catch(() => false);
   if (handleSubscription(subscriptions, payload)) {
     void publish().catch(() => {});
   }
@@ -276,8 +277,10 @@ function handleInboundSubscription(
 }
 
 async function handleSessionRead(client: RelayClient,
-  payload: Extract<Payload, { type: 'session.events' | 'session.image.query' }>): Promise<boolean> {
-  if (payload.type === 'session.image.query') await publishSessionImage(client, payload);
-  else await publishSessionEvents(client, payload.sessionId, undefined, payload.threadId, payload).catch(() => false);
+  payload: Extract<Payload, { type: 'session.events' | 'session.image.query' }>,
+  peerPublicKey?: string): Promise<boolean> {
+  if (payload.type === 'session.image.query') await publishSessionImage(client, payload, peerPublicKey);
+  else await publishSessionEvents(client, payload.sessionId, undefined, payload.threadId,
+    { ...payload, peerPublicKey }).catch(() => false);
   return true;
 }

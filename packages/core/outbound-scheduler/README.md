@@ -11,11 +11,13 @@ Tests live in `tests/`; they include an actual WebSocket server with the relay's
 rate limit. A socket write is transport evidence, never an approval receipt.
 
 MIT License; see the repository LICENSE.
-# Active controllers
+# Controller delivery
 
-Authenticated incoming phone traffic marks that controller active for 90 seconds.
-Large replaceable encrypted task/project data targets recent controllers while
-catalogs, liveness, approval status and reliable messages retain every authorized
-recipient. Current catalogs and liveness pass queued bulk frames. A transport with no recent controller falls back to
-the complete authorized set for legacy clients and reconnection. Routing never
-deletes a pairing or replaces the controller authorization gate.
+Catalogs, liveness and shared conversation updates reach every authorized
+controller, including a phone receiving passively. Silence never removes access
+to its local replica. Authenticated history, subscription and image requests
+return their independent key grant and encrypted result only to the requesting
+controller, with priority over queued periodic snapshots. Older callers without
+a requester retain the complete authorized recipient set. Every explicit target
+passes the pairing and controller authorization checks. Routing never deletes a
+pairing or changes approval policy.

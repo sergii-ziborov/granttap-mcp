@@ -56,7 +56,7 @@ export async function publishSessionEvents(
   sessionId: string,
   status?: SessionsStatus,
   threadId?: string,
-  history?: { history?: boolean; historyCursor?: string },
+  history?: { history?: boolean; historyCursor?: string; peerPublicKey?: string },
 ): Promise<boolean> {
   const session = resolveSession(client, sessionId, status);
   if (!session) return false;
@@ -66,6 +66,7 @@ export async function publishSessionEvents(
   await sendSessionPayload(client, activityWithImages(activity), sessionId, "phone", {
     ttlMs: INTERVAL_MS * 24,
     reliable: false,
+    peerPublicKey: history?.peerPublicKey,
   });
   return true;
 }

@@ -102,6 +102,6 @@ async function sendScopedPayload(input: {
     key,
     purpose,
     createdAt: Date.now(),
-  }, to, { ttlMs: options.ttlMs });
+  }, to, { ttlMs: options.ttlMs, peerPublicKey: options.peerPublicKey });
   await client.sendSession(payload, sessionId, to, options);
 }

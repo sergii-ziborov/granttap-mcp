@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, appendFileSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readTranscriptHistory } from '../../transcript-history';
@@ -50,6 +50,33 @@ for (const provider of ['codex', 'claude'] as const) {
     assert.equal(readSessionImage(query(session, imageId, png.length), session, activity), undefined);
   });
 }
+
+test('an advertised workspace picture remains readable after its reply leaves the history head', t => {
+  const root = mkdtempSync(join(tmpdir(), 'granttap-old-artifact-picture-'));
+  const id = 'old-artifact-picture', path = join(root, 'log.jsonl'), picture = join(root, 'result.png');
+  t.after(() => { rmSync(root, { recursive: true, force: true }); codexLogPathBySession.delete(id); });
+  writeFileSync(picture, png);
+  writeFileSync(path, JSON.stringify({ type: 'event_msg', timestamp: new Date(1000).toISOString(),
+    payload: { type: 'agent_message', message: `![result](<${picture}>)` } }) + '\n');
+  codexLogPathBySession.set(id, path);
+  const session: SessionInfo = { sessionId: id, agent: 'codex', state: 'idle', startedAt: 1,
+    lastActivityAt: 1000, tokensSession: 0, tokensLastTurn: 0 };
+  const saved = activityWithImages(readTranscriptHistory(session)!);
+  const imageId = saved.entries.flatMap(entry => entry.images ?? [])[0]!.id;
+  for (let index = 0; index < 600; index++) appendFileSync(path, JSON.stringify({ type: 'progress',
+    timestamp: new Date(2000 + index).toISOString(), data: 'x'.repeat(5000) }) + '\n');
+  const store = join(root, 'mesh.json');
+  writeFileSync(store, JSON.stringify({ version: 1,
+    projects: [{ projectId: 'project', name: 'Test', canonicalRepositoryId: 'repo', createdAt: 1 }],
+    tasks: [{ taskId: 'task', projectId: 'project', title: 'Picture', goal: 'Test', state: 'working', createdAt: 1, updatedAt: 2 }],
+    executions: [{ taskId: 'task', sessionId: id, provider: 'codex', computerId: 'computer', workspace: root, startedAt: 1 }] }));
+  const current = readTranscriptHistory(session)!;
+  assert.equal(current.entries.some(entry => entry.images?.some(image => image.id === imageId)), false);
+  const chunk = sessionImageChunk(session, current, imageId, 0, undefined, store);
+  assert.ok(chunk, 'A saved image ID must still resolve its original authorized workspace link.');
+  assert.deepEqual(Buffer.from(chunk.data_base64, 'base64'), png);
+  assert.equal(sessionImageChunk({ ...session, agent: 'claude' }, current, imageId, 0, undefined, store), undefined);
+});
 
 test('workspace pictures retain execution and workspace access checks', t => {
   const root = mkdtempSync(join(tmpdir(), 'granttap-picture-scope-'));
@@ -111,3 +138,38 @@ test('a saved Codex picture remains addressable after the current history head a
   assert.deepEqual(Buffer.from(chunk.data_base64, 'base64'), png);
   assert.equal(readSessionImage(query(session, 'other:1000:0'), session, activity), undefined);
 });
+
+for (const provider of ['codex', 'claude'] as const) {
+  test(`${provider}: a saved picture survives more than thirty-two newer transcript windows`, t => {
+    const root = mkdtempSync(join(tmpdir(), 'granttap-durable-picture-'));
+    const id = `durable-picture-${provider}`, path = join(root, 'log.jsonl');
+    t.after(() => {
+      rmSync(root, { recursive: true, force: true });
+      codexLogPathBySession.delete(id); claudeLogPathBySession.delete(id);
+    });
+    const blocks = provider === 'codex'
+      ? [{ type: 'input_image', image_url: `data:image/png;base64,${png.toString('base64')}` }]
+      : [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: png.toString('base64') } }];
+    const row = provider === 'codex'
+      ? { type: 'response_item', timestamp: new Date(1000).toISOString(),
+        payload: { type: 'message', role: 'user', content: blocks } }
+      : { type: 'user', uuid: 'durable-photo', timestamp: new Date(1000).toISOString(),
+        message: { role: 'user', content: blocks } };
+    writeFileSync(path, JSON.stringify({ type: 'progress', timestamp: new Date(1).toISOString(),
+      data: 'x'.repeat(512 * 1024) }) + '\n' + JSON.stringify(row) + '\n');
+    (provider === 'codex' ? codexLogPathBySession : claudeLogPathBySession).set(id, path);
+    const session: SessionInfo = { sessionId: id, agent: provider, state: 'idle', startedAt: 1,
+      lastActivityAt: 1000, tokensSession: 0, tokensLastTurn: 0 };
+    const saved = readTranscriptHistory(session)!;
+    const imageId = saved.entries.find(entry => entry.attachments?.includes('Image'))!.id;
+    for (let index = 0; index < 640; index++) {
+      appendFileSync(path, JSON.stringify({ type: 'progress', timestamp: new Date(2000 + index).toISOString(),
+        data: 'x'.repeat(65_536) }) + '\n');
+    }
+    const current = readTranscriptHistory(session)!;
+    assert.equal(current.entries.some(entry => entry.id === imageId), false);
+    const chunk = readSessionImage(query(session, imageId), session, current);
+    assert.ok(chunk, 'Appending chat history must not make a saved image unavailable.');
+    assert.deepEqual(Buffer.from(chunk.data_base64, 'base64'), png);
+  });
+}
