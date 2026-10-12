@@ -50,6 +50,7 @@ import { loadRuntimeConfig } from "../config";
 import { timedProviderScan } from "../machine-load/mcp/scan-cost";
 
 export { MAX_ACTIVITY_ENTRIES, MAX_ACTIVITY_TEXT, TOKEN_WINDOW_HOURS };
+export { nativeTranscriptRoots, nativeTranscriptSource, restoreNativeTranscriptSource } from "./native-source";
 
 type ProviderScan = ReturnType<typeof scanClaude>;
 

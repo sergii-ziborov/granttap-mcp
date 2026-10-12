@@ -21,6 +21,7 @@ import { confirmPendingController } from "../../pairing/controllers";
 import { recordControllerName } from "../../pairing/presence";
 import { startPublishLoop } from "./publish-loop";
 import { singleFlightPublisher } from "./single-flight";
+import { publishedCatalog, rememberPublishedCatalog, resumePublishedChats } from "../../session-catalog";
 import { createMachineLoadPublisher } from "../../machine-load";
 import { startMachineLoadLoop } from "../../machine-load/host/loop";
 import { publishProjectPolicyStatuses } from "../../project-policy/runtime";
@@ -121,8 +122,13 @@ async function publishMonitorTick(input: {
   if (!client.isConnected) return { lastHistoryPublishedAt, lastCapabilityPublishedAt };
   await publishHeartbeat(client).catch(() => {});
   if (!leadership.acquire()) return { lastHistoryPublishedAt, lastCapabilityPublishedAt };
+  if (lastHistoryPublishedAt === 0) {
+    await resumePublishedChats(client,
+      (session, status) => publishSessionEvents(client, session.sessionId, status));
+  }
   const includeHistory = forceHistory || Date.now() - lastHistoryPublishedAt >= HISTORY_INTERVAL_MS;
   const status = monitorSnapshot({ includeHistory, forceHistory, subscriptions, history });
+  rememberPublishedCatalog(client, status);
   await client.send(status, "phone", { ttlMs: INTERVAL_MS * 24, reliable: false });
   // Provider review is independent of task visibility; a hung hook RPC must
   // never hold the current catalog behind its discovery timeout.
@@ -182,6 +188,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
   const subscriptions = new Set<string>();
   const leadership = monitorLeadership();
   primeSessionKeys(client);
+  publishedCatalog(client);
   let historyCache: { generatedAt: number; sessions: SessionsStatus["sessions"] } | undefined;
   let lastHistoryPublishedAt = 0;
   let lastCapabilityPublishedAt = 0;

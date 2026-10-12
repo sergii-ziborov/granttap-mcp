@@ -17,6 +17,12 @@ adapters, and wire contracts. It powers Project Mesh, Governance, and observed
 usage while agents and provider credentials stay on your computer. Controller
 traffic is end-to-end encrypted.
 
+Known chats are read from their published native identities, without another
+walk through every provider log. The local helper retains a private metadata
+index so a restart can send current heads of the saved Now chats before a fresh
+discovery scan. The Apple clients keep downloaded conversations, pictures, and
+Mesh data locally for offline use; clearing that cache preserves the account login.
+
 The MCP runtime, plugins, and CLI are open source under the MIT License.
 The Apple apps, Engine, relay, and website are separately licensed commercial
 products or source. Their licenses do not change this repository's MIT grant.

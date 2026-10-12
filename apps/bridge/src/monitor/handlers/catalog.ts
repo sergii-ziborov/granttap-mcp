@@ -3,6 +3,7 @@ import type { RelayClient } from "../../../../../packages/core/relay-client";
 import { sendSessionPayload } from "../../host/session-keys";
 import { cachedSessionActivity } from "../support/session-activity";
 import { readTranscriptHistory } from "../../transcript-history";
+import { publishedSession } from "../../session-catalog";
 import { activityWithImages } from '../../session-images';
 import {
   scanSessionHistory,
@@ -38,11 +39,13 @@ export function boundedCatalogHistory(
   return [...pinned, ...rest].sort((a, b) => b.lastActivityAt - a.lastActivityAt);
 }
 
-function resolveSession(sessionId: string, status?: SessionsStatus): SessionInfo | undefined {
+function resolveSession(client: RelayClient, sessionId: string, status?: SessionsStatus): SessionInfo | undefined {
   if (status) {
     return status.sessions.find((session) => session.sessionId === sessionId)
       ?? status.history?.find((session) => session.sessionId === sessionId);
   }
+  const known = publishedSession(client, sessionId);
+  if (known) return known;
   return scanSessions().sessions.find((session) => session.sessionId === sessionId)
     ?? scanSessionHistory().find((session) => session.sessionId === sessionId);
 }
@@ -55,7 +58,7 @@ export async function publishSessionEvents(
   threadId?: string,
   history?: { history?: boolean; historyCursor?: string },
 ): Promise<boolean> {
-  const session = resolveSession(sessionId, status);
+  const session = resolveSession(client, sessionId, status);
   if (!session) return false;
   const activity = threadId ? scanThreadActivity(session, threadId)
     : (history?.history ? readTranscriptHistory(session, history.historyCursor) : undefined)
