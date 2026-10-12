@@ -14,7 +14,8 @@ MIT License; see the repository LICENSE.
 # Active controllers
 
 Authenticated incoming phone traffic marks that controller active for 90 seconds.
-Replaceable snapshots target recent controllers while reliable messages retain
-every authorized recipient. A transport with no recent controller falls back to
+Large replaceable encrypted task/project data targets recent controllers while
+catalogs, liveness, approval status and reliable messages retain every authorized
+recipient. Current catalogs and liveness pass queued bulk frames. A transport with no recent controller falls back to
 the complete authorized set for legacy clients and reconnection. Routing never
 deletes a pairing or replaces the controller authorization gate.

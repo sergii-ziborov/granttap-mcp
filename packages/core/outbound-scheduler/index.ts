@@ -69,7 +69,8 @@ export class OutboundFrameQueue {
 }
 
 const control = (type: Payload["type"]) => type === "hello" || type.startsWith("approval.")
-  || type.startsWith("config.") || type.startsWith("pairing.") || type === "session.key.grant";
+  || type.startsWith("config.") || type.startsWith("pairing.") || type === "session.key.grant"
+  || type === "sessions.status" || type === "machine.heartbeat" || type === "approvals.status";
 
 export async function sendEncryptedPayload(queue: OutboundFrameQueue, config: PeerConfig,
   allowed: (key: string) => boolean,

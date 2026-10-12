@@ -3,11 +3,11 @@ import { once } from "node:events";
 import test from "node:test";
 import { WebSocketServer } from "ws";
 import { RelayClient, sealEnvelope } from "../../relay-client";
-import { generateKeyPair, open } from "../../crypto";
+import { generateKeyPair, generateTransferKey, open } from "../../crypto";
 import type { Payload } from "../../../protocol/schema";
 import { ActiveControllerRecipients } from "..";
 
-test("replaceable updates target active authenticated controllers without revoking sleeping ones", async t => {
+test("catalog liveness reaches passive controllers while bulky updates target active ones", async t => {
   const server=new WebSocketServer({port:0});await once(server,"listening");
   const address=server.address();assert.ok(address&&typeof address!=="string");
   const machine=generateKeyPair(),a=generateKeyPair(),b=generateKeyPair();
@@ -30,8 +30,14 @@ test("replaceable updates target active authenticated controllers without revoki
   await new Promise<void>(resolve=>setTimeout(resolve,30));
   const heartbeat=frames.filter(e=>(open(e.nonce,e.box,a.publicKey,machine.secretKey) as any)?.type==="machine.heartbeat"
     || (open(e.nonce,e.box,b.publicKey,machine.secretKey) as any)?.type==="machine.heartbeat");
-  assert.equal(heartbeat.length,1,"Sleeping controllers must not multiply every replaceable frame.");
+  assert.equal(heartbeat.length,2,"Passive controllers still need metadata to discover changes.");
   assert.deepEqual(cfg.extraPeerPublicKeys,[b.publicKey],"Presence must not remove a pairing.");
+  frames.length=0;
+  client.setSessionKey("fixture-task",generateTransferKey());
+  await client.sendSession({type:"session.activity",sessionId:"fixture-task",agent:"claude",
+    state:"idle",entries:[],generatedAt:Date.now()},"fixture-task","phone",{reliable:false});
+  await new Promise<void>(resolve=>setTimeout(resolve,30));
+  assert.equal(frames.length,1,"Sleeping controllers must not multiply bulky replaceable frames.");
   frames.length=0;
   await client.send({type:"machine.heartbeat",machine:"Fixture",createdAt:Date.now()},"phone",{reliable:true});
   await new Promise<void>(resolve=>setTimeout(resolve,30));

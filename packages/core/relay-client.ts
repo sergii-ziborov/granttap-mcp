@@ -238,7 +238,8 @@ export class RelayClient {
     const ws = this.ws;
     if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error("relay not connected");
     if (!this.frames) throw new Error("relay not connected");
-    const replaceable = this.cfg.role === "machine" && to === "phone" && options.reliable === false;
+    const replaceable = this.cfg.role === "machine" && to === "phone"
+      && options.reliable === false && payload.type === "session.sealed";
     await sendEncryptedPayload(this.frames, this.cfg,
       key => this.peerIsAllowed(key) && this.activeControllers.allows(key, replaceable),
       { payload, to, options });
