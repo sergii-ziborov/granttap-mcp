@@ -21,14 +21,16 @@ export function nativeTranscriptImage(session: SessionInfo, imageId: string, off
   }
   if (!path || !['claude', 'codex'].includes(session.agent)) return undefined;
   try {
-    const lines = previousNativeLines(path, session.sessionId, cursor)?.lines.map(l => l.text);
-    if (!lines) return undefined;
-    if (session.agent === 'codex') {
-      const full = codexImageChunk(session.sessionId, imageId, 0, lines);
-      if (!full) return undefined;
-      // The native reader retains the original bytes for subsequent bounded chunks.
-      return codexImageChunk(session.sessionId, imageId, offset);
-    }
+    let pageCursor = cursor;
+    for (let page = 0; page < 32; page++) {
+      const window = previousNativeLines(path, session.sessionId, pageCursor);
+      if (!window) return undefined;
+      const lines = window.lines.map(line => line.text);
+      if (session.agent === 'codex') {
+        const full = codexImageChunk(session.sessionId, imageId, 0, lines)
+          ?? codexImageChunk(session.sessionId, imageId, 0);
+        return full ? codexImageChunk(session.sessionId, imageId, offset) : undefined;
+      }
     for (const line of lines) {
       let row;
       try { row = JSON.parse(line); } catch { continue; }
@@ -45,6 +47,9 @@ export function nativeTranscriptImage(session: SessionInfo, imageId: string, off
         cached = { key, bytes, mime: source.media_type, until: Date.now() + 30_000 };
         return slice(cached, offset);
       }
+    }
+      if (window.start === 0) break;
+      pageCursor = window.cursorAt(window.lines[0]?.offset ?? window.start);
     }
   } catch { return undefined; }
   return undefined;

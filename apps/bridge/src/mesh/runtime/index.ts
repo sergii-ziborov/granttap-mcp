@@ -10,9 +10,6 @@ import type {
   SessionInfo,
   TaskCapsule,
 } from "../../../../../packages/protocol/schema";
-import {
-  projectBackbone, projectRepositoryGraphs, waitForProjectBindingSync,
-} from "../../engine/runtime/engine-projects";
 import { configDir } from "../../config";
 import {
   createClaudeSession,
@@ -25,10 +22,7 @@ import { isProviderEnabled } from "../../config/runtime";
 import { sendMeshPayload } from "../../host/session-keys";
 import { linkSessionsToProjects, workingTreeState } from "../catalog";
 import { catalogFromEndpoint } from "../catalog/models";
-import { projectMcpServers } from "../catalog/project/capabilities";
-import { configuredProjectMcpServers, mergeConfiguredMcpServers } from "../catalog/project/configured-mcp";
 import { saveProjectCapabilityRequest } from "../catalog/project/requests";
-import { projectCapabilityObservations } from "../catalog/project/observations";
 import { computerId } from "../identity/computer";
 import { createCheckpoint } from "../admin/checkpoint";
 import { buildTaskCapsule } from "../admin/capsule";
@@ -36,11 +30,11 @@ import { handoffReadiness } from "../tasks/readiness";
 import { createHandoffFlow } from "./handoff";
 import type { MeshRuntimeDependencies } from "./dependencies";
 import { localMeshStore } from "../local-remote/local";
+import { composeMeshSnapshot } from "./snapshot/compose";
 import { enrichMeshSnapshot } from "./snapshot/enriched";
 import { createHandoffWorktree, repositoryHasCommit } from "./worktree";
 import { fetchRevision, pushBranch } from "../local-remote/remote";
-import { projectSessionCapabilityInventory, projectExecutionCapabilitySessions } from "./capabilities";
-import { refreshLocalGraphBindings } from "./graph/binding-sync";
+import { projectSessionCapabilityInventory } from "./capabilities";
 import { createMeshSessionCatalog } from "./catalog/session-catalog";
 
 export type { MeshRuntimeDependencies };
@@ -158,53 +152,29 @@ export function createMeshRuntime(deps: MeshRuntimeDependencies) {
   const catalog = (sessions: SessionInfo[]) =>
     linkSessionsToProjects(deps.store(), sessions, deps.computer());
 
-  const composeSnapshot = (
-    projectId: string,
-    store = deps.store(),
-    sessions = deps.sessions(),
-    models = catalogFromEndpoint(deps.computer(), sessions),
-  ): MeshSnapshot | undefined => {
-    const snapshot = store.snapshot(projectId, deps.computer());
-    if (!snapshot) return undefined;
-    const linked = projectExecutionCapabilitySessions(
-      snapshot, sessions, deps.computer(), deps.capabilityInventory,
-    );
-    const reported = projectMcpServers(
-      linked.filter((session) => session.computerId === deps.computer()), projectId,
-    );
-    const workspaces = (snapshot.bindings ?? [])
-      .filter((binding) => binding.endpointId === deps.computer()
-        && binding.available && binding.localPathHint)
-      .map((binding) => binding.localPathHint!);
-    const mcpServers = mergeConfiguredMcpServers(
-      configuredProjectMcpServers(deps.computer(), workspaces), reported,
-    );
-    const capabilityObservations = projectCapabilityObservations({
-      projectId, endpointId: deps.computer(), bound: workspaces.length > 0,
-      requests: snapshot.capabilityRequests ?? [], skills: snapshot.skills ?? [],
-      mcpServers, now: deps.now(),
-    });
-    return {
-      ...snapshot,
-      publisherEndpointId: deps.computer(),
-      mcpServers: mcpServers.length > 0 ? mcpServers : undefined,
-      capabilityObservations: capabilityObservations.length > 0
-        ? capabilityObservations : undefined,
-      modelCatalog: models.models.length > 0 || models.reason ? [models] : undefined,
-    };
-  };
 
   return {
     catalog,
-    snapshot(projectId: string): MeshSnapshot | undefined {
-      return composeSnapshot(projectId);
+    snapshot(projectId: string, sessions?: SessionInfo[]): MeshSnapshot | undefined {
+      return composeMeshSnapshot(deps, projectId, deps.store(), sessions ?? deps.sessions());
     },
     snapshots(): MeshSnapshot[] {
       const store = deps.store();
       const sessions = deps.sessions();
       const models = catalogFromEndpoint(deps.computer(), sessions);
       return store.projectIds().flatMap((projectId) =>
-        composeSnapshot(projectId, store, sessions, models) ?? []);
+        composeMeshSnapshot(deps, projectId, store, sessions, models) ?? []);
+    },
+    async snapshotsAsync(sessions = deps.sessions()): Promise<MeshSnapshot[]> {
+      const store = deps.store();
+      const models = catalogFromEndpoint(deps.computer(), sessions);
+      const snapshots: MeshSnapshot[] = [];
+      for (const id of store.projectIds()) {
+        await new Promise<void>(resolve => setImmediate(resolve));
+        const snapshot = composeMeshSnapshot(deps, id, store, sessions, models);
+        if (snapshot) snapshots.push(snapshot);
+      }
+      return snapshots;
     },
     requestCapability(input: ProjectCapabilityRequestSet): boolean {
       const project = deps.store().snapshot(input.projectId)?.project;
@@ -251,16 +221,21 @@ export function meshSnapshots(): MeshSnapshot[] {
   return defaultRuntime.snapshots();
 }
 
-export function meshSnapshot(projectId: string): MeshSnapshot | undefined {
-  return defaultRuntime.snapshot(projectId);
+/** Yield between Project projections so live decisions and heartbeats continue. */
+export function meshSnapshotsAsync(sessions?: SessionInfo[]): Promise<MeshSnapshot[]> {
+  return defaultRuntime.snapshotsAsync(sessions);
+}
+
+export function meshSnapshot(projectId: string, sessions?: SessionInfo[]): MeshSnapshot | undefined {
+  return defaultRuntime.snapshot(projectId, sessions);
 }
 
 export function requestProjectCapability(input: ProjectCapabilityRequestSet): boolean {
   return defaultRuntime.requestCapability(input);
 }
 
-export async function meshSnapshotsWithEngine(): Promise<MeshSnapshot[]> {
-  return Promise.all(meshSnapshots().map((snapshot) => enrichMeshSnapshot(snapshot)));
+export async function meshSnapshotsWithEngine(snapshots = meshSnapshots()): Promise<MeshSnapshot[]> {
+  return Promise.all(snapshots.map((snapshot) => enrichMeshSnapshot(snapshot)));
 }
 
 export async function meshSnapshotWithEngine(projectId: string): Promise<MeshSnapshot | undefined> {
@@ -268,52 +243,7 @@ export async function meshSnapshotWithEngine(projectId: string): Promise<MeshSna
   return snapshot ? enrichMeshSnapshot(snapshot) : undefined;
 }
 
-/** A person's explicit Graph refresh bypasses background job backoff. */
-type GraphAnalysisDependencies = {
-  snapshots: typeof meshSnapshots;
-  wait: typeof waitForProjectBindingSync;
-  sync?: typeof refreshLocalGraphBindings;
-  backbone: typeof projectBackbone;
-  graphs: typeof projectRepositoryGraphs;
-  send: (client: RelayClient, snapshot: MeshSnapshot) => Promise<void>;
-};
-
-const graphAnalysisDependencies: GraphAnalysisDependencies = {
-  snapshots: meshSnapshots,
-  wait: waitForProjectBindingSync,
-  sync: refreshLocalGraphBindings,
-  backbone: projectBackbone,
-  graphs: projectRepositoryGraphs,
-  send: (client, snapshot) => sendMeshPayload(client, snapshot, "phone", {
-    ttlMs: 60_000, reliable: true,
-  }),
-};
-
-export async function analyzeProjectGraphNow(
-  client: RelayClient, projectId: string,
-  dependencies: GraphAnalysisDependencies = graphAnalysisDependencies,
-): Promise<boolean> {
-  const snapshot = dependencies.snapshots().find((item) => item.projectId === projectId);
-  if (!snapshot) return false;
-  await dependencies.wait(projectId);
-  const current = dependencies.snapshots().find((item) => item.projectId === projectId);
-  if (!current) return false;
-  if (dependencies.sync) await dependencies.sync(current);
-  const [backbone, repositoryGraphs] = await Promise.all([
-    dependencies.backbone(projectId),
-    dependencies.graphs(projectId, current.bindings ?? [], { background: false }),
-  ]);
-  const reports = repositoryGraphs.length > 0 ? repositoryGraphs : [{
-    projectId, repositoryId: current.project.canonicalRepositoryId,
-    revision: "unverified", weavatrixVersion: "unknown",
-    analysisStatus: "UNAVAILABLE" as const, analysisErrorCode: "REPOSITORY_NOT_BOUND",
-    nodes: [], relations: [], totalNodes: 0, totalRelations: 0, truncated: false,
-  }];
-  await dependencies.send(client, {
-    ...current, backbone, repositoryGraphs: reports, generatedAt: Date.now(),
-  });
-  return true;
-}
+export { analyzeProjectGraphNow } from "./graph/analysis";
 
 export function handleMeshPayload(
   client: RelayClient,

@@ -2,7 +2,8 @@
 
 `index.ts` keeps the native identities of the latest published catalog. Requests
 for a chat already shown on the phone use that identity instead of walking every
-provider directory again. A new discovery window cannot make a known chat
+provider directory again, including image chunk requests. The in-memory catalog
+retains current names; the private restart cache contains only native identity. A new discovery window cannot make a known chat
 unreadable merely because hundreds of newer logs appeared.
 
 The private `session-catalog-cache.json` contains metadata and validated native

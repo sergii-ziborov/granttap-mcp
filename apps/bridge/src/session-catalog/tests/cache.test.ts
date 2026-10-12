@@ -41,6 +41,8 @@ test("known identity survives process restart without storing titles or tool des
     title: "private descriptor" }];
   const first = client(); rememberPublishedCatalog(first, status([chat], [session("historical")]));
   assert.equal(publishedSession(first, chat.sessionId)?.sessionId, chat.sessionId);
+  assert.equal(publishedSession(first, chat.sessionId)?.title, chat.title,
+    "live identity reads retain the complete current presentation");
   const restored = publishedCatalog(client());
   assert.equal(restored?.generatedAt, 3, "a restored catalog retains its original timestamp");
   assert.equal(publishedSession(client(), "historical")?.sessionId, "historical");

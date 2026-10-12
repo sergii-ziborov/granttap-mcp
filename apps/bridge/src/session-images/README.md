@@ -12,3 +12,8 @@ account state. Apple clients retain validated original bytes locally and use
 their scoped copy when offline. Tests live in `tests/`.
 
 Licensed under the MIT License. See the repository root `LICENSE`.
+
+Native image identities remain readable after the chat head advances. Codex
+attachments are located by timestamp and content block together, so a caption
+with the same timestamp cannot hide the picture. Original bytes are delivered in
+bounded encrypted chunks and the Apple client retains them for offline use.

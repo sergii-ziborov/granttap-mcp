@@ -14,7 +14,8 @@ Mesh snapshot enrichment queues Weavatrix repository analysis through
 `repository-graph-jobs.ts`. One analysis runs at a time, repeated snapshot
 ticks reuse a fresh bounded report, and failed analyses back off. An absent
 report leaves the graph unavailable and Cortex degraded; it does not block
-policy IPC or turn a repository label into an architecture result.
+policy IPC: repository analysis owns a separate bounded-lifetime socket, while
+policy and Backbone requests keep their control connection. It does not turn a repository label into an architecture result.
 Claude, Codex, and Cursor hooks can evaluate the engine's local Project
 Governance policy only when both `GRANTTAP_ENGINE_ENABLED` and
 `GRANTTAP_PROJECT_POLICY_ENABLED` are enabled. Project `DENY` and `ASK` precede

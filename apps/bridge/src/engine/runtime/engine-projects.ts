@@ -182,7 +182,7 @@ export async function projectRepositoryGraphs(
     priority?: number } = {},
 ): Promise<ProjectRepositoryGraph[]> {
   if (!engineFeatureEnabled(options.env ?? process.env)) return [];
-  const client = options.client ?? defaultClient();
+  const client = options.client;
   const repositories = [...new Map(bindings.map((item) => [item.repositoryId, item])).values()].slice(0, 64);
   const graphs = options.background
     ? repositories.map((binding) => repositoryGraphJobs.read(
@@ -191,7 +191,7 @@ export async function projectRepositoryGraphs(
       options.priority ?? 0,
     ))
     : await Promise.all(repositories.map((binding) =>
-      analyzeRepositoryGraph(client, projectId, binding.repositoryId, 30_000).then((graph) => {
+      analyzeRepositoryGraph(client, projectId, binding.repositoryId, 120_000).then((graph) => {
         repositoryGraphJobs.remember(JSON.stringify([projectId, binding.repositoryId, binding.revision]), graph);
         return graph;
       })));
@@ -199,10 +199,13 @@ export async function projectRepositoryGraphs(
 }
 
 async function analyzeRepositoryGraph(
-  client: EngineClientLike, projectId: string, repositoryId: string, timeoutMs: number,
+  client: EngineClientLike | undefined, projectId: string, repositoryId: string, timeoutMs: number,
 ): Promise<ProjectRepositoryGraph | undefined> {
+  // The daemon serves a socket serially. Analysis must not occupy the channel
+  // used for policy, bindings and Backbone reads while a repository is scanned.
+  const channel = client ?? new EngineClient({ socketPath: join(configDir(), "engine.sock") });
   try {
-    const result = await client.request({
+    const result = await channel.request({
       operation: "graph.analyze_repository", input: {
         project_id: projectId, repository_id: repositoryId,
       },
@@ -251,6 +254,8 @@ async function analyzeRepositoryGraph(
       analysisStatus: "UNAVAILABLE", analysisErrorCode: code,
       nodes: [], relations: [], totalNodes: 0, totalRelations: 0, truncated: false,
     };
+  } finally {
+    if (!client) channel.close();
   }
 }
 

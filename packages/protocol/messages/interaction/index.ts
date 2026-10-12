@@ -144,5 +144,6 @@ export const SessionsRefresh = z.object({
   type: z.literal("sessions.refresh"),
   createdAt: z.number(),
   graphProjectId: z.string().min(1).max(128).optional(),
+  graphAnalysisRequestId: z.string().min(1).max(128).optional(),
 });
 export type SessionsRefresh = z.infer<typeof SessionsRefresh>;

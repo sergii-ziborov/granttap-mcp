@@ -20,10 +20,12 @@ function metadata(session: SessionInfo): SessionInfo {
 
 /** Keep native identity, not capability descriptors or message contents. */
 export function rememberPublishedCatalog(client: RelayClient, status: SessionsStatus): void {
+  const previous = catalogs.get(client);
+  const history = status.history ?? previous?.history;
   const compact: SessionsStatus = { type: "sessions.status", machine: status.machine,
-    sessions: status.sessions.map(metadata), history: status.history?.map(metadata),
+    sessions: status.sessions.map(metadata), history: history?.map(metadata),
     generatedAt: status.generatedAt };
-  catalogs.set(client, compact);
+  catalogs.set(client, { ...status, history });
   const paths = Object.fromEntries([...compact.sessions, ...(compact.history ?? [])]
     .flatMap(session => { const path = nativeTranscriptSource(session);
       return path ? [[session.sessionId, path]] : []; }));

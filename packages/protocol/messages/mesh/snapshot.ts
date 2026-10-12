@@ -250,6 +250,7 @@ export const MeshSnapshot = z.object({
   dependencies: z.array(TaskDependency).max(128),
   events: z.array(MeshEvent).max(128),
   generatedAt: z.number().nonnegative(),
+  graphAnalysisRequestId: z.string().min(1).max(128).optional(),
 }).strict().superRefine((value, ctx) => {
   const detailKeys = new Set(value.repositoryDetails?.map((item) => `${item.endpointId}\0${item.repositoryId}`));
   if (detailKeys.size !== (value.repositoryDetails?.length ?? 0)

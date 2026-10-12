@@ -1,16 +1,19 @@
 import type { RelayClient } from "../../../../packages/core/relay-client";
 import { analyzeProjectGraphNow } from "../mesh/runtime";
 
-const inFlight = new Set<string>();
+const inFlight = new Map<string, Set<string>>();
 
 /** One user request starts one analysis per Project, even during reconnect. */
 export function requestProjectGraphRefresh(
   client: RelayClient, projectId: string,
   analyze: typeof analyzeProjectGraphNow = analyzeProjectGraphNow,
+  requestId?: string,
 ): boolean {
-  if (inFlight.has(projectId)) return false;
-  inFlight.add(projectId);
-  void analyze(client, projectId).catch(() => false).finally(() => {
+  const pending = inFlight.get(projectId);
+  if (pending) { if (requestId) pending.add(requestId); return false; }
+  const receipts = new Set(requestId ? [requestId] : []);
+  inFlight.set(projectId, receipts);
+  void analyze(client, projectId, undefined, receipts).catch(() => false).finally(() => {
     inFlight.delete(projectId);
   });
   return true;

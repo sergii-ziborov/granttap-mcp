@@ -172,10 +172,10 @@ async function handleInboundRefresh(
   // An explicit refresh may pay for the full history scan; routine Mesh
   // snapshots use the cached history and fresh live sessions.
   invalidateMeshSessionHistory();
-  await publish(true).catch(() => {});
   if (payload.graphProjectId && loadRuntimeConfig().meshEnabled) {
-    requestProjectGraphRefresh(client, payload.graphProjectId);
+    requestProjectGraphRefresh(client, payload.graphProjectId, undefined, payload.graphAnalysisRequestId);
   }
+  void publish(true).catch(() => {});
   return true;
 }
 

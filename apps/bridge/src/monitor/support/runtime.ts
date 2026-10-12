@@ -12,10 +12,7 @@ import { localMeshStore } from "../../mesh/local-remote/local";
 import { refreshMcpLoad } from "../../machine-load/mcp/refresh";
 import { approvalsStatus } from "../../approvals/state";
 import { primeSessionKeys } from "../../host/session-keys";
-import { sendMeshPayload } from "../../host/session-keys";
-import { meshCatalog, meshSnapshots, meshSnapshotsWithEngine } from "../../mesh/runtime";
-import { deriveObservedClaims } from "../../mesh/observed/claims";
-import { ingestRuntimeInvocations } from "../../engine/invocation/ingest";
+import { meshCatalog } from "../../mesh/runtime";
 import { HEARTBEAT_INTERVAL_MS, publishHeartbeat } from "./heartbeat";
 import { confirmPendingController } from "../../pairing/controllers";
 import { recordControllerName } from "../../pairing/presence";
@@ -24,14 +21,13 @@ import { singleFlightPublisher } from "./single-flight";
 import { publishedCatalog, rememberPublishedCatalog, resumePublishedChats } from "../../session-catalog";
 import { createMachineLoadPublisher } from "../../machine-load";
 import { startMachineLoadLoop } from "../../machine-load/host/loop";
-import { publishProjectPolicyStatuses } from "../../project-policy/runtime";
 import { scanCapabilityUsage, scanSessionHistory, scanSessions, scopeCapabilityUsageToRoom, TOKEN_WINDOW_HOURS } from "../../sessions";
 import { boundedCatalogHistory, INTERVAL_MS, publishSessionEvents } from "../handlers/catalog";
 import { sweepAttachments } from "../handlers/receipts";
 import { handleMonitorMessage } from "../handlers/inbound";
 
 const HISTORY_INTERVAL_MS = 10_000;
-let meshEnrichmentInFlight: Promise<void> | undefined;
+import { publishMonitorMeshes, stopMonitorMeshes } from "../mesh-publication";
 
 export type SessionMonitor = {
   publish: () => Promise<void>;
@@ -140,22 +136,7 @@ async function publishMonitorTick(input: {
     await publishSessionEvents(client, sessionId, status).catch(() => false);
   }
   await client.send(approvalsStatus(), "phone", { ttlMs: INTERVAL_MS * 3, reliable: false });
-  if (loadRuntimeConfig().meshEnabled) {
-    deriveObservedClaims(localMeshStore(), status.sessions);
-    void ingestRuntimeInvocations(status.sessions).catch(() => {});
-    const meshes = meshSnapshots();
-    for (const mesh of meshes) {
-      await sendMeshPayload(client, mesh, "phone", {
-        ttlMs: INTERVAL_MS * 24,
-        reliable: false,
-      }).catch(() => {});
-    }
-    await publishProjectPolicyStatuses(
-      client,
-      meshes.map((mesh) => mesh.projectId),
-    ).catch(() => {});
-    publishEnrichedMeshes(client);
-  }
+  if (loadRuntimeConfig().meshEnabled) publishMonitorMeshes(client, status);
   if (Date.now() - lastCapabilityPublishedAt >= 30_000) {
     const usage = scanCapabilityUsage([
       ...status.sessions,
@@ -165,18 +146,6 @@ async function publishMonitorTick(input: {
     lastCapabilityPublishedAt = Date.now();
   }
   return { lastHistoryPublishedAt, lastCapabilityPublishedAt };
-}
-
-function publishEnrichedMeshes(client: RelayClient): void {
-  if (meshEnrichmentInFlight) return;
-  meshEnrichmentInFlight = (async () => {
-    const meshes = await meshSnapshotsWithEngine();
-    for (const mesh of meshes) {
-      await sendMeshPayload(client, mesh, "phone", {
-        ttlMs: INTERVAL_MS * 24, reliable: false,
-      }).catch(() => {});
-    }
-  })().finally(() => { meshEnrichmentInFlight = undefined; });
 }
 
 /**
@@ -254,6 +223,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
     publish: () => publish(false),
     close: () => {
       stopCatalog();
+      stopMonitorMeshes(client);
       stopHeartbeat();
       loadLoop.stop();
       off();

@@ -40,7 +40,8 @@ export async function enrichMeshSnapshot(
     ...(snapshot.supersededKnowledgeRecordIds ?? []),
     ...supersededProjectKnowledgeIds(snapshot.projectId, allMemory),
   ])].sort().slice(-128);
-  const enriched = { ...snapshot, backbone, repositoryGraphs: [...repositoryGraphs, ...identityFailures],
+  const enriched = { ...snapshot, backbone, ...(repositoryGraphs.length || identityFailures.length
+      ? { repositoryGraphs: [...repositoryGraphs, ...identityFailures] } : {}),
     repositoryDetails: details,
     knowledge: activeProjectKnowledge(snapshot.projectId, allMemory)
       .sort((a, b) => b.recordedAt - a.recordedAt).slice(0, 16),

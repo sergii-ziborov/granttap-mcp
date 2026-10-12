@@ -45,10 +45,62 @@ test("explicit Graph build refreshes one admitted Project and reports missing bi
     send: async (_client: unknown, value: MeshSnapshot) => { sent.push(value); },
   };
   assert.equal(await analyzeProjectGraphNow({} as never, "other", dependencies), false);
-  assert.equal(await analyzeProjectGraphNow({} as never, "project", dependencies), true);
+  assert.equal(await analyzeProjectGraphNow({} as never, "project", dependencies, new Set(["request-one", "request-two"])), true);
   assert.deepEqual(calls, ["wait:project", "backbone:project", "graphs:project:0:false"]);
   assert.equal(sent[0]?.projectId, "project");
+  assert.deepEqual(sent.map(snapshot => snapshot.graphAnalysisRequestId), ["request-one", "request-two"]);
   assert.equal(sent[0]?.repositoryGraphs?.[0]?.analysisErrorCode, "REPOSITORY_NOT_BOUND");
   assert.equal(sent[0]?.repositoryGraphs?.[0]?.analysisStatus, "UNAVAILABLE");
   assert.ok((sent[0]?.generatedAt ?? 0) > snapshot.generatedAt);
+});
+
+
+test("an explicit Graph request starts while the catalog publisher is still busy", async t => {
+  const { mkdtempSync, mkdirSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { saveRuntimeConfig } = await import("../../apps/bridge/src/config");
+  const { localMeshStore } = await import("../../apps/bridge/src/mesh/local-remote/local");
+  const { handleMonitorMessage } = await import("../../apps/bridge/src/monitor/handlers/inbound");
+  const root = mkdtempSync(join(tmpdir(), "granttap-graph-request-"));
+  const names = ["GRANTTAP_CONFIG_DIR", "GRANTTAP_ENGINE_ENABLED", "GRANTTAP_CLAUDE_PROJECTS_DIR",
+    "GRANTTAP_CODEX_DIR", "GRANTTAP_CODEX_SESSIONS_DIR", "GRANTTAP_CURSOR_TRANSCRIPTS_DIR", "GRANTTAP_GROK_SESSIONS_DIR"];
+  const prior = Object.fromEntries(names.map(n => [n, process.env[n]]));
+  for (const n of names) process.env[n] = root;
+  process.env.GRANTTAP_ENGINE_ENABLED = "0";
+  mkdirSync(join(root, "empty"));
+  t.after(() => { for (const n of names) {
+    if (prior[n] == null) delete process.env[n]; else process.env[n] = prior[n]; }
+    rmSync(root, { recursive: true, force: true }); });
+  saveRuntimeConfig({ meshEnabled: true, providerSettings: { claude: false, codex: false, cursor: false, grok: false } });
+  localMeshStore().upsertProject({ projectId: "busy-catalog-project", name: "Test",
+    canonicalRepositoryId: "repository", createdAt: 1 });
+  const sent: Array<{type: string}> = [];
+  const client = { room: "test", setSessionKey: () => {},
+    sendSession: async (p: {type: string}) => { sent.push(p); },
+    send: async (p: {type: string}) => { sent.push(p); } };
+  let release!: () => void;
+  const blocked = new Promise<void>(resolve => { release = resolve; });
+  const work = handleMonitorMessage(client as never, { type: "sessions.refresh", graphProjectId: "busy-catalog-project", createdAt: 1 },
+    { leadership: { acquire: () => true }, subscriptions: new Set(), publish: () => blocked });
+  try {
+    for (let i = 0; i < 30 && !sent.some(p => p.type === "mesh.snapshot"); i++) {
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    assert.ok(sent.some(p => p.type === "mesh.snapshot"), "graph result must not wait for a catalog scan");
+  } finally { release(); await work; await new Promise(resolve => setImmediate(resolve)); }
+});
+
+test("coalesced architecture builds retain every requesting controller receipt", async () => {
+  let release!: (value: boolean) => void;
+  const held = new Promise<boolean>(resolve => { release = resolve; });
+  let receipts: ReadonlySet<string> | undefined;
+  const analyze: typeof analyzeProjectGraphNow = async (_client, _project, _dependencies, requested) => {
+    receipts = requested;
+    return held;
+  };
+  assert.equal(requestProjectGraphRefresh({} as never, "receipt-project", analyze, "first-controller"), true);
+  assert.equal(requestProjectGraphRefresh({} as never, "receipt-project", analyze, "second-controller"), false);
+  try { assert.deepEqual([...(receipts ?? [])], ["first-controller", "second-controller"]); }
+  finally { release(true); await new Promise(resolve => setImmediate(resolve)); }
 });

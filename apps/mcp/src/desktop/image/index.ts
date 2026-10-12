@@ -15,7 +15,10 @@ export function sessionImageChunk(session: SessionInfo, activity: SessionActivit
   if (activity.sessionId !== session.sessionId) return undefined;
   const native = activity.entries.some(entry => entry.id === imageId && entry.kind === 'user'
     && entry.attachments?.includes('Image'));
-  if (native) return nativeTranscriptImage(session, imageId, offset, cursor);
+  if (native || imageId.startsWith(`${session.sessionId}:`)) {
+    const picture = nativeTranscriptImage(session, imageId, offset, cursor);
+    if (picture) return picture;
+  }
   const artifact = activity.entries.flatMap(artifactImages).find(image => image.id === imageId);
   if (!artifact) return undefined;
   const loaded = readStoreState(storePath ?? join(configDir(), 'project-mesh.json'));

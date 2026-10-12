@@ -85,3 +85,29 @@ test('invalid, oversized and contradictory chunks fail wire validation', () => {
   assert.equal(Payload.safeParse({ type: valid.type, sessionId: 'chat', requestId: 'request',
     imageId: 'photo', offset: 0, unavailable: true }).success, true);
 });
+
+
+test('a saved Codex picture remains addressable after the current history head advances', t => {
+  const root = mkdtempSync(join(tmpdir(), 'granttap-old-picture-'));
+  const id = 'old-picture', path = join(root, 'log.jsonl');
+  t.after(() => { rmSync(root, { recursive: true, force: true }); codexLogPathBySession.delete(id); });
+  const stamp = new Date(1000).toISOString();
+  const row = JSON.stringify({ type: 'response_item', timestamp: stamp,
+    payload: { type: 'message', role: 'user', content: [{ type: 'input_image',
+      image_url: `data:image/png;base64,${png.toString('base64')}` }] } });
+  const newer = Array.from({ length: 300 }, (_, i) => JSON.stringify({ type: 'event_msg',
+    timestamp: new Date(2000 + i).toISOString(), payload: { type: 'agent_message', message: 'x'.repeat(5000) } }));
+  const textRow = JSON.stringify({ type: 'response_item', timestamp: stamp,
+    payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Caption' }] } });
+  writeFileSync(path, [textRow, row, ...newer].join('\n') + '\n');
+  codexLogPathBySession.set(id, path);
+  const session: SessionInfo = { sessionId: id, agent: 'codex', state: 'idle', startedAt: 1000,
+    lastActivityAt: 2400, tokensSession: 0, tokensLastTurn: 0 };
+  const activity = readTranscriptHistory(session)!;
+  const imageId = `${id}:1000:0`;
+  assert.equal(activity.entries.some(e => e.id === imageId), false);
+  const chunk = readSessionImage(query(session, imageId), session, activity);
+  assert.ok(chunk, 'the saved identity must reach its own older native row');
+  assert.deepEqual(Buffer.from(chunk.data_base64, 'base64'), png);
+  assert.equal(readSessionImage(query(session, 'other:1000:0'), session, activity), undefined);
+});
