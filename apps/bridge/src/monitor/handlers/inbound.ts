@@ -35,6 +35,7 @@ import { handleTaskCreate } from "./task-create";
 import { handleUserMessage } from "./user-message";
 import { publishSessionEvents } from "./catalog";
 import { publishSessionImage } from '../../session-images';
+import { publishTaskWorkspace } from '../../task-files/relay';
 import { publishHistoryPage } from "../history/pages";
 import { requestProjectGraphRefresh } from "../graph-refresh";
 import { handleControllerPairRequest, handleInboundKnowledgeWrite } from "../controller-knowledge";
@@ -84,7 +85,7 @@ export async function handleMonitorMessage(
       return true;
     } else if (payload.type === "session.subscribe") {
       return handleInboundSubscription(client, payload, subscriptions, publish, input.peerPublicKey);
-    } else if (payload.type === "session.events" || payload.type === "session.image.query") {
+    } else if (payload.type === "session.events" || payload.type === "session.image.query" || payload.type === "session.workspace.query") {
       return handleSessionRead(client, payload, input.peerPublicKey);
     } else if (payload.type === "sessions.refresh") {
       return handleInboundRefresh(client, payload, publish);
@@ -277,9 +278,10 @@ function handleInboundSubscription(
 }
 
 async function handleSessionRead(client: RelayClient,
-  payload: Extract<Payload, { type: 'session.events' | 'session.image.query' }>,
+  payload: Extract<Payload, { type: 'session.events' | 'session.image.query' | 'session.workspace.query' }>,
   peerPublicKey?: string): Promise<boolean> {
-  if (payload.type === 'session.image.query') await publishSessionImage(client, payload, peerPublicKey);
+  if (payload.type === 'session.workspace.query') await publishTaskWorkspace(client, payload, peerPublicKey);
+  else if (payload.type === 'session.image.query') await publishSessionImage(client, payload, peerPublicKey);
   else await publishSessionEvents(client, payload.sessionId, undefined, payload.threadId,
     { ...payload, peerPublicKey }).catch(() => false);
   return true;

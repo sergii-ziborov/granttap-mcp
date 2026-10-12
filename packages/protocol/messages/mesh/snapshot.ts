@@ -154,6 +154,7 @@ export const ProjectRepositoryGraph = z.object({
   repositoryId: z.string().trim().min(1).max(512),
   revision: z.string().trim().min(1).max(512),
   weavatrixVersion: z.string().trim().min(1).max(64),
+  sourceRevision: z.string().trim().min(1).max(512).optional(),
   analysisId: z.string().trim().min(1).max(128).optional(),
   analysisStatus: z.enum(["COMPLETE", "INCOMPLETE", "UNAVAILABLE"]).optional(),
   analysisErrorCode: z.string().regex(/^[A-Z_]{2,64}$/).optional(),

@@ -1,7 +1,8 @@
 import type { RelayClient } from "../../../../../packages/core/relay-client";
 import type { SessionsStatus } from "../../../../../packages/protocol/schema";
 import { localMeshStore } from "../../mesh/local-remote/local";
-import { meshSnapshotsAsync, meshSnapshotsWithEngine } from "../../mesh/runtime";
+import { meshSnapshotsAsync } from "../../mesh/runtime";
+import { publishEnrichedMeshes } from "./enrichment";
 import { deriveObservedClaims } from "../../mesh/observed/claims";
 import { ingestRuntimeInvocations } from "../../engine/invocation/ingest";
 import { publishProjectPolicyStatuses } from "../../project-policy/runtime";
@@ -29,11 +30,10 @@ export function publishMonitorMeshes(client: RelayClient, status: SessionsStatus
     }
     if (!token.active || !client.isConnected) return;
     await publishProjectPolicyStatuses(client, snapshots.map(mesh => mesh.projectId)).catch(() => {});
-    const enriched = await meshSnapshotsWithEngine(snapshots);
-    for (const snapshot of enriched) {
+    await publishEnrichedMeshes(snapshots, async snapshot => {
       if (!token.active || !client.isConnected) return;
       await sendMeshPayload(client, snapshot, "phone", { ttlMs: INTERVAL_MS * 24, reliable: false }).catch(() => {});
-    }
+    });
   })();
   void work.catch(() => {}).finally(() => { if (pending.get(client) === token) pending.delete(client); });
 }

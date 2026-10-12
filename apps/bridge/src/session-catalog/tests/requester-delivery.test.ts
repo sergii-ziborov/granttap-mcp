@@ -38,6 +38,7 @@ test("authenticated history and image reads return to the requesting phone only"
     ] } }) + "\n");
   saveRuntimeConfig({ meshEnabled: false,
     providerSettings: { claude: true, codex: false, cursor: false, grok: false } });
+  writeFileSync(join(root, "preview.swift"), "let fixture = 42\n");
   const server = new WebSocketServer({ port: 0 });
   await once(server, "listening");
   const address = server.address();
@@ -69,6 +70,8 @@ test("authenticated history and image reads return to the requesting phone only"
     { type: "session.events", sessionId: session.sessionId, history: true, createdAt: Date.now() },
     { type: "session.image.query", sessionId: session.sessionId, requestId: "fixture-picture",
       imageId, offset: 0, createdAt: Date.now() },
+    { type: "session.workspace.query", sessionId: session.sessionId, requestId: "fixture-workspace",
+      mode: "file", path: "preview.swift", createdAt: Date.now() },
   ];
   for (const request of requests) {
     frames.length = 0;
@@ -95,6 +98,10 @@ test("authenticated history and image reads return to the requesting phone only"
       assert.equal(result.type, "session.activity");
       assert.equal(result.history.hasMore, false);
       assert.ok(result.entries.some((entry: any) => entry.text === "Dedicated replica test message"));
+    } else if (request.type === "session.workspace.query") {
+      assert.equal(result.type, "session.workspace.result");
+      assert.equal(result.text, "let fixture = 42\n");
+      assert.equal(result.requestId, "fixture-workspace");
     } else {
       assert.equal(result.type, "session.image.chunk");
       assert.equal(result.unavailable, undefined);

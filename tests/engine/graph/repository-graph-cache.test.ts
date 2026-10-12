@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { RepositoryGraphCache } from '../../../apps/bridge/src/engine/runtime/repository-graph/cache';
+import { RepositoryGraphJobs } from '../../../apps/bridge/src/engine/runtime/repository-graph-jobs';
+import type { ProjectRepositoryGraph } from '../../../packages/protocol/schema';
+test('automatic architecture survives MCP restart and refreshes after its observation expires', async (t) => {
+    const directory = mkdtempSync('/tmp/granttap-graph-cache-');
+    t.after(() => rmSync(directory, { recursive: true, force: true }));
+    let now = 1;
+    const cache = new RepositoryGraphCache(directory, () => now);
+    const report: ProjectRepositoryGraph = { projectId: 'p', repositoryId: 'repo', revision: 'content', sourceRevision: 'head',
+        weavatrixVersion: '2.17.4', analysisStatus: 'COMPLETE', nodes: [], relations: [], totalNodes: 4, totalRelations: 0, truncated: false };
+    const key = JSON.stringify(['p', 'repo', 'head']);
+    cache.write(key, report);
+    const restored = new RepositoryGraphJobs<ProjectRepositoryGraph>(() => now, 120000, 300000, 32, cache);
+    let runs = 0;
+    const analyze = async () => { runs++; return { ...report, totalNodes: 8 }; };
+    assert.equal(restored.read(key, analyze)?.totalNodes, 4);
+    assert.equal(runs, 0);
+    now += 120001;
+    assert.equal(restored.read(key, analyze)?.totalNodes, 4, 'saved data remains usable while fresh analysis runs');
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(runs, 1);
+    const restarted = new RepositoryGraphJobs<ProjectRepositoryGraph>(() => now, 120000, 300000, 32, cache);
+    assert.equal(restarted.read(key, analyze)?.totalNodes, 8);
+    assert.equal(cache.read(JSON.stringify(['p', 'repo', 'other-head'])), undefined);
+    cache.write(key, { ...report, analysisStatus: 'UNAVAILABLE' });
+    assert.equal(cache.read(key)?.value.totalNodes, 8, 'failed analysis does not erase the durable last report');
+});

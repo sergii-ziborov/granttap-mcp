@@ -4,6 +4,7 @@ export class RepositoryGraphJobs<T> {
     value?: T;
     retryAt: number;
     pending: boolean;
+    listeners: Array<(value: T | undefined) => void>;
   }>();
   private readonly queue: Array<{
     key: string; run: () => Promise<T | undefined>; priority: number;
@@ -15,23 +16,59 @@ export class RepositoryGraphJobs<T> {
     private readonly successMs = 120_000,
     private readonly failureMs = 300_000,
     private readonly capacity = 32,
+    private readonly storage?: {read(key:string):{value:T;savedAt:number}|undefined;write(key:string,value:T):void},
   ) {}
 
-  read(key: string, run: () => Promise<T | undefined>, priority = 0): T | undefined {
+  read(key: string, run: () => Promise<T | undefined>, priority = 0, force = false): T | undefined {
+    if (!this.entries.has(key)) {
+      const saved = this.storage?.read(key);
+      if (saved) this.entries.set(key, {value:saved.value,retryAt:saved.savedAt+this.successMs,
+        pending:false,listeners:[]});
+    }
     const previous = this.entries.get(key);
     if (previous?.pending) return previous.value;
-    if (previous && this.now() < previous.retryAt) return previous.value;
-    if (this.queue.length >= this.capacity) return undefined;
+    if (previous && !force && this.now() < previous.retryAt) return previous.value;
+    if (!this.admit(priority)) return undefined;
     if (!previous && this.entries.size >= this.capacity * 2) {
       const oldest = [...this.entries].find(([, entry]) => !entry.pending)?.[0];
       if (!oldest) return undefined;
       this.entries.delete(oldest);
     }
-    this.entries.set(key, { value: previous?.value, retryAt: 0, pending: true });
+    this.entries.set(key, { value: previous?.value, retryAt: 0, pending: true, listeners: [] });
     const before = this.queue.findIndex((job) => job.priority < priority);
     this.queue.splice(before < 0 ? this.queue.length : before, 0, { key, run, priority });
     void this.drain();
     return previous?.value;
+  }
+
+  /** A requested build joins the same revision's automatic job and raises its queue priority. */
+  refresh(key: string, run: () => Promise<T | undefined>, priority = Number.MAX_SAFE_INTEGER): Promise<T | undefined> {
+    if (!this.entries.get(key)?.pending) this.read(key, run, priority, true);
+    const entry = this.entries.get(key);
+    if (!entry?.pending) return Promise.resolve(undefined);
+    const index = this.queue.findIndex(job => job.key === key);
+    if (index >= 0) {
+      const job = this.queue.splice(index, 1)[0]!;
+      job.priority = Math.max(priority, job.priority);
+      const before = this.queue.findIndex(other => other.priority < job.priority);
+      this.queue.splice(before < 0 ? this.queue.length : before, 0, job);
+    }
+    return new Promise(resolve => entry.listeners.push(resolve));
+  }
+
+  private admit(priority: number): boolean {
+    if (this.queue.length < this.capacity) return true;
+    const last = this.queue[this.queue.length - 1];
+    if (!last || last.priority >= priority) return false;
+    this.queue.pop();
+    const entry = this.entries.get(last.key);
+    if (entry) {
+      entry.pending = false;
+      entry.retryAt = this.now() + this.failureMs;
+      for (const listener of entry.listeners) listener(undefined);
+      entry.listeners = [];
+    }
+    return true;
   }
 
   /** An explicit refresh supersedes an older queued or running observation. */
@@ -44,7 +81,9 @@ export class RepositoryGraphJobs<T> {
       if (!oldest) return;
       this.entries.delete(oldest);
     }
-    this.entries.set(key, { value, pending: false,
+    for (const listener of this.entries.get(key)?.listeners ?? []) listener(value);
+    if (value !== undefined) this.storage?.write(key, value);
+    this.entries.set(key, { value, pending: false, listeners: [],
       retryAt: this.now() + (value === undefined ? this.failureMs : this.successMs) });
   }
 
@@ -58,11 +97,14 @@ export class RepositoryGraphJobs<T> {
         let value: T | undefined;
         try { value = await job.run(); } catch { /* Retry after backoff. */ }
         if (this.entries.get(job.key) !== entry) continue;
+        if (value !== undefined) this.storage?.write(job.key, value);
         this.entries.set(job.key, {
           value,
           retryAt: this.now() + (value === undefined ? this.failureMs : this.successMs),
           pending: false,
+          listeners: [],
         });
+        for (const listener of entry?.listeners ?? []) listener(value);
       }
     } finally {
       this.running = false;

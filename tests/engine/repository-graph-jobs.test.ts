@@ -64,3 +64,17 @@ test("recent Project analysis goes ahead of older queued Projects", async () => 
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(order, ["recent", "old"]);
 });
+
+test("an active Project can enter a full queue ahead of stale background Projects", async () => {
+  let release!: (value: string) => void;
+  const held = new Promise<string>(resolve => { release = resolve; });
+  const jobs = new RepositoryGraphJobs<string>(() => 0, 100, 500, 1);
+  const started: string[] = [];
+  jobs.read("running", () => held);
+  jobs.read("stale", async () => { started.push("stale"); return "stale"; }, 1);
+  jobs.read("active", async () => { started.push("active"); return "active"; }, 10);
+  release("running");
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(started, ["active"]);
+  assert.equal(jobs.read("active", async () => "wrong"), "active");
+});

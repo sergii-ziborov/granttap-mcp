@@ -16,6 +16,11 @@ ticks reuse a fresh bounded report, and failed analyses back off. An absent
 report leaves the graph unavailable and Cortex degraded; it does not block
 policy IPC: repository analysis owns a separate bounded-lifetime socket, while
 policy and Backbone requests keep their control connection. It does not turn a repository label into an architecture result.
+Explicit builds join and prioritize the same pending repository job. Confirmed
+reports are retained in a bounded private computer cache across restarts, served
+while a new observation runs, and refreshed after the observation expires. Git
+admission revision (`sourceRevision`) remains separate from Weavatrix's content
+fingerprint (`revision`). Failed analyses cannot erase the durable last report.
 Claude, Codex, and Cursor hooks can evaluate the engine's local Project
 Governance policy only when both `GRANTTAP_ENGINE_ENABLED` and
 `GRANTTAP_PROJECT_POLICY_ENABLED` are enabled. Project `DENY` and `ASK` precede

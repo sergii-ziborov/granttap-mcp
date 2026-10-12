@@ -1,6 +1,8 @@
 /** Public encrypted wire protocol entry point. */
 import { z } from "zod";
 import { SessionImageQuery, SessionImageChunk } from './messages/session-images';
+import { SessionWorkspaceQuery, SessionWorkspaceResult } from './messages/sessions/workspace';
+export { SessionWorkspaceQuery, SessionWorkspaceResult } from './messages/sessions/workspace';
 export { SessionImageQuery, SessionImageChunk } from './messages/session-images';
 import { ProviderHookTrust, ProviderHookTrustResult } from "./messages/provider-hooks";
 import {
@@ -126,6 +128,8 @@ export const Payload = z.union([
   SessionActivity,
   SessionImageQuery,
   SessionImageChunk,
+  SessionWorkspaceQuery,
+  SessionWorkspaceResult,
   CapabilityUsageStatus,
   SessionKeyGrant,
   SessionSealed,

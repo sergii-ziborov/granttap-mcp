@@ -18,7 +18,7 @@ export const DESKTOP_OPERATIONS = new Set([
   "project.list_bindings", "policy.get", "policy.coverage",
   "graph.get_backbone", "memory.history", "invocation.history",
   "desktop.project", "desktop.mesh_snapshot", "desktop.workspace", "desktop.task_activity",
-  "desktop.machine_load", "desktop.capability_usage", "desktop.task_image",
+  "desktop.machine_load", "desktop.capability_usage", "desktop.task_image", "desktop.task_workspace",
   "desktop.installed_skills", "desktop.policy_status", "desktop.policy_set", "desktop.project_auto_accept",
   "desktop.mesh_snapshots",
   "desktop.task_send",

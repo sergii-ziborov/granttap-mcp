@@ -16,6 +16,7 @@ import type {
 } from "../protocol/engine-protocol";
 import { RepositoryGraphJobs } from "./repository-graph-jobs";
 import { fitRepositoryGraph } from "./repository-graph/fit";
+import { RepositoryGraphCache } from "./repository-graph/cache";
 
 export type LocalProjectBinding = {
   summary: ProjectBindingSummary;
@@ -29,7 +30,8 @@ let sharedClient: EngineClient | undefined;
 const pendingBindingSyncs = new Map<string, Promise<boolean>>();
 const MAX_REPOSITORY_GRAPH_WIRE_BYTES = 256 * 1_024;
 const MAX_SINGLE_GRAPH_WIRE_BYTES = 192 * 1_024;
-const repositoryGraphJobs = new RepositoryGraphJobs<ProjectRepositoryGraph>();
+const repositoryGraphJobs = new RepositoryGraphJobs<ProjectRepositoryGraph>(Date.now,120_000,300_000,32,
+  new RepositoryGraphCache(()=>join(configDir(),"repository-graph-cache")));
 
 export async function syncProjectBinding(
   project: Project,
@@ -192,19 +194,19 @@ export async function projectRepositoryGraphs(
   const graphs = options.background
     ? repositories.map((binding) => repositoryGraphJobs.read(
       JSON.stringify([projectId, binding.repositoryId, binding.revision]),
-      () => analyzeRepositoryGraph(client, projectId, binding.repositoryId, 120_000),
+      () => analyzeRepositoryGraph(client, projectId, binding.repositoryId, 120_000, binding.revision),
       options.priority ?? 0,
     ))
-    : await Promise.all(repositories.map((binding) =>
-      analyzeRepositoryGraph(client, projectId, binding.repositoryId, 120_000).then((graph) => {
-        repositoryGraphJobs.remember(JSON.stringify([projectId, binding.repositoryId, binding.revision]), graph);
-        return graph;
-      })));
+    : await Promise.all(repositories.map((binding) => repositoryGraphJobs.refresh(
+      JSON.stringify([projectId, binding.repositoryId, binding.revision]),
+      () => analyzeRepositoryGraph(client, projectId, binding.repositoryId, 120_000, binding.revision),
+    )));
   return boundRepositoryGraphs(graphs.filter((item): item is ProjectRepositoryGraph => item != null));
 }
 
 async function analyzeRepositoryGraph(
   client: EngineClientLike | undefined, projectId: string, repositoryId: string, timeoutMs: number,
+  sourceRevision?: string,
 ): Promise<ProjectRepositoryGraph | undefined> {
   // The daemon serves a socket serially. Analysis must not occupy the channel
   // used for policy, bindings and Backbone reads while a repository is scanned.
@@ -222,6 +224,7 @@ async function analyzeRepositoryGraph(
     return {
       projectId: graph.project_id, repositoryId: graph.repository_id,
       revision: graph.revision, weavatrixVersion: graph.weavatrix_version,
+      sourceRevision,
       analysisId: graph.analysis_id ?? undefined,
       analysisStatus: graph.analysis_status,
       architectureHypotheses: graph.architecture_hypotheses,
