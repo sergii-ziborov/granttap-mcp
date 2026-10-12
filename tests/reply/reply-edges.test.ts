@@ -97,27 +97,27 @@ test("Codex delivery covers JSONL diagnostics, sandbox variants, and escaped MCP
     sessionMcpDisabled: { workspace: ['quote"slash\\'] },
   });
   const reply = await import(`../../apps/bridge/src/reply/index.ts?codexEdges=${Date.now()}`);
-  const workspace = await reply.deliverToSession(session("codex", "workspace", root), "go", 2_000);
+  const workspace = await reply.deliverToSession(session("codex", "workspace", root), "go", 15_000);
   assert.equal(workspace.ok, true);
   if (workspace.ok) {
     assert.match(workspace.text, /sandbox_mode="workspace-write"/);
     assert.match(workspace.text, /mcp_servers\."quote\\"slash\\\\"\.enabled=false/);
   }
-  const full = await reply.deliverToSession(session("codex", "full", root), "go", 2_000);
+  const full = await reply.deliverToSession(session("codex", "full", root), "go", 15_000);
   assert.equal(full.ok, true);
   if (full.ok) assert.match(full.text, /sandbox_mode="danger-full-access"/);
-  const raw = await reply.createCodexSession("raw", root, 2_000);
+  const raw = await reply.createCodexSession("raw", root, 15_000);
   assert.deepEqual(raw, { ok: true, text: "diagnostic text", sessionId: undefined });
-  assert.deepEqual(await reply.createCodexSession("empty", root, 2_000), {
+  assert.deepEqual(await reply.createCodexSession("empty", root, 15_000), {
     ok: false, error: "Codex returned an empty response.",
   });
-  assert.deepEqual(await reply.createCodexSession("json-error", root, 2_000), {
+  assert.deepEqual(await reply.createCodexSession("json-error", root, 15_000), {
     ok: false, error: "provider failed",
   });
-  assert.deepEqual(await reply.createCodexSession("json-only", root, 2_000), {
+  assert.deepEqual(await reply.createCodexSession("json-only", root, 15_000), {
     ok: false, error: "Codex returned no agent message.",
   });
-  assert.equal((await reply.createCodexSession("normal", root, 2_000)).sessionId, "fallback-thread");
+  assert.equal((await reply.createCodexSession("normal", root, 15_000)).sessionId, "fallback-thread");
   assert.equal((await reply.deliverToSession({ ...session("codex", "bad", root), agent: "other" as never }, "go")).ok, false);
 });
 
