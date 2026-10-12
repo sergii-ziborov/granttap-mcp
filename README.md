@@ -23,6 +23,12 @@ index so a restart can send current heads of the saved Now chats before a fresh
 discovery scan. The Apple clients keep downloaded conversations, pictures, and
 Mesh data locally for offline use; clearing that cache preserves the account login.
 
+The chat's **Files** pill opens recorded changes for the current reply and the
+Task's **All files** tree. Directory and text reads are paged, encrypted for the
+requesting controller, and restricted to that native execution's admitted
+checkout. Received previews remain on the device for offline inspection.
+**Agents** opens nested execution conversations within the same Task.
+
 The MCP runtime, plugins, and CLI are open source under the MIT License.
 The Apple apps, Engine, relay, and website are separately licensed commercial
 products or source. Their licenses do not change this repository's MIT grant.
@@ -149,6 +155,21 @@ separate from their path identity. Missing content evidence remains unknown.
 </p>
 
 <p align="center"><em>These are deterministic simulator fixtures, not reports from a live customer repository.</em></p>
+
+Health and Graph share one architecture build state. With Engine enabled,
+active repository bindings schedule missing or changed analysis automatically;
+manual rebuilds join pending work and return their own delivery receipts.
+Usable reports persist privately on the computer across MCP restarts, while
+the phone keeps its last received map visible during a rebuild. Source Git
+revision and analysis content fingerprint are separate freshness facts.
+Partial and unavailable reports retain their scope and status.
+
+<p align="center">
+  <img src="docs/images/iphone-chat-work-summary.png" width="200" alt="Files and Agents above the composer with deterministic sample work">
+  <img src="docs/images/iphone-chat-files.png" width="200" alt="Saved Task checkout folder tree">
+</p>
+
+<p align="center"><em>Native build181 captures with deterministic sample data.</em></p>
 
 An authenticated controller can request a separate, one-time device credential
 for another iPhone or iPad from each Live linked computer. The phone packages
