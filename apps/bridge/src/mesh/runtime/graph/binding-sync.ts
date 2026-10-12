@@ -29,15 +29,23 @@ export async function refreshLocalGraphBindings(
           nodes: [], relations: [], totalNodes: 0, totalRelations: 0, truncated: false });
         return;
       }
-      await dependencies.sync(snapshot.project, {
+      const admitted = await dependencies.sync(snapshot.project, {
         summary: binding,
         localRoot: facts.root,
         canonicalRemote: facts.baseRemote,
         lastSeenAt: Date.now(),
       });
-    } catch { /* A stale checkout cannot prevent other verified bindings from recovery. */ }
+      if (!admitted) failures.push(admissionFailure(snapshot, binding));
+    } catch { failures.push(admissionFailure(snapshot, binding)); }
   }));
   return failures;
+}
+
+function admissionFailure(snapshot: MeshSnapshot, binding: NonNullable<MeshSnapshot["bindings"]>[number]): ProjectRepositoryGraph {
+  return { projectId: snapshot.projectId, repositoryId: binding.repositoryId,
+    revision: "unverified", weavatrixVersion: "unknown", analysisStatus: "UNAVAILABLE",
+    analysisErrorCode: "ENGINE_ADMISSION_UNAVAILABLE", nodes: [], relations: [],
+    totalNodes: 0, totalRelations: 0, truncated: false };
 }
 
 /** Rehydrate previously admitted Git checkouts after Engine restart. */

@@ -5,6 +5,7 @@ import type { RelayClient } from "../../../../packages/core/relay-client";
 import { SessionsStatus, type SessionInfo } from "../../../../packages/protocol/schema";
 import { configDir, writePrivateFile } from "../config";
 import { nativeTranscriptRoots, nativeTranscriptSource, restoreNativeTranscriptSource } from "../sessions";
+export { recoverCatalogBindings } from "./startup-recovery";
 
 const catalogs = new WeakMap<RelayClient, SessionsStatus | undefined>();
 const cachePath = () => join(configDir(), "session-catalog-cache.json");

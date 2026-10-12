@@ -38,7 +38,10 @@ export async function syncProjectBinding(
 ): Promise<boolean> {
   const env = options.env ?? process.env;
   if (!engineFeatureEnabled(env)) return false;
-  const client = options.client ?? defaultClient();
+  // Repository admission is restore work; keep it off the policy connection.
+  const client = options.client ?? new EngineClient({
+    socketPath: join(configDir(), "engine.sock"), connectTimeoutMs: 10_000,
+  });
   try {
     const result = await client.request({
       operation: "project.upsert_binding",
@@ -63,10 +66,12 @@ export async function syncProjectBinding(
           last_seen_at: local.lastSeenAt,
         },
       },
-    }, { timeoutMs: 5_000 });
+    }, { timeoutMs: 30_000 });
     return result.operation === "project.binding_upserted";
   } catch {
     return false;
+  } finally {
+    if (!options.client) client.close?.();
   }
 }
 
@@ -203,7 +208,9 @@ async function analyzeRepositoryGraph(
 ): Promise<ProjectRepositoryGraph | undefined> {
   // The daemon serves a socket serially. Analysis must not occupy the channel
   // used for policy, bindings and Backbone reads while a repository is scanned.
-  const channel = client ?? new EngineClient({ socketPath: join(configDir(), "engine.sock") });
+  const channel = client ?? new EngineClient({
+    socketPath: join(configDir(), "engine.sock"), connectTimeoutMs: 10_000,
+  });
   try {
     const result = await channel.request({
       operation: "graph.analyze_repository", input: {

@@ -4,7 +4,7 @@ import { RelayClient } from "../../../../../packages/core/relay-client";
 import { configDir, loadConfig, machineConfigPath } from "../../config";
 import { EngineSupervisor } from "../../engine/runtime/engine-supervisor";
 import { meshSnapshotsAsync } from "../../mesh/runtime";
-import { publishedCatalog } from "../../session-catalog";
+import { publishedCatalog, recoverCatalogBindings } from "../../session-catalog";
 import { recoverLocalGraphBindings } from "../../mesh/runtime/graph/binding-sync";
 import { startSessionMonitor } from "../../monitor";
 import { controllerPeerGate } from "../../pairing/controllers";
@@ -47,31 +47,25 @@ const stop = (): void => {
 process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
 
-void engine.ensureAvailable().then((health) => {
-  if (health.state === "healthy") {
-    // A new Engine binary starts with its own registry. Re-admit existing,
-    // locally verified Git bindings so linked repositories have a graph again.
+void recoverCatalogBindings({
+  engineAvailable: async () => {
+    const health = await engine.ensureAvailable();
+    if (health.state !== "disabled" && health.state !== "healthy") {
+      process.stderr.write(`[granttap-mcp] Project engine ${health.state}; legacy behavior remains active\n`);
+    }
+    return health.state === "healthy";
+  },
+  publishCatalog: async () => {
+    try { await client.connect(); await monitor.publish(); }
+    catch (error) {
+      // RelayClient retries connection independently; keep this helper alive.
+      process.stderr.write(`[granttap-mcp] initial catalog connection failed (${error instanceof Error ? error.name : "unknown"})\n`);
+      throw error;
+    }
+  },
+  snapshots: () => {
     const known = publishedCatalog(client);
-    void meshSnapshotsAsync(known ? [...known.sessions, ...(known.history ?? [])] : [])
-      .then(recoverLocalGraphBindings)
-      .then(() => monitor.publish())
-      .catch(() => undefined);
-  }
-  if (health.state !== "disabled" && health.state !== "healthy") {
-    const reason = health.reason ? `: ${health.reason}` : "";
-    process.stderr.write(
-      `[granttap-mcp] Project engine ${health.state}${reason}; legacy behavior remains active\n`,
-    );
-  }
-});
-
-void client
-  .connect()
-  .then(() => monitor.publish())
-  .catch((error: unknown) => {
-    // RelayClient keeps reconnecting in the background. Log the initial error
-    // for diagnostics without terminating the launchd-managed helper.
-    process.stderr.write(
-      `[granttap-mcp] initial relay connection failed: ${error instanceof Error ? error.message : String(error)}\n`,
-    );
-  });
+    return meshSnapshotsAsync(known ? [...known.sessions, ...(known.history ?? [])] : []);
+  },
+  recover: recoverLocalGraphBindings,
+}).then(() => monitor.publish()).catch(() => undefined);

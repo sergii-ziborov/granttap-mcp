@@ -35,7 +35,7 @@ export class DesktopTaskActivityRunner {
       || typeof taskId !== "string" || !taskId || taskId.length > 128) {
       return Promise.resolve(undefined);
     }
-    return this.enqueue(query, storePath);
+    return this.enqueue({ ...query, operation: "desktop.task_activity" }, storePath);
   }
 
   usage(): Promise<unknown> {

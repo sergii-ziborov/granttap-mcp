@@ -15,3 +15,5 @@ separately from that first live publication. It does not republish an old catalo
 as fresh. The phone continues its durable historical backfill independently.
 
 Tests live in `tests/`. This runtime module uses the repository MIT License.
+
+Engine binding recovery waits for the first connected catalog publication before projecting repository graphs. A cold Engine cannot hold the initial relay handshake behind restored Mesh analysis.
