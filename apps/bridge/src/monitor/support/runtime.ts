@@ -18,7 +18,8 @@ import { confirmPendingController } from "../../pairing/controllers";
 import { recordControllerName } from "../../pairing/presence";
 import { startPublishLoop } from "./publish-loop";
 import { singleFlightPublisher } from "./single-flight";
-import { publishedCatalog, rememberPublishedCatalog, resumePublishedChats } from "../../session-catalog";
+import { publishedCatalog, rememberPublishedCatalog, resumePublishedChats,
+  publishCatalogHeads, stopCatalogHeads } from "../../session-catalog";
 import { createMachineLoadPublisher } from "../../machine-load";
 import { startMachineLoadLoop } from "../../machine-load/host/loop";
 import { scanCapabilityUsage, scanSessionHistory, scanSessions, scopeCapabilityUsageToRoom, TOKEN_WINDOW_HOURS } from "../../sessions";
@@ -135,9 +136,7 @@ async function publishMonitorTick(input: {
   if (includeHistory || initial) lastHistoryPublishedAt = Date.now();
   loadLoop.updateStatus(status);
   void refreshMcpLoad(status.sessions).catch(() => {});
-  for (const sessionId of subscriptions) {
-    await publishSessionEvents(client, sessionId, status).catch(() => false);
-  }
+  publishCatalogHeads(client, status, subscriptions, publishSessionEvents);
   await client.send(approvalsStatus(), "phone", { ttlMs: INTERVAL_MS * 3, reliable: false });
   if (loadRuntimeConfig().meshEnabled) publishMonitorMeshes(client, status);
   if (Date.now() - lastCapabilityPublishedAt >= 30_000) {
@@ -226,6 +225,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
     publish: () => publish(false),
     close: () => {
       stopCatalog();
+      stopCatalogHeads(client);
       stopMonitorMeshes(client);
       stopHeartbeat();
       loadLoop.stop();

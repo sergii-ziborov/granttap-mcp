@@ -6,6 +6,7 @@ import { SessionsStatus, type SessionInfo } from "../../../../packages/protocol/
 import { configDir, writePrivateFile } from "../config";
 import { nativeTranscriptRoots, nativeTranscriptSource, restoreNativeTranscriptSource } from "../sessions";
 export { recoverCatalogBindings } from "./startup-recovery";
+export { publishCatalogHeads, stopCatalogHeads } from "./publish-heads";
 
 const catalogs = new WeakMap<RelayClient, SessionsStatus | undefined>();
 const cachePath = () => join(configDir(), "session-catalog-cache.json");
