@@ -65,7 +65,9 @@ test("authenticated history and image reads return to the requesting phone only"
   rememberPublishedCatalog(client, { ...status, type: "sessions.status", machine: "Fixture", generatedAt: Date.now() });
   const imageId = readTranscriptHistory(session)!.entries.find(value => value.attachments?.includes("Image"))!.id;
   await client.connect();
-  await new Promise<void>(resolve => setTimeout(resolve, 30));
+  // The initial hello is sent to both controllers. Drain it by receipt rather
+  // than a wall-clock guess when Apple builds compete for the same host.
+  await receivedFrames(frames, 2);
   const requests: Payload[] = [
     { type: "session.events", sessionId: session.sessionId, history: true, createdAt: Date.now() },
     { type: "session.image.query", sessionId: session.sessionId, requestId: "fixture-picture",
@@ -87,7 +89,7 @@ test("authenticated history and image reads return to the requesting phone only"
       mySecretKey: requester.secretKey, peerPublicKey: machine.publicKey }, request, "machine"));
     await handled;
     remove();
-    await new Promise<void>(resolve => setTimeout(resolve, 30));
+    await receivedFrames(frames, 2);
     const replies = frames.filter(frame => frame.v === 1);
     assert.equal(replies.length, 2, "Each read grants its key and returns one encrypted result.");
     assert.equal(replies.some(frame => open(frame.nonce, frame.box, passive.publicKey, machine.secretKey)), false);
@@ -109,3 +111,12 @@ test("authenticated history and image reads return to the requesting phone only"
     }
   }
 });
+
+async function receivedFrames(frames: { v?: number }[], count: number): Promise<void> {
+  const deadline = Date.now() + 15_000;
+  const encryptedCount = () => frames.filter(frame => frame.v === 1).length;
+  while (encryptedCount() < count && Date.now() < deadline) {
+    await new Promise<void>(resolve => setTimeout(resolve, 10));
+  }
+  assert.equal(encryptedCount(), count, "The local relay must receive every expected encrypted frame.");
+}
