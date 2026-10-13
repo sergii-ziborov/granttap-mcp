@@ -5,6 +5,8 @@ import { join } from "node:path";
 import test from "node:test";
 import {
   abandonDelivery,
+  acknowledgeProcessingDelivery,
+  processingDeliveryAcknowledged,
   beginDelivery,
   completeDelivery,
   hasAcceptedDelivery,
@@ -34,5 +36,16 @@ test("delivery ledger makes phone retries idempotent and expires old ids", async
   assert.equal(beginDelivery("message-b", now + 2), "started");
 
   assert.equal(beginDelivery("message-c", now), "started");
-  assert.equal(beginDelivery("message-c", now + 6 * 60_000), "started");
+  assert.equal(beginDelivery("message-c", now + 6 * 60_000), "processing");
+  assert.equal(beginDelivery("message-c", now + 12 * 60_000), "started");
+  acknowledgeProcessingDelivery("absent", now);
+  assert.equal(processingDeliveryAcknowledged("absent"), false);
+  assert.equal(beginDelivery("message-d", now), "started");
+  assert.equal(processingDeliveryAcknowledged("message-d"), false);
+  acknowledgeProcessingDelivery("message-d", now + 1);
+  assert.equal(processingDeliveryAcknowledged("message-d"), true);
+  completeDelivery("message-d", now + 2);
+  acknowledgeProcessingDelivery("message-d", now + 3);
+  assert.equal(processingDeliveryAcknowledged("message-d"), false);
+  assert.equal(hasAcceptedDelivery("message-d", now + 3), true);
 });

@@ -22,7 +22,8 @@ import { DELIVERY_TIMEOUT_MS } from "./receipts";
 async function startNewAgentTask(input: {
   client: RelayClient;
   message: UserMessage;
-  say: (text: string, sessionId?: string, wake?: boolean) => Promise<unknown>;
+  say: (text: string, sessionId?: string, wake?: boolean, kind?: "status" | "response") => Promise<unknown>;
+  onProcessing?: () => Promise<void>;
 }): Promise<"rejected" | void> {
   const { client, message, say } = input;
   const agent = message.agent ?? "codex";
@@ -57,7 +58,8 @@ async function startNewAgentTask(input: {
     }
     return "rejected";
   }
-  await say(`Creating a new ${displayName} task…`);
+  await input.onProcessing?.();
+  await say(`Creating a new ${displayName} task…`, undefined, false, "status");
   const create = {
     claude: createClaudeSession,
     codex: createCodexSession,
@@ -77,16 +79,17 @@ async function startNewAgentTask(input: {
 export async function handleUserMessage(
   client: RelayClient,
   message: UserMessage,
+  onProcessing?: () => Promise<void>,
 ): Promise<"accepted" | "rejected" | void> {
-  const say = (text: string, sessionId?: string, wake = false) => {
-    const payload = agentEventForUserMessage(message, text, sessionId);
+  const say = (text: string, sessionId?: string, wake = false, kind: "status" | "response" = "response") => {
+    const payload = agentEventForUserMessage(message, text, sessionId, kind);
     const options = { ttlMs: 15 * 60_000, wake: wake || undefined };
     return (sessionId
       ? sendSessionPayload(client, payload, sessionId, "phone", options)
       : client.send(payload, "phone", options)).catch(() => {});
   };
   if (!message.sessionId) {
-    return startNewAgentTask({ client, message, say });
+    return startNewAgentTask({ client, message, say, onProcessing });
   }
   const resolved = resolveMessageAttachments(message, (attachmentId) => takeAttachment(attachmentId, client.room));
   if (!resolved.ok) {
@@ -135,6 +138,7 @@ export async function handleUserMessage(
 
   // No "sent, waiting" line from a middleman: the delivery receipt already
   // marks the person's bubble, and the next words in the chat are the answer.
+  await onProcessing?.();
   const startedAt = Date.now();
   const result = await deliverToSession(target, message.text, DELIVERY_TIMEOUT_MS, attachments, {
     preferredMcp: message.preferredMcp,

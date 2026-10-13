@@ -32,7 +32,7 @@ import {
   handleSubscription,
 } from "./session-commands";
 import { handleTaskCreate } from "./task-create";
-import { handleUserMessage } from "./user-message";
+import { handleInboundUserMessage } from "../message-delivery";
 import { publishSessionEvents } from "./catalog";
 import { publishSessionImage } from '../../session-images';
 import { publishTaskWorkspace } from '../../task-files/relay';
@@ -199,42 +199,6 @@ function handleInboundPairingJoin(payload: Extract<Payload, { type: "pairing.joi
     setImmediate(() => process.exit(0));
   }
   return true;
-}
-
-async function handleInboundUserMessage(
-  client: RelayClient, payload: Extract<Payload, { type: "user.message" }>,
-  publish: (forceHistory?: boolean) => Promise<void>,
-): Promise<boolean> {
-  // Correlated replies belong to the MCP `ask` waiter in one process.
-  if (payload.requestId) return false;
-  let deliveryStarted = false;
-  if (payload.messageId) {
-    const state = beginDelivery(payload.messageId);
-    if (state === "completed") {
-      await sendDeliveryReceipt(client, payload.messageId, "accepted", undefined, payload.sessionId);
-      return true;
-    }
-    if (state === "processing") return false;
-    deliveryStarted = true;
-  }
-  try {
-    const outcome = await handleUserMessage(client, payload);
-    if (payload.messageId && deliveryStarted) {
-      if (outcome === "rejected") {
-        // The phone sends the message again with what was missing; the
-        // ledger must let that second copy through.
-        abandonDelivery(payload.messageId);
-      } else {
-        completeDelivery(payload.messageId);
-        await sendDeliveryReceipt(client, payload.messageId, "accepted", undefined, payload.sessionId);
-      }
-    }
-    void publish().catch(() => {});
-    return true;
-  } catch {
-    if (payload.messageId && deliveryStarted) abandonDelivery(payload.messageId);
-    return false;
-  }
 }
 
 async function handleInboundTaskCreate(

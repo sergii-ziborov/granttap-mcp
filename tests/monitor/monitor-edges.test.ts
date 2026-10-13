@@ -113,7 +113,8 @@ test("monitor compaction, delivery dedupe, failures, and leadership remain bound
     type: "user.message", messageId, sessionId: "grok-existing", text, createdAt: Date.now(),
   });
   const pending = firstRelay.emit(message("dedupe", "slow"));
-  assert.equal(await firstRelay.emit(message("dedupe", "slow")), false);
+  assert.equal(await firstRelay.emit(message("dedupe", "slow")), true,
+    "a duplicate envelope is handled without starting another provider run");
   assert.equal(await pending, true);
   assert.equal(await firstRelay.emit(message("dedupe", "slow")), true);
   assert.equal(await firstRelay.emit(message("existing-fail", "fail")), true);

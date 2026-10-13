@@ -5,11 +5,13 @@ import { configDir } from "../config";
 
 const LIMIT = 500;
 const MAX_AGE_MS = 7 * 24 * 60 * 60_000;
-const PROCESSING_LEASE_MS = 5 * 60_000;
+// Cover the ten-minute provider call and completion propagation before retry.
+const PROCESSING_LEASE_MS = 11 * 60_000;
 
 type DeliveryRecord = {
   state: "processing" | "completed";
   updatedAt: number;
+  processingAcknowledged?: boolean;
 };
 
 export type DeliveryStart = "started" | "processing" | "completed";
@@ -53,6 +55,19 @@ function save(records: Record<string, DeliveryRecord>, now: number): void {
   mkdirSync(configDir(), { recursive: true });
   writeFileSync(deliveryLedgerPath(), `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
   chmodSync(deliveryLedgerPath(), 0o600);
+}
+
+/** Only validated provider work may emit a non-terminal processing receipt. */
+export function acknowledgeProcessingDelivery(messageId: string, now = Date.now()): void {
+  const records = load();
+  if (records[messageId]?.state !== "processing") return;
+  records[messageId] = { state: "processing", updatedAt: now, processingAcknowledged: true };
+  save(records, now);
+}
+
+export function processingDeliveryAcknowledged(messageId: string): boolean {
+  const record = load()[messageId];
+  return record?.state === "processing" && record.processingAcknowledged === true;
 }
 
 /** Acquire a durable processing lease before invoking an agent. */
