@@ -42,6 +42,21 @@ test("a write failure is reported and does not freeze later controls", async t =
   assert.equal(count, 2);
 });
 
+test("disconnect releases a catalog write even when the socket callback never completes", async () => {
+  let started!: () => void;
+  const writing = new Promise<void>(resolve => { started = resolve; });
+  const queue = new OutboundFrameQueue(async () => {
+    started();
+    await new Promise<void>(() => {});
+  }, 0);
+  const catalog = queue.send("catalog").then(() => "sent", () => "cancelled");
+  await writing;
+  queue.cancel();
+  const result = await Promise.race([catalog,
+    new Promise<string>(resolve => setTimeout(() => resolve("still waiting"), 100))]);
+  assert.equal(result, "cancelled");
+});
+
 test("a fresh catalog passes queued bulk data", async t => {
   const machine = generateKeyPair(), phone = generateKeyPair();
   let release!: () => void, start!: () => void;

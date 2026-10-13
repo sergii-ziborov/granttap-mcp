@@ -79,7 +79,10 @@ function codexMcpRows(): CodexMcpRow[] {
     codexCache = { at: Date.now(), rows };
     return rows;
   } catch {
-    return codexCache?.rows ?? [];
+    const rows = codexCache?.rows ?? [];
+    // One failed CLI call must not block again for every row in this catalog.
+    codexCache = { at: Date.now(), rows };
+    return rows;
   }
 }
 

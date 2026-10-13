@@ -13,6 +13,7 @@ export class OutboundFrameQueue {
   private snapshots: Job[] = [];
   private bytes = 0;
   private running = false;
+  private inFlight?: Job;
   private closed = false;
   private timer?: NodeJS.Timeout;
   private nextAt = 0;
@@ -36,6 +37,7 @@ export class OutboundFrameQueue {
     this.closed = true;
     clearTimeout(this.timer);
     this.timer = undefined;
+    this.inFlight?.reject(CLOSED());
     for (const job of [...this.controls, ...this.snapshots]) job.reject(CLOSED());
     this.controls = [];
     this.snapshots = [];
@@ -53,6 +55,7 @@ export class OutboundFrameQueue {
     const job = this.controls.shift() ?? this.snapshots.shift();
     if (!job) return;
     this.running = true;
+    this.inFlight = job;
     this.bytes -= job.bytes;
     try {
       await this.write(job.frame);
@@ -60,6 +63,7 @@ export class OutboundFrameQueue {
       job.resolve();
     } catch (error) { job.reject(error instanceof Error ? error : CLOSED()); }
     finally {
+      if (this.inFlight === job) this.inFlight = undefined;
       this.running = false;
       this.nextAt = performance.now() + this.intervalMs;
       this.schedule();

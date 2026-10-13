@@ -7,6 +7,10 @@ replaceable snapshots. TCP write completion, bounded queued bytes, cancellation
 on disconnect, and a fresh queue on reconnect prevent stale bursts from crossing
 connection generations. No message content or keys are logged.
 
+Disconnect rejects the current write as well as queued frames. Catalog and
+history publishers can retry on the next connection even if the previous
+socket never calls its write-completion callback.
+
 Tests live in `tests/`; they include an actual WebSocket server with the relay's
 rate limit. A socket write is transport evidence, never an approval receipt.
 
