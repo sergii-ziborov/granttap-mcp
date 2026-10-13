@@ -5,7 +5,7 @@ import type {
 } from "../../../../../packages/protocol/schema";
 import { configDir } from "../../config/runtime/paths";
 import { EngineClient } from "./engine-client";
-import { EngineRemoteError } from "../protocol/transport/protocol-base";
+import { EngineProtocolError, EngineRemoteError } from "../protocol/transport/protocol-base";
 import { engineFeatureEnabled, type EngineClientLike } from "./engine-supervisor";
 import { sanitizedRepositoryRemote } from "../../mesh/identity";
 import type { ProjectBackbone } from "../../../../../packages/protocol/schema";
@@ -52,7 +52,7 @@ export async function syncProjectBinding(
         project: {
           project_id: project.projectId,
           name: project.name,
-          created_at: project.createdAt,
+          created_at: engineTimestamp(project.createdAt),
         },
         binding: {
           binding_id: local.summary.bindingId,
@@ -66,7 +66,7 @@ export async function syncProjectBinding(
             : undefined,
           role: local.role ?? "primary",
           observed_revision: local.summary.revision,
-          last_seen_at: local.lastSeenAt,
+          last_seen_at: engineTimestamp(local.lastSeenAt),
         },
       },
     }, { timeoutMs: 30_000 });
@@ -287,4 +287,13 @@ function boundRepositoryGraphs(graphs: ProjectRepositoryGraph[]): ProjectReposit
 function defaultClient(): EngineClient {
   sharedClient ??= new EngineClient({ socketPath: join(configDir(), "engine.sock") });
   return sharedClient;
+}
+
+/** Provider file times carry sub-millisecond precision; Engine epochs are u64 milliseconds. */
+function engineTimestamp(value: number): number {
+  const milliseconds = Math.floor(value);
+  if (!Number.isSafeInteger(milliseconds) || milliseconds < 0) {
+    throw new EngineProtocolError("Engine timestamp must be nonnegative safe milliseconds");
+  }
+  return milliseconds;
 }

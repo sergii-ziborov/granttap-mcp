@@ -10,6 +10,10 @@ legacy hook behavior when the engine is disabled or unavailable.
 `engine-projects.ts` forwards only bounded local Project/binding records when
 the rollout flag is enabled. Absolute roots stay on the local IPC connection;
 the encrypted Mesh projection omits them by default.
+Provider timestamps may contain fractions of a millisecond. Binding admission
+converts them to nonnegative safe integer milliseconds at the Engine IPC
+boundary, matching Rust's `u64` contract. The original Project and provider
+observations retain their precision; invalid epochs cannot update a binding.
 Mesh snapshot enrichment queues Weavatrix repository analysis through
 `repository-graph-jobs.ts`. One analysis runs at a time, repeated snapshot
 ticks reuse a fresh bounded report, and failed analyses back off. An absent
