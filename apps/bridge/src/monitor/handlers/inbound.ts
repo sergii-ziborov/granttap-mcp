@@ -55,7 +55,7 @@ export async function handleMonitorMessage(
     if (payload.type === "pairing.join") {
       return handleInboundPairingJoin(payload);
     }
-    recordPhoneSeen();
+    recordPhoneSeen(Date.now(), input.peerPublicKey);
     // Codex may start one MCP server per open task. Exactly one instance owns
     // phone routing, so a single phone message can never create duplicate tasks.
     if (!leadership.acquire()) return false;
