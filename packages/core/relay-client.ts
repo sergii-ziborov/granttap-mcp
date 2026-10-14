@@ -10,6 +10,7 @@
  * the Cloudflare Durable Object deployment.
  */
 import WebSocket from "ws";
+import { publicKeyIdentifier } from "./ciphertext-recipient";
 import { ManagedRelayLease, RelaySocketHealth } from "./socket-lifecycle";
 import { OutboundFrameQueue, sendEncryptedPayload } from "./outbound-scheduler";
 import { createHash } from "node:crypto";
@@ -26,6 +27,7 @@ type Listener = (p: Payload, peerPublicKey: string) => boolean | void | Promise<
 
 export class RelayClient {
   private ws?: WebSocket;
+  private recipientRouting = false;
   private frames?: OutboundFrameQueue;
   private listeners = new Set<Listener>();
   private intentionalClose = false;
@@ -74,6 +76,7 @@ export class RelayClient {
     if (this.connectPromise) return this.connectPromise;
 
     this.intentionalClose = false;
+    this.recipientRouting = false;
     const pending = Promise.resolve().then(() => this.opts.upgradeHeaders?.() ?? {})
       .then(headers => new Promise<void>((resolve, reject) => {
       // The room rides in the URL: the Cloudflare relay must pick a Durable
@@ -82,7 +85,8 @@ export class RelayClient {
       url.searchParams.set("room", this.cfg.room);
       const ws = new WebSocket(
         url.toString(),
-        { headers: { ...headers,
+        { headers: { ...headers, "X-GrantTap-Recipient-Routing": "1",
+          ...(this.cfg.role === "phone" ? { "X-GrantTap-Recipient-Key-Id": publicKeyIdentifier(this.cfg.myPublicKey) } : {}),
           ...(this.cfg.pushAuth ? { Authorization: `Bearer ${this.cfg.pushAuth}` } : {}) } },
       );
       this.ws = ws;
@@ -135,10 +139,16 @@ export class RelayClient {
   }
 
   private async onRaw(raw: string): Promise<void> {
-    const parsed = Envelope.safeParse(safeJson(raw));
+    const control = safeJson(raw) as { type?: string; recipientRouting?: boolean } | null;
+    if (control?.type === "relay.capabilities" && control.recipientRouting === true) {
+      this.recipientRouting = true;
+      return;
+    }
+    const parsed = Envelope.safeParse(control);
     if (!parsed.success) return;
     const env = parsed.data;
     if (env.room !== this.cfg.room) return;
+    if (env.recipientKeyId && env.recipientKeyId !== publicKeyIdentifier(this.cfg.myPublicKey)) return;
     if (env.from !== this.otherRole()) return;
     if (env.to !== this.cfg.role && env.to !== "all") return;
     if (env.expiresAt != null && env.expiresAt <= Date.now()) return;
@@ -239,7 +249,7 @@ export class RelayClient {
       return;
     }
     await sendEncryptedPayload(this.frames, this.cfg, key => this.peerIsAllowed(key),
-      { payload, to, options });
+      { payload, to, options: { ...options, recipientRouting: this.recipientRouting } });
   }
 
   /** Add a newly issued controller without waiting for the monitor to restart. */
@@ -261,7 +271,7 @@ export class RelayClient {
     if (!peerPublicKeys(this.cfg.peerPublicKey, this.cfg.extraPeerPublicKeys).includes(peerPublicKey)
       || !this.peerIsAllowed(peerPublicKey)) throw new Error("controller peer is not authorized");
     if (!this.frames) throw new Error("relay not connected");
-    await this.frames.send(sealEnvelope({ ...this.cfg, peerPublicKey }, payload, this.otherRole(), options), true);
+    await this.frames.send(sealEnvelope({ ...this.cfg, peerPublicKey }, payload, this.otherRole(), { ...options, recipientRouting: this.recipientRouting }), true);
   }
 
   setSessionKey(sessionId: string, key: string): void {

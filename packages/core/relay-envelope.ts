@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Envelope, PROTOCOL_VERSION, type Payload, type Role } from "../protocol/schema";
+import { publicKeyIdentifier } from "./ciphertext-recipient";
 import { seal } from "./crypto";
 import type { PeerConfig, SendOptions } from "./relay-client-types";
 
@@ -25,6 +26,7 @@ export function sealEnvelope(
     from: cfg.role,
     to,
     senderId: cfg.senderId,
+    recipientKeyId: options.recipientRouting ? publicKeyIdentifier(cfg.peerPublicKey) : undefined,
     deliveryId: options.reliable === false
       ? undefined
       : options.deliveryId ?? randomUUID(),

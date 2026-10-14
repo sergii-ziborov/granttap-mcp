@@ -43,6 +43,8 @@ export type RelayClientOptions = {
 };
 
 export type SendOptions = {
+  /** Set by negotiated RelayClient transport; absent for older relays. */
+  recipientRouting?: boolean;
   /** Reply only to the authenticated requester; absent means all authorized peers. */
   peerPublicKey?: string;
   /** Delivery lifetime for relay hold queues. Omit only for non-expiring hello packets. */

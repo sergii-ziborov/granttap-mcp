@@ -190,6 +190,7 @@ export type Payload = z.infer<typeof Payload>;
 
 /** The routed unit. `nonce`+`box` are the sealed Payload; relay cannot open it. */
 export const Envelope = z.object({
+  recipientKeyId: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   v: z.literal(PROTOCOL_VERSION),
   room: z.string(),
   from: Role,
