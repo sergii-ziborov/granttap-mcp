@@ -6,6 +6,7 @@ import {
   loadGrokBotEndpoint,
 } from "../../../../bridge/src/mesh/identity/endpoint";
 import { localMeshStore } from "../../../../bridge/src/mesh/local-remote/local";
+import { managedAdmissionOptions } from "../../../../bridge/src/managed-admission";
 
 let client: RelayClient | null = null;
 let credentialId: string | null = null;
@@ -43,7 +44,7 @@ export async function grokBotRelay(): Promise<RelayClient> {
   });
   if (!client || credentialId !== bundle.credential.credentialId) {
     client?.close();
-    client = new RelayClient(bundle.pairing, { autoReconnect: true });
+    client = new RelayClient(bundle.pairing, { ...managedAdmissionOptions(bundle.pairing), autoReconnect: true });
     credentialId = bundle.credential.credentialId;
     client.onMessage(receive);
   }

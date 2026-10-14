@@ -14,6 +14,7 @@ import { completeEnrollment } from "../../connection-center/enrollment";
 import { confirmPendingController, controllerPeerGate } from "../../../../bridge/src/pairing/controllers";
 import { applyNetworkRoute } from "../../../../bridge/src/device-network/settings";
 import { startEndpointPublisher } from "../../../../bridge/src/device-network/directory";
+import { managedAdmissionOptions } from "../../../../bridge/src/managed-admission";
 
 const ASK_TIMEOUT_MS = Number(
   process.env.GRANTTAP_ASK_TIMEOUT_MS ?? process.env.NODVOX_ASK_TIMEOUT_MS ?? 180_000,
@@ -35,7 +36,8 @@ export async function relay(): Promise<RelayClient | null> {
   try {
     if (!client) {
       const config = applyNetworkRoute(loadConfig(machineConfigPath()));
-      client = new RelayClient(config, { autoReconnect: true, peerAllowed: controllerPeerGate(config) });
+      client = new RelayClient(config, { ...managedAdmissionOptions(config),
+        autoReconnect: true, peerAllowed: controllerPeerGate(config) });
       client.onMessage((payload, peerPublicKey) => {
         if (payload.type === "pairing.join") {
           const result = applyPairingJoin(payload);

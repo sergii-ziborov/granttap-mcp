@@ -7,12 +7,14 @@ import { observedComputerId } from "../../../../bridge/src/mesh/identity/compute
 import { prepareMeshHandoff } from "../../../../bridge/src/mesh/runtime";
 import { readStoreState } from "../../../../bridge/src/mesh/store/state";
 import { controllerPeerGate } from "../../../../bridge/src/pairing/controllers";
+import { managedAdmissionOptions } from "../../../../bridge/src/managed-admission";
 
 type Prepare = (request: HandoffRequest) => Promise<boolean>;
 
 async function prepareThroughRelay(request: HandoffRequest): Promise<boolean> {
   const config = applyNetworkRoute(loadConfig(machineConfigPath()));
-  const client = new RelayClient(config, { peerAllowed: controllerPeerGate(config) });
+  const client = new RelayClient(config, { ...managedAdmissionOptions(config),
+    peerAllowed: controllerPeerGate(config) });
   try {
     await client.connect();
     return await prepareMeshHandoff(client, request);
