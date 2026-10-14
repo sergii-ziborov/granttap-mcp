@@ -18,4 +18,4 @@ offer; it never receives a pairing key in plaintext.
 The normal QR pairing path remains independent. A passkey authenticates the
 account; an ephemeral phone public key encrypts the pairing offer end to end.
 
-This runtime module is covered by the repository MIT License.
+This runtime module is covered by the repository Apache License 2.0.

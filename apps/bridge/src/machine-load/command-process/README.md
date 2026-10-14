@@ -9,5 +9,5 @@ read these samples. Ambiguous and unobserved calls remain unknown.
 The process sampler in `../host/process-sampler.ts` feeds this module. The
 public use is `commandProcessResource` from `history.ts` in session telemetry.
 
-License: this module is distributed under the MIT License in the repository-root
+License: this module is distributed under the Apache License 2.0 in the repository-root
 `LICENSE` file.

@@ -61,5 +61,5 @@ cargo build -p granttap-mcp --release
 
 ## License
 
-This unpublished crate is distributed under the MIT License
+This unpublished crate is distributed under the Apache License 2.0
 inherited from the workspace `LICENSE` file.

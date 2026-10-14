@@ -19,4 +19,4 @@ Tests in `tests/` use disposable configuration directories and loopback relays.
 They cover consent, the private socket, first pairing, additive enrollment,
 expiry, exact-controller confirmation, and preservation on relay failure.
 
-Licensed under the MIT License; see the repository LICENSE.
+Licensed under the Apache License 2.0; see the repository LICENSE.

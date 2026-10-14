@@ -1,6 +1,6 @@
 # Third-party notices
 
-GrantTap MCP is distributed under the MIT License. Third-party components
+GrantTap MCP is distributed under the Apache License 2.0. Third-party components
 retain their own licenses; the GrantTap license does not replace or restrict
 those terms.
 
@@ -27,4 +27,4 @@ complete license texts required by the exact dependency versions they contain.
 Provider storage inspection may invoke a separately installed SweepLoom CLI
 ([source](https://github.com/Weavatrix/sweeploom), MPL-2.0). No SweepLoom source or
 binary is included in this npm package. Its license remains independent; the
-GrantTap MIT license does not apply to SweepLoom.
+GrantTap Apache-2.0 license does not apply to SweepLoom.

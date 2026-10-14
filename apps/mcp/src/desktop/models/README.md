@@ -9,4 +9,4 @@ remains explicitly stale. Model descriptions never include provider instructions
 
 Behavior tests: [`tests/catalog.test.ts`](tests/catalog.test.ts).
 
-MIT License. See [LICENSE](../../../../../LICENSE).
+Apache License 2.0. See [LICENSE](../../../../../LICENSE).

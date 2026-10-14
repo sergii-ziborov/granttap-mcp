@@ -25,7 +25,7 @@ credential, policy revision, expiry, actor, Project scope, and operation on ever
 call, and can never create invites, expand scope, change the relay, or reach
 `setup`.
 
-License: this module is distributed under the MIT License
+License: this module is distributed under the Apache License 2.0
 in the repository-root `LICENSE` file.
 
 The connection center lives in `../connection-center`. Status requests are

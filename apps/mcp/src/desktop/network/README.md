@@ -14,4 +14,4 @@ checks the owned command path and never signals an unrelated reused PID.
 
 Runtime and installation behavior tests are beside `bridge/src/device-network`.
 
-This runtime module is covered by the repository MIT License.
+This runtime module is covered by the repository Apache License 2.0.

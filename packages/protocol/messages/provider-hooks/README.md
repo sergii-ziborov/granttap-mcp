@@ -17,4 +17,4 @@ No credentials, pairing secrets, or prompt content are part of this contract.
 
 ## License
 
-This module is distributed under the MIT License. See the repository LICENSE.
+This module is distributed under the Apache License 2.0. See the repository LICENSE.

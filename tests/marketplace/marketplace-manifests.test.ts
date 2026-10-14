@@ -101,7 +101,7 @@ test("public install docs distinguish Git plugins from approved listings", () =>
   assert.match(readme, /reviewed \*\*GrantTap\*\* Marketplace listing/);
   assert.match(pluginReadme, /grok plugin marketplace add sergii-ziborov\/granttap-mcp/);
   assert.match(pluginReadme, /grok plugin install granttap --trust/);
-  assert.match(cursorReadme, /plugin source is public and MIT-licensed/);
+  assert.match(cursorReadme, /plugin source is public and Apache-2.0-licensed/);
   assert.match(cursorReadme, /Marketplace listings require Cursor's\s+review/);
   assert.match(cursorReadme, /Git import does not automatically receive marketplace updates/);
 });

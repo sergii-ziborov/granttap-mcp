@@ -11,4 +11,4 @@ only after the Engine confirms. A correction carries the old record ID; the
 Engine validates its scope. The phone may replay the same ID after a lost reply.
 This is not a migration of old chats into verified knowledge.
 
-MIT License.
+Apache License 2.0.

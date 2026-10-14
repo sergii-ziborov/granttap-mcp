@@ -10,5 +10,5 @@ is still required for complete language coverage and exact spans.
 Tests live in `tests/project/project-restrictions.test.ts` and
 `tests/project/restrictions/function-restrictions.test.ts` at repository root.
 
-License: this module is distributed under the MIT License
+License: this module is distributed under the Apache License 2.0
 in the repository-root `LICENSE` file.

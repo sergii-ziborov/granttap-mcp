@@ -8,4 +8,4 @@ Terminal responses remain correlated to the original message id.
 Integration tests: `tests/delivery/processing-receipt.test.ts`; attachment rejection
 coverage: `tests/attachment/attachment-uploads.test.ts`. See the monitor README.
 
-This module uses the repository MIT License.
+This module uses the repository Apache License 2.0.

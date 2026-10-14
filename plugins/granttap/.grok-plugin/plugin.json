@@ -9,7 +9,7 @@
   },
   "homepage": "https://granttap.com/connect",
   "repository": "https://github.com/sergii-ziborov/granttap-mcp",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "keywords": [
     "granttap",
     "granttap mcp",

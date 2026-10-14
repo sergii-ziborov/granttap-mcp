@@ -10,4 +10,4 @@ an `answers` mapping using Claude's documented PreToolUse `updatedInput` contrac
 
 Tests: `tests/`. Engineering contract: the Apple repository `AGENTS.md`.
 
-License: MIT License; see the repository LICENSE.
+License: Apache License 2.0; see the repository LICENSE.

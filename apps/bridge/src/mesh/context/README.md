@@ -16,4 +16,4 @@ Task-private attempts stay private unless an explicitly shared completion expose
 them to the Project. Tests: `tests/context/context-packet.test.ts` and
 `tests/mesh/knowledge/failed-run.test.ts`.
 
-License: [MIT License](../../../../../LICENSE).
+License: [Apache License 2.0](../../../../../LICENSE).

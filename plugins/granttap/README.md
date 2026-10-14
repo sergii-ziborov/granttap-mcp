@@ -115,5 +115,5 @@ service installed by `granttap setup`. See
 [granttap.com](https://granttap.com) for the iPhone and Apple Watch app,
 privacy policy, and terms.
 
-The plugin and local MCP runtime are distributed under the [MIT License](LICENSE).
+The plugin and local MCP runtime are distributed under the [Apache License 2.0](LICENSE).
 The GrantTap iPhone and Apple Watch app and hosted service have separate terms.

@@ -14,7 +14,7 @@ socket never calls its write-completion callback.
 Tests live in `tests/`; they include an actual WebSocket server with the relay's
 rate limit. A socket write is transport evidence, never an approval receipt.
 
-MIT License; see the repository LICENSE.
+Apache License 2.0; see the repository LICENSE.
 # Controller delivery
 
 Catalogs, liveness and shared conversation updates reach every authorized

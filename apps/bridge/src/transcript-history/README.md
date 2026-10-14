@@ -18,7 +18,7 @@ the visible page. Reads, file lists and diff previews are bounded; partial
 summaries and truncated diffs carry explicit flags. `tool-details.ts` keeps
 readable bounded call/result text independently of the compact timeline label.
 
-Behavior tests live in `tests/`. Licensed under the [MIT License](../../../../LICENSE).
+Behavior tests live in `tests/`. Licensed under the [Apache License 2.0](../../../../LICENSE).
 
 ## Claude history
 

@@ -9,4 +9,4 @@ terminated owners can be recovered; active owners are never displaced.
 
 The public transport entry remains `../session-keys.ts`. Tests exercise actual
 concurrent processes and the durable dictionary without logging key material.
-This module uses the repository MIT License.
+This module uses the repository Apache License 2.0.

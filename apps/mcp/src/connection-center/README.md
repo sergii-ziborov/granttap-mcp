@@ -35,5 +35,5 @@ client. The Codex-owned plugin management page is not this card.
 Tests in `tests/` exercise isolated keys, a loopback encrypted phone connection,
 expiry, non-mutating status, and actual DOM button/host-message behavior.
 
-License: this module is distributed under the MIT License
+License: this module is distributed under the Apache License 2.0
 in the repository-root `LICENSE` file.

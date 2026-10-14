@@ -49,5 +49,5 @@ the durable journal.
 
 The proprietary engine source and Project database do not live in this package.
 
-License: this module is distributed under the MIT License
+License: this module is distributed under the Apache License 2.0
 in the repository-root `LICENSE` file.

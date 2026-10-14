@@ -10,7 +10,7 @@ keeps each phone response tied to the exact originating chat and prompt.
 Install the supported CLI on this computer, then run:
 
 ```bash
-npm install -g granttap-mcp@0.8.62
+npm install -g granttap-mcp@0.8.63
 granttap setup
 granttap status
 ```
@@ -44,7 +44,7 @@ JavaScript entry point through Node, avoiding command-shell quoting. Do not add 
 
 ## Install the Cursor plugin
 
-The plugin source is public and MIT-licensed at
+The plugin source is public and Apache-2.0-licensed at
 `sergii-ziborov/granttap-mcp`. Cursor Marketplace listings require Cursor's
 review; a Git import does not automatically receive marketplace updates. Install
 the reviewed **GrantTap** listing when it is available to your account, or
@@ -89,5 +89,5 @@ Troubleshooting details live in
 
 ## License
 
-The plugin is distributed under the [MIT License](LICENSE). The GrantTap iPhone
+The plugin is distributed under the [Apache License 2.0](LICENSE). The GrantTap iPhone
 and Apple Watch app and hosted service have separate terms.

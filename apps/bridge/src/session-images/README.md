@@ -11,7 +11,7 @@ Unavailable sources produce an explicit reply; they do not change pairing or
 account state. Apple clients retain validated original bytes locally and use
 their scoped copy when offline. Tests live in `tests/`.
 
-Licensed under the MIT License. See the repository root `LICENSE`.
+Licensed under the Apache License 2.0. See the repository root `LICENSE`.
 
 Native image identities remain readable after the chat head advances. Codex
 attachments are located by timestamp and content block together, so a caption
