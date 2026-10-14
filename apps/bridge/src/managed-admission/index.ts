@@ -3,10 +3,12 @@ import { loadAccountLink } from "../account-recovery/link";
 
 /** Account computer identity is stable across QR rooms and provider sessions. */
 export function managedAdmissionOptions(config: PeerConfig,
-  request: typeof fetch = fetch): Pick<RelayClientOptions, "upgradeHeaders"> {
+  request: typeof fetch = fetch): Pick<RelayClientOptions, "upgradeHeaders" | "connectionLeaseExpiresAt"> {
   const url = new URL(config.relayUrl);
   if (config.role !== "machine" || url.protocol !== "wss:" || url.hostname !== "relay.granttap.com") return {};
-  return { upgradeHeaders: async (): Promise<Record<string, string>> => {
+  let expiresAt: number | null = null;
+  return { connectionLeaseExpiresAt: () => expiresAt,
+    upgradeHeaders: async (): Promise<Record<string, string>> => {
     const account = loadAccountLink();
     if (!account) return {};
     const response = await request("https://granttap.com/api/account/machine/admission", {
@@ -25,6 +27,7 @@ export function managedAdmissionOptions(config: PeerConfig,
       || body.expiresAt <= Date.now() || body.expiresAt > Date.now() + 360_000) {
       throw new Error("Managed admission returned an invalid lease.");
     }
+    expiresAt = body.expiresAt;
     return { "X-GrantTap-Admission": body.ticket };
   } };
 }

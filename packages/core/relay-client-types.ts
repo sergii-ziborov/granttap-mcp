@@ -22,6 +22,8 @@ export type PeerConfig = {
 export type RelayClientOptions = {
   /** Fresh managed admission at each socket upgrade; own relays need no ticket. */
   upgradeHeaders?: () => Promise<Record<string, string>>;
+  /** Verified server lease deadline, refreshed without reconnecting the socket. */
+  connectionLeaseExpiresAt?: () => number | null;
   autoReconnect?: boolean;
   minReconnectMs?: number;
   maxReconnectMs?: number;
