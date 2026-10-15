@@ -5,7 +5,8 @@ import { createOneTimePairing, DEFAULT_RELAY, PAIRING_CODE_TTL_MINUTES } from ".
 import { isMachineConfigured, readOnlyMachineConfigPath } from "../../../../mcp/src/status/pairing-status";
 import { installHttpMcpService } from "../../../../mcp/src/http-service";
 
-const mode = process.argv[2];
+// Direct invocation may retain the `phone` route; the published launcher strips it.
+const mode = process.argv[2] === "phone" ? process.argv[3] : process.argv[2];
 
 async function main(): Promise<void> {
   if (mode !== "add" && mode !== "reconnect") {

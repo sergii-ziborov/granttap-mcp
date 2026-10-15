@@ -105,7 +105,7 @@ if (!preflight || !loader) {
 }
 
 const forwardedArgs = ["connect", "status", "reset", "mesh", "setup", "restrictions", "phone"].includes(command)
-  ? (command === "mesh" || command === "restrictions" || command === "phone" ? commandArgs.slice(1) : commandArgs)
+  ? (command === "mesh" || command === "restrictions" ? commandArgs.slice(1) : commandArgs)
   : [];
 const child = spawn(
   process.execPath,
