@@ -79,3 +79,25 @@ test("an effort level the CLI does not accept is refused rather than passed on",
     type: "user.message", text: "go", createdAt: 1, permissionMode: "default",
   }));
 });
+
+
+test("Codex receives the selected reasoning effort on resumed and new turns", async (t) => {
+  const dir = await argvReportingClaude(t);
+  const stub = join(dir, "codex-stub");
+  await writeFile(stub, ["#!/usr/bin/env node",
+    "process.stdout.write(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:JSON.stringify(process.argv.slice(2))}})+'\\n');",
+  ].join("\n"), { mode: 0o755 });
+  const previous = process.env.GRANTTAP_CODEX_BIN;
+  process.env.GRANTTAP_CODEX_BIN = stub;
+  t.after(() => { if (previous == null) delete process.env.GRANTTAP_CODEX_BIN;
+    else process.env.GRANTTAP_CODEX_BIN = previous; });
+  const { deliverToSession, createCodexSession } = await import("../../apps/bridge/src/reply");
+  assert.equal(UserMessage.parse({ type: "user.message", text: "test", createdAt: 1, effort: "ultra" }).effort, "ultra");
+  for (const result of [
+    await deliverToSession({ ...claudeSession(dir), agent: "codex" }, "test", 5_000, [], { effort: "ultra" }),
+    await createCodexSession("test", dir, 5_000, [], undefined, undefined, "high"),
+  ]) {
+    assert.equal(result.ok, true);
+    if (result.ok) assert.match(result.text, /model_reasoning_effort/);
+  }
+});

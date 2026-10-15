@@ -14,3 +14,7 @@ resources that outlive the agent process need their own cancellation receipts.
 
 License: this module is distributed under the Apache License 2.0
 in the repository-root `LICENSE` file.
+
+Model reasoning effort reaches resumed and new provider turns as native arguments.
+Codex uses `model_reasoning_effort`; Claude uses `--effort`; Grok uses
+`--reasoning-effort`. Cursor effort variants are native model IDs.

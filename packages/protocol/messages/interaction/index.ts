@@ -61,7 +61,7 @@ export const UserMessage = z.object({
   permissionMode: z.enum([
     "acceptEdits", "auto", "bypassPermissions", "manual", "dontAsk", "plan",
   ]).optional(),
-  effort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional(),
+  effort: z.enum(["low", "medium", "high", "xhigh", "max", "ultra"]).optional(),
   createdAt: z.number(),
 });
 export type UserMessage = z.infer<typeof UserMessage>;

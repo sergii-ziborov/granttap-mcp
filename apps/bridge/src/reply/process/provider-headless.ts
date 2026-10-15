@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { SessionInfo } from "../../../../../packages/protocol/schema";
 import { runProcess } from ".";
+import { providerEffortArgs } from "./provider-effort";
 import type { ReplyResult } from "../payload/types";
 import type { DeliveryOptions } from "../payload/types";
 import { resolveCursorAgentBin } from "./cursor-agent-bin";
@@ -61,7 +62,7 @@ function parseGrok(stdout: string, fallback: string): ReplyResult {
 }
 
 export function runCursorNew(
-  text: string, cwd: string, timeoutMs: number, model?: string, operationKey?: string,
+  text: string, cwd: string, timeoutMs: number, model?: string, operationKey?: string, effort?: string,
 ): Promise<ReplyResult> {
   return runProcess(
     cursorBin(), ["-p", ...(model ? ["--model", model] : []),
@@ -81,12 +82,12 @@ export function runCursorResume(
 }
 
 export function runGrokNew(
-  text: string, cwd: string, timeoutMs: number, model?: string, operationKey?: string,
+  text: string, cwd: string, timeoutMs: number, model?: string, operationKey?: string, effort?: string,
 ): Promise<ReplyResult> {
   const sessionId = randomUUID();
   const args = [
     "--no-auto-update", "--cwd", cwd, "--session-id", sessionId,
-    ...(model ? ["--model", model] : []),
+    ...(model ? ["--model", model] : []), ...providerEffortArgs("grok", effort),
     "-p", text, "--output-format", "streaming-json",
   ];
   return runProcess(grokBin(), args, cwd, timeoutMs, (stdout) => parseGrok(stdout, sessionId),
@@ -101,7 +102,7 @@ export function runGrokResume(
     "--no-auto-update", ...(session.cwd ? ["--cwd", session.cwd] : []),
     ...(options.model ? ["--model", options.model] : []),
     ...(permission ? ["--permission-mode", permission] : []),
-    ...(options.effort ? ["--reasoning-effort", options.effort] : []),
+    ...providerEffortArgs("grok", options.effort),
     "--resume", session.sessionId, "-p", text, "--output-format", "streaming-json",
   ];
   return runProcess(

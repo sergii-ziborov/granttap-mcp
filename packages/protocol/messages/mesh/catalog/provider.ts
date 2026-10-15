@@ -40,6 +40,7 @@ export const AdvertisedModel = z.object({
   description: z.string().trim().min(1).max(240).optional(),
   priority: z.number().int().nonnegative().max(10_000).optional(),
   observedAt: z.number().nonnegative(),
+  supportedEfforts: z.array(z.enum(["low", "medium", "high", "xhigh", "max", "ultra"])).max(6).optional(),
 }).strict();
 export type AdvertisedModel = z.infer<typeof AdvertisedModel>;
 

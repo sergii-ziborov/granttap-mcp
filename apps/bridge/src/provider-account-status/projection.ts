@@ -1,5 +1,8 @@
 import type { AdvertisedModel, ProviderAccountUsage } from "../../../../packages/protocol/schema";
 
+const EFFORTS = ["low", "medium", "high", "xhigh", "max", "ultra"] as const;
+type Effort = typeof EFFORTS[number];
+
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,159}$/;
 const text = (value: unknown) => typeof value === "string"
   ? value.replace(/[\x00-\x1f\x7f]/g, " ").trim().slice(0, 240) || undefined : undefined;
@@ -11,7 +14,10 @@ export function projectAccountModels(value: any, endpointId: string, now: number
   for (const item of value.data) {
     if (item?.hidden === true || typeof item?.model !== "string" || !ID.test(item.model)) continue;
     rows.set(item.model, { modelId: item.model, endpointId, provider: "codex", source: "advertised",
-      label: text(item.displayName), description: text(item.description), priority: rows.size, observedAt: now });
+      label: text(item.displayName), description: text(item.description), priority: rows.size, observedAt: now,
+      ...(Array.isArray(item.supportedReasoningEfforts) ? { supportedEfforts:
+        [...new Set<Effort>(item.supportedReasoningEfforts.map((x: any) => x?.reasoningEffort)
+          .filter((x: unknown): x is Effort => EFFORTS.includes(x as Effort)))] } : {}) });
     if (rows.size === 64) break;
   }
   return [...rows.values()];

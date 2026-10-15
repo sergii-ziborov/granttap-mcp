@@ -36,3 +36,10 @@ test("refresh coalesces, throttles, expires and keeps account failure separate f
   await reader.refresh("mac");
   assert.equal(calls.length, 4);
 });
+
+
+test("native model effort levels are allowlisted independently per model", () => {
+  const models = projectAccountModels({ data: [{ model: "test", supportedReasoningEfforts:
+    [{ reasoningEffort: "low" }, { reasoningEffort: "ultra" }, { reasoningEffort: "unsafe" }] }] }, "mac", 100);
+  assert.deepEqual(models[0]?.supportedEfforts, ["low", "ultra"]);
+});

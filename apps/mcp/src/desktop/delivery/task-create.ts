@@ -31,7 +31,7 @@ export function desktopTaskCreate(
   const query = input as Record<string, unknown>;
   const projectId = query.project_id, bindingId = query.binding_id;
   const operationId = query.operation_id, text = query.text;
-  const provider = query.provider, model = query.model;
+  const provider = query.provider, model = query.model, effort = query.effort;
   if (typeof projectId !== "string" || !projectId || projectId.length > 128
     || typeof bindingId !== "string" || !bindingId || bindingId.length > 128
     || query.endpoint_id !== endpoint
@@ -40,6 +40,9 @@ export function desktopTaskCreate(
     || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(text)
     || typeof provider !== "string" || !(provider in providers)
     || model !== undefined && (typeof model !== "string" || model.length > 128)) {
+    return Promise.resolve(undefined);
+  }
+  if (effort !== undefined && !["low", "medium", "high", "xhigh", "max", "ultra"].includes(effort as string)) {
     return Promise.resolve(undefined);
   }
   const loaded = readStoreState(storePath);
@@ -86,7 +89,7 @@ export function desktopTaskCreate(
   if (!attachments || !text.trim() && attachments.length === 0) return Promise.resolve(undefined);
   const start = create ?? providers[agent];
   const result = start(text.trim(), workspace, 240_000, attachments, model as string | undefined,
-    operationId).then((reply) => ({
+    operationId, effort as string | undefined).then((reply) => ({
       operation: "desktop.task_create", created: reply.ok,
       session_id: reply.ok ? reply.sessionId ?? null : null,
       error: reply.ok ? null : reply.error.slice(0, 500),
