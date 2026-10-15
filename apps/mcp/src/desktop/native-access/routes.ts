@@ -11,7 +11,7 @@ export function installDesktopNativeRoutes(app: Express, socketPath: string, ori
   access = new DesktopNativeAccess(), enroll = enrollMacAccount): void {
   app.use('/desktop', (_req, res, next) => {
     res.set({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer',
-      'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; style-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'" });
+      'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; style-src 'self'; form-action 'self' granttap:; frame-ancestors 'none'; base-uri 'none'" });
     next();
   });
   app.get('/desktop/consent.css', (_req, res) => res.type('css').send(desktopConsentStyles));

@@ -26,16 +26,16 @@ test("local Task send keeps the exact Mesh and native execution link", async () 
   };
   const request = { project_id: "mesh-a", task_id: "task-a", session_id: "session-a",
     delivery_id: randomUUID(), text: "Continue", model: "gpt-6-astra" };
-  assert.equal(await desktopTaskSend({ ...request, project_id: "other" }, storePath, deliver), undefined);
-  assert.equal(await desktopTaskSend({ ...request, session_id: "other" }, storePath, deliver), undefined);
-  assert.equal(await desktopTaskSend({ ...request, text: "" }, storePath, deliver), undefined);
-  assert.deepEqual(await desktopTaskSend(request, storePath, deliver), {
+  assert.equal(await desktopTaskSend({ ...request, project_id: "other" }, storePath, deliver, "computer-a"), undefined);
+  assert.equal(await desktopTaskSend({ ...request, session_id: "other" }, storePath, deliver, "computer-a"), undefined);
+  assert.equal(await desktopTaskSend({ ...request, text: "" }, storePath, deliver, "computer-a"), undefined);
+  assert.deepEqual(await desktopTaskSend(request, storePath, deliver, "computer-a"), {
     operation: "desktop.task_send", accepted: true, error: null,
   });
-  await desktopTaskSend(request, storePath, deliver);
+  await desktopTaskSend(request, storePath, deliver, "computer-a");
   assert.deepEqual(calls, ["session-a:Continue"]);
   assert.deepEqual(options, [{ model: "gpt-6-astra" }], "confirmed model must reach the exact resumed execution");
-  assert.equal(await desktopTaskSend({ ...request, delivery_id: randomUUID(), model: "--invalid" }, storePath, deliver), undefined);
+  assert.equal(await desktopTaskSend({ ...request, delivery_id: randomUUID(), model: "--invalid" }, storePath, deliver, "computer-a"), undefined);
 });
 
 test("local Task accepts a source file without a caption and rejects untrusted attachment paths", async () => {
@@ -60,14 +60,14 @@ test("local Task accepts a source file without a caption and rejects untrusted a
     return { ok: true as const, text: "Done" };
   };
   try {
-    const result = await desktopTaskSend(request, storePath, deliver);
+    const result = await desktopTaskSend(request, storePath, deliver, "computer");
     assert.equal((result as { accepted?: boolean })?.accepted, true);
     assert.deepEqual(delivered, [[{ name: "Answer.swift", mimeType: "text/plain",
       data: Buffer.from("let answer = 42\n").toString("base64") }]]);
     assert.equal(await desktopTaskSend({ ...request, delivery_id: randomUUID(), text: "Inspect",
-      attachments_json: JSON.stringify([{ ...files[0], path: storePath }]) }, storePath, deliver), undefined);
+      attachments_json: JSON.stringify([{ ...files[0], path: storePath }]) }, storePath, deliver, "computer"), undefined);
     assert.equal(await desktopTaskSend({ ...request, delivery_id: randomUUID(), text: "Inspect",
-      attachments_json: "bad JSON" }, storePath, deliver), undefined);
+      attachments_json: "bad JSON" }, storePath, deliver, "computer"), undefined);
     assert.equal(delivered.length, 1, "invalid attachments must not be silently dropped");
   } finally { await rm(directory, { recursive: true, force: true }); }
 });

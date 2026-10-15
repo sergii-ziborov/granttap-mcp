@@ -1,3 +1,5 @@
+import { handleTaskTransferCommand } from "../../task-transfer/runtime";
+import { handleProjectTransportConfiguration } from '../../task-network/runtime';
 import { handleHookTrust } from "../../codex-hook-trust";
 import { handleConfigurationCommand } from "../../configuration-delivery";
 import type { Payload } from "../../../../../packages/protocol/schema";
@@ -59,12 +61,8 @@ export async function handleMonitorMessage(
     // Codex may start one MCP server per open task. Exactly one instance owns
     // phone routing, so a single phone message can never create duplicate tasks.
     if (!leadership.acquire()) return false;
-    if (payload.type === "controller.pair.request" || payload.type === "account.machine.link") {
-      return handleDeviceEnrollment(client, payload, input.peerPublicKey);
-    }
-    if (payload.type === "provider.hook.trust") {
-      return handleHookTrust(client, payload, input.peerPublicKey, publish);
-    }
+    const configuration = handlePeerConfiguration(client, payload, input.peerPublicKey, publish);
+    if (configuration) return configuration;
     if (payload.type === "knowledge.write") {
       return handleInboundKnowledgeWrite(client, payload, input.peerPublicKey, publish);
     }
@@ -131,14 +129,27 @@ export async function handleMonitorMessage(
       await handleMeshPayload(client, payload);
       void publish().catch(() => {});
       return true;
-    } else if (payload.type === "mesh.handoff.prepare" && loadRuntimeConfig().meshEnabled) {
-      const prepared = await prepareMeshHandoff(client, payload);
-      if (prepared) void publish().catch(() => {});
-      return prepared;
+    } else if (payload.type === "task.transfer.continue"
+      || payload.type === "mesh.handoff.prepare" && loadRuntimeConfig().meshEnabled) {
+      return handleTaskTransferCommand(client, payload, () => { void publish().catch(() => {}); });
     } else if (payload.type === "mesh.claim.release" && loadRuntimeConfig().meshEnabled) {
       return handleInboundClaimRelease(client, payload, publish);
     }
     return false;
+}
+
+function handlePeerConfiguration(client: RelayClient, payload: Payload, peerPublicKey: string | undefined,
+  publish: (forceHistory?: boolean) => Promise<void>): Promise<boolean> | undefined {
+  if (payload.type === 'project.transport.set') {
+    return handleProjectTransportConfiguration(client, payload, peerPublicKey);
+  }
+  if (payload.type === 'controller.pair.request' || payload.type === 'account.machine.link') {
+    return handleDeviceEnrollment(client, payload, peerPublicKey);
+  }
+  if (payload.type === 'provider.hook.trust') {
+    return handleHookTrust(client, payload, peerPublicKey, publish);
+  }
+  return undefined;
 }
 
 function handleDeviceEnrollment(

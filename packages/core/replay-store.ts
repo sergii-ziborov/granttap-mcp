@@ -32,3 +32,32 @@ export function saveReplayFingerprints(path: string | undefined, fingerprints: I
     if (existsSync(temporary)) unlinkSync(temporary);
   }
 }
+
+/** Replay identity belongs to authenticated ciphertext, never relay-controlled IDs. */
+export class RelayMessageAcceptance {
+  private readonly seen: Set<string>;
+  private readonly processing = new Set<string>();
+
+  constructor(private readonly path?: string) {
+    this.seen = new Set(loadReplayFingerprints(path));
+  }
+
+  hasAccepted(fingerprint: string): boolean { return this.seen.has(fingerprint); }
+
+  begin(fingerprint: string): boolean {
+    if (this.processing.has(fingerprint)) return false;
+    this.processing.add(fingerprint);
+    return true;
+  }
+
+  accept(fingerprint: string): void {
+    this.seen.add(fingerprint);
+    if (this.seen.size > MAX_FINGERPRINTS) {
+      const oldest = this.seen.values().next().value;
+      if (oldest) this.seen.delete(oldest);
+    }
+    saveReplayFingerprints(this.path, this.seen);
+  }
+
+  finish(fingerprint: string): void { this.processing.delete(fingerprint); }
+}

@@ -43,17 +43,22 @@ export function receiptMovesOwnership(
 export function taskAfterEvent(
   task: TaskValue,
   event: MeshEventValue,
+  executions: readonly ExecutionValue[] = [],
 ): TaskValue | undefined {
   const next = { ...task };
   const finished = isTerminalTaskState(task.state);
   const receipt = event.payload.receipt;
   if (event.eventType === "HANDOFF_ACCEPTED" && receipt) {
     next.ownerSessionId = receipt.targetSessionId;
-    if (!finished) next.state = "working";
+    if (!finished) next.state = receipt.prepared ? "planned" : "working";
   } else if (!finished) {
     next.state = liveState(task.state, event);
   }
-  if (event.eventType === "TASK_COMPLETED") next.state = "completed";
+  if (event.eventType === "TASK_COMPLETED") {
+    const anotherWorking = executions.some(execution => execution.taskId === task.taskId
+      && execution.sessionId !== event.sourceSessionId && execution.endedAt == null && execution.state === "working");
+    next.state = anotherWorking ? "working" : "completed";
+  }
   next.updatedAt = Math.max(task.updatedAt, event.createdAt);
   if (sameTask(task, next)) return undefined;
   next.revision = nextTaskRevision(task);
@@ -92,15 +97,30 @@ export function taskAfterLocalReading(
   if (previous.updatedAt > reading.updatedAt) return undefined;
   const owns = reading.ownerSessionId != null
     && mayOwnTask(previous, reading.ownerSessionId, executions);
+  const branch = executions.find(execution => execution.taskId === previous.taskId
+    && execution.sessionId === reading.ownerSessionId && execution.endedAt == null);
+  const parallel = branch?.continuedAt != null && reading.updatedAt >= branch.continuedAt
+    && ["working", "needs_user"].includes(reading.state);
   const next: TaskValue = {
     ...previous,
     title: reading.title,
     goal: reading.goal,
     updatedAt: reading.updatedAt,
     ownerSessionId: owns ? reading.ownerSessionId : previous.ownerSessionId,
-    state: owns && !isTerminalTaskState(previous.state) ? reading.state : previous.state,
+    state: (owns || parallel) && !isTerminalTaskState(previous.state) ? reading.state : previous.state,
   };
   if (sameTask(previous, next)) return undefined;
   next.revision = nextTaskRevision(previous);
   return next;
+}
+
+/** A completed branch stops contributing active work before Task aggregation. */
+export function recordExecutionCompletion(executions: ExecutionValue[], event: MeshEventValue): void {
+  if (event.eventType !== "TASK_COMPLETED") return;
+  const source = executions.find(execution => execution.taskId === event.taskId
+    && execution.sessionId === event.sourceSessionId);
+  if (source) {
+    source.state = "idle";
+    source.updatedAt = Math.max(source.updatedAt ?? 0, event.createdAt);
+  }
 }

@@ -69,7 +69,7 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
 
   const tools = await client.listTools();
   assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
-    "ask", "ask_yes_no", "connect", "connect_with_passkey", "connection_status", "notify", "reconnect",
+    "ask", "ask_yes_no", "connect", "connect_with_passkey", "connection_status", "notify", "offload_task", "reconnect",
   ]);
   for (const tool of tools.tools) {
     assert.equal(tool.annotations?.readOnlyHint, tool.name === "connection_status");

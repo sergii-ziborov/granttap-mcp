@@ -5,6 +5,7 @@ import { scanCapabilityUsage, scanSessions, scanSessionHistory } from "../../../
 import { desktopSelectedMesh } from "./projection/selected-mesh";
 import { desktopUsageSessions } from "./projection/session-usage";
 import { desktopLiveCatalog } from "./live-catalog";
+import { desktopTaskCapabilities } from "./task-control/capabilities";
 
 let usageCache: { at: number; result: unknown } | undefined;
 const activityCache = new Map<string, { at: number; result: ReturnType<typeof desktopTaskActivity> }>();
@@ -39,6 +40,9 @@ for await (const line of createInterface({ input: process.stdin, crlfDelay: Infi
     const result = request.query && typeof request.query === "object"
       && (request.query as { operation?: string }).operation === "desktop.capability_usage"
       ? cachedUsage()
+      : request.query && typeof request.query === "object"
+        && (request.query as { operation?: string }).operation === "desktop.task_capabilities"
+        ? desktopTaskCapabilities(request.query, request.storePath) ?? null
       : request.query && typeof request.query === "object"
         && (request.query as { operation?: string }).operation === "desktop.live_catalog"
         ? desktopLiveCatalog(request.storePath) ?? null

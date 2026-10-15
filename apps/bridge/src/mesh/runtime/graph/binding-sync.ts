@@ -3,6 +3,7 @@ import type { MeshSnapshot, ProjectRepositoryGraph } from "../../../../../../pac
 import { queueProjectBindingSync } from "../../../engine/runtime/engine-projects";
 import { inspectRepository } from "../../catalog";
 import { computerId } from "../../identity/computer";
+import { matchesLocalCheckout } from "./checkout-identity";
 
 /** Re-admit this computer's verified checkouts before an explicit Graph build. */
 export async function refreshLocalGraphBindings(
@@ -21,8 +22,9 @@ export async function refreshLocalGraphBindings(
     try {
       const path = binding.localPathHint!;
       const facts = dependencies.inspect(path);
+      const pathIdentity = matchesLocalCheckout(binding.repositoryId, facts.root);
       if (!facts.worktree || realpathSync(facts.root) !== realpathSync(path)
-        || facts.canonicalRepositoryId !== binding.repositoryId) {
+        || (facts.canonicalRepositoryId !== binding.repositoryId && !pathIdentity)) {
         failures.push({ projectId: snapshot.projectId, repositoryId: binding.repositoryId,
           revision: "unverified", weavatrixVersion: "unknown", analysisStatus: "UNAVAILABLE",
           analysisErrorCode: facts.worktree ? "REPOSITORY_IDENTITY_MISMATCH" : "REPOSITORY_IDENTITY_UNVERIFIED",
@@ -32,7 +34,9 @@ export async function refreshLocalGraphBindings(
       const admitted = await dependencies.sync(snapshot.project, {
         summary: binding,
         localRoot: facts.root,
-        canonicalRemote: facts.baseRemote,
+        // A local binding is scoped by its verified path. Do not relabel it as
+        // a remote repository or move it into that repository's Project scope.
+        canonicalRemote: pathIdentity ? undefined : facts.baseRemote,
         lastSeenAt: Date.now(),
       });
       if (!admitted) failures.push(admissionFailure(snapshot, binding));

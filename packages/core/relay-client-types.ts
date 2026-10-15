@@ -1,3 +1,4 @@
+import type { TaskDispatchListener } from "./task-dispatch";
 import type { Role } from "../protocol/schema";
 
 /** Public pairing material for one encrypted machine/phone endpoint. */
@@ -20,6 +21,8 @@ export type PeerConfig = {
 
 /** Persistent processes reconnect in the background; one-shot hooks leave this off. */
 export type RelayClientOptions = {
+  /** Durable job consumer; normal payload listeners never execute scheduled offers. */
+  onTaskDispatch?: TaskDispatchListener;
   /** Fresh managed admission at each socket upgrade; own relays need no ticket. */
   upgradeHeaders?: () => Promise<Record<string, string>>;
   /** Verified server lease deadline, refreshed without reconnecting the socket. */

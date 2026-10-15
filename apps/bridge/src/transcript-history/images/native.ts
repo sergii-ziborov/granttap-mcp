@@ -1,3 +1,4 @@
+import { localTaskTransfers, transferredImage } from "../../task-transfer";
 import type { SessionInfo } from '../../../../../packages/protocol/schema';
 import { codexImageChunk } from '../../sessions/scan/codex/image';
 import { codexLogPathForSession, codexLogLines } from '../../sessions/scan/codex/shared';
@@ -8,7 +9,10 @@ import { previousNativeLines } from '../native-lines';
 let cached: { key: string; bytes: Buffer; mime: string; until: number } | undefined;
 
 /** Native attachment bytes are located by advertised row identity and cursor. */
-export function nativeTranscriptImage(session: SessionInfo, imageId: string, offset: number, cursor?: string) {
+export function nativeTranscriptImage(input: SessionInfo, imageId: string, offset: number, cursor?: string) {
+  const transferred = transferredImage(input, imageId, offset);
+  if (transferred) return transferred;
+  const session = localTaskTransfers().nativeSession(input);
   const key = `${session.agent}\0${session.sessionId}\0${imageId}`;
   if (!Number.isSafeInteger(offset) || offset < 0 || offset > 8 * 1024 * 1024) return undefined;
   if (session.agent === 'codex' && offset > 0) return codexImageChunk(session.sessionId, imageId, offset);

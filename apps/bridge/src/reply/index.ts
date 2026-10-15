@@ -1,4 +1,6 @@
 /** Deliver phone messages into existing sessions or start a new Codex task. */
+import { localTaskTransfers, localTransferContinuations } from "../task-transfer";
+import { localRoutingRequests } from '../task-routing/requests';
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { SessionInfo, UserAttachment } from "../../../../packages/protocol/schema";
@@ -28,11 +30,15 @@ export function resolveAgentWorkspace(cwd: string | undefined, agent: CodingAgen
   return path;
 }
 
-const inFlight = new Map<string, Promise<ReplyResult>>();
+const inFlight = new Map<string, Promise<ReplyResult | null>>();
+
+export function isDeliveryInFlight(sessionId: string): boolean { return inFlight.has(sessionId); }
 
 /** Request a stop for owned processes; confirmation arrives only on process exit. */
 export function stopDeliveries(sessionId: string): number {
-  return abortProcesses(sessionId);
+  try { localRoutingRequests().cancel(sessionId); } catch { /* The native stop still runs when storage is unavailable. */ }
+  const native = localTaskTransfers().nativeSession({ sessionId } as SessionInfo).sessionId;
+  return abortProcesses(sessionId) + (native === sessionId ? 0 : abortProcesses(native));
 }
 
 export function deliverToSession(
@@ -42,10 +48,27 @@ export function deliverToSession(
   attachments: UserAttachment[] = [],
   options: DeliveryOptions = {},
 ): Promise<ReplyResult> {
+  const transferred = localTransferContinuations().blockReason(session.sessionId);
+  if (transferred) return Promise.resolve({ ok: false, error: transferred });
+  try {
+    const routing = localRoutingRequests().blockReason(session.sessionId);
+    if (routing) return Promise.resolve({ ok: false, error: routing });
+  } catch { return Promise.resolve({ ok: false, error: 'The automatic transfer journal is unavailable.' }); }
   // A held chat takes no new turn either: the pause is the person's, and a
   // message from the phone would otherwise quietly restart the work.
   if (!options.ignorePause && isSessionPaused(session.sessionId)) {
     return Promise.resolve({ ok: false, error: PAUSED_SESSION_REASON });
+  }
+  if (/^transfer-[a-f0-9]{48}$/.test(session.sessionId)) {
+    return queued(session.sessionId, async () => (await localTaskTransfers().deliver(
+      session.sessionId, text, attachments, options, {
+        start: request => ({ claude: createClaudeSession, codex: createCodexSession,
+          cursor: createCursorSession, grok: createGrokSession }[request.provider])(
+          request.text, request.cwd, timeoutMs, request.attachments, request.model, request.operationKey, request.effort),
+        resume: (native, body, images, settings) => withAttachments(images, body, prepared => runDelivery(native,
+          native.agent === "codex" ? prepared.prompt : prepared.claudePrompt, timeoutMs, prepared.images, settings)),
+      },
+    )) ?? { ok: false, error: "The prepared transfer is unavailable." });
   }
   return queued(session.sessionId, () => withAttachments(attachments, text, (prepared) =>
     runDelivery(
@@ -123,11 +146,12 @@ export function createGrokSession(
 function queued(key: string, run: () => Promise<ReplyResult>): Promise<ReplyResult> {
   const previous = inFlight.get(key) ?? Promise.resolve(null);
   const next = previous.then(run);
-  inFlight.set(
-    key,
-    next.catch(() => null as never),
-  );
-  return next;
+  const settled = next.finally(() => {
+    if (inFlight.get(key) === tracked) inFlight.delete(key);
+  });
+  const tracked = settled.catch(() => null);
+  inFlight.set(key, tracked);
+  return settled;
 }
 
 function runDelivery(

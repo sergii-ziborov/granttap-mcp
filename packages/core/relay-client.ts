@@ -1,24 +1,14 @@
-/**
- * RelayClient — the shared machine/phone endpoint.
- *
- * Both the machine-side bridge and the phone talk to the relay through this.
- * It holds the E2EE keys, seals every outgoing Payload for the peer, opens
- * incoming envelopes, and exposes a small event + request/response API.
- *
- * Transport is a plain WebSocket. The relay only ever sees Envelopes (opaque
- * ciphertext bodies), so the same client works with both the Node relay and
- * the Cloudflare Durable Object deployment.
- */
+/** Shared authenticated relay transport. See README.md for delivery and encryption boundaries. */
 import WebSocket from "ws";
-import { publicKeyIdentifier } from "./ciphertext-recipient";
-import { ManagedRelayLease, RelaySocketHealth } from "./socket-lifecycle";
+import { ManagedRelayLease, RelaySocketHealth, relayUpgradeHeaders } from "./socket-lifecycle";
 import { OutboundFrameQueue, sendEncryptedPayload } from "./outbound-scheduler";
-import { createHash } from "node:crypto";
-import { Envelope, Payload, type Role } from "../protocol/schema";
-import { openFromPeersWithIdentity, openWithTransferKey, peerPublicKeys, seal, sealWithTransferKey } from "./crypto";
+import { openRelayMessage } from "./relay-inbound";
+import { consumeTaskJobOffer, type TaskDispatchListener } from "./task-dispatch";
+import { Payload, type Role } from "../protocol/schema";
+import { peerPublicKeys, sealWithTransferKey } from "./crypto";
 import type { PeerConfig, RelayClientOptions, SendOptions } from "./relay-client-types";
 export type { PeerConfig, RelayClientOptions, SendOptions } from "./relay-client-types";
-import { loadReplayFingerprints, saveReplayFingerprints } from "./replay-store";
+import { RelayMessageAcceptance } from "./replay-store";
 import { sealEnvelope } from "./relay-envelope";
 export { sealEnvelope } from "./relay-envelope";
 
@@ -30,6 +20,8 @@ export class RelayClient {
   private recipientRouting = false;
   private frames?: OutboundFrameQueue;
   private listeners = new Set<Listener>();
+  private taskDispatchListeners = new Set<TaskDispatchListener>();
+  private taskOfferListeners = new Set<(control: unknown) => void | Promise<void>>();
   private intentionalClose = false;
   private connectPromise?: Promise<void>;
   private reconnectTimer?: NodeJS.Timeout;
@@ -37,24 +29,15 @@ export class RelayClient {
   private readonly socketHealth = new RelaySocketHealth();
   private readonly admissionLease = new ManagedRelayLease();
   private readonly sessionKeys = new Map<string, string>();
-  /**
-   * Delivery ids are relay-controlled metadata, so replay protection is bound
-   * to the authenticated ciphertext itself. Keep a bounded process-local set:
-   * relay retries are acknowledged, but never delivered to the application
-   * twice even if an attacker changes the clear-text delivery id.
-   */
-  private readonly seenCiphertexts = new Set<string>();
-  private readonly processingCiphertexts = new Set<string>();
-  private static readonly MAX_SEEN_CIPHERTEXTS = 2_048;
+  private readonly replay: RelayMessageAcceptance;
 
   constructor(
     private readonly cfg: PeerConfig,
     private readonly opts: RelayClientOptions = {},
   ) {
     this.reconnectDelay = opts.minReconnectMs ?? 1_000;
-    for (const fingerprint of loadReplayFingerprints(opts.replayPath)) {
-      this.seenCiphertexts.add(fingerprint);
-    }
+    if (opts.onTaskDispatch) this.taskDispatchListeners.add(opts.onTaskDispatch);
+    this.replay = new RelayMessageAcceptance(opts.replayPath);
   }
 
   /** Authenticated pairing room used to scope E2EE chat deep links. */
@@ -85,9 +68,7 @@ export class RelayClient {
       url.searchParams.set("room", this.cfg.room);
       const ws = new WebSocket(
         url.toString(),
-        { headers: { ...headers, "X-GrantTap-Recipient-Routing": "1",
-          ...(this.cfg.role === "phone" ? { "X-GrantTap-Recipient-Key-Id": publicKeyIdentifier(this.cfg.myPublicKey) } : {}),
-          ...(this.cfg.pushAuth ? { Authorization: `Bearer ${this.cfg.pushAuth}` } : {}) } },
+        { headers: relayUpgradeHeaders(this.cfg, headers, this.taskDispatchListeners.size > 0 || this.taskOfferListeners.size > 0) },
       );
       this.ws = ws;
       const frames = new OutboundFrameQueue(frame => new Promise((resolve, reject) => {
@@ -144,72 +125,26 @@ export class RelayClient {
       this.recipientRouting = true;
       return;
     }
-    const parsed = Envelope.safeParse(control);
-    if (!parsed.success) return;
-    const env = parsed.data;
-    if (env.room !== this.cfg.room) return;
-    if (env.recipientKeyId && env.recipientKeyId !== publicKeyIdentifier(this.cfg.myPublicKey)) return;
-    if (env.from !== this.otherRole()) return;
-    if (env.to !== this.cfg.role && env.to !== "all") return;
-    if (env.expiresAt != null && env.expiresAt <= Date.now()) return;
-    const opened = openFromPeersWithIdentity(
-      env.nonce,
-      env.box,
-      this.cfg.mySecretKey,
-      this.cfg.peerPublicKey,
-      this.cfg.extraPeerPublicKeys,
-    );
-    if (opened === null) return; // not for us, or tampered
-    const { body, peerPublicKey } = opened;
-    if (!this.peerIsAllowed(peerPublicKey)) return;
-    const parsedPayload = Payload.safeParse(body);
-    if (!parsedPayload.success) {
-      const type = body && typeof body === "object" && "type" in body ? String((body as { type?: unknown }).type) : "";
-      if (type === "pairing.join") {
-        const paths = parsedPayload.error.issues.map((issue) => `${issue.path.join(".")}:${issue.code}`);
-        console.error(`[granttap] dropped pairing.join (${paths.join(",") || "invalid"})`);
-      }
+    if (control?.type === "relay.task-job") {
+      if (raw.length > 22_010_000) return;
+      await consumeTaskJobOffer({ control, cfg: this.cfg, sessionKeys: this.sessionKeys,
+        peerAllowed: key => this.peerIsAllowed(key), listeners: [...this.taskDispatchListeners] });
+      await Promise.all([...this.taskOfferListeners].map(async listener => {
+        try { await listener(control); } catch { /* A failed consumer leaves the durable job unclaimed. */ }
+      }));
       return;
     }
-    let payload: Payload = parsedPayload.data;
-    if (payload.type === "session.key.grant") {
-      // A machine owns native-session keys. The paired phone may forward only
-      // explicit task/project keys when the user authorizes cross-computer Mesh.
-      if (this.cfg.role === "machine" && !["task", "project"].includes(payload.purpose ?? "")) return;
-    } else if (payload.type === "session.sealed") {
-      const key = this.sessionKeys.get(payload.sessionId);
-      if (!key) return;
-      const inner = openWithTransferKey(payload.nonce, payload.box, key);
-      const parsedInner = Payload.safeParse(inner);
-      if (
-        !parsedInner.success ||
-        parsedInner.data.type === "session.key.grant" ||
-        parsedInner.data.type === "session.sealed"
-      ) return;
-      const innerSessionId = "sessionId" in parsedInner.data ? parsedInner.data.sessionId : undefined;
-      if (
-        !payload.sessionId.trim() ||
-        typeof innerSessionId !== "string" ||
-        !innerSessionId.trim() ||
-        innerSessionId !== payload.sessionId
-      ) return;
-      payload = parsedInner.data;
-    }
-
-    const fingerprint = createHash("sha256")
-      .update(env.nonce)
-      .update(".")
-      .update(env.box)
-      .digest("base64url");
-    if (this.seenCiphertexts.has(fingerprint)) {
+    const opened = openRelayMessage(this.cfg, control, this.sessionKeys, key => this.peerIsAllowed(key));
+    if (!opened || opened.payload.type === "task.dispatch") return;
+    const { env, payload, peerPublicKey, fingerprint } = opened;
+    if (this.replay.hasAccepted(fingerprint)) {
       this.ackDelivery(env.deliveryId);
       return;
     }
     if (payload.type === "session.key.grant") {
       this.sessionKeys.set(payload.sessionId, payload.key);
     }
-    if (this.processingCiphertexts.has(fingerprint)) return;
-    this.processingCiphertexts.add(fingerprint);
+    if (!this.replay.begin(fingerprint)) return;
     try {
       const results = await Promise.all([...this.listeners].map(async (listener) => {
         try { return (await listener(payload, peerPublicKey)) === true; } catch { return false; }
@@ -218,15 +153,10 @@ export class RelayClient {
       const accepted = payload.type === "hello" || payload.type === "session.key.grant"
         || results.some(Boolean);
       if (!accepted) return;
-      this.seenCiphertexts.add(fingerprint);
-      if (this.seenCiphertexts.size > RelayClient.MAX_SEEN_CIPHERTEXTS) {
-        const oldest = this.seenCiphertexts.values().next().value;
-        if (oldest) this.seenCiphertexts.delete(oldest);
-      }
-      saveReplayFingerprints(this.opts.replayPath, this.seenCiphertexts);
+      this.replay.accept(fingerprint);
       this.ackDelivery(env.deliveryId);
     } finally {
-      this.processingCiphertexts.delete(fingerprint);
+      this.replay.finish(fingerprint);
     }
   }
 
@@ -299,6 +229,18 @@ export class RelayClient {
       box: sealed.box,
       createdAt: Date.now(),
     }, to, options);
+  }
+
+  /** Register before connect so only durable receivers advertise task-job support. */
+  onTaskDispatch(listener: TaskDispatchListener): () => void {
+    this.taskDispatchListeners.add(listener);
+    return () => { this.taskDispatchListeners.delete(listener); };
+  }
+
+  /** Raw offers are a separate lane; consumers must verify their own scoped peer ciphertext. */
+  onTaskJobOffer(listener: (control: unknown) => void | Promise<void>): () => void {
+    this.taskOfferListeners.add(listener);
+    return () => { this.taskOfferListeners.delete(listener); };
   }
 
   onMessage(l: Listener): () => void {

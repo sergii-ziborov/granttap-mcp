@@ -1,5 +1,11 @@
 /** Public encrypted wire protocol entry point. */
 import { z } from "zod";
+import { ProjectTransportSet, ProjectTransportAck } from './task-network';
+export * from './task-network';
+import { TaskTransferContinue, TaskTransferContinueResult } from "./task-transfer";
+export * from "./task-transfer";
+import { TaskDispatch } from "./task-dispatch";
+export { TaskDispatch } from "./task-dispatch";
 import { SessionImageQuery, SessionImageChunk } from './messages/session-images';
 import { SessionWorkspaceQuery, SessionWorkspaceResult } from './messages/sessions/workspace';
 export { SessionWorkspaceQuery, SessionWorkspaceResult } from './messages/sessions/workspace';
@@ -172,6 +178,11 @@ export const Payload = z.union([
   AccountMachineLink,
   KnowledgeWrite,
   KnowledgeWriteResult,
+  TaskTransferContinue,
+  TaskTransferContinueResult,
+  ProjectTransportSet,
+  ProjectTransportAck,
+  TaskDispatch,
 ]).superRefine((payload, ctx) => {
   if (payload.type !== "user.message") return;
   const encodedCharacters = payload.attachments?.reduce(

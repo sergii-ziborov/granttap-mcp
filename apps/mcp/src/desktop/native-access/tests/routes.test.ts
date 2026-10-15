@@ -45,6 +45,9 @@ test('native HTTP bridge rejects browser forgery and unauthenticated reads, then
     assert.match(await russian.text(), /lang="ru"[\s\S]*Разрешить на этом Mac/);
     assert.match(authorization.headers.get('content-security-policy') ?? '', /style-src 'self'/);
     assert.doesNotMatch(authorization.headers.get('content-security-policy') ?? '', /unsafe-inline/);
+    assert.match(authorization.headers.get('content-security-policy') ?? '',
+      /form-action 'self' granttap:(?:;|$)/,
+      'Chrome must permit the fixed native callback after the consent form redirects.');
     const stylesheet = await fetch(`${origin}/desktop/consent.css`);
     assert.equal(stylesheet.status, 200);
     assert.match(stylesheet.headers.get('content-type') ?? '', /text\/css/);

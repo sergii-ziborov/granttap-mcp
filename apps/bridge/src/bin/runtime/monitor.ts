@@ -12,11 +12,16 @@ import { applyNetworkRoute } from "../../device-network/settings";
 import { startEndpointPublisher } from "../../device-network/directory";
 import { managedAdmissionOptions } from "../../managed-admission";
 
+import { startTaskDispatchMonitor } from "../../task-dispatch/worker/monitor";
+import { startTaskNetworkMonitor } from '../../task-network/runtime';
+
 let client: RelayClient;
 let monitor: ReturnType<typeof startSessionMonitor>;
 const engine = new EngineSupervisor();
 let stopping = false;
 let stopEndpointPublisher = () => {};
+let stopTaskDispatch = () => {};
+let stopTaskNetwork = () => {};
 
 try {
   const cfg = applyNetworkRoute(loadConfig(machineConfigPath()));
@@ -27,6 +32,10 @@ try {
     peerAllowed: controllerPeerGate(cfg),
   });
   monitor = startSessionMonitor(client);
+  stopTaskDispatch = startTaskDispatchMonitor({ config: cfg, client,
+    isLeader: monitor.isLeader, peerAllowed: controllerPeerGate(cfg), publish: monitor.publish });
+  stopTaskNetwork = startTaskNetworkMonitor({ config: cfg, client,
+    isLeader: monitor.isLeader, peerAllowed: controllerPeerGate(cfg), publish: monitor.publish });
   stopEndpointPublisher = startEndpointPublisher(cfg);
 } catch (error) {
   process.stderr.write(
@@ -38,6 +47,8 @@ try {
 const stop = (): void => {
   if (stopping) return;
   stopping = true;
+  stopTaskDispatch();
+  stopTaskNetwork();
   monitor.close();
   stopEndpointPublisher();
   client.close();

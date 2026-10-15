@@ -1,4 +1,5 @@
 import { refreshLocalGraphBindings } from "../graph/binding-sync";
+import { graphAnalysisBindings } from "../graph/checkout-identity";
 import type { MeshSnapshot } from "../../../../../../packages/protocol/schema";
 import {
   projectBackbone, projectRepositoryGraphs, waitForProjectBindingSync,
@@ -16,7 +17,8 @@ export async function enrichMeshSnapshot(
 ): Promise<MeshSnapshot> {
   const identityFailures = await refreshLocalGraphBindings(snapshot);
   const excludedRepositories = new Set(identityFailures.map((report) => report.repositoryId));
-  const bindings = (snapshot.bindings ?? []).filter((binding) => !excludedRepositories.has(binding.repositoryId));
+  const bindings = graphAnalysisBindings((snapshot.bindings ?? [])
+    .filter((binding) => !excludedRepositories.has(binding.repositoryId)));
   await waitForProjectBindingSync(snapshot.projectId);
   queueProjectKnowledgeSync({
     projectId: snapshot.projectId,

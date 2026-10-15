@@ -1,10 +1,25 @@
 import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, realpathSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { basename, dirname } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { basename, dirname, join } from "node:path";
 import { UserAttachment, MAX_USER_ATTACHMENTS } from "../../../../../packages/protocol/schema";
 
 /** Read only a bounded private batch prepared by the same-user native client. */
-export function readDesktopAttachments(manifest: unknown): UserAttachment[] | undefined {
+type AttachmentLocations = { platform: string; temporary: string; home: string };
+
+function allowedParent(parent: string, locations: AttachmentLocations): boolean {
+  const roots = [locations.temporary];
+  if (locations.platform === "darwin") roots.push(
+    join(locations.temporary, "com.ziborov.granttap"),
+    join(locations.home, "Library", "Containers", "com.ziborov.granttap", "Data", "tmp"),
+  );
+  return roots.some(root => {
+    try { return parent === realpathSync(root); } catch { return false; }
+  });
+}
+
+export function readDesktopAttachments(manifest: unknown, locations: AttachmentLocations = {
+  platform: process.platform, temporary: tmpdir(), home: homedir(),
+}): UserAttachment[] | undefined {
   if (manifest === undefined) return [];
   if (typeof manifest !== "string" || manifest.length > 32_768) return undefined;
   try {
@@ -20,7 +35,7 @@ export function readDesktopAttachments(manifest: unknown): UserAttachment[] | un
       if (!parent.isDirectory() || parent.uid !== process.getuid?.()
         || (parent.mode & 0o777) !== 0o700
         || !/^granttap-message-[A-Za-z0-9-]{6,64}$/.test(basename(directory))
-        || dirname(realpathSync(directory)) !== realpathSync(tmpdir())) throw new Error("Invalid batch");
+        || !allowedParent(dirname(realpathSync(directory)), locations)) throw new Error("Invalid batch");
       paths.add(row.path);
       const fd = openSync(row.path, constants.O_RDONLY | constants.O_NOFOLLOW);
       try {

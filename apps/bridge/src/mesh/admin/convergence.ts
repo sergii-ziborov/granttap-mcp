@@ -54,6 +54,7 @@ export function preferExecution(
   if ((current.endedAt != null) !== (incoming.endedAt != null)) {
     const ended = current.endedAt != null ? current : incoming;
     const live = current.endedAt != null ? incoming : current;
+    if (live.continuedAt != null && live.continuedAt > ended.endedAt!) return live;
     return { ...live, endedAt: ended.endedAt };
   }
   const currentAt = current.updatedAt ?? current.startedAt;

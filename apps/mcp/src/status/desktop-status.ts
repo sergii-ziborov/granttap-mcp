@@ -30,5 +30,7 @@ export function desktopStatusSnapshot(desktopEngineSocket?: string) {
     relayStatus: runtime.relayStatus,
     providers: inspectProviderStatusSnapshot().providers,
     desktopEngineSocket,
+    taskQueueAvailable: true,
+    taskControlsAvailable: true,
   };
 }

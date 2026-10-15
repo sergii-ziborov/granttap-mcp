@@ -22,6 +22,7 @@ type CodexParseState = {
   cwd?: string;
   branch?: string;
   model?: string;
+  effort?: SessionInfo['effort'];
   title?: string;
   provisionalTitle?: string;
   summary?: string;
@@ -79,6 +80,8 @@ function applyCodexLine(d: any, state: CodexParseState): void {
 
   if (d.type === "turn_context") {
     if (d.payload?.model) state.model = String(d.payload.model);
+    const effort = d.payload?.effort ?? d.payload?.reasoning_effort;
+    state.effort = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'].includes(effort) ? effort : undefined;
     const sandbox = d.payload?.sandbox_policy?.type;
     if (sandbox === "read-only") state.accessLevel = "read-only";
     if (sandbox === "workspace-write") state.accessLevel = "workspace";
@@ -176,6 +179,7 @@ export function parseCodexFile(file: string): CodexCandidate | undefined {
     worktree: state.cwd ? observedCodexWorktree(state.cwd, state.workdirs) : undefined,
     branch: state.branch,
     model: state.model,
+    effort: state.effort,
     summary: state.summary,
     accessLevel: state.accessLevel,
     state: codexTurnState(state.turn, state.lastActivityAt),

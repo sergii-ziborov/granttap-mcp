@@ -5,6 +5,7 @@ import { sendMeshPayload } from "../../../host/session-keys";
 import { publishedCatalog } from "../../../session-catalog";
 import { meshSnapshot, meshSnapshots } from "..";
 import { refreshLocalGraphBindings } from "./binding-sync";
+import { graphAnalysisBindings } from "./checkout-identity";
 
 /** A person's explicit Graph refresh bypasses background job backoff. */
 type GraphAnalysisDependencies = {
@@ -48,7 +49,8 @@ export async function analyzeProjectGraphNow(
   const rejected = new Set(failures.map(report => report.repositoryId));
   const [backbone, repositoryGraphs] = await Promise.all([
     dependencies.backbone(projectId),
-    dependencies.graphs(projectId, (current.bindings ?? []).filter(binding => !rejected.has(binding.repositoryId)), { background: false }),
+    dependencies.graphs(projectId, graphAnalysisBindings((current.bindings ?? [])
+      .filter(binding => !rejected.has(binding.repositoryId))), { background: false }),
   ]);
   const observed = [...repositoryGraphs, ...failures];
   const reports = observed.length > 0 ? observed : [{

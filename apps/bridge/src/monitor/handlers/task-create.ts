@@ -25,6 +25,7 @@ export type TaskCreateAdmission =
 export async function handleTaskCreate(
   client: RelayClient,
   message: TaskCreate,
+  onProcessing?: () => Promise<void>,
 ): Promise<TaskCreateAdmission> {
   const say = (text: string, sessionId?: string, wake = false) => {
     const payload = {
@@ -38,7 +39,7 @@ export async function handleTaskCreate(
       ? sendSessionPayload(client, payload, sessionId, "phone", options)
       : client.send(payload, "phone", options)).catch(() => {});
   };
-  if (!acceptInstanceEpoch(message.instanceEpoch, loadConfigCommandState().requireFreshCommands)) {
+  if (!onProcessing && !acceptInstanceEpoch(message.instanceEpoch, loadConfigCommandState().requireFreshCommands)) {
     const error = "This command was issued for a previous instance of this computer.";
     await say(error, undefined, true);
     return { status: "rejected", error };
@@ -78,6 +79,7 @@ export async function handleTaskCreate(
     return { status: "rejected", error: admitted.detail };
   }
   if ("queued" in admitted && admitted.queued) {
+    if (onProcessing) return { status: "rejected", error: "The pinned host is unavailable." };
     enqueuePinnedTask({
       operationId: message.operationId,
       projectId: admitted.projectId,
@@ -89,6 +91,7 @@ export async function handleTaskCreate(
     await say("The pinned host is offline. The task is queued until the deadline.", undefined, true);
     return { status: "accepted" };
   }
+  await onProcessing?.();
   await say(`Creating a new ${displayName} task…`);
   const create = {
     claude: createClaudeSession,
@@ -104,6 +107,7 @@ export async function handleTaskCreate(
     await say(result.text, result.sessionId, true);
   } else {
     await say(`Could not create a ${displayName} task: ${result.error}`, undefined, true);
+    return { status: "rejected", error: "Provider delivery failed." };
   }
   return { status: "accepted" };
 }

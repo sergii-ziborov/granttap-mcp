@@ -3,6 +3,7 @@ import { descriptorsForProvider, descriptorsForSession, mcpConfigDigest } from "
 import { cachedMetadata, refreshDescriptorMetadata } from "./metadata";
 
 export { projectSharedSkills, workspaceSkills } from "./skills";
+export { deliveryRoutingError } from "./routing";
 export { mcpConfigDigest } from "./descriptors";
 
 /** Resolve real MCP initialization metadata and cache it for a session. */

@@ -15,8 +15,9 @@ function appendFileActivity(input: {
   baseTime: number;
   indexOffset: number;
   child?: ChildThreadInfo;
+  fullText?: boolean;
 }): void {
-  const { out, seen, sessionId, file, baseTime, indexOffset, child } = input;
+  const { out, seen, sessionId, file, baseTime, indexOffset, child, fullText } = input;
   let lines: string[];
   try {
     lines = readFileSync(file, "utf8").split("\n");
@@ -36,23 +37,23 @@ function appendFileActivity(input: {
       const text = textBlocks(item.message?.content).join("\n").trim();
       if (!text) return;
       const ordinal = indexOffset + index;
-      pushEntry({ out: out, seen: seen, sessionId: sessionId, kind: "user", text: text, createdAt: createdAt, ordinal: ordinal, extras: childFields, idOverride: entryId(createdAt, ordinal) });
+      pushEntry({ fullText, out: out, seen: seen, sessionId: sessionId, kind: "user", text: text, createdAt: createdAt, ordinal: ordinal, extras: childFields, idOverride: entryId(createdAt, ordinal) });
       return;
     }
     if (item.role !== "assistant") return;
     const content = item.message?.content;
     if (typeof content === "string") {
       const ordinal = indexOffset + index;
-      pushEntry({ out: out, seen: seen, sessionId: sessionId, kind: "message", text: content, createdAt: createdAt, ordinal: ordinal, extras: childFields, idOverride: entryId(createdAt, ordinal) });
+      pushEntry({ fullText, out: out, seen: seen, sessionId: sessionId, kind: "message", text: content, createdAt: createdAt, ordinal: ordinal, extras: childFields, idOverride: entryId(createdAt, ordinal) });
       return;
     }
     if (!Array.isArray(content)) return;
     content.forEach((block: any, blockIndex: number) => {
       const sequence = (indexOffset + index) * 100 + blockIndex;
       if (block?.type === "text" && typeof block.text === "string" && block.text.trim()) {
-        pushEntry({ out: out, seen: seen, sessionId: sessionId, kind: "message", text: block.text, createdAt: createdAt, ordinal: sequence, extras: childFields, idOverride: entryId(createdAt, sequence) });
+        pushEntry({ fullText, out: out, seen: seen, sessionId: sessionId, kind: "message", text: block.text, createdAt: createdAt, ordinal: sequence, extras: childFields, idOverride: entryId(createdAt, sequence) });
       } else if (block?.type === "tool_use") {
-        pushEntry({ out: out, seen: seen, sessionId: sessionId, kind: "tool", text: toolSummary(block.name, block.input), createdAt: createdAt, ordinal: sequence, extras: {
+        pushEntry({ fullText, out: out, seen: seen, sessionId: sessionId, kind: "tool", text: toolSummary(block.name, block.input), createdAt: createdAt, ordinal: sequence, extras: {
             ...childFields,
             ...classifyTool(block.name, block.input),
             estimatedContextTokens: estimateTokens(block.input),
@@ -62,7 +63,7 @@ function appendFileActivity(input: {
   });
 }
 
-export function cursorActivity(session: SessionInfo): ActivityEntry[] {
+export function cursorActivity(session: SessionInfo, fullText = false): ActivityEntry[] {
   let files = cursorFiles(session.sessionId);
   if (!files) {
     scanCursor();
@@ -80,7 +81,7 @@ export function cursorActivity(session: SessionInfo): ActivityEntry[] {
       tokensSession: 0, tokensLastTurn: 0,
     } : undefined;
     appendFileActivity({
-      out, seen, sessionId: session.sessionId, file: file.path,
+      fullText, out, seen, sessionId: session.sessionId, file: file.path,
       baseTime: base, indexOffset: index * 10_000, child,
     });
   });

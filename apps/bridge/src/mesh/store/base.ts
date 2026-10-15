@@ -1,3 +1,4 @@
+import { localTaskTransfers } from "../../task-transfer";
 import {
   ExecutionSessionLink,
   HandoffReceipt,
@@ -276,6 +277,11 @@ export class MeshStoreBase {
     const own = this.state.executions.find((item) =>
       item.computerId === computerId && item.provider === provider && item.sessionId === sessionId);
     if (own) return own.taskId;
+    const transfer = localTaskTransfers().executionForNative(provider, sessionId);
+    if (transfer?.capsule.targetComputer === computerId) {
+      return this.state.executions.find(item => item.sessionId === transfer.sessionId
+        && item.computerId === computerId && item.provider === provider)?.taskId;
+    }
     return this.state.executions.find((item) =>
       item.provider === provider && item.sessionId === sessionId)?.taskId;
   }

@@ -34,6 +34,7 @@ export async function desktopTaskHandoff(
   const row = input as Record<string, unknown>;
   const request = MeshHandoffPrepare.safeParse({
     type: "mesh.handoff.prepare",
+    ...(row.prepare_only === true ? { prepareOnly: true } : {}),
     sessionId: row.session_id, projectId: row.project_id, taskId: row.task_id,
     targetProvider: row.target_provider, targetComputer: row.target_computer,
     targetModel: row.target_model, userComment: row.user_comment,

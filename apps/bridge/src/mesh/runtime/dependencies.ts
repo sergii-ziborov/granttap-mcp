@@ -5,6 +5,7 @@ import type {
   MeshProvider,
   MeshSnapshot,
   SessionInfo,
+  TaskCapsule,
 } from "../../../../../packages/protocol/schema";
 import type { createCodexSession, deliverToSession } from "../../reply";
 import type { MeshStore } from "../store";
@@ -15,6 +16,12 @@ type WorktreeResult = NonNullable<ReturnType<typeof createHandoffWorktree>>;
 
 export type MeshRuntimeDependencies = {
   store: () => MeshStore;
+  continuations?: () => import("../../task-transfer").TransferContinuations;
+  transfers?: () => import('../../task-transfer').PreparedTaskTransfers;
+  captureTransferContext?: typeof import('../../task-transfer').captureTransferContext;
+  sourceCaptureCurrent?: (session: SessionInfo, capsule: TaskCapsule) => boolean;
+  dispatchPreparedTransfer?: (event: MeshEvent, session: SessionInfo,
+    confirmContext: () => Promise<boolean>) => Promise<boolean>;
   sessions: () => SessionInfo[];
   /** Observed native configuration for a session on this endpoint. */
   capabilityInventory?: (session: SessionInfo) => SessionInfo;
@@ -34,6 +41,7 @@ export type MeshRuntimeDependencies = {
     taskId: string,
     provider: MeshProvider,
     revision: string,
+    operationId?: string,
   ) => WorktreeResult | undefined | null;
   hasCommit: (repository: string, revision: string) => boolean;
   /** Publish the branch a capsule names, when the person asked for it. */

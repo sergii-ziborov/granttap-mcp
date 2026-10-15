@@ -56,8 +56,8 @@ test("selected Mac refresh admits its checkout and returns completed Engine anal
     assert.equal(result.repositoryGraphs?.[0]?.analysisStatus, "COMPLETE");
     assert.equal(result.repositoryGraphs?.[0]?.totalNodes, 4);
     const alias = result.repositoryGraphs?.find((report) => report.repositoryId.startsWith("local:"));
-    assert.equal(alias?.analysisErrorCode, "REPOSITORY_IDENTITY_MISMATCH");
-    assert.equal(alias?.totalNodes, 0);
+    assert.equal(alias, undefined, "The admitted canonical checkout replaces its duplicate local graph.");
+    assert.equal(result.repositoryGraphs?.length, 1);
     assert.ok(calls.indexOf("project.upsert_binding") >= 0);
     assert.ok(calls.indexOf("project.upsert_binding") < calls.indexOf("graph.analyze_repository"));
     assert.equal(await worker.enrichedSnapshot("foreign", true), undefined);

@@ -33,6 +33,7 @@ import { publishMonitorMeshes, stopMonitorMeshes } from "../mesh-publication";
 
 export type SessionMonitor = {
   publish: () => Promise<void>;
+  isLeader: () => boolean;
   close: () => void;
 };
 
@@ -223,6 +224,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
 
   return {
     publish: () => publish(false),
+    isLeader: () => leadership.acquire(),
     close: () => {
       stopCatalog();
       stopCatalogHeads(client);

@@ -81,7 +81,9 @@ export function workspaceForRepository(
     .filter((task) => projectIds.has(task.projectId)).map((task) => task.taskId));
   const local = state.executions.find((item) =>
     taskIds.has(item.taskId) && (computerId == null || item.computerId === computerId));
-  if (computerId != null) return local?.worktree ?? local?.workspace;
+  if (computerId != null) return local?.worktree ?? local?.workspace
+    ?? state.bindings.find(binding => binding.endpointId === computerId
+      && binding.repositoryId === canonicalRepositoryId && binding.available)?.localPathHint;
   return local?.worktree ?? local?.workspace
     ?? state.projects.find((item) => projectIds.has(item.projectId))?.repositoryRoot;
 }

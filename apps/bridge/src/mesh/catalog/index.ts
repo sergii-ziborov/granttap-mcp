@@ -224,6 +224,7 @@ function linkSession(input: {
     workspace: cwd,
     repositoryId: repository.canonicalRepositoryId,
     activeAt: session.lastActivityAt,
+    state: session.state, continuedAt: session.transfer?.continuedAt,
     branch: repository.branch ?? session.branch,
     worktree: repository.worktree,
     uncommitted: hasUncommittedWork(repository.worktree ?? cwd),

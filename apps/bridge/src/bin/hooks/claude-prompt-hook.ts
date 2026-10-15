@@ -5,11 +5,13 @@
  * Registered in ~/.claude/settings.json so that when a person submits a
  * prompt, this program adds what the chat could not know by itself: the
  * background runs that answered phone messages in it, and the Mesh brief for
- * its Task. It never blocks a prompt — anything wrong, and it adds nothing.
+ * its Task. Transferred chats require explicit continuation; ordinary prompts retain the existing context behavior.
  *
  *   Reads:  UserPromptSubmit JSON on stdin ({ session_id, prompt, cwd, ... })
  *   Writes: { hookSpecificOutput: { hookEventName, additionalContext } } on stdout
  */
+import { localTransferContinuations } from "../../task-transfer";
+import { localRoutingRequests } from '../../task-routing/requests';
 import { promptContext } from "../../mesh/context/prompt";
 
 async function readStdin(): Promise<string> {
@@ -30,6 +32,10 @@ async function main(): Promise<void> {
     return;
   }
   const sessionId = typeof input.session_id === "string" ? input.session_id.trim() : "";
+  const transferred = localTransferContinuations().blockReason(sessionId) ?? localRoutingRequests().blockReason(sessionId);
+  if (transferred) {
+    process.stdout.write(JSON.stringify({ decision: "block", reason: transferred })); return;
+  }
   const text = promptContext(sessionId);
   if (!text) return;
   process.stdout.write(JSON.stringify({

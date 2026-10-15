@@ -21,13 +21,14 @@ export const DESKTOP_OPERATIONS = new Set([
   "desktop.machine_load", "desktop.capability_usage", "desktop.task_image", "desktop.task_workspace",
   "desktop.installed_skills", "desktop.policy_status", "desktop.policy_set", "desktop.project_auto_accept",
   "desktop.mesh_snapshots",
-  "desktop.task_send",
+  "desktop.task_send", "desktop.task_queue", "desktop.transfer_continue", "desktop.task_control", "desktop.task_preferences",
   "desktop.task_handoff",
+  "desktop.project_transport",
   "desktop.task_create",
   "desktop.mesh_create",
   "desktop.invocation_history",
   "desktop.controller_enrollment",
-  "desktop.live_catalog",
+  "desktop.live_catalog", "desktop.task_capabilities",
   "desktop.codex_hook_trust", "desktop.provider_storage",
   "desktop.network_status", "desktop.network_configure", "desktop.own_relay",
 ]);
@@ -43,12 +44,18 @@ export function desktopOperationTimeout(operation: unknown, input: unknown): num
   if (operation === "desktop.own_relay") return 250_000;
   if (operation === "desktop.controller_enrollment") return 30_000;
   if (operation === "desktop.codex_hook_trust") return 25_000;
+  if (operation === "desktop.task_queue") return 45_000;
+  if (operation === "desktop.task_control") {
+    return (input as { action?: unknown } | undefined)?.action === "compact" ? 250_000 : 45_000;
+  }
+  if (operation === "desktop.project_transport") return 45_000;
   if (operation === "desktop.policy_set") return 60_000;
   if (operation === "desktop.policy_status") return 30_000;
   if (operation === "desktop.capability_usage"
     || operation === "desktop.mesh_snapshots") return 75_000;
   if (operation === "desktop.task_activity"
-    || operation === "desktop.task_image" || operation === "desktop.live_catalog") return 45_000;
+    || operation === "desktop.task_image" || operation === "desktop.live_catalog"
+    || operation === "desktop.task_capabilities") return 45_000;
   if (operation === "desktop.task_send" || operation === "desktop.task_handoff"
     || operation === "desktop.task_create") return 250_000;
   if (operation === "desktop.mesh_snapshot"

@@ -10,6 +10,11 @@ same limits as encrypted phone messages. Invalid batches are rejected rather
 than silently losing files. The existing provider attachment pipeline stages
 images and arbitrary documents; the native client removes its batch after reply.
 
+Immediate replies retain model, effort, permission mode, preferred MCP and Skill.
+Explicit routing uses the same current capability validation as phone replies.
+The execution must belong to this local computer; a replicated remote Task is
+readable history, not permission to launch that native session here.
+
 `desktop.task_handoff` accepts a bounded handoff request from the authenticated
 Mac desktop channel. It verifies the exact owning local execution, then asks the
 canonical Mesh runtime to prepare the encrypted Task Capsule. A destination

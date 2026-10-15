@@ -1,11 +1,9 @@
 import {
-  ExecutionSessionLink,
   HandoffReceipt,
   IntegrationPeer,
   MeshEvent,
   MeshSnapshot,
   MeshTask,
-  Project,
   ResourceClaim,
   type ExecutionSessionLink as ExecutionValue,
   type HandoffReceipt as ReceiptValue,
@@ -22,7 +20,7 @@ import { MAX_STORE_PEERS, type StoreState } from "./state";
 import { preferExecution, isTerminalTaskState, mayOwnTask } from "../admin/convergence";
 import { capsuleHash } from "../handoff";
 import { mergeBy, scopedOverlapKind, type ResourceScope } from "./support";
-import { receiptMovesOwnership, taskAfterEvent, taskAfterLocalReading } from "../tasks/state";
+import { receiptMovesOwnership, taskAfterEvent, taskAfterLocalReading, recordExecutionCompletion } from "../tasks/state";
 import { workspaceForRepository as boundWorkspace } from "../catalog/binding-state";
 import { mergeSnapshotState } from "../snapshot/merge";
 import { selectSnapshotTasks } from "../snapshot/window";
@@ -32,6 +30,7 @@ import { loadEnvironment, redactEnvironment } from "../context/env";
 import { loadRestrictions } from "../restrictions";
 import { MeshStoreBase } from "./base";
 import { activeProjectKnowledge, supersededProjectKnowledgeIds } from "../knowledge/active";
+import { restoreHandoffResult, validStoredReceipt } from './receipts';
 import {
   projectCapabilityRequests,
 } from "../catalog/project/requests";
@@ -191,9 +190,11 @@ export class MeshStore extends MeshStoreBase {
     this.sync();
     const parsed = MeshEvent.safeParse(input);
     if (!parsed.success) return false;
-    const event = parsed.data;
+    // Full context is persisted by the transfer module, never repeated in Mesh snapshots.
+    const event = parsed.data.payload.transferContext == null ? parsed.data
+      : { ...parsed.data, payload: { ...parsed.data.payload, transferContext: undefined } };
     if (event.expiresAt != null && event.expiresAt <= this.now()) return false;
-    if (event.eventType === "HANDOFF_ACCEPTED" && !this.validReceipt(event)) return false;
+    if (event.eventType === "HANDOFF_ACCEPTED" && !validStoredReceipt(this.state, event)) return false;
     if (this.state.events.some((item) => item.eventId === event.eventId)) return false;
     this.state.events.push(event);
     this.state.events = this.state.events.slice(-512);
@@ -202,23 +203,12 @@ export class MeshStore extends MeshStoreBase {
     return true;
   }
 
-  private validReceipt(event: MeshEventValue): boolean {
-    const receipt = event.payload.receipt;
-    if (!receipt || receipt.taskId !== event.taskId) return false;
-    const request = [...this.state.events].reverse().find((item) =>
-      item.eventType === "HANDOFF_REQUEST"
-      && item.taskId === event.taskId
-      && item.sourceSessionId === receipt.sourceSessionId
-      && item.payload.capsule != null);
-    if (request?.payload.capsule == null) return false;
-    const digest = capsuleHash(request.payload.capsule);
-    if (digest === receipt.capsuleHash) return true;
-    // A receipt written before this Task was rejoined names the capsule by
-    // the hash it had then; the move is on record, so the receipt still holds.
-    return this.state.migrations.some((item) =>
-      item.taskIdTo === event.taskId
-      && item.capsuleHashTo === digest
-      && item.capsuleHashFrom === receipt.capsuleHash);
+  /** Transport has already authenticated this retained peer result and its immutable job scope. */
+  acceptRecoveredHandoff(request: MeshEventValue, event: MeshEventValue, destination?: ExecutionValue): boolean {
+    const changed = this.transact(() => restoreHandoffResult(this.state, request, event, destination,
+      value => this.applyEvent(value)));
+    if (!changed.applied) throw new Error('The recovered transfer is waiting for the Mesh store lock.');
+    return changed.value;
   }
 
   private applyEvent(event: MeshEventValue): void {
@@ -260,7 +250,8 @@ export class MeshStore extends MeshStoreBase {
         receipt,
       ].slice(-256);
     }
-    const next = taskAfterEvent(task, event);
+    recordExecutionCompletion(this.state.executions, event);
+    const next = taskAfterEvent(task, event, this.state.executions);
     if (next) this.replaceTask(next);
   }
 

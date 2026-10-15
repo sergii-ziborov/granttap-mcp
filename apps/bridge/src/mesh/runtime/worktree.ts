@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, lstatSync, realpathSync } from "node:fs";
+import { join, resolve } from "node:path";
 
 export type HandoffWorktree = { path: string; branch: string };
 
@@ -28,15 +29,19 @@ export function createHandoffWorktree(input: {
   provider: string;
   baseSha: string;
   now?: number;
+  operationId?: string;
 }): HandoffWorktree | undefined {
   const { repository, worktreeRoot, taskId, provider, baseSha, now = Date.now() } = input;
   if (!/^[0-9a-f]{7,64}$/i.test(baseSha)) return undefined;
+  if (input.operationId !== undefined && (!input.operationId || input.operationId.length > 128)) return undefined;
   const task = safeSegment(taskId) || "task";
   const agent = safeSegment(provider) || "agent";
-  const suffix = Math.trunc(now).toString(36);
+  const suffix = input.operationId ? createHash('sha256').update(input.operationId).digest('hex').slice(0, 24)
+    : Math.trunc(now).toString(36);
   const branch = `granttap/${agent}/${task}-${suffix}`;
   const path = join(worktreeRoot, `${task}-${agent}-${suffix}`);
-  if (existsSync(path)) return undefined;
+  if (existsSync(path)) return input.operationId && reusableWorktree(path, repository, baseSha, branch)
+    ? { path, branch } : undefined;
   mkdirSync(worktreeRoot, { recursive: true, mode: 0o700 });
   try {
     execFileSync("git", ["-C", repository, "cat-file", "-e", `${baseSha}^{commit}`], {
@@ -49,4 +54,20 @@ export function createHandoffWorktree(input: {
   } catch {
     return undefined;
   }
+}
+
+function reusableWorktree(path: string, repository: string, revision: string, branch: string): boolean {
+  const git = (cwd: string, args: string[]) => execFileSync('git', ['-C', cwd, ...args], {
+    encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 3_000, maxBuffer: 512 * 1_024,
+  }).trim();
+  try {
+    if (lstatSync(path).isSymbolicLink() || !lstatSync(path).isDirectory()) return false;
+    const root = realpathSync(path);
+    return realpathSync(git(path, ['rev-parse', '--show-toplevel'])) === root
+      && realpathSync(resolve(path, git(path, ['rev-parse', '--git-common-dir'])))
+        === realpathSync(resolve(repository, git(repository, ['rev-parse', '--git-common-dir'])))
+      && git(path, ['rev-parse', 'HEAD']) === git(repository, ['rev-parse', `${revision}^{commit}`])
+      && git(path, ['branch', '--show-current']) === branch
+      && git(path, ['status', '--porcelain=v1', '--untracked-files=all']) === '';
+  } catch { return false; }
 }

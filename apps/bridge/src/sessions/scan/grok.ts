@@ -38,6 +38,7 @@ type ParsedLog = {
 };
 
 let activityBySession = new Map<string, ActivityEntry[]>();
+let logPaths = new Map<string, string>();
 let usageBySession = new Map<string, CapabilityObservation[]>();
 
 function recentSummaries(root: string, limit: number): string[] {
@@ -70,7 +71,7 @@ function textBlocks(content: unknown): string[] {
   });
 }
 
-function parseLog(path: string, sessionId: string, fallbackTime: number): ParsedLog {
+function parseLog(path: string, sessionId: string, fallbackTime: number, fullText = false): ParsedLog {
   let lines: string[];
   try { lines = readFileSync(path, "utf8").split("\n"); } catch {
     return { entries: [], usage: [], tokens: 0, lastTurn: 0 };
@@ -96,7 +97,7 @@ function parseLog(path: string, sessionId: string, fallbackTime: number): Parsed
       if (text) {
         if (messageAt) lastMessageAt = Math.max(lastMessageAt, messageAt);
         firstUser ??= text;
-        pushEntry({ out: entries, seen: seen, sessionId: sessionId, kind: "user", text: text, createdAt: createdAt, ordinal: index });
+        pushEntry({ fullText, out: entries, seen: seen, sessionId: sessionId, kind: "user", text: text, createdAt: createdAt, ordinal: index });
         tokens += estimateTokens(text);
       }
       return;
@@ -104,7 +105,7 @@ function parseLog(path: string, sessionId: string, fallbackTime: number): Parsed
     if (role !== "assistant") return;
     let turnTokens = 0;
     texts.forEach((text, block) => {
-      pushEntry({ out: entries, seen: seen, sessionId: sessionId, kind: "message", text: text, createdAt: createdAt, ordinal: index * 100 + block });
+      pushEntry({ fullText, out: entries, seen: seen, sessionId: sessionId, kind: "message", text: text, createdAt: createdAt, ordinal: index * 100 + block });
       turnTokens += estimateTokens(text);
     });
     if (texts.some((text) => !!text.trim()) && messageAt) {
@@ -117,7 +118,7 @@ function parseLog(path: string, sessionId: string, fallbackTime: number): Parsed
       const input = block.input;
       const identity = classifyTool(name, input);
       const sourceId = String(block.id ?? `${sessionId}:${index}:${blockIndex}`);
-      pushEntry({ out: entries, seen: seen, sessionId: sessionId, kind: "tool", text: toolSummary(name, input), createdAt: createdAt, ordinal: index * 100 + blockIndex, extras: identity });
+      pushEntry({ fullText, out: entries, seen: seen, sessionId: sessionId, kind: "tool", text: toolSummary(name, input), createdAt: createdAt, ordinal: index * 100 + blockIndex, extras: identity });
       usage.push({
         sourceId, sessionId, toolName: identity.toolName, createdAt,
         mcpServer: identity.mcpServer, skill: identity.skill,
@@ -167,6 +168,7 @@ export function scanGrok(maxFiles = MAX_FILES): Scan {
       tokensSession: parsed.tokens, tokensLastTurn: parsed.lastTurn,
       contextTokensUsed: parsed.tokens,
     });
+    logPaths.set(sessionId, join(directory, "chat_history.jsonl"));
     activities.set(sessionId, parsed.entries);
     usages.set(sessionId, parsed.usage);
     if (Date.now() - updatedAt <= TOKEN_WINDOW_MS) tokensRecent += parsed.tokens;
@@ -176,8 +178,10 @@ export function scanGrok(maxFiles = MAX_FILES): Scan {
   return { sessions, tokensRecent, sourceLimited: listed.length > maxFiles };
 }
 
-export function grokActivity(session: SessionInfo): ActivityEntry[] {
+export function grokActivity(session: SessionInfo, fullText = false): ActivityEntry[] {
   if (!activityBySession.has(session.sessionId)) scanGrok();
+  const path = logPaths.get(session.sessionId);
+  if (fullText && path) return parseLog(path, session.sessionId, session.startedAt, true).entries;
   return activityBySession.get(session.sessionId) ?? [];
 }
 

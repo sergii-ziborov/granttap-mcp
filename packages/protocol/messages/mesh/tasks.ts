@@ -59,6 +59,8 @@ export const MeshTask = z.object({
 export type MeshTask = z.infer<typeof MeshTask>;
 
 export const ExecutionSessionLink = z.object({
+  continuedAt: z.number().nonnegative().optional(),
+  state: z.enum(["working", "waiting", "idle"]).optional(),
   taskId: Identifier,
   sessionId: Identifier,
   provider: MeshExecutionProvider,

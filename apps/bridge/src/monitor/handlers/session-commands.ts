@@ -18,18 +18,14 @@ import {
   loadRuntimeConfig,
   saveRuntimeConfig,
   setSessionMcpAllowed,
-  setSessionPaused,
   setSessionShellAllowed,
   setSessionSkillAllowed,
 } from "../../config";
-import { compactCodexSession } from "../../providers/codex-control";
-import { deliverToSession, stopDeliveries } from "../../reply";
+import { compactTaskSession, controlTaskSession } from "../../task-control";
 import { acceptInstanceEpoch } from "../../host/instance-epoch";
 import { applyHostGrant } from "../../mesh/runtime/execution-policy";
 import { computerId } from "../../mesh/identity/computer";
 import { sendSessionPayload } from "../../host/session-keys";
-import { scanSessionHistory, scanSessions } from "../../sessions";
-import { DELIVERY_TIMEOUT_MS } from "./receipts";
 
 export function handleAccessSet(message: SessionAccessSet): void {
   const runtime = loadRuntimeConfig();
@@ -49,88 +45,24 @@ export function handleShellSet(message: SessionShellSet): void {
   setSessionShellAllowed(message.sessionId, message.allowed);
 }
 
-/** What the agent is told when the person lifts the hold and asks it to go on. */
-export const RESUME_PROMPT =
-  "GrantTap: this chat was resumed from the phone. Continue the work you were doing before the pause; tool calls are allowed again.";
+export { RESUME_PROMPT } from "../../task-control";
 
-/**
- * Pause or resume one chat.
- *
- * A pause is a hold on tool calls, enforced by the provider hooks on every call
- * the chat makes, plus a stop of any delivery already running for it. The
- * result goes back at once; the continuation a resume asks for runs in the
- * background, so a phone that tapped "resume" does not wait on a whole turn.
- */
-export async function handleSessionControl(
-  client: RelayClient,
-  message: SessionControl,
-  afterContinue: () => void = () => {},
-): Promise<void> {
-  const sessionId = message.sessionId;
-  const reply = async (ok: boolean, text: string): Promise<void> => {
-    await sendSessionPayload(client, {
-      type: "session.control.result",
-      sessionId,
-      action: message.action,
-      ok,
-      message: text.slice(0, 1_000),
-      createdAt: Date.now(),
-    }, sessionId, "phone", { ttlMs: 15 * 60_000 });
-  };
-  try {
-    setSessionPaused(sessionId, message.action === "pause");
-  } catch (error) {
-    return reply(false, error instanceof Error ? error.message : String(error));
-  }
-  if (message.action === "pause") {
-    const stopped = stopDeliveries(sessionId);
-    return reply(true, stopped > 0
-      ? `Paused. Stop requested for ${stopped} running turn${stopped === 1 ? "" : "s"}; process exit is not yet confirmed. Every new tool call from this chat is refused until you resume.`
-      : "Paused: every tool call from this chat is refused until you resume.");
-  }
-  if (!message.continue) return reply(true, "Resumed: tool calls are allowed again.");
-  const session = scanSessions().sessions.find((item) => item.sessionId === sessionId)
-    ?? scanSessionHistory().find((item) => item.sessionId === sessionId);
-  if (!session) {
-    return reply(true, "Resumed. This chat is not on this computer any more, so nothing was asked to continue.");
-  }
-  await reply(true, "Resumed and asked to continue.");
-  void deliverToSession(session, RESUME_PROMPT, DELIVERY_TIMEOUT_MS, [], { ignorePause: true })
-    .then((result) => {
-      if (!result.ok) {
-        process.stderr.write(`[monitor] resume of ${sessionId.slice(0, 8)} did not continue: ${result.error}\n`);
-      }
-    })
-    .catch(() => {})
-    .finally(afterContinue);
+/** Phone and local desktop actions share the same computer-enforced implementation. */
+export async function handleSessionControl(client: RelayClient, message: SessionControl,
+  afterContinue: () => void = () => {}): Promise<void> {
+  await controlTaskSession(message, async (ok, text) => {
+    await sendSessionPayload(client, { type: "session.control.result", sessionId: message.sessionId,
+      action: message.action, ok, message: text.slice(0, 1_000), createdAt: Date.now(),
+    }, message.sessionId, "phone", { ttlMs: 15 * 60_000 });
+  }, afterContinue);
 }
 
 export async function handleCompact(client: RelayClient, message: SessionCompact): Promise<void> {
-  const resultMessage = async (ok: boolean, text: string): Promise<void> => {
-    const payload = {
-        type: "session.compact.result",
-        sessionId: message.sessionId,
-        ok,
-        message: text,
-        createdAt: Date.now(),
-      } as const;
-    await sendSessionPayload(client, payload, message.sessionId, "phone", { ttlMs: 15 * 60_000 });
-  };
-
-  const session = scanSessions().sessions.find((item) => item.sessionId === message.sessionId);
-  if (!session) return resultMessage(false, "This task is no longer available on the computer.");
-  if (session.agent !== "codex") {
-    return resultMessage(false, "Claude Code does not expose a supported remote compaction API.");
-  }
-  if (session.state === "working") {
-    return resultMessage(false, "Wait for the active Codex turn to finish before compacting it.");
-  }
-
-  const result = await compactCodexSession(session.sessionId);
-  await resultMessage(
-    result.ok,
-    result.ok ? "Codex context compaction completed." : `Context compaction failed: ${result.error}`,
-  );
+  await compactTaskSession(message.sessionId, async (ok, text) => {
+    await sendSessionPayload(client, { type: "session.compact.result", sessionId: message.sessionId,
+      ok, message: text, createdAt: Date.now(),
+    }, message.sessionId, "phone", { ttlMs: 15 * 60_000 });
+  });
 }
 
 /**

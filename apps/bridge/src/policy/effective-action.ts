@@ -1,3 +1,5 @@
+import { localTransferContinuations } from "../task-transfer";
+import { localRoutingRequests } from '../task-routing/requests';
 import { isAbsolute, join, normalize, relative, sep } from "node:path";
 import { inspectRepository } from "../mesh/catalog";
 import { computerId } from "../mesh/identity/computer";
@@ -73,6 +75,12 @@ export async function evaluateEffectiveAction(
   options: EffectiveActionOptions = {},
 ): Promise<EffectiveActionDecision> {
   if (input.legacyDenyReason) return legacyDeny(input.legacyDenyReason);
+  const transferred = localTransferContinuations().blockReason(input.sessionId);
+  if (transferred) return legacyDeny(transferred);
+  try {
+    const routing = localRoutingRequests().blockReason(input.sessionId, input.toolName);
+    if (routing) return legacyDeny(routing);
+  } catch { return legacyDeny('The automatic transfer journal could not be checked. Restore its storage before continuing.'); }
   const env = options.env ?? process.env;
   const endpointId = options.endpointId ?? computerId(env);
   const restrictionProjectId = options.projectId

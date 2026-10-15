@@ -5,6 +5,7 @@
  * observations beside their session summary. Activity and telemetry therefore
  * do not trigger a second filesystem walk during the monitor publish cycle.
  */
+import { localTaskTransfers, localTransferContinuations } from "../task-transfer";
 import { recentProjectDecisions } from "../policy/decision-log";
 import type {
   ActivityEntry,
@@ -130,7 +131,8 @@ function pickWithReserve(
 function scanCatalog(maxFiles = MAX_FILES): { all: SessionInfo[]; tokensRecent: number; sourceLimited: boolean } {
   const scans = providerScans(maxFiles);
   return {
-    all: sortedUniqueSessions(scans),
+    all: localTaskTransfers().catalog(sortedUniqueSessions(scans)).map(session => ({ ...session,
+      transfer: localTransferContinuations().notice(session.sessionId) })),
     tokensRecent: scans.reduce((sum, scan) => sum + scan.tokensRecent, 0),
     sourceLimited: scans.some((scan) => scan.sourceLimited === true),
   };
@@ -165,7 +167,8 @@ export function scanSessionHistoryForPaging(maxFiles = MAX_FILES): { sessions: S
   };
 }
 
-function activityForSession(session: SessionInfo): ActivityEntry[] {
+function activityForSession(input: SessionInfo): ActivityEntry[] {
+  const session = localTaskTransfers().nativeSession(input);
   if (session.agent === "claude") return claudeActivity(session);
   if (session.agent === "codex") return codexActivity(session);
   if (session.agent === "cursor") return cursorActivity(session);

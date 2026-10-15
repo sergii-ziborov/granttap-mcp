@@ -41,3 +41,23 @@ test("desktop batches reject malformed manifests, missing files and unsafe file 
     assert.equal(read([{ ...file, path: join(tmpdir(), "0") }]), undefined);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
+
+test("the signed Mac sandbox can submit private photos without allowing arbitrary nested directories", async () => {
+  const { mkdirSync } = await import("node:fs");
+  const root = mkdtempSync(join(tmpdir(), "granttap-sandbox-"));
+  const temporary = join(root, "T"), home = join(root, "home");
+  const options = { platform: "darwin", temporary, home };
+  const allowed = [join(temporary, "com.ziborov.granttap"),
+    join(home, "Library", "Containers", "com.ziborov.granttap", "Data", "tmp")];
+  try {
+    for (const parent of [...allowed, join(temporary, "other-app")]) {
+      mkdirSync(parent, { recursive: true, mode: 0o700 });
+      const batch = mkdtempSync(join(parent, "granttap-message-"));
+      writeFileSync(join(batch, "0"), Buffer.from([1, 2, 3]), { mode: 0o600 });
+      const manifest = JSON.stringify([{ path: join(batch, "0"), name: "photo.png", mimeType: "image/png" }]);
+      const result = readDesktopAttachments(manifest, options);
+      if (allowed.includes(parent)) assert.equal(result?.[0]?.data, "AQID");
+      else assert.equal(result, undefined);
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

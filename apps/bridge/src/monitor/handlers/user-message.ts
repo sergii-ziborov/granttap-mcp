@@ -3,7 +3,7 @@ import { ATTACHMENT_MISSING_ERROR } from "../../../../../packages/protocol/schem
 import type { RelayClient } from "../../../../../packages/core/relay-client";
 import { takeAttachment } from "../../delivery/attachment-store";
 import { loadRuntimeConfig } from "../../config";
-import { mcpServersForSession, workspaceSkills } from "../../capabilities";
+import { deliveryRoutingError } from "../../capabilities";
 import {
   createClaudeSession,
   createCodexSession,
@@ -24,7 +24,7 @@ async function startNewAgentTask(input: {
   message: UserMessage;
   say: (text: string, sessionId?: string, wake?: boolean, kind?: "status" | "response") => Promise<unknown>;
   onProcessing?: () => Promise<void>;
-}): Promise<"rejected" | void> {
+}): Promise<"accepted" | "rejected"> {
   const { client, message, say } = input;
   const agent = message.agent ?? "codex";
   const displayName = {
@@ -32,7 +32,7 @@ async function startNewAgentTask(input: {
   }[agent];
   if (!loadRuntimeConfig().providerSettings[agent]) {
     await say(`${displayName} is disabled in GrantTap Settings.`, undefined, true);
-    return;
+    return "rejected";
   }
   const requestedCwd = message.cwd?.trim();
   if (requestedCwd) {
@@ -43,7 +43,7 @@ async function startNewAgentTask(input: {
     });
     if (!admitted.ok) {
       await say(admitted.detail, undefined, true);
-      return;
+      return "rejected";
     }
     if ("queued" in admitted && admitted.queued) {
       // The phone's durable outbox retries after reconnect. This monitor has
@@ -71,8 +71,10 @@ async function startNewAgentTask(input: {
   );
   if (result.ok) {
     await say(result.text, result.sessionId, true);
+    return "accepted";
   } else {
     await say(`Could not create a ${displayName} task: ${result.error}`, undefined, true);
+    return "rejected";
   }
 }
 
@@ -80,7 +82,7 @@ export async function handleUserMessage(
   client: RelayClient,
   message: UserMessage,
   onProcessing?: () => Promise<void>,
-): Promise<"accepted" | "rejected" | void> {
+): Promise<"accepted" | "rejected"> {
   const say = (text: string, sessionId?: string, wake = false, kind: "status" | "response" = "response") => {
     const payload = agentEventForUserMessage(message, text, sessionId, kind);
     const options = { ttlMs: 15 * 60_000, wake: wake || undefined };
@@ -103,37 +105,20 @@ export async function handleUserMessage(
   const target = scanSessions().sessions.find((session) => session.sessionId === message.sessionId);
   if (!target) {
     await say("This task is no longer available on the computer.", message.sessionId);
-    return;
+    return "rejected";
   }
 
   const settings = loadRuntimeConfig().providerSettings;
   if (target.agent in settings
     && settings[target.agent as keyof typeof settings] === false) {
     await say("This agent is disabled in GrantTap Settings.", message.sessionId, true);
-    return;
+    return "rejected";
   }
 
-  const runtime = loadRuntimeConfig();
-  const mcpServers = mcpServersForSession(
-    target,
-    runtime.sessionMcpDisabled[target.sessionId] ?? [],
-  );
-  if (message.preferredMcp && !mcpServers.some((server) =>
-    server.name === message.preferredMcp && server.allowed)) {
-    await say("The selected MCP server is not allowed for this task.", target.sessionId);
-    return;
-  }
-  const skills = workspaceSkills(target.cwd);
-  if (message.skill && !skills.some((skill) => skill.name === message.skill)) {
-    await say("The selected project skill is no longer available in this task's folder.", target.sessionId);
-    return;
-  }
-  if (
-    message.skill &&
-    (runtime.sessionSkillsDisabled[target.sessionId] ?? []).includes(message.skill)
-  ) {
-    await say("The selected project skill is disabled for this task.", target.sessionId);
-    return;
+  const routingError = deliveryRoutingError(target, message);
+  if (routingError) {
+    await say(routingError, target.sessionId);
+    return "rejected";
   }
 
   // No "sent, waiting" line from a middleman: the delivery receipt already
@@ -163,7 +148,9 @@ export async function handleUserMessage(
   }
   if (result.ok) {
     await say(result.text, result.sessionId ?? target.sessionId, true);
+    return "accepted";
   } else {
     await say(`Could not deliver the message: ${result.error}`, target.sessionId, true);
+    return "rejected";
   }
 }

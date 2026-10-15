@@ -6,8 +6,9 @@
  * catalog, snapshots, and inbound routing.
  */
 import type { RelayClient } from "../../../../../packages/core/relay-client";
-import type { MeshEvent, MeshHandoffPrepare, TaskCapsule } from "../../../../../packages/protocol/schema";
-import { handoffReceipt } from "../handoff";
+import type { MeshEvent, MeshHandoffPrepare, TaskCapsule, SessionInfo } from "../../../../../packages/protocol/schema";
+import { handoffReceipt, capsuleHash } from "../handoff";
+import { localTaskTransfers, localTransferContinuations, transferDigest } from "../../task-transfer";
 import type { MeshRuntimeDependencies } from "./dependencies";
 
 function capsulePrompt(capsule: TaskCapsule): string {
@@ -132,23 +133,42 @@ async function acceptHandoff(
       + "or hand off from a commit this computer already has.",
     );
   }
-  const worktree = deps.worktree(
-    repository,
-    event.taskId,
-    capsule.targetProvider,
-    revision,
-  );
+  const transfers = capsule.launch === "on_message" ? (deps.transfers ?? localTaskTransfers)() : undefined;
+  const previous = transfers?.forEvent(event.eventId);
+  if (previous && (previous.projectId !== event.projectId
+    || previous.sourceSessionId !== event.sourceSessionId
+    || capsuleHash(previous.capsule) !== capsuleHash(capsule))) {
+    return rejectHandoff(deps, client, event, "This transfer id already names different work.");
+  }
+  if (transfers && !previous && (!event.payload.transferContext || !capsule.title
+    || transferDigest(event.payload.transferContext) !== capsule.contextHash)) {
+    return rejectHandoff(deps, client, event, "The complete transfer context could not be confirmed.");
+  }
+  const worktree = previous ? { path: previous.workspace, branch: previous.branch }
+    : transfers ? deps.worktree(repository, event.taskId, capsule.targetProvider, revision, event.eventId)
+      : deps.worktree(repository, event.taskId, capsule.targetProvider, revision);
   if (!worktree) return rejectHandoff(deps, client, event, "A separate handoff worktree could not be created.");
-  const result = await deps.start(
-    capsule.targetProvider, capsulePrompt(capsule), worktree.path, capsule.targetModel,
-  );
-  if (!result.ok || !result.sessionId) {
-    const reason = result.ok ? "The target agent did not create a session." : result.error;
-    return rejectHandoff(deps, client, event, reason);
+  let targetSessionId: string;
+  if (transfers) {
+    try {
+      targetSessionId = previous?.sessionId ?? transfers.prepare({ eventId: event.eventId,
+        projectId: event.projectId, sourceSessionId: event.sourceSessionId,
+        title: capsule.title!, capsule, workspace: worktree.path, branch: worktree.branch,
+        context: event.payload.transferContext!, acceptedAt: deps.now() }).sessionId;
+    } catch {
+      return rejectHandoff(deps, client, event, "The complete transfer could not be saved on this computer.");
+    }
+  } else {
+    const result = await deps.start(capsule.targetProvider, capsulePrompt(capsule), worktree.path, capsule.targetModel);
+    if (!result.ok || !result.sessionId) {
+      const reason = result.ok ? "The target agent did not create a session." : result.error;
+      return rejectHandoff(deps, client, event, reason);
+    }
+    targetSessionId = result.sessionId;
   }
   store.linkExecution({
     taskId: event.taskId,
-    sessionId: result.sessionId,
+    sessionId: targetSessionId,
     provider: capsule.targetProvider,
     computerId: deps.computer(),
     workspace: worktree.path,
@@ -156,10 +176,18 @@ async function acceptHandoff(
     worktree: worktree.path,
     startedAt: deps.now(),
   });
-  const receipt = handoffReceipt(capsule, event.sourceSessionId, result.sessionId, deps.now());
+  const receipt = handoffReceipt(capsule, event.sourceSessionId, targetSessionId, previous?.acceptedAt ?? deps.now());
+  if (transfers) {
+    receipt.prepared = true;
+    if (capsule.sourceComputer === deps.computer()) (deps.continuations ?? localTransferContinuations)().record({
+      sourceSessionId: receipt.sourceSessionId, targetSessionId: receipt.targetSessionId,
+      taskId: receipt.taskId, projectId: event.projectId, capsuleHash: receipt.capsuleHash,
+      acceptedAt: receipt.acceptedAt, queuedAt: event.createdAt,
+    }, (deps.transfers ?? localTaskTransfers)().nativeSession({ sessionId: receipt.sourceSessionId } as SessionInfo).sessionId);
+  }
   store.recordReceipt(receipt);
   const accepted = responseEvent({
-    deps, source: event, sourceSessionId: result.sessionId, eventType: "HANDOFF_ACCEPTED",
+    deps, source: event, sourceSessionId: targetSessionId, eventType: "HANDOFF_ACCEPTED",
     payload: { receipt },
   });
   store.acceptEvent(accepted);

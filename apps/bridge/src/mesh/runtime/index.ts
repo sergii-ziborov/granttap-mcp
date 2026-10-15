@@ -10,6 +10,7 @@ import type {
   SessionInfo,
   TaskCapsule,
 } from "../../../../../packages/protocol/schema";
+import { captureTransferContext, localTransferContinuations, localTaskTransfers } from "../../task-transfer";
 import { configDir } from "../../config";
 import {
   createClaudeSession,
@@ -20,7 +21,7 @@ import {
 } from "../../reply";
 import { isProviderEnabled } from "../../config/runtime";
 import { sendMeshPayload } from "../../host/session-keys";
-import { linkSessionsToProjects, workingTreeState } from "../catalog";
+import { inspectRepository, linkSessionsToProjects, workingTreeState } from "../catalog";
 import { catalogFromEndpoint } from "../catalog/models";
 import { saveProjectCapabilityRequest } from "../catalog/project/requests";
 import { computerId } from "../identity/computer";
@@ -36,6 +37,7 @@ import { createHandoffWorktree, repositoryHasCommit } from "./worktree";
 import { fetchRevision, pushBranch } from "../local-remote/remote";
 import { projectSessionCapabilityInventory } from "./capabilities";
 import { createMeshSessionCatalog } from "./catalog/session-catalog";
+import { capturePreparedHandoff, preparedHandoffMetadata } from './prepared-transfer';
 
 export type { MeshRuntimeDependencies };
 
@@ -56,6 +58,14 @@ const defaultDependencies: MeshRuntimeDependencies = {
   now: Date.now,
   eventId: randomUUID,
   providerEnabled: isProviderEnabled,
+  sourceCaptureCurrent: (session, capsule) => {
+    const cwd = session.worktree ?? session.cwd;
+    try { return Boolean(cwd && workingTreeState(cwd) === 'clean'
+      && inspectRepository(cwd).revision === (capsule.latestCommit ?? capsule.baseSha)); }
+    catch { return false; }
+  },
+  dispatchPreparedTransfer: async (event, session, confirm) =>
+    (await import('../../task-network/runtime')).submitNetworkTransfer(event, session, confirm),
   start: async (provider, prompt, cwd, model) => {
     if (provider === "claude") return createClaudeSession(prompt, cwd, 240_000, [], model);
     if (provider === "codex") return createCodexSession(prompt, cwd, 240_000, [], model);
@@ -67,12 +77,13 @@ const defaultDependencies: MeshRuntimeDependencies = {
   push: pushBranch,
   fetch: fetchRevision,
   send: (client, payload, options) => sendMeshPayload(client, payload, "phone", options),
-  worktree: (repository, taskId, provider, revision) => createHandoffWorktree({
+  worktree: (repository, taskId, provider, revision, operationId) => createHandoffWorktree({
     repository,
     worktreeRoot: join(configDir(), "worktrees"),
     taskId,
     provider,
     baseSha: revision,
+    operationId,
   }),
 };
 
@@ -89,6 +100,10 @@ async function prepareHandoff(
   if (!session || session.projectId !== request.projectId || session.taskId !== request.taskId) {
     return false;
   }
+  if (request.prepareOnly && session.state === "working") {
+    await blockHandoff(client, request, "Pause or finish the current turn before transferring this Task.");
+    return false;
+  }
   const cwd = session.worktree ?? session.cwd;
   const made = request.checkpoint && cwd && workingTreeState(cwd) === "dirty"
     ? createCheckpoint(cwd, request.taskId, session.title ?? request.taskId, request.createdAt)
@@ -100,7 +115,7 @@ async function prepareHandoff(
       && (other.worktree ?? other.cwd) === cwd)
     : false;
   const checkpoint = made && shared ? { ...made, status: "requires_review" as const } : made;
-  const capsule = buildTaskCapsule(deps.store(), session, request, deps.computer(), checkpoint);
+  let capsule = buildTaskCapsule(deps.store(), session, request, deps.computer(), checkpoint);
   const readiness = handoffReadiness({
     capsule,
     targetProviderEnabled: request.targetProvider === "grok_bot"
@@ -119,6 +134,19 @@ async function prepareHandoff(
     return false;
   }
   if (!capsule) return false;
+  let transferContext: string | undefined;
+  let confirmContext: (() => Promise<boolean>) | undefined;
+  if (request.prepareOnly) {
+    try {
+      const captured = await capturePreparedHandoff(deps, session, capsule);
+      transferContext = captured.transferContext;
+      capsule = captured.capsule;
+      confirmContext = captured.confirm;
+    } catch (error) {
+      await blockHandoff(client, request, error instanceof Error ? error.message : "The complete transfer context is unavailable.");
+      return false;
+    }
+  }
   const local = request.targetComputer === deps.computer();
   if (request.push && !local && cwd) {
     const pushed = deps.push(cwd, capsule.branch);
@@ -138,10 +166,22 @@ async function prepareHandoff(
     eventType: "HANDOFF_REQUEST",
     createdAt,
     expiresAt: createdAt + 60 * 60_000,
-    payload: { capsule },
+    payload: { capsule, transferContext },
   };
+  if (request.prepareOnly && !local && deps.dispatchPreparedTransfer) {
+    try {
+      if (await deps.dispatchPreparedTransfer(event, session, confirmContext!)) {
+        await deps.send(client, preparedHandoffMetadata(event), { ttlMs: 60 * 60_000, wake: true }).catch(() => {});
+        return true;
+      }
+      await blockHandoff(client, request, 'Project computer transfer is not configured for this destination. Connect its Project in GrantTap.');
+    } catch (error) {
+      await blockHandoff(client, request, error instanceof Error ? error.message : 'The transfer could not be saved.');
+    }
+    return false;
+  }
   deps.store().acceptEvent(event);
-  await deps.send(client, event, { ttlMs: 60 * 60_000, wake: true });
+  await deps.send(client, request.prepareOnly ? preparedHandoffMetadata(event) : event, { ttlMs: 60 * 60_000, wake: true });
   if (local) await acceptHandoff(client, event);
   return true;
 }
@@ -199,8 +239,20 @@ export function createMeshRuntime(deps: MeshRuntimeDependencies) {
         return true;
       }
       const fresh = store.acceptEvent(payload);
+      if (payload.eventType === "HANDOFF_REQUEST" && origin === "relay"
+        && (fresh || payload.payload.capsule?.launch === "on_message")) await acceptHandoff(client, payload);
       if (!fresh) return true;
-      if (payload.eventType === "HANDOFF_REQUEST" && origin === "relay") await acceptHandoff(client, payload);
+      if (payload.eventType === "HANDOFF_ACCEPTED" && payload.payload.receipt?.prepared) {
+        const receipt = payload.payload.receipt;
+        const request = store.eventsForProject(payload.projectId).find(event =>
+          event.eventType === "HANDOFF_REQUEST" && event.sourceSessionId === receipt.sourceSessionId
+          && event.payload.capsule?.sourceComputer === deps.computer());
+        if (request) (deps.continuations ?? localTransferContinuations)().record({
+          sourceSessionId: receipt.sourceSessionId, targetSessionId: receipt.targetSessionId,
+          projectId: payload.projectId, taskId: receipt.taskId, capsuleHash: receipt.capsuleHash,
+          acceptedAt: receipt.acceptedAt, queuedAt: request.createdAt,
+        }, (deps.transfers ?? localTaskTransfers)().nativeSession({ sessionId: receipt.sourceSessionId } as SessionInfo).sessionId);
+      }
       if (payload.eventType === "AGENT_QUESTION") await answerAgentQuestion(client, payload);
       return true;
     },
@@ -211,7 +263,12 @@ export function createMeshRuntime(deps: MeshRuntimeDependencies) {
   };
 }
 
-const defaultRuntime = createMeshRuntime(defaultDependencies);
+/** Local adapters may replace a scoped transport without rebuilding runtime dependencies. */
+export function createLocalMeshRuntime(overrides: Partial<MeshRuntimeDependencies> = {}) {
+  return createMeshRuntime({ ...defaultDependencies, ...overrides });
+}
+
+const defaultRuntime = createLocalMeshRuntime();
 
 export function meshCatalog(sessions: SessionInfo[]): SessionInfo[] {
   return defaultRuntime.catalog(sessions);

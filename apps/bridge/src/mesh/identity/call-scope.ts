@@ -49,7 +49,7 @@ function canonical(value: unknown): unknown {
 export function grantTapToolName(rawToolName: unknown): string | undefined {
   const raw = String(rawToolName ?? "").trim();
   const tool = raw.includes("__") ? raw.split("__").at(-1)! : raw;
-  return ["notify", "connect", "ask", "ask_yes_no"].includes(tool) ? tool : undefined;
+  return ["notify", "connect", "ask", "ask_yes_no", "offload_task"].includes(tool) ? tool : undefined;
 }
 
 export function meshCallKey(tool: string, args: unknown): string {

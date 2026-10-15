@@ -13,6 +13,10 @@ its device-only Keychain and never shares it with a provider.
 The fallback consent page is styled and localized by the loopback service;
 the stylesheet has no script or external dependency. A Mac app with a verified
 passkey account uses `/desktop/account/authorize` instead of opening that page.
+The consent CSP permits the `granttap:` form redirect so Chrome can return the
+one-time code to the native app. A host-only CSP source does not match Chrome's
+custom-scheme callback. The service still fixes the exact callback host, and
+the native client validates that host, state and PKCE before accepting a grant.
 
 `/desktop/invoke` requires that grant before parsing a bounded request. It can
 invoke only the existing allowlisted desktop operations; inputs are still

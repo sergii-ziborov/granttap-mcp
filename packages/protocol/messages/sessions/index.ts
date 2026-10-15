@@ -1,4 +1,5 @@
 import { AgentIntegrationStatus } from "../provider-hooks";
+import { TaskTransferNotice } from "../../task-transfer";
 import { z } from "zod";
 import { CodingAgent } from "../primitives";
 import { ActivityEntry, McpServerInfo, SkillInfo } from "../capabilities";
@@ -64,6 +65,7 @@ export const SessionSealed = z.object({
 export type SessionSealed = z.infer<typeof SessionSealed>;
 
 export const SessionInfo = z.object({
+  transfer: TaskTransferNotice.optional(),
   sessionId: z.string(),
   agent: AgentId,
   projectId: z.string().max(128).optional(),
@@ -74,6 +76,8 @@ export const SessionInfo = z.object({
   branch: z.string().optional(),
   worktree: z.string().max(1_024).optional(),
   model: z.string().optional(),
+  /** Explicit native turn setting, absent when the provider has not reported it. */
+  effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max', 'ultra']).optional(),
   summary: z.string().optional(),
   accessLevel: AgentAccess.optional(),
   state: SessionState,

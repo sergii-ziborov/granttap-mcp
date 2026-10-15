@@ -12,6 +12,9 @@ export const TaskCapsule = z.object({
   taskId: Identifier,
   goal: Detail,
   currentStatus: Detail,
+  title: z.string().min(1).max(160).optional(),
+  launch: z.literal("on_message").optional(),
+  contextHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   sourceProvider: MeshExecutionProvider,
   sourceActorId: Identifier.optional(),
   sourceComputer: Identifier,
@@ -57,6 +60,7 @@ export const TaskCapsule = z.object({
 export type TaskCapsule = z.infer<typeof TaskCapsule>;
 
 export const HandoffReceipt = z.object({
+  prepared: z.boolean().optional(),
   sourceSessionId: Identifier,
   targetSessionId: Identifier,
   taskId: Identifier,
@@ -81,6 +85,7 @@ export const MeshEventPayload = z.object({
   questionEventId: Identifier.optional(),
   answer: Detail.optional(),
   capsule: TaskCapsule.optional(),
+  transferContext: z.string().max(16_000_000).optional(),
   receipt: HandoffReceipt.optional(),
   reason: Detail.optional(),
   claim: ResourceClaim.optional(),
@@ -201,6 +206,7 @@ export const MeshClaimReleaseResult = z.object({
 export type MeshClaimReleaseResult = z.infer<typeof MeshClaimReleaseResult>;
 
 export const MeshHandoffPrepare = z.object({
+  prepareOnly: z.boolean().optional(),
   type: z.literal("mesh.handoff.prepare"),
   sessionId: Identifier,
   projectId: Identifier,

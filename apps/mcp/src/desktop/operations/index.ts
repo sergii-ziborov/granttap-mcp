@@ -1,3 +1,8 @@
+import { desktopTransferContinue } from "../task-transfer";
+import { desktopTaskControl } from "../task-control";
+import { desktopTaskPreferences } from "../task-control/preferences";
+import { desktopProjectTransport } from '../project-transport';
+import { desktopTaskQueue } from '../task-queue';
 import { ProviderStorage } from "../provider-storage";
 import { desktopHookTrust } from "../provider-hooks";
 import { desktopProjectAutoAccept } from "../policy/auto-accept";
@@ -30,6 +35,8 @@ export function desktopReadOperation(input: {
   network?: DesktopNetworkController;
 }): Promise<unknown> {
   const { operation, queryInput, storePath, engine, activity, enrichment } = input;
+  if (operation === "desktop.task_control") return desktopTaskControl(queryInput, { storePath });
+  if (operation === "desktop.task_preferences") return Promise.resolve(desktopTaskPreferences(queryInput, { storePath }));
   if (operation === "desktop.provider_storage") return providerStorage.read(queryInput);
   if (["desktop.network_status", "desktop.network_configure", "desktop.own_relay"].includes(operation)) {
     return input.network?.read(operation, queryInput) ?? Promise.resolve(undefined);
@@ -52,10 +59,14 @@ export function desktopReadOperation(input: {
     return Promise.resolve(desktopMeshSnapshots(storePath));
   }
   if (operation === "desktop.live_catalog") return activity.liveCatalog(storePath);
+  if (operation === "desktop.task_capabilities") return activity.capabilities(queryInput, storePath);
   if (operation === "desktop.machine_load") return desktopMachineLoad();
   if (operation === "desktop.task_activity") return activity.read(queryInput, storePath);
   if (operation === "desktop.task_image") return activity.image(queryInput, storePath);
   if (operation === "desktop.task_workspace") return Promise.resolve(desktopTaskWorkspace(queryInput, storePath));
+  if (operation === "desktop.transfer_continue") return Promise.resolve(desktopTransferContinue(queryInput, { storePath }));
+  if (operation === "desktop.task_queue") return desktopTaskQueue(queryInput, { storePath });
+  if (operation === "desktop.project_transport") return desktopProjectTransport(queryInput);
   if (operation === "desktop.task_send") return desktopTaskSend(queryInput, storePath);
   if (operation === "desktop.task_handoff") return desktopTaskHandoff(queryInput, storePath);
   if (operation === "desktop.task_create") return desktopTaskCreate(queryInput, storePath);
