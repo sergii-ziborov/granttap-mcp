@@ -1,5 +1,5 @@
 import type { AdvertisedModel, EndpointModelCatalog, MeshProvider } from "../../../../../packages/protocol/schema";
-import { readCodexModelCatalog } from "../../provider-model-catalog";
+import { readProviderModelCatalog } from "../../provider-model-catalog";
 
 const PROVIDERS = new Set(["claude", "codex", "cursor", "grok"]);
 
@@ -54,9 +54,10 @@ export function catalogFromEndpoint(
   endpointId: string, sessions: Parameters<typeof catalogFromSessions>[1], now = Date.now(),
 ): EndpointModelCatalog {
   const observed = catalogFromSessions(endpointId, sessions, now);
-  const native = readCodexModelCatalog(endpointId, { now });
+  const native = readProviderModelCatalog(endpointId);
   const models = [...native.models, ...observed.models.filter(item => native.stale || item.provider !== "codex")];
-  return { endpointId, observedAt: now, models: models.slice(0, 64),
+  return { endpointId, observedAt: now, models: models.slice(0, 256),
+    accountUsage: native.accountUsage,
     ...(native.stale ? { stale: true, reason: native.reason } : {}),
   };
 }

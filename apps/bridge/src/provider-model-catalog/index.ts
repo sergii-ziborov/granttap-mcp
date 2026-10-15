@@ -3,6 +3,10 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AdvertisedModel, EndpointModelCatalog } from "../../../../packages/protocol/schema";
 
+import { readClaudeUsage } from "../provider-account-status/claude-statusline";
+import { cachedCLIModels } from "./cli-models";
+import { cachedProviderAccount } from "../provider-account-status";
+
 const MAX_BYTES = 2_000_000;
 const MAX_AGE = 24 * 60 * 60_000;
 const MODEL_ID = /^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,159}$/;
@@ -36,7 +40,7 @@ function readCache(path: string): Record<string, unknown> {
 }
 
 /** Project only picker metadata from Codex's account-scoped cache, never prompts or identity. */
-export function readCodexModelCatalog(
+function readCachedCodexModels(
   endpointId: string, options: { path?: string; now?: number; env?: NodeJS.ProcessEnv } = {},
 ): EndpointModelCatalog {
   const now = options.now ?? Date.now();
@@ -60,4 +64,24 @@ export function readCodexModelCatalog(
       models: [...models.values()].sort((a, b) => (a.priority ?? 10_000) - (b.priority ?? 10_000)).slice(0, 64),
     };
   } catch { return missing; }
+}
+
+/** Fresh native account metadata takes precedence over an expired on-disk cache. */
+export function readCodexModelCatalog(
+  endpointId: string, options: Parameters<typeof readCachedCodexModels>[1] = {},
+): EndpointModelCatalog {
+  const cached = readCachedCodexModels(endpointId, options);
+  if (options.path) return cached;
+  const live = cachedProviderAccount(endpointId, options.env);
+  if (!live) return cached;
+  return live.models.length ? live : { ...cached, accountUsage: live.accountUsage };
+}
+
+/** A shared endpoint catalog for all four existing coding providers. */
+export function readProviderModelCatalog(endpointId: string): EndpointModelCatalog {
+  const codex = readCodexModelCatalog(endpointId);
+  const cli = cachedCLIModels(endpointId);
+  return { ...codex, observedAt: Math.max(codex.observedAt, ...cli.map(row => row.observedAt)),
+    accountUsage: [...(codex.accountUsage ?? []), ...readClaudeUsage()],
+    stale: codex.stale === true && cli.length === 0, models: [...codex.models, ...cli].slice(0, 256) };
 }

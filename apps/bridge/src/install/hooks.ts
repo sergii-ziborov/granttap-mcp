@@ -1,6 +1,7 @@
 /** Install the GrantTap-owned hooks without changing unrelated handlers.
  * Configuration alone does not establish Codex hook trust.
  */
+import { ensureClaudeUsageStatusLine } from "../provider-account-status/claude-statusline";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -61,7 +62,7 @@ export function installClaudeHook(): InstallResult {
   // The prompt hook rides along with the approval hook: what the chat could
   // not know by itself — background runs in it, the Mesh around it — is added
   // to each prompt. It never blocks; anything wrong, and it adds nothing.
-  const promptHookChanged = ensureClaudePromptHook(settings);
+  const promptHookChanged = [ensureClaudePromptHook(settings), ensureClaudeUsageStatusLine(settings, hookCommand("claude-statusline"))].some(Boolean);
   const entries: any[] = (((settings.hooks ??= {}).PreToolUse ??= []) as any[]);
   const currentCommand = hookCommand("claude");
   const presentEntry = entries.find((entry) =>

@@ -15,7 +15,8 @@ test("Mac list and selected Mesh carry fresh provider model metadata without a s
   resetLocalMeshStore();
   try {
     writeFileSync(join(directory, "project-mesh.json"), JSON.stringify({ version: 1,
-      projects: [{ projectId: "picker-mesh", name: "Picker", canonicalRepositoryId: "repo:picker", createdAt: 1 }], tasks: [], executions: [],
+      projects: [{ projectId: "picker-mesh", name: "Picker", canonicalRepositoryId: "repo:picker", createdAt: 1 },
+        { projectId: "second", name: "Second", canonicalRepositoryId: "repo:second", createdAt: 1 }], tasks: [], executions: [],
     }));
     const path = join(directory, "models_cache.json");
     const save = (id: string, time = Date.now()) => writeFileSync(path, JSON.stringify({
@@ -26,6 +27,8 @@ test("Mac list and selected Mesh carry fresh provider model metadata without a s
     }));
     save("gpt-6-sol");
     const list = desktopMeshSnapshots().snapshots;
+    assert.equal(list.length, 2);
+    assert.equal(list.filter(row => row.modelCatalog).length, 1, "Shared account metadata is sent once per bounded Mac catalog.");
     const selected = await desktopSelectedMesh("picker-mesh");
     for (const snapshot of [list[0], selected]) {
       assert.ok(snapshot);

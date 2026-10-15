@@ -84,7 +84,7 @@ export function desktopMeshSnapshots(storePath = join(configDir(), "project-mesh
     operation: "desktop.mesh_snapshots" as const,
     snapshots: (desktopWorkspace(storePath)?.projects ?? []).flatMap((project) =>
       desktopFixtureSnapshot({ project_id: project.project_id }, storePath) ?? [])
-      .map((snapshot) => withDesktopModels(snapshot, models)),
+      .map((snapshot, index) => withDesktopModels(snapshot, models, index === 0)),
   };
 }
 

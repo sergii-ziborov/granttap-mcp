@@ -59,11 +59,11 @@ if (command === "mcp") {
 } else if (command === "internal" && argument === "monitor") {
   entry = join(root, "apps", "bridge", "src", "bin", "runtime", "monitor.ts");
 } else if (command === "internal" && argument === "hook" && [
-  "claude", "claude-prompt", "codex", "codex-policy", "cursor", "cursor-after", "cursor-mcp",
+  "claude", "claude-prompt", "claude-statusline", "codex", "codex-policy", "cursor", "cursor-after", "cursor-mcp",
 ].includes(commandArgs[1])) {
   const route = commandArgs[1];
   const hookDir = route === "cursor-mcp" ? "runtime" : "hooks";
-  const hookEntry = route === "codex-policy"
+  const hookEntry = route === "claude-statusline" ? "statusline/claude-statusline-hook.ts" : route === "codex-policy"
     ? "codex-policy-hook.ts"
     : route === "cursor-after"
       ? "cursor-after-shell.ts"

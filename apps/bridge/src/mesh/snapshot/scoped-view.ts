@@ -116,7 +116,7 @@ export function scopedMeshView(
     skills: snapshot.skills ?? [],
     mcpServers: snapshot.mcpServers ?? [],
     capabilityRequests: snapshot.capabilityRequests ?? [],
-    modelCatalog: snapshot.modelCatalog ?? [],
+    modelCatalog: snapshot.modelCatalog?.map(({ accountUsage: _usage, ...catalog }) => catalog) ?? [],
     executionPolicy: snapshot.execution,
     restrictions: snapshot.restrictions,
     environment: snapshot.environment,

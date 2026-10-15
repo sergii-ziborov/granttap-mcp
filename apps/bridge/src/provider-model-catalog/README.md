@@ -20,3 +20,16 @@ CLI aliases as aliases, whose resolved versions remain the provider's choice.
 Behavior tests: [`tests/catalog.test.ts`](tests/catalog.test.ts).
 
 Apache License 2.0. See [LICENSE](../../../../LICENSE).
+
+## All four providers
+
+`readProviderModelCatalog` is the shared endpoint entry point. Fresh Codex
+app-server picker metadata takes precedence over its disk cache. Cursor's native
+`models` and Grok's native `models` commands supply exact account model IDs;
+listing runs without a prompt, and failed/signed-out catalogs advertise nothing.
+The wire allows up to 256 models so Cursor's parameter variants are not silently
+cut to 64. Claude's supported CLI aliases remain aliases rather than a frozen
+list of version numbers. Client model choices use the existing resume flags.
+
+Account percentages travel separately as optional `accountUsage` observations.
+See [provider account status](../provider-account-status/README.md).

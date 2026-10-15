@@ -49,6 +49,7 @@ export { isCursorHelperNode, resolveMonitorNodeBin };
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..");
 
 export type HookRoute =
+  | "claude-statusline"
   | "claude"
   | "claude-prompt"
   | "codex"
