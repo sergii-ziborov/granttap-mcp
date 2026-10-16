@@ -21,6 +21,7 @@ import {
 } from "node:fs";
 import { resolveClaudeBinary } from "../providers/claude-bin";
 import { resolveCodexBinary } from "../providers/codex-bin";
+import { resolveGrokBinary } from "../providers/grok-bin";
 import { describeCommand, inspectTools, updatingTools } from "../tools/updater";
 import { resolveCursorAgentBin } from "../reply/process/cursor-agent-bin";
 import { homedir } from "node:os";
@@ -205,7 +206,7 @@ export function inspectAgentIntegrations(): AgentIntegrationStatus[] {
   const codex = resolveCodexBinary();
   const claude = resolveClaudeBinary().path;
   const cursor = process.env.GRANTTAP_CURSOR_AGENT_BIN ?? resolveCursorAgentBin();
-  const grok = process.env.GRANTTAP_GROK_BIN ?? "grok";
+  const grok = resolveGrokBinary();
   const cursorStatus = inspectCursorIntegration();
   const tools = new Map(inspectTools().map((tool) => [tool.agent, tool]));
   const updating = new Set(updatingTools());
