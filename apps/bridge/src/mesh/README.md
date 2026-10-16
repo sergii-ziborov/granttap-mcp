@@ -26,12 +26,16 @@ tool so the public MCP tool allowlist remains exactly `connect`, `notify`,
 CLI-only.
 
 `readiness.ts` decides whether a handoff may leave at all. A capsule transfers
-committed facts, so uncommitted work blocks the handoff instead of silently
-staying behind, and the destination refuses just as explicitly when it lacks the
-named commit or when the capsule's resource claims overlap another execution.
-"Uncommitted" is read from `git status` including untracked files, because an
-untracked file is work no commit would carry. A probe that cannot answer
-publishes `unknown`, and only an explicit `clean` releases the handoff.
+committed facts, so uncommitted work stays on the source computer: that is the
+person's call, made with a warning rather than refused, and the capsule tells
+the next agent which changes stayed where. The destination refuses explicitly
+when it lacks the named commit or when the capsule's resource claims overlap
+another execution. "Uncommitted" is read from `git status` including untracked
+files, because an untracked file is work no commit would carry. A probe that
+cannot answer publishes `unknown`, which is warned about the same way, never
+taken for `clean`. A prepared transfer to another computer is confirmed only
+while the source checkout is still on the same commit with the same uncommitted
+changes it had when the person agreed to the move.
 `remote.ts` is the one place a remote is touched: a push of the branch the
 capsule names when the phone asked for it, never forced, and a fetch of that
 branch on a destination that lacks the commit. A handoff whose target is this

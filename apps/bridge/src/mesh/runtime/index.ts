@@ -21,7 +21,7 @@ import {
 } from "../../reply";
 import { isProviderEnabled } from "../../config/runtime";
 import { sendMeshPayload } from "../../host/session-keys";
-import { inspectRepository, linkSessionsToProjects, workingTreeState } from "../catalog";
+import { linkSessionsToProjects, workingTreeState } from "../catalog";
 import { catalogFromEndpoint } from "../catalog/models";
 import { saveProjectCapabilityRequest } from "../catalog/project/requests";
 import { computerId } from "../identity/computer";
@@ -38,6 +38,7 @@ import { fetchRevision, pushBranch } from "../local-remote/remote";
 import { projectSessionCapabilityInventory } from "./capabilities";
 import { createMeshSessionCatalog } from "./catalog/session-catalog";
 import { capturePreparedHandoff, preparedHandoffMetadata } from './prepared-transfer';
+import { sourceCheckoutUnchanged } from './prepared-transfer/source-checkout';
 
 export type { MeshRuntimeDependencies };
 
@@ -58,12 +59,7 @@ const defaultDependencies: MeshRuntimeDependencies = {
   now: Date.now,
   eventId: randomUUID,
   providerEnabled: isProviderEnabled,
-  sourceCaptureCurrent: (session, capsule) => {
-    const cwd = session.worktree ?? session.cwd;
-    try { return Boolean(cwd && workingTreeState(cwd) === 'clean'
-      && inspectRepository(cwd).revision === (capsule.latestCommit ?? capsule.baseSha)); }
-    catch { return false; }
-  },
+  sourceCaptureCurrent: (session, capsule) => sourceCheckoutUnchanged(session.worktree ?? session.cwd, capsule),
   dispatchPreparedTransfer: async (event, session, confirm) =>
     (await import('../../task-network/runtime')).submitNetworkTransfer(event, session, confirm),
   start: async (provider, prompt, cwd, model) => {

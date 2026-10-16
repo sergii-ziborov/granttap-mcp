@@ -9,7 +9,7 @@ import type {
   MeshEvent, MeshSnapshot, SessionInfo, TaskCapsule,
 } from "../../packages/protocol/schema";
 import { hasUncommittedWork } from "../../apps/bridge/src/mesh/catalog";
-import { handoffReadiness, UNCOMMITTED_WORK_REASON } from "../../apps/bridge/src/mesh/tasks/readiness";
+import { handoffReadiness } from "../../apps/bridge/src/mesh/tasks/readiness";
 import { createMeshRuntime, type MeshRuntimeDependencies } from "../../apps/bridge/src/mesh/runtime";
 import { MeshStore } from "../../apps/bridge/src/mesh/store";
 import { repositoryHasCommit } from "../../apps/bridge/src/mesh/runtime/worktree";
@@ -60,7 +60,7 @@ function sourceSession(cwd: string): SessionInfo {
   };
 }
 
-test("a handoff that would strand uncommitted work is refused, not narrowed", async () => {
+test("uncommitted work is left behind with a warning, not refused", async () => {
   const repo = await gitRepository(true);
   assert.equal(hasUncommittedWork(repo), true);
   const run = await harness();
@@ -73,15 +73,14 @@ test("a handoff that would strand uncommitted work is refused, not narrowed", as
     projectId: source.projectId!, taskId: source.taskId!,
     targetProvider: "codex", targetComputer: "Workstation", createdAt: now,
   });
-  assert.equal(prepared, false);
-  const blocked = run.sent[0] as MeshEvent;
-  assert.equal(blocked.eventType, "TASK_BLOCKED");
-  assert.equal(blocked.payload.needsUser, true);
-  assert.equal(blocked.payload.reason, UNCOMMITTED_WORK_REASON);
-  assert.equal(
-    run.sent.some((item) => (item as MeshEvent).eventType === "HANDOFF_REQUEST"), false,
-    "no capsule leaves the computer while work is uncommitted",
-  );
+  assert.equal(prepared, true);
+  assert.equal(run.sent.some((item) => (item as MeshEvent).eventType === "TASK_BLOCKED"), false);
+  const request = run.sent.find((item) => (item as MeshEvent).eventType === "HANDOFF_REQUEST") as MeshEvent;
+  const capsule = request.payload.capsule!;
+  assert.equal(capsule.workingTree, "dirty");
+  assert.match(capsule.dirtyDiffHash ?? "", /^[0-9a-f]{64}$/);
+  assert.match(capsule.remainingWork.join(" "), /Uncommitted changes to README\.md stayed on Workstation/,
+    "the next agent learns what it does not have");
 });
 
 test("a clean checkout still hands off and reports its committed state", async () => {

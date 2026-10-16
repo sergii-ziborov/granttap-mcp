@@ -13,8 +13,8 @@ import {
 import { preferExecution, preferTask } from "../../../apps/bridge/src/mesh/admin/convergence";
 import { handoffReceipt } from "../../../apps/bridge/src/mesh/handoff";
 import {
-  UNCOMMITTED_WORK_REASON,
-  UNREADABLE_WORKING_TREE_REASON,
+  UNCOMMITTED_WORK_WARNING,
+  UNREADABLE_WORKING_TREE_WARNING,
   handoffReadiness,
 } from "../../../apps/bridge/src/mesh/tasks/readiness";
 import { MeshStore } from "../../../apps/bridge/src/mesh/store";
@@ -114,27 +114,30 @@ test("untracked work counts as uncommitted and an unreadable tree stays unknown"
   assert.equal(hasUncommittedWork(outside), undefined, "an unreadable tree is not clean");
 });
 
-test("handoff readiness refuses a working tree it could not read", async () => {
+test("handoff readiness warns about uncommitted or unreadable work instead of refusing", async () => {
   const base = { latestCommit: "abc1234", baseSha: "abc1234", repository: "repo" };
   const clean = handoffReadiness({
     capsule: { ...base, workingTree: "clean" } as TaskCapsule,
     targetProviderEnabled: true, conflicts: [],
   });
   assert.equal(clean.ready, true);
+  assert.deepEqual(clean.warnings, []);
 
   const dirty = handoffReadiness({
     capsule: { ...base, workingTree: "dirty" } as TaskCapsule,
     targetProviderEnabled: true, conflicts: [],
   });
-  assert.equal(dirty.blockedReason, UNCOMMITTED_WORK_REASON);
+  assert.equal(dirty.ready, true, "uncommitted work is the person's call");
+  assert.deepEqual(dirty.warnings, [UNCOMMITTED_WORK_WARNING]);
+  assert.equal(dirty.checks.find((item) => item.id === "workingTree")?.detail, UNCOMMITTED_WORK_WARNING);
 
   for (const workingTree of ["unknown", undefined]) {
     const unknown = handoffReadiness({
       capsule: { ...base, workingTree } as TaskCapsule,
       targetProviderEnabled: true, conflicts: [],
     });
-    assert.equal(unknown.ready, false);
-    assert.equal(unknown.blockedReason, UNREADABLE_WORKING_TREE_REASON);
+    assert.equal(unknown.ready, true);
+    assert.deepEqual(unknown.warnings, [UNREADABLE_WORKING_TREE_WARNING]);
   }
 });
 

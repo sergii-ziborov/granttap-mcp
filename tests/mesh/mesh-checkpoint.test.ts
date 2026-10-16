@@ -92,10 +92,12 @@ test("with a checkpoint the capsule is clean, names the commit, and the handoff 
     taskId: linked.taskId!, targetProvider: "codex" as const, targetComputer: "Studio", createdAt: now,
     checkpoint: true,
   };
-  // Without a checkpoint the dirty tree blocks the move, as before.
+  // Without a checkpoint the dirty tree stays behind: allowed, with a warning.
   const dirty = buildTaskCapsule(store, linked, request, "MacBook");
   assert.equal(dirty?.workingTree, "dirty");
-  assert.equal(handoffReadiness({ capsule: dirty, targetProviderEnabled: true, conflicts: [] }).ready, false);
+  const warned = handoffReadiness({ capsule: dirty, targetProviderEnabled: true, conflicts: [] });
+  assert.equal(warned.ready, true);
+  assert.equal(warned.warnings.length, 1);
 
   const checkpoint = createCheckpoint(root, linked.taskId!, "Pairing refactor")!;
   const capsule = buildTaskCapsule(store, linked, request, "MacBook", checkpoint);
@@ -108,6 +110,8 @@ test("with a checkpoint the capsule is clean, names the commit, and the handoff 
   assert.deepEqual(capsule?.importantDecisions, []);
   const readiness = handoffReadiness({ capsule, targetProviderEnabled: true, conflicts: [] });
   assert.equal(readiness.ready, true, readiness.blockedReason);
+  assert.deepEqual(readiness.warnings, [], "a checkpoint carries the work, so nothing is left behind");
+  assert.doesNotMatch(capsule?.remainingWork.join(" ") ?? "", /stayed on MacBook/);
 
   // A partial checkpoint names what stayed behind, in the capsule and in
   // the words the destination's agent reads, so nobody takes it for the whole.

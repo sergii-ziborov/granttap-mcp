@@ -207,10 +207,10 @@ offered for it. Unsupported remote-start paths fail closed instead of claiming
 parity.
 
 A capsule carries facts, not files. A handoff from a checkout with uncommitted
-changes is refused — "This task has uncommitted changes. Commit or checkpoint
-them before moving the task." — instead of silently continuing the Task from
-committed state and leaving that work behind. Asked to checkpoint from the
-phone, the source computer commits everything to `granttap/checkpoint/<task>`
+changes goes ahead with a warning — "This task has uncommitted changes. They stay
+on this computer; the next agent starts from the last commit." — and the capsule
+names the changes that stayed behind, so nothing is narrowed silently. Asked to
+checkpoint from the phone, the source computer commits everything to `granttap/checkpoint/<task>`
 from a temporary index, so HEAD, the current branch, and the working tree stay
 exactly as the agent left them, and the capsule carries that commit. Nothing is
 pushed unless the phone asks for it per handoff: then the source publishes the

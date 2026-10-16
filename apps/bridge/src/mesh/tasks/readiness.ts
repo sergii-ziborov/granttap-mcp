@@ -2,18 +2,18 @@
  * Handoff readiness.
  *
  * A Task Capsule carries facts, not files: the destination starts a worktree
- * from a commit. Anything still uncommitted stays on the source computer even
- * though the Task visibly continues elsewhere, so a handoff that would lose it
- * is refused instead of silently narrowing to committed state.
+ * from a commit. Anything still uncommitted stays on the source computer while
+ * the Task continues elsewhere. That is the person's call, so it is said out
+ * loud — on the phone, here, and in the capsule — rather than refused.
  */
 import type { ResourceClaim, TaskCapsule } from "../../../../../packages/protocol/schema";
 
-export const UNCOMMITTED_WORK_REASON =
-  "This task has uncommitted changes. Commit or checkpoint them before moving the task.";
+export const UNCOMMITTED_WORK_WARNING =
+  "This task has uncommitted changes. They stay on this computer; the next agent starts from the last commit.";
 
-/** An unread working tree blocks the move; only a positive "clean" releases it. */
-export const UNREADABLE_WORKING_TREE_REASON =
-  "GrantTap could not read this working tree, so it cannot promise a commit carries every change.";
+/** "We could not look" is not "clean", so an unread tree is warned about too. */
+export const UNREADABLE_WORKING_TREE_WARNING =
+  "GrantTap could not read this working tree, so uncommitted changes may stay on this computer.";
 
 export type HandoffCheckId = "repository" | "workingTree" | "claims" | "targetAgent";
 
@@ -48,11 +48,11 @@ function workingTree(capsule?: TaskCapsule): "clean" | "dirty" | "unknown" {
   return capsule?.workingTree ?? "unknown";
 }
 
-function workingTreeDetail(capsule?: TaskCapsule): string {
+function workingTreeWarning(capsule?: TaskCapsule): string | undefined {
   switch (workingTree(capsule)) {
-    case "clean": return "Clean";
-    case "dirty": return UNCOMMITTED_WORK_REASON;
-    default: return UNREADABLE_WORKING_TREE_REASON;
+    case "clean": return undefined;
+    case "dirty": return UNCOMMITTED_WORK_WARNING;
+    default: return UNREADABLE_WORKING_TREE_WARNING;
   }
 }
 
@@ -68,11 +68,7 @@ export function handoffReadiness(input: HandoffReadinessInput): HandoffReadiness
         ? `Commit ${capsule.latestCommit ?? capsule.baseSha} in ${capsule.repository}`
         : "No git repository, task, or commit was found for this execution.",
     ),
-    check(
-      "workingTree",
-      Boolean(capsule) && workingTree(capsule) === "clean",
-      workingTreeDetail(capsule),
-    ),
+    check("workingTree", Boolean(capsule), workingTreeWarning(capsule) ?? "Clean"),
     check(
       "claims",
       !conflict,
@@ -89,9 +85,11 @@ export function handoffReadiness(input: HandoffReadinessInput): HandoffReadiness
     ),
   ];
   const blocked = checks.find((item) => !item.ready);
+  const leftBehind = capsule ? workingTreeWarning(capsule) : undefined;
   // Same module, different file: the merge conflict that has not happened
   // yet. Said out loud, not enforced — two agents can share a module.
-  const warnings = (input.moduleOverlaps ?? []).slice(0, 8).map((claim) =>
+  const overlaps = (input.moduleOverlaps ?? []).slice(0, 8).map((claim) =>
     `${claim.ownerSessionId} is working in the same module (${claim.resource}).`);
+  const warnings = [...(leftBehind ? [leftBehind] : []), ...overlaps];
   return { ready: !blocked, blockedReason: blocked?.detail, checks, warnings };
 }

@@ -12,11 +12,7 @@ import {
 } from "../../../apps/bridge/src/mesh/catalog";
 import { preferExecution, preferTask } from "../../../apps/bridge/src/mesh/admin/convergence";
 import { handoffReceipt } from "../../../apps/bridge/src/mesh/handoff";
-import {
-  UNCOMMITTED_WORK_REASON,
-  UNREADABLE_WORKING_TREE_REASON,
-  handoffReadiness,
-} from "../../../apps/bridge/src/mesh/tasks/readiness";
+import { handoffReadiness } from "../../../apps/bridge/src/mesh/tasks/readiness";
 import { MeshStore } from "../../../apps/bridge/src/mesh/store";
 import { now, freshStore, project, capsuleTo, event, handedOffStore } from "../../support/mesh/mesh-convergence-fixtures";
 

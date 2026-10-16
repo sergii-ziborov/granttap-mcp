@@ -218,8 +218,9 @@ export const MeshHandoffPrepare = z.object({
   userComment: Detail.optional(),
   createdAt: z.number().nonnegative(),
   /**
-   * Commit uncommitted work to a checkpoint branch first, so the Task can
-   * leave without losing it. The branch is local: GrantTap never pushes.
+   * Commit uncommitted work to a checkpoint branch first, so the work travels
+   * with the Task instead of staying behind. The branch is local: GrantTap
+   * never pushes.
    */
   checkpoint: z.boolean().optional(),
   /**

@@ -42,9 +42,20 @@ function changedFiles(cwd: string): string[] {
   return [...new Set(files)].slice(0, 64);
 }
 
-function dirtyDiffHash(cwd: string): string | undefined {
+/** The identity of the uncommitted changes, so a later reading can tell they are the same. */
+export function dirtyDiffHash(cwd: string): string | undefined {
   const diff = git(cwd, ["diff", "--binary", "HEAD"]);
   return diff ? createHash("sha256").update(diff).digest("hex") : undefined;
+}
+
+/**
+ * Uncommitted work that does not travel with the capsule. The move is allowed;
+ * the next agent is told what it does not have and where it stayed.
+ */
+function leftBehindWork(files: string[], computerId: string): string {
+  const named = files.slice(0, 8).join(", ") + (files.length > 8 ? ` and ${files.length - 8} more` : "");
+  return `Uncommitted changes to ${named || "this checkout"} stayed on ${computerId}; they are not in this commit.`
+    .slice(0, 1_000);
 }
 
 export function buildTaskCapsule(
@@ -61,6 +72,8 @@ export function buildTaskCapsule(
   if (!cwd || !task || !project || session.taskId !== request.taskId) return undefined;
   const head = git(cwd, ["rev-parse", "HEAD"]);
   if (!head) return undefined;
+  const tree = workingTreeState(cwd);
+  const files = changedFiles(cwd);
   const capsule = {
     taskId: request.taskId,
     goal: task.goal,
@@ -77,13 +90,16 @@ export function buildTaskCapsule(
     branch: session.branch ?? git(cwd, ["branch", "--show-current"]),
     latestCommit: head,
     dirtyDiffHash: dirtyDiffHash(cwd),
-    workingTree: workingTreeState(cwd),
-    filesChanged: changedFiles(cwd),
+    workingTree: tree,
+    filesChanged: files,
     dependencies: snapshot.dependencies
       .filter((item) => item.taskId === request.taskId).map((item) => item.dependsOnTaskId).slice(0, 32),
     resourceClaims: snapshot.claims
       .filter((item) => item.taskId === request.taskId).map((item) => item.resource).slice(0, 64),
-    remainingWork: ["Continue the task from the current committed state."],
+    remainingWork: [
+      "Continue the task from the current committed state.",
+      ...(tree === "dirty" ? [leftBehindWork(files, computerId)] : []),
+    ],
     importantDecisions: [],
     createdAt: Date.now(),
   };
