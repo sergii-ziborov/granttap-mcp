@@ -16,6 +16,14 @@ test('durable task envelope preserves signed scheduling and correlated native me
   if (parsed.success) assert.deepEqual(parsed.data, value);
 });
 
+test('explicit Send now is authenticated inside the immutable job', () => {
+  const value = { ...dispatch(), deliveryMode: 'immediate' };
+  const parsed = Payload.safeParse(value);
+  assert.equal(parsed.success, true);
+  if (parsed.success) assert.deepEqual(parsed.data, value);
+  assert.equal(Payload.safeParse({ ...value, deliveryMode: 'ignore_policy' }).success, false);
+});
+
 test('scheduled dispatch cannot carry stale attachment references or an approval reply', () => {
   const reference = dispatch();
   Object.assign(reference.operation, { attachmentRefs: [{ attachmentId: 'photo', name: 'photo.jpg', mimeType: 'image/jpeg' }] });

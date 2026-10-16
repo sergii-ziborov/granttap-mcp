@@ -27,18 +27,20 @@ test('same-computer queue persists one encrypted operation across HTTP failure a
     return Response.json({ job: { id, state: 'queued', notBefore: now, expiresAt: now + 7 * 86_400_000 } });
   };
   const sender = new NativeTaskQueueSender({ root, config, request: request as typeof fetch });
-  await assert.rejects(sender.submit(scope, message, now, now));
-  assert.equal(sender.hasStaged(scope, message, now, now), true);
+  await assert.rejects(sender.submit(scope, message, now, now, 'immediate'));
+  assert.equal(sender.hasStaged(scope, message, now, now, 'immediate'), true);
+  assert.equal(sender.hasStaged(scope, message, now, now), false);
   assert.equal(sender.hasStaged(scope, { ...message, text: 'Another task' }, now, now), false);
   assert.equal(sender.hasStaged({ ...scope, taskId: 'foreign' }, message, now, now), false);
   const recovered = new NativeTaskQueueSender({ root, config, request: request as typeof fetch });
-  assert.equal((await recovered.submit(scope, message, now, now)).state, 'queued');
+  assert.equal((await recovered.submit(scope, message, now, now, 'immediate')).state, 'queued');
   assert.equal(uploads.length, 2); assert.equal(uploads[0], uploads[1]);
   const envelope = JSON.parse(uploads[0]!).envelope;
   const decoded = open(envelope.nonce, envelope.box, config.myPublicKey, config.mySecretKey) as {
-    origin: string; operation: UserMessage;
+    origin: string; operation: UserMessage; deliveryMode: string;
   };
   assert.equal(decoded.origin, 'computer');
+  assert.equal(decoded.deliveryMode, 'immediate');
   assert.equal(decoded.operation.attachments?.[0]?.data, 'AQID');
   await assert.rejects(recovered.submit(scope, { ...message, text: 'Conflicting operation' }, now, now));
   await assert.rejects(recovered.status({ ...scope, taskId: 'other-task' }, id));

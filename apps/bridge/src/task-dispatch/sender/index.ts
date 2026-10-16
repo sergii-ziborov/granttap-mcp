@@ -15,14 +15,15 @@ export class NativeTaskQueueSender {
     this.store = new NativeTaskQueueStore(options.root, options.config);
   }
 
-  async submit(scope: NativeQueueScope, operation: UserMessage, notBefore: number, createdAt: number): Promise<TaskJobReceipt> {
+  async submit(scope: NativeQueueScope, operation: UserMessage, notBefore: number, createdAt: number,
+    deliveryMode?: TaskDispatch['deliveryMode']): Promise<TaskJobReceipt> {
     scope = NativeQueueScope.parse(scope); operation = UserMessage.parse(operation);
     if (!operation.messageId || operation.sessionId !== scope.sessionId || operation.projectId !== scope.projectId
       || operation.agent !== scope.provider) throw new Error('Queued Task scope mismatch.');
     const expiresAt = Math.min(createdAt + 30 * 86_400_000, notBefore + 7 * 86_400_000);
     const header = { id: operation.messageId, scope, createdAt, notBefore, expiresAt,
-      intent: digest({ scope, operation, notBefore, createdAt }) };
-    this.store.stage(header, () => this.encrypt(scope, operation, notBefore, createdAt, expiresAt));
+      intent: digest({ scope, operation, notBefore, createdAt, deliveryMode }) };
+    this.store.stage(header, () => this.encrypt(scope, operation, notBefore, createdAt, expiresAt, deliveryMode));
     return this.store.uploaded(header.id) ? this.status(scope, header.id) : this.upload(header.id);
   }
 
@@ -35,12 +36,13 @@ export class NativeTaskQueueSender {
   }
 
   /** Positive durable admission, independent of an ambiguous HTTP response; never inferred provider usage. */
-  hasStaged(scope: NativeQueueScope, operation: UserMessage, notBefore: number, createdAt: number): boolean {
+  hasStaged(scope: NativeQueueScope, operation: UserMessage, notBefore: number, createdAt: number,
+    deliveryMode?: TaskDispatch['deliveryMode']): boolean {
     try {
       scope = NativeQueueScope.parse(scope); operation = UserMessage.parse(operation);
       if (!operation.messageId) return false;
       const header = this.store.header(operation.messageId, scope);
-      return header.intent === digest({ scope, operation, notBefore, createdAt });
+      return header.intent === digest({ scope, operation, notBefore, createdAt, deliveryMode });
     } catch { return false; }
   }
 
@@ -84,14 +86,17 @@ export class NativeTaskQueueSender {
     return receipt;
   }
 
-  private encrypt(scope: NativeQueueScope, operation: UserMessage, notBefore: number, createdAt: number, expiresAt: number) {
+  private encrypt(scope: NativeQueueScope, operation: UserMessage, notBefore: number, createdAt: number,
+    expiresAt: number, deliveryMode?: TaskDispatch['deliveryMode']) {
     const job = TaskDispatch.parse({ type: 'task.dispatch', origin: 'computer', jobId: operation.messageId,
-      token: randomBytes(32).toString('hex'), sessionId: scope.sessionId, operation, notBefore, expiresAt, createdAt });
+      token: randomBytes(32).toString('hex'), sessionId: scope.sessionId, operation, notBefore, expiresAt, createdAt,
+      deliveryMode });
     const envelope = JSON.parse(sealEnvelope({ ...this.options.config, role: 'phone',
       peerPublicKey: this.options.config.myPublicKey }, job, 'machine', {
       recipientRouting: true, deliveryId: job.jobId, ttlMs: expiresAt - Date.now() }));
     envelope.expiresAt = expiresAt;
-    return { header: { id: job.jobId, scope, createdAt, notBefore, expiresAt, intent: digest({ scope, operation, notBefore, createdAt }) },
+    return { header: { id: job.jobId, scope, createdAt, notBefore, expiresAt,
+      intent: digest({ scope, operation, notBefore, createdAt, deliveryMode }) },
       body: { notBefore, expiresAt, acceptanceHash: createHash('sha256').update(job.token).digest('hex'), envelope } };
   }
 

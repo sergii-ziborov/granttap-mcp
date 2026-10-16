@@ -26,21 +26,20 @@ import {
   TOKEN_WINDOW_MS,
 } from "./support/common";
 import {
-  claudeActivity,
   claudeCapabilityUsage,
   scanClaude,
 } from "./scan/claude";
 import {
-  codexActivity,
   codexCapabilityUsage,
   scanCodex,
 } from "./scan/codex";
 import {
-  cursorActivity,
   cursorCapabilityUsage,
   scanCursor,
 } from "./cursor";
-import { grokActivity, grokCapabilityUsage, scanGrok } from "./scan/grok";
+import { grokCapabilityUsage, scanGrok } from "./scan/grok";
+import { activityForSession } from './session-activity';
+export { MAX_THREAD_ENTRIES, scanThreadActivity } from './session-activity';
 import {
   limitCapabilityUsageEvents,
   rememberCapabilityUsageCandidate,
@@ -167,15 +166,6 @@ export function scanSessionHistoryForPaging(maxFiles = MAX_FILES): { sessions: S
   };
 }
 
-function activityForSession(input: SessionInfo): ActivityEntry[] {
-  const session = localTaskTransfers().nativeSession(input);
-  if (session.agent === "claude") return claudeActivity(session);
-  if (session.agent === "codex") return codexActivity(session);
-  if (session.agent === "cursor") return cursorActivity(session);
-  if (session.agent === "grok") return grokActivity(session);
-  return [];
-}
-
 /**
  * Keep the person's chat first. Newest child rows used to fill the whole
  * window, so a Cursor chat with many Task-tool runs arrived with no root
@@ -234,31 +224,6 @@ export function scanSessionActivity(session: SessionInfo): SessionActivity {
     sessionId: session.sessionId,
     agent: session.agent,
     state: session.state,
-    entries,
-    generatedAt: Date.now(),
-  };
-}
-
-/** One agent conversation's rows travel on their own, bounded, when asked for. */
-export const MAX_THREAD_ENTRIES = 60;
-
-/**
- * Every row of one agent conversation, newest last. The chat's own window
- * keeps a few of each conversation's rows for navigation; opened, the
- * conversation is worth reading whole, and it is read from the transcript
- * on demand rather than carried on every tick.
- */
-export function scanThreadActivity(session: SessionInfo, threadId: string): SessionActivity {
-  const entries = activityForSession(session)
-    .filter((entry) => entry.childThreadId === threadId)
-    .sort((a, b) => a.createdAt - b.createdAt)
-    .slice(-MAX_THREAD_ENTRIES);
-  return {
-    type: "session.activity",
-    sessionId: session.sessionId,
-    agent: session.agent,
-    state: session.state,
-    threadId,
     entries,
     generatedAt: Date.now(),
   };

@@ -17,6 +17,12 @@ local offer. Scheduling does not imply that the controller phone is online.
 Tests live in `tests/` and `worker/tests/` and use synthetic operations and private
 temporary directories. This module does not grant provider or project access.
 
+An authenticated `deliveryMode: immediate` is an explicit controller release.
+It takes precedence over waiting follow-ups and skips the idle requirement only;
+pause, an in-flight native submission and provider policy still win. Normal jobs
+use a catalog observed within 60 seconds rather than rescanning all native logs
+for every pending message on each receiver tick.
+
 ## License
 
 Licensed under the Apache License, Version 2.0 (Apache-2.0). See LICENSE and NOTICE.

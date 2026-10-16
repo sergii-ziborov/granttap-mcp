@@ -31,6 +31,7 @@ export function desktopStatusSnapshot(desktopEngineSocket?: string) {
     providers: inspectProviderStatusSnapshot().providers,
     desktopEngineSocket,
     taskQueueAvailable: true,
+    taskQueueImmediate: true,
     taskControlsAvailable: true,
   };
 }

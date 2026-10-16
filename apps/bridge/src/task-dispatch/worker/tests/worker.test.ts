@@ -7,6 +7,7 @@ import { generateKeyPair } from '../../../../../../packages/core/crypto';
 import type { TaskDispatch } from '../../../../../../packages/protocol/schema';
 import { TaskDispatchInbox } from '../../index';
 import { TaskDispatchWorker, type WorkerOptions } from '../index';
+import { taskDispatchReady } from '../readiness';
 
 function fixture(t: TestContext) {
   const root = mkdtempSync(join(tmpdir(), 'granttap-job-worker-'));
@@ -37,6 +38,21 @@ test('relay queue waits while busy and starts once after readiness, without any 
   f.busy(false); await worker.tick(); await worker.tick();
   assert.equal(f.starts(), 1); assert.equal(f.state(), 'completed');
   assert.equal(f.inbox.status(f.job.jobId)?.phase, 'completed');
+});
+
+test('explicit Send now releases the selected job ahead of older waiting follow-ups', async t => {
+  const f = fixture(t), immediate = { ...f.job, jobId: 'worker-send-now', createdAt: f.job.createdAt + 1,
+    deliveryMode: 'immediate' as const };
+  f.inbox.stage(immediate, generateKeyPair().publicKey);
+  f.options.ready = job => taskDispatchReady(job, { inFlight: false, paused: false,
+    generatedAt: Date.now(), session: { sessionId: 'chat', agent: 'claude', state: 'working',
+      startedAt: 1, lastActivityAt: 1, tokensSession: 0, tokensLastTurn: 0 } });
+  const delivered: string[] = [];
+  f.options.remote.get = async () => 'queued';
+  f.options.deliver = async (job, beforeStart) => { await beforeStart(); delivered.push(job.jobId); return 'accepted'; };
+  await new TaskDispatchWorker(f.options).tick();
+  assert.deepEqual(delivered, [immediate.jobId]);
+  assert.equal(f.inbox.status(f.job.jobId)?.phase, 'staged');
 });
 
 test('a cancelled server job never starts from a stale local offer', async t => {

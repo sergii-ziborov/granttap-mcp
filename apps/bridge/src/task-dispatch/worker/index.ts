@@ -26,7 +26,9 @@ export class TaskDispatchWorker {
   async tick(): Promise<void> {
     if (!this.options.connected()) return;
     const launched: Promise<void>[] = [];
-    const records = this.options.inbox.pendingRecords().sort((a, b) => a.job.createdAt - b.job.createdAt);
+    const records = this.options.inbox.pendingRecords().sort((a, b) =>
+      Number(b.job.deliveryMode === 'immediate') - Number(a.job.deliveryMode === 'immediate')
+        || a.job.createdAt - b.job.createdAt);
     for (const record of records) {
       if (['completed', 'cancelled'].includes(record.phase) || this.active.has(record.job.jobId)) continue;
       const key = record.job.sessionId ?? `new:${record.job.operation.agent ?? 'codex'}`;

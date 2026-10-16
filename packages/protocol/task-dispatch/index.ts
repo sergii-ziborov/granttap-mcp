@@ -5,6 +5,7 @@ import { TaskCreate, UserMessage } from '../messages/interaction';
 export const TaskDispatch = z.object({
   type: z.literal('task.dispatch'),
   origin: z.enum(['controller', 'computer']).optional(),
+  deliveryMode: z.enum(['when_idle', 'immediate']).optional(),
   jobId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{7,119}$/),
   token: z.string().regex(/^[a-f0-9]{64}$/),
   sessionId: z.string().min(1).max(180).optional(),

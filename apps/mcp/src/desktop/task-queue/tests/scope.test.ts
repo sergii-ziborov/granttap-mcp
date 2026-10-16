@@ -22,13 +22,15 @@ test('native queued work is confined to the exact local Mesh Task and execution'
     status: async () => receipt, cancel: async () => ({ ...receipt, state: 'cancelled' as const }) };
   const options = { storePath, endpointId: 'local', sender, providerEnabled: () => true };
   const request = { action: 'put', project_id: 'mesh', task_id: 'task', session_id: 'chat', delivery_id: id,
-    text: 'Synthetic queued task', model: 'grok-build', effort: 'high', not_before: now, created_at: now };
+    text: 'Synthetic queued task', model: 'grok-build', effort: 'high', not_before: now, created_at: now,
+    delivery_mode: 'immediate' };
   assert.equal(await desktopTaskQueue({ ...request, project_id: 'other' }, options), undefined);
   assert.equal(await desktopTaskQueue(request, { ...options, endpointId: 'remote' }), undefined);
   assert.equal(await desktopTaskQueue({ ...request, session_id: 'other' }, options), undefined);
   const accepted = await desktopTaskQueue(request, options) as { accepted: boolean; job: unknown };
   assert.equal(accepted.accepted, true); assert.deepEqual(accepted.job, receipt);
   assert.equal(calls.length, 1);
+  assert.equal((calls[0] as unknown[])[4], 'immediate');
   const [, operation] = calls[0] as [unknown, { agent: string; effort: string; model: string }];
   assert.equal(operation.agent, 'grok'); assert.equal(operation.effort, 'high'); assert.equal(operation.model, 'grok-build');
   const cancelled = await desktopTaskQueue({ ...request, action: 'cancel' }, options) as { job: { state: string } };

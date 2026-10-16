@@ -78,6 +78,7 @@ describe("machine liveness heartbeat", () => {
 
     assert.equal(sent.length, 1);
     assert.equal(sent[0]!.payload.type, "machine.heartbeat");
+    assert.equal(sent[0]!.payload.taskQueueImmediate, true);
     assert.equal(sent[0]!.to, "phone");
     assert.equal(sent[0]!.options.reliable, false);
     const held: Array<{ options: any }> = [];
@@ -106,6 +107,7 @@ describe("machine liveness heartbeat", () => {
 
     assert.equal(sent.length, 1);
     assert.equal(sent[0]!.payload.type, "machine.heartbeat");
+    assert.equal(sent[0]!.payload.taskQueueImmediate, true);
     assert.equal(sent[0]!.options.reliable, true);
     assert.ok(HELD_HEARTBEAT_TTL_MS <= PHONE_OFFLINE_THRESHOLD_MS);
   });

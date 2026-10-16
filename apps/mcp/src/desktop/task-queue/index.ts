@@ -15,6 +15,7 @@ const Query = z.object({ action: z.enum(['put', 'status', 'cancel']),
   not_before: z.number().int().nonnegative().optional(), created_at: z.number().int().nonnegative().optional(),
   attachments_json: z.string().max(32_768).optional(), preferred_mcp: z.string().max(180).optional(),
   skill: z.string().max(180).optional(), permission_mode: z.string().max(80).optional(),
+  delivery_mode: z.enum(['when_idle', 'immediate']).optional(),
 }).strict();
 
 type Sender = Pick<NativeTaskQueueSender, 'submit' | 'status' | 'cancel'>;
@@ -51,7 +52,7 @@ export async function desktopTaskQueue(input: unknown, options: {
         preferredMcp: query.preferred_mcp, skill: query.skill, permissionMode: query.permission_mode,
         createdAt: query.created_at });
       if (!message.success) return undefined;
-      job = await sender.submit(scope, message.data, query.not_before, query.created_at);
+      job = await sender.submit(scope, message.data, query.not_before, query.created_at, query.delivery_mode);
     } else {
       job = await sender[query.action](scope, query.delivery_id);
     }

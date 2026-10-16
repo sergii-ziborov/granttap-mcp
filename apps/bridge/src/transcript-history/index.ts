@@ -10,6 +10,7 @@ import { completedTurnChanges } from "./turn-changes";
 export { nativeImageLines } from "./images";
 export { nativeTranscriptImage } from './images/native';
 export { nativeTranscriptEntry } from './images/advertised-entry';
+export { previousNativeLines as readNativeTranscriptWindow } from './native-lines';
 
 function boundedEntry(entry: ActivityEntry): ActivityEntry {
   const result = { ...entry };

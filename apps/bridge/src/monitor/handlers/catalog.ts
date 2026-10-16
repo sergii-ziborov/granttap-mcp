@@ -51,7 +51,30 @@ function resolveSession(client: RelayClient, sessionId: string, status?: Session
 }
 
 /** Send one bounded transcript under the task-specific E2EE key. */
-export async function publishSessionEvents(
+export function publishSessionEvents(
+  client: RelayClient,
+  sessionId: string,
+  status?: SessionsStatus,
+  threadId?: string,
+  history?: { history?: boolean; historyCursor?: string; peerPublicKey?: string },
+): Promise<boolean> {
+  let pending = transcriptReplies.get(client);
+  if (!pending) { pending = new Map(); transcriptReplies.set(client, pending); }
+  const key = JSON.stringify([sessionId, threadId, history?.history === true,
+    history?.historyCursor, history?.peerPublicKey, status?.generatedAt]);
+  const active = pending.get(key);
+  if (active) return active;
+  const reply = sendTranscript(client, sessionId, status, threadId, history)
+    .finally(() => { pending.delete(key); });
+  pending.set(key, reply);
+  return reply;
+}
+
+// A subscription and history refresh may arrive together while a large native
+// transcript is changing. Share only identical reads for the same recipient.
+const transcriptReplies = new WeakMap<RelayClient, Map<string, Promise<boolean>>>();
+
+async function sendTranscript(
   client: RelayClient,
   sessionId: string,
   status?: SessionsStatus,

@@ -2,13 +2,14 @@ import { join } from 'node:path';
 import type { PeerConfig, RelayClient } from '../../../../../packages/core/relay-client';
 import { configDir, isSessionPaused } from '../../config';
 import { isDeliveryInFlight } from '../../reply';
-import { scanSessions } from '../../sessions';
+import { publishedCatalog } from '../../session-catalog';
 import { handleUserMessage } from '../../monitor/handlers/user-message';
 import { handleTaskCreate } from '../../monitor/handlers/task-create';
 import { TaskDispatchInbox } from '../index';
 import { TaskDispatchWorker } from './index';
 import { relayTaskJobRemote } from './remote';
 import { NativeTaskQueueSender } from '../sender';
+import { taskDispatchReady } from './readiness';
 
 /** Only the persistent monitor advertises durable submission capability. */
 export function startTaskDispatchMonitor(input: {
@@ -25,11 +26,12 @@ export function startTaskDispatchMonitor(input: {
     onTerminal: job => sender.confirmReceiverOutcome(job),
     onError: () => reportFailure(),
     ready: job => {
-      if (!job.sessionId) return !isDeliveryInFlight(`__new_${job.operation.agent ?? 'codex'}_task__`);
-      if (isDeliveryInFlight(job.sessionId)) return false;
-      const session = scanSessions().sessions.find(item => item.sessionId === job.sessionId);
-      // A missing chat is allowed through validation to produce a definite rejection.
-      return !session || session.state === 'idle' && !isSessionPaused(job.sessionId);
+      const catalog = publishedCatalog(input.client);
+      const session = [...(catalog?.sessions ?? []), ...(catalog?.history ?? [])]
+        .find(item => item.sessionId === job.sessionId);
+      return taskDispatchReady(job, { session, generatedAt: catalog?.generatedAt,
+        inFlight: isDeliveryInFlight(job.sessionId ?? `__new_${job.operation.agent ?? 'codex'}_task__`),
+        paused: !!job.sessionId && isSessionPaused(job.sessionId) });
     },
     deliver: async (job, beforeStart) => {
       const outcome = job.operation.type === 'user.message'

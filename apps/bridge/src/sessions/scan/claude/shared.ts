@@ -56,6 +56,7 @@ export type CachedClaudeSummary = {
 export const claudeSummaryCache = new Map<string, CachedClaudeSummary>();
 export const claudeLogPathBySession = new Map<string, string>();
 export const claudeChildLogPathsBySession = new Map<string, string[]>();
+export const claudeChildPathByThread = new Map<string, string>();
 
 export function claudeTranscriptPaths(sessionId: string): string[] {
   const parent = claudeLogPathBySession.get(sessionId) ?? claudeLogPath(sessionId);
@@ -131,6 +132,7 @@ export function claudeChildSummary(
   } catch {
     // Parsed timestamps still make this child usable.
   }
+  claudeChildPathByThread.set(`${parentSessionId}\0${threadId}`, path);
   return {
     threadId,
     parentThreadId: parentSessionId,
