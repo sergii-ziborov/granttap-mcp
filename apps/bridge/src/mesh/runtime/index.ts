@@ -39,6 +39,7 @@ import { projectSessionCapabilityInventory } from "./capabilities";
 import { createMeshSessionCatalog } from "./catalog/session-catalog";
 import { capturePreparedHandoff, preparedHandoffMetadata } from './prepared-transfer';
 import { sourceCheckoutUnchanged } from './prepared-transfer/source-checkout';
+import { prepareCloudHandoff } from "./cloud-handoff";
 
 export type { MeshRuntimeDependencies };
 
@@ -130,6 +131,7 @@ async function prepareHandoff(
     return false;
   }
   if (!capsule) return false;
+  if (request.cloud) return prepareCloudHandoff({ deps, block: blockHandoff, client, request, session, capsule });
   let transferContext: string | undefined;
   let confirmContext: (() => Promise<boolean>) | undefined;
   if (request.prepareOnly) {

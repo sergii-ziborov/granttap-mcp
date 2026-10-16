@@ -6,7 +6,7 @@ import {
   MeshExecutionProvider,
   Path,
 } from "./endpoint";
-import { ResourceClaim } from "./tasks";
+import { CloudLaunchRequest, ResourceClaim } from "./tasks";
 
 export const TaskCapsule = z.object({
   taskId: Identifier,
@@ -229,9 +229,18 @@ export const MeshHandoffPrepare = z.object({
    * Never a force push; the person asks for it per handoff.
    */
   push: z.boolean().optional(),
+  /**
+   * Start the Task in the provider's cloud runner instead of a local chat.
+   * The target computer launches it with its installed CLI, so it must be the
+   * computer that holds the Task. A Codex Cloud environment may be named.
+   */
+  cloud: CloudLaunchRequest.optional(),
 }).strict().superRefine((value, ctx) => {
   if ((value.targetProvider === "grok_bot") !== (value.targetActorId != null)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["targetActorId"], message: "actor required" });
+  }
+  if (value.cloud && value.targetProvider !== "claude" && value.targetProvider !== "codex") {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["cloud"], message: "cloud runner provider" });
   }
 });
 export type MeshHandoffPrepare = z.infer<typeof MeshHandoffPrepare>;

@@ -34,3 +34,29 @@ test("desktop handoff uses only the owning local execution and forwards model an
     createdAt: (sent[0] as { createdAt: number }).createdAt,
   }]);
 });
+
+test("the Mac app can send its own Task to a cloud runner through this computer", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "granttap-desktop-cloud-"));
+  const storePath = join(directory, "project-mesh.json");
+  await writeFile(storePath, JSON.stringify({ version: 1,
+    projects: [{ projectId: "project", name: "Project", createdAt: 1 }],
+    tasks: [{ taskId: "task", projectId: "project", title: "Task", goal: "Goal",
+      state: "working", ownerSessionId: "source", createdAt: 1, updatedAt: 2 }],
+    executions: [{ taskId: "task", sessionId: "source", provider: "claude",
+      computerId: "this-mac", workspace: directory, startedAt: 1 }],
+  }));
+  const sent: Array<{ cloud?: unknown }> = [];
+  const prepare = async (request: { cloud?: unknown }) => { sent.push(request); return true; };
+  const request = { project_id: "project", task_id: "task", session_id: "source",
+    target_provider: "codex", target_computer: "this-mac", push: true, prepare_only: true,
+    cloud: true, cloud_environment: "example/granttap" };
+  assert.equal((await desktopTaskHandoff(request, storePath, prepare, "this-mac") as { accepted: boolean }).accepted, true);
+  assert.deepEqual(sent[0]?.cloud, { environment: "example/granttap" });
+  await desktopTaskHandoff({ ...request, target_provider: "claude", cloud_environment: undefined, cloud_effort: "high" },
+    storePath, prepare, "this-mac");
+  assert.deepEqual(sent[1]?.cloud, { effort: "high" });
+  assert.equal(await desktopTaskHandoff({ ...request, target_provider: "grok" }, storePath, prepare, "this-mac"), undefined,
+    "only Claude and Codex have cloud runners");
+  await desktopTaskHandoff({ ...request, cloud: false }, storePath, prepare, "this-mac");
+  assert.equal(sent[2]?.cloud, undefined);
+});

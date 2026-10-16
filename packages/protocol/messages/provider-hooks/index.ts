@@ -48,6 +48,8 @@ export const AgentIntegrationStatus = z.object({
   updateCommand: z.string().trim().min(1).max(200).optional(),
   newerOnThisMac: z.string().trim().min(1).max(64).optional(),
   updating: z.boolean().optional(),
+  // The installed CLI can start the provider's cloud runner without a terminal.
+  cloud: z.boolean().optional(),
 });
 export type AgentIntegrationStatus = z.infer<typeof AgentIntegrationStatus>;
 

@@ -39,6 +39,10 @@ export async function desktopTaskHandoff(
     targetProvider: row.target_provider, targetComputer: row.target_computer,
     targetModel: row.target_model, userComment: row.user_comment,
     checkpoint: row.checkpoint, push: row.push, createdAt: Date.now(),
+    ...(row.cloud === true ? { cloud: {
+      ...(row.cloud_environment === undefined ? {} : { environment: row.cloud_environment }),
+      ...(row.cloud_effort === undefined ? {} : { effort: row.cloud_effort }),
+    } } : {}),
   });
   if (!request.success) return undefined;
   const loaded = readStoreState(storePath);

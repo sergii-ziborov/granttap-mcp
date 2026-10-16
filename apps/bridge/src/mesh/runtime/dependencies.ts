@@ -8,6 +8,7 @@ import type {
   TaskCapsule,
 } from "../../../../../packages/protocol/schema";
 import type { createCodexSession, deliverToSession } from "../../reply";
+import type { CloudLaunchInput, CloudLaunchResult } from "../../cloud-runners";
 import type { MeshStore } from "../store";
 import type { createHandoffWorktree } from "./worktree";
 
@@ -48,4 +49,8 @@ export type MeshRuntimeDependencies = {
   push: (cwd: string, branch: string | undefined) => { ok: true; remote: string } | { ok: false; error: string };
   /** Bring a commit the capsule names to this checkout; whether it is here now. */
   fetch: (repository: string, revision: string, branch?: string) => boolean;
+  /** Whether the checkout's remote already has a commit a cloud runner must fetch. */
+  remoteHasCommit?: (cwd: string, revision: string) => boolean;
+  /** Start a provider cloud run with the installed CLI. */
+  launchCloud?: (input: CloudLaunchInput) => Promise<CloudLaunchResult>;
 };
