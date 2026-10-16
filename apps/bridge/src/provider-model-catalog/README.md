@@ -33,3 +33,21 @@ list of version numbers. Client model choices use the existing resume flags.
 
 Account percentages travel separately as optional `accountUsage` observations.
 See [provider account status](../provider-account-status/README.md).
+
+## Grok Build details and order
+
+`grok models` decides which Grok models exist. Grok Build's own account catalog
+(`models_cache.json` in its home, at most 24 hours old, 2 MB) only adds display
+names, descriptions and the reasoning levels each listed model accepts
+(`supportedEfforts`, e.g. `low…xhigh`); identity, endpoints, keys and headers
+are never read into a row. When the listing could not run at all (timeout or a
+crash) and Grok Build is installed and signed in, that fresh catalog stands in
+for it with its own fetch time; a signed-out listing advertises nothing.
+Cursor and Grok rows carry their CLI order as `priority`, so the phone shows
+them in the provider's order. The Grok binary is resolved like its turns
+(`GRANTTAP_GROK_BIN`, then `PATH`, then `~/.grok/bin/grok`), so a launchd PATH
+without Grok's installer directory no longer hides it.
+
+Claude Code has no listing command. Its picker keeps the CLI's documented aliases
+(`opus`, `sonnet`, `haiku`, `fable`); `--model` also accepts full names, which
+the phone does not invent. Tests: [`tests/grok-catalog.test.ts`](tests/grok-catalog.test.ts).

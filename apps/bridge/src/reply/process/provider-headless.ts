@@ -5,13 +5,14 @@ import { providerEffortArgs } from "./provider-effort";
 import type { ReplyResult } from "../payload/types";
 import type { DeliveryOptions } from "../payload/types";
 import { resolveCursorAgentBin } from "./cursor-agent-bin";
+import { resolveGrokBinary } from "../../providers/grok-bin";
 
 function cursorBin(): string {
   return resolveCursorAgentBin();
 }
 
 function grokBin(): string {
-  return process.env.GRANTTAP_GROK_BIN ?? "grok";
+  return resolveGrokBinary();
 }
 
 function parseCursor(stdout: string, fallback?: string): ReplyResult {

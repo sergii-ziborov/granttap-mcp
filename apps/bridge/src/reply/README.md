@@ -18,3 +18,10 @@ in the repository-root `LICENSE` file.
 Model reasoning effort reaches resumed and new provider turns as native arguments.
 Codex uses `model_reasoning_effort`; Claude uses `--effort`; Grok uses
 `--reasoning-effort`. Cursor effort variants are native model IDs.
+
+Accepted levels: Codex `low…ultra`, Claude `low…max`, Grok `low…xhigh` (Grok
+Build lists `xhigh` for its current models and has no `max`). Anything else is
+dropped rather than passed. A prepared transfer's first turn uses the model and
+effort that message carries, else the capsule's `targetModel`. Grok Build is
+resolved with `providers/grok-bin.ts`. Tests:
+[`tests/model-effort-args.test.ts`](tests/model-effort-args.test.ts).
