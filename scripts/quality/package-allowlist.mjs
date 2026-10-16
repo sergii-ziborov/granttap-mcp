@@ -7,6 +7,7 @@ const PUBLIC_FILES = new Set([
   "README.md",
   "SECURITY.md",
   "THIRD_PARTY_NOTICES.md",
+  "THIRD_PARTY_LICENSES.txt",
   "package.json",
 ]);
 const PUBLIC_PREFIXES = ["apps/", "bin/", "cursor-plugin/", "packages/"];

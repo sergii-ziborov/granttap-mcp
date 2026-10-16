@@ -7,6 +7,10 @@ those terms.
 The npm package declares, rather than vendors, these direct runtime
 dependencies. Their packages carry the applicable license texts:
 
+`THIRD_PARTY_LICENSES.txt` contains the original notices for the full resolved
+runtime dependency graph, including optional platform packages. Package
+boundaries and upstream grants remain separate from GrantTap's Apache license.
+
 | Component | License |
 | --- | --- |
 | `@modelcontextprotocol/sdk` | MIT |

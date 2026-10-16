@@ -1,7 +1,7 @@
 {
   "name": "granttap-mcp",
   "version": "0.8.68",
-  "description": "Personal live control center runtime for local coding agents on iPhone and Apple Watch.",
+  "description": "Apache-2.0 computer runtime connecting local coding agents to GrantTap on Mac, iPhone, iPad and Apple Watch.",
   "type": "module",
   "bin": {
     "granttap": "bin/granttap-mcp.mjs",
@@ -17,7 +17,8 @@
     "NOTICE",
     "README.md",
     "SECURITY.md",
-    "THIRD_PARTY_NOTICES.md"
+    "THIRD_PARTY_NOTICES.md",
+    "THIRD_PARTY_LICENSES.txt"
   ],
   "scripts": {
     "start": "node bin/granttap-mcp.mjs",
