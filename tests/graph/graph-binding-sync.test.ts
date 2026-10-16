@@ -33,8 +33,37 @@ test("Graph refresh readmits only a verified checkout on this endpoint", async (
     sync: async (_project, local) => { admitted.push(local.summary.bindingId); return true; },
   });
   assert.deepEqual(admitted, ["local"]);
-  assert.deepEqual(failures.map((report) => [report.repositoryId, report.analysisErrorCode]),
-    [["another-repo", "REPOSITORY_IDENTITY_MISMATCH"]]);
+  assert.deepEqual(failures, [], "a stale identity of a checkout another binding already admits is not a failure");
+});
+
+test("Mesh Health reports only real repository failures", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "granttap-graph-health-"));
+  const plain = join(root, "plain"), repo = join(root, "repo"), sub = join(repo, "docs"), moved = join(root, "moved");
+  for (const path of [plain, repo, sub, moved]) mkdirSync(path, { recursive: true });
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const project = { projectId: "mesh", name: "Mesh", canonicalRepositoryId: "repo", createdAt: 1 };
+  const binding = (bindingId: string, path: string, repositoryId: string) => ({ bindingId, projectId: "mesh",
+    endpointId: "this-mac", repositoryId, displayName: bindingId, localPathHint: path, available: true });
+  const failures = await refreshLocalGraphBindings({
+    type: "mesh.snapshot", sessionId: "mesh", projectId: "mesh", project,
+    tasks: [], executions: [], claims: [], dependencies: [], events: [], generatedAt: 1,
+    bindings: [binding("plain", plain, `local:${plain}`), binding("repo", repo, "repo"),
+      binding("sub", sub, `local:${sub}`), binding("gone", join(root, "gone"), "gone"),
+      binding("moved", moved, "old-identity"), binding("refused", repo, `local:${repo}`)],
+  }, {
+    endpoint: () => "this-mac",
+    inspect: (path) => {
+      if (path.endsWith("gone")) throw new Error("checkout removed");
+      if (path === plain) return { root: plain, canonicalRepositoryId: `local:${plain}` };
+      if (path === moved) return { root: moved, worktree: moved, canonicalRepositoryId: "new-identity", revision: "h" };
+      return { root: repo, worktree: repo, canonicalRepositoryId: "repo", revision: "head" };
+    },
+    sync: async (_project, local) => local.summary.bindingId !== "refused",
+  });
+  assert.deepEqual(failures.map((report) => [report.repositoryId, report.analysisErrorCode]), [
+    ["old-identity", "REPOSITORY_IDENTITY_MISMATCH"],
+    [`local:${repo}`, "ENGINE_ADMISSION_UNAVAILABLE"],
+  ], "plain folders, subfolders and removed checkouts are not repositories with a broken graph");
 });
 
 test("Engine restart restores existing Git bindings without admitting the workspace root", async (t) => {

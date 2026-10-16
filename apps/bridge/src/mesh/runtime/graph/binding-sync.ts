@@ -5,7 +5,15 @@ import { inspectRepository } from "../../catalog";
 import { computerId } from "../../identity/computer";
 import { matchesLocalCheckout } from "./checkout-identity";
 
-/** Re-admit this computer's verified checkouts before an explicit Graph build. */
+/**
+ * Re-admit this computer's verified checkouts before an explicit Graph build.
+ *
+ * Only a repository whose Graph is genuinely unavailable is reported. A plain
+ * folder an agent ran in, a subfolder of a repository, a removed checkout and
+ * a former identity of a checkout another binding already describes are not
+ * repositories with a broken Graph; reporting them filled Mesh Health with
+ * errors nobody could act on.
+ */
 export async function refreshLocalGraphBindings(
   snapshot: MeshSnapshot,
   dependencies: {
@@ -18,19 +26,23 @@ export async function refreshLocalGraphBindings(
   const candidates = (snapshot.bindings ?? []).filter((binding) =>
     binding.endpointId === localEndpoint && binding.available && binding.localPathHint);
   const failures: ProjectRepositoryGraph[] = [];
-  await Promise.all(candidates.map(async (binding) => {
+  const checkouts = candidates.flatMap((binding) => {
+    const facts = readCheckout(dependencies.inspect, binding.localPathHint!);
+    return facts ? [{ binding, facts, real: realpathSync(facts.root) }] : [];
+  });
+  await Promise.all(checkouts.map(async ({ binding, facts, real }) => {
+    const pathIdentity = matchesLocalCheckout(binding.repositoryId, facts.root);
+    if (facts.canonicalRepositoryId !== binding.repositoryId && !pathIdentity) {
+      const described = checkouts.some((other) => other.real === real
+        && (other.binding.repositoryId === facts.canonicalRepositoryId
+          || matchesLocalCheckout(other.binding.repositoryId, facts.root)));
+      if (!described) failures.push({ projectId: snapshot.projectId, repositoryId: binding.repositoryId,
+        revision: "unverified", weavatrixVersion: "unknown", analysisStatus: "UNAVAILABLE",
+        analysisErrorCode: "REPOSITORY_IDENTITY_MISMATCH",
+        nodes: [], relations: [], totalNodes: 0, totalRelations: 0, truncated: false });
+      return;
+    }
     try {
-      const path = binding.localPathHint!;
-      const facts = dependencies.inspect(path);
-      const pathIdentity = matchesLocalCheckout(binding.repositoryId, facts.root);
-      if (!facts.worktree || realpathSync(facts.root) !== realpathSync(path)
-        || (facts.canonicalRepositoryId !== binding.repositoryId && !pathIdentity)) {
-        failures.push({ projectId: snapshot.projectId, repositoryId: binding.repositoryId,
-          revision: "unverified", weavatrixVersion: "unknown", analysisStatus: "UNAVAILABLE",
-          analysisErrorCode: facts.worktree ? "REPOSITORY_IDENTITY_MISMATCH" : "REPOSITORY_IDENTITY_UNVERIFIED",
-          nodes: [], relations: [], totalNodes: 0, totalRelations: 0, truncated: false });
-        return;
-      }
       const admitted = await dependencies.sync(snapshot.project, {
         summary: binding,
         localRoot: facts.root,
@@ -43,6 +55,17 @@ export async function refreshLocalGraphBindings(
     } catch { failures.push(admissionFailure(snapshot, binding)); }
   }));
   return failures;
+}
+
+/** A Git checkout rooted exactly at the bound path, or nothing a Graph can be built from. */
+function readCheckout(inspect: typeof inspectRepository, path: string) {
+  try {
+    const facts = inspect(path);
+    if (!facts.worktree || realpathSync(facts.root) !== realpathSync(path)) return undefined;
+    return facts;
+  } catch {
+    return undefined;
+  }
 }
 
 function admissionFailure(snapshot: MeshSnapshot, binding: NonNullable<MeshSnapshot["bindings"]>[number]): ProjectRepositoryGraph {
