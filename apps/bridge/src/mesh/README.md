@@ -41,6 +41,12 @@ capsule names when the phone asked for it, never forced, and a fetch of that
 branch on a destination that lacks the commit. A handoff whose target is this
 computer is taken up by `prepare` itself, since the request would only come
 back as a duplicate of an event the store already holds.
+A prepare request with `cloud` goes to `runtime/cloud-handoff`: the computer
+holding the Task pushes (or finds pushed, via `remoteHasCommit`) the capsule's
+branch and starts a Claude Code cloud session or Codex Cloud task with the
+installed CLI. The run is recorded as an `external` execution with the CLI's
+link and is never swept, owned or given progress; see
+[cloud runners](../cloud-runners/README.md).
 
 `convergence.ts` and `task-state.ts` keep one Task identity while snapshots and
 events arrive late, twice, and from several computers. Every writer raises the

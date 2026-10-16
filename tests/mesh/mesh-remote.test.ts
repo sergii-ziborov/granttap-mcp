@@ -4,7 +4,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { defaultRemote, fetchRevision, pushBranch } from "../../apps/bridge/src/mesh/local-remote/remote";
+import { defaultRemote, fetchRevision, pushBranch, remoteHasCommit } from "../../apps/bridge/src/mesh/local-remote/remote";
 import { repositoryHasCommit } from "../../apps/bridge/src/mesh/runtime/worktree";
 
 function git(cwd: string, args: string[]): string {
@@ -71,4 +71,18 @@ test("a push says why it could not happen instead of forcing anything", async ()
   git(lonely, ["remote", "add", "mirror", lonely]);
   assert.equal(defaultRemote(lonely), "mirror");
   assert.equal(fetchRevision(lonely, "b".repeat(40), "main"), false, "fetch fails on an empty repository");
+});
+
+test("a cloud runner's commit counts as published only once a remote branch holds it", async () => {
+  const { source } = await repositories();
+  git(source, ["checkout", "-q", "-b", "feature/cloud"]);
+  await writeFile(join(source, "cloud.txt"), "work\n");
+  git(source, ["add", "cloud.txt"]);
+  git(source, ["-c", "user.name=Test", "-c", "user.email=test@example.test", "commit", "-q", "-m", "cloud"]);
+  const sha = git(source, ["rev-parse", "HEAD"]);
+  assert.equal(remoteHasCommit(source, sha), false, "committed is not pushed");
+  assert.deepEqual(pushBranch(source, "feature/cloud"), { ok: true, remote: "origin" });
+  assert.equal(remoteHasCommit(source, sha), true);
+  assert.equal(remoteHasCommit(source, "not-a-sha"), false);
+  assert.equal(remoteHasCommit(join(source, "missing"), sha), false);
 });

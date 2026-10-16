@@ -6,6 +6,7 @@ import { loadRuntimeConfig, autoAcceptLevelFor } from "../../config";
 import { monitorLeadership } from "./leadership";
 import { mcpServersForSession, workspaceSkills } from "../../capabilities";
 import { inspectAgentIntegrations } from "../../install";
+import { withCloudRunners } from "../../cloud-runners";
 import { currentConfigRevision } from "../../config/commands";
 import { currentInstanceEpoch } from "../../host/instance-epoch";
 import { localMeshStore } from "../../mesh/local-remote/local";
@@ -102,7 +103,7 @@ function monitorSnapshot(input: {
     contextCompilerEnabled: runtime.contextCompilerEnabled,
     configRevision: currentConfigRevision(),
     instanceEpoch: currentInstanceEpoch(),
-    agents: inspectAgentIntegrations(),
+    agents: withCloudRunners(inspectAgentIntegrations()),
     generatedAt: Date.now(),
   };
 }

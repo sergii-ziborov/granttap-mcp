@@ -58,6 +58,19 @@ export const MeshTask = z.object({
 }).strict();
 export type MeshTask = z.infer<typeof MeshTask>;
 
+/** A provider cloud run a computer started; GrantTap cannot observe its progress. */
+export const ExternalExecution = z.object({
+  runner: z.enum(["claude_cloud", "codex_cloud"]),
+  url: z.string().trim().max(1_024).regex(/^https:\/\/\S+$/).optional(),
+}).strict();
+export type ExternalExecution = z.infer<typeof ExternalExecution>;
+
+export const CloudLaunchRequest = z.object({
+  environment: z.string().trim().min(1).max(160).regex(/^[^\x00-\x1f\x7f]+$/).optional(),
+  effort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional(),
+}).strict();
+export type CloudLaunchRequest = z.infer<typeof CloudLaunchRequest>;
+
 export const ExecutionSessionLink = z.object({
   continuedAt: z.number().nonnegative().optional(),
   state: z.enum(["working", "waiting", "idle"]).optional(),
@@ -84,6 +97,8 @@ export const ExecutionSessionLink = z.object({
   activeAt: z.number().nonnegative().optional(),
   startedAt: z.number().nonnegative(),
   endedAt: z.number().nonnegative().optional(),
+  // Set only for a provider cloud run: where to look at it, never progress.
+  external: ExternalExecution.optional(),
 }).strict().superRefine((value, ctx) => {
   if ((value.provider === "grok_bot") !== (value.actorId != null)) {
     ctx.addIssue({

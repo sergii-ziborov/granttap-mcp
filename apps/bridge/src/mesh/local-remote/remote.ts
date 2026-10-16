@@ -53,3 +53,16 @@ export function fetchRevision(repository: string, revision: string, branch?: str
   }
   return repositoryHasCommit(repository, revision);
 }
+
+/**
+ * Whether a remote-tracking branch already holds the commit, as this checkout
+ * last saw its remote. A provider cloud runner can only fetch what is pushed.
+ */
+export function remoteHasCommit(cwd: string, revision: string): boolean {
+  if (!/^[0-9a-f]{7,64}$/i.test(revision)) return false;
+  try {
+    return git(cwd, ["branch", "-r", "--contains", revision], 10_000).length > 0;
+  } catch {
+    return false;
+  }
+}

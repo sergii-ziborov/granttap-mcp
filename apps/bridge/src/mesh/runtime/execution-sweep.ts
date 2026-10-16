@@ -25,6 +25,8 @@ export function closeVanished(
   let closed = 0;
   for (const execution of executions) {
     if (execution.computerId !== computerId || execution.endedAt != null) continue;
+    // A provider cloud run is never a local chat, so its absence here says nothing.
+    if (execution.external) continue;
     if (!scannedProviders.has(execution.provider)) continue;
     if (liveSessionIds.has(execution.sessionId)) continue;
     execution.endedAt = endedAt;
