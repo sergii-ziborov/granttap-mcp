@@ -15,6 +15,10 @@ beside `mesh-publication`. This module uses the repository Apache License 2.0.
 `message-delivery/index.ts` reserves the durable delivery lease, then
 emits a non-terminal processing receipt only after workspace, attachment and
 provider validation. Duplicate validated requests replay that receipt without
-starting another provider run. The eleven-minute lease covers the ten-minute
-provider timeout. New-task startup events are status updates; the correlated
-result is terminal. Delivery integration tests live in `tests/delivery`.
+starting another provider run. A message is delivered once the agent has
+taken it: `message-delivery/acceptance.ts` reports an immediate failure as that
+failure and accepts a run still going after a short window, so the
+eleven-minute lease only has to cover that window. The answer, or the reason a
+long run stopped, reaches the chat when the run ends; unattended runs are
+bounded at six hours. New-task startup events are status updates; the
+correlated result is terminal. Delivery integration tests live in `tests/delivery`.

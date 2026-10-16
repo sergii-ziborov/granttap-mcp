@@ -9,6 +9,7 @@ import {
   createCodexSession,
   createCursorSession,
   createGrokSession,
+  type ReplyResult,
 } from "../../reply";
 import { acceptInstanceEpoch } from "../../host/instance-epoch";
 import { evaluateCreateTask } from "../../mesh/tasks/create-task";
@@ -16,7 +17,7 @@ import { recordDelegation } from "../../mesh/handoff/delegation-loop";
 import { enqueuePinnedTask } from "../../mesh/tasks/queue";
 import { sendSessionPayload } from "../../host/session-keys";
 import { resolveMessageAttachments } from "./receipts";
-import { DELIVERY_TIMEOUT_MS } from "./receipts";
+import { acceptWhenStarted, PHONE_RUN_LIMIT_MS } from "../message-delivery/acceptance";
 
 export type TaskCreateAdmission =
   | { status: "accepted" }
@@ -99,15 +100,16 @@ export async function handleTaskCreate(
     cursor: createCursorSession,
     grok: createGrokSession,
   }[agent];
-  const result = await create(
-    message.text, message.cwd, DELIVERY_TIMEOUT_MS, resolved.attachments, message.model,
+  const run = create(
+    message.text, message.cwd, PHONE_RUN_LIMIT_MS, resolved.attachments, message.model,
     message.operationId,
   );
-  if (result.ok) {
-    await say(result.text, result.sessionId, true);
-  } else {
-    await say(`Could not create a ${displayName} task: ${result.error}`, undefined, true);
-    return { status: "rejected", error: "Provider delivery failed." };
-  }
-  return { status: "accepted" };
+  const settle = (result: ReplyResult, late: boolean) => result.ok
+    ? say(result.text, result.sessionId, true)
+    : say(late ? `The ${displayName} task stopped: ${result.error}`
+      : `Could not create a ${displayName} task: ${result.error}`, undefined, true);
+  const early = await acceptWhenStarted(run, (result) => settle(result, true));
+  if (early === "started") return { status: "accepted" };
+  await settle(early, false);
+  return early.ok ? { status: "accepted" } : { status: "rejected", error: "Provider delivery failed." };
 }

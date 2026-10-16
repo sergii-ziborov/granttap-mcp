@@ -4,8 +4,6 @@ import type { RelayClient } from "../../../../../packages/core/relay-client";
 import { pruneAttachments, takeAttachment } from "../../delivery/attachment-store";
 import { sendSessionPayload } from "../../host/session-keys";
 
-export const DELIVERY_TIMEOUT_MS = 10 * 60_000;
-
 export async function sendDeliveryReceipt(
   client: RelayClient,
   messageId: string,

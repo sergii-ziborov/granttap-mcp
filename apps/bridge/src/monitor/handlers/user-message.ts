@@ -10,6 +10,7 @@ import {
   createCursorSession,
   createGrokSession,
   deliverToSession,
+  type ReplyResult,
 } from "../../reply";
 import { noteDeliveredRun } from "../../mesh/delivery/run-digest";
 import { evaluateCreateTask } from "../../mesh/tasks/create-task";
@@ -17,7 +18,7 @@ import { sendSessionPayload } from "../../host/session-keys";
 import { scanSessions } from "../../sessions";
 import { agentEventForUserMessage, sendDeliveryReceipt } from "./receipts";
 import { resolveMessageAttachments } from "./receipts";
-import { DELIVERY_TIMEOUT_MS } from "./receipts";
+import { acceptWhenStarted, PHONE_RUN_LIMIT_MS } from "../message-delivery/acceptance";
 
 async function startNewAgentTask(input: {
   client: RelayClient;
@@ -66,16 +67,17 @@ async function startNewAgentTask(input: {
     cursor: createCursorSession,
     grok: createGrokSession,
   }[agent];
-  const result = await create(
-    message.text, requestedCwd, DELIVERY_TIMEOUT_MS, resolved.attachments, message.model, undefined, message.effort,
+  const run = create(
+    message.text, requestedCwd, PHONE_RUN_LIMIT_MS, resolved.attachments, message.model, undefined, message.effort,
   );
-  if (result.ok) {
-    await say(result.text, result.sessionId, true);
-    return "accepted";
-  } else {
-    await say(`Could not create a ${displayName} task: ${result.error}`, undefined, true);
-    return "rejected";
-  }
+  const settle = (result: ReplyResult, late: boolean) => result.ok
+    ? say(result.text, result.sessionId, true)
+    : say(late ? `The ${displayName} task stopped: ${result.error}`
+      : `Could not create a ${displayName} task: ${result.error}`, undefined, true);
+  const early = await acceptWhenStarted(run, (result) => settle(result, true));
+  if (early === "started") return "accepted";
+  await settle(early, false);
+  return early.ok ? "accepted" : "rejected";
 }
 
 export async function handleUserMessage(
@@ -125,32 +127,34 @@ export async function handleUserMessage(
   // marks the person's bubble, and the next words in the chat are the answer.
   await onProcessing?.();
   const startedAt = Date.now();
-  const result = await deliverToSession(target, message.text, DELIVERY_TIMEOUT_MS, attachments, {
+  const run = deliverToSession(target, message.text, PHONE_RUN_LIMIT_MS, attachments, {
     preferredMcp: message.preferredMcp,
     skill: message.skill,
     model: message.model,
     permissionMode: message.permissionMode,
     effort: message.effort,
   });
-  // The run's turns are in the transcript, but a session holding this chat
-  // open never sees them; the journal is how it finds out on its next prompt,
-  // and the Task carries the same digest as progress.
-  const noted = noteDeliveredRun({
-    session: target,
-    prompt: message.text,
-    result,
-    startedAt,
-    endedAt: Date.now(),
-  });
-  if (noted?.event) {
-    await sendSessionPayload(client, noted.event, noted.event.taskId, "phone", { ttlMs: 24 * 60 * 60_000 })
-      .catch(() => {});
-  }
-  if (result.ok) {
-    await say(result.text, result.sessionId ?? target.sessionId, true);
-    return "accepted";
-  } else {
-    await say(`Could not deliver the message: ${result.error}`, target.sessionId, true);
-    return "rejected";
-  }
+  const settle = async (result: ReplyResult, late: boolean) => {
+    // The run's turns are in the transcript, but a session holding this chat
+    // open never sees them; the journal is how it finds out on its next prompt,
+    // and the Task carries the same digest as progress.
+    const noted = noteDeliveredRun({
+      session: target,
+      prompt: message.text,
+      result,
+      startedAt,
+      endedAt: Date.now(),
+    });
+    if (noted?.event) {
+      await sendSessionPayload(client, noted.event, noted.event.taskId, "phone", { ttlMs: 24 * 60 * 60_000 })
+        .catch(() => {});
+    }
+    if (result.ok) await say(result.text, result.sessionId ?? target.sessionId, true);
+    else await say(late ? `The run stopped: ${result.error}` : `Could not deliver the message: ${result.error}`,
+      target.sessionId, true);
+  };
+  const early = await acceptWhenStarted(run, (result) => settle(result, true));
+  if (early === "started") return "accepted";
+  await settle(early, false);
+  return early.ok ? "accepted" : "rejected";
 }
