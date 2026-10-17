@@ -7,3 +7,7 @@ public entry point. Characterization coverage lives in `tests/sessions.test.ts`,
 
 License: this module is distributed under the Apache License 2.0
 in the repository-root `LICENSE` file.
+
+`attention/` supplements JSONL messages with the native composer's visible
+question cards and warnings. Missing hooks or a text-only transcript must not
+hide the prompt or choices. Native storage is read-only and bounded.

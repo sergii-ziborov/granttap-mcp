@@ -2,10 +2,11 @@ import { readFileSync } from "node:fs";
 import type { ActivityEntry, ChildThreadInfo, SessionInfo } from "../../../../../packages/protocol/schema";
 import { classifyTool, estimateTokens, pushEntry, toolSummary } from "../support/activity-helpers";
 import { childEntryFields } from "../support/child-threads";
-import { safeParse, stateFor } from "../support/common";
+import { safeParse, stateFor, ts } from "../support/common";
 import type { CapabilityObservation } from "../telemetry";
 import { cursorFiles, cursorUsage, scanCursor } from "./scan";
 import { textBlocks } from "./transcripts";
+import { cursorNativeAttention, cursorQuestionText, cursorNoticeText } from "./attention";
 
 function appendFileActivity(input: {
   out: ActivityEntry[];
@@ -31,8 +32,14 @@ function appendFileActivity(input: {
   lines.forEach((line, index) => {
     const item = safeParse(line);
     if (!item) return;
-    const createdAt = (typeof item.timestamp === "number" ? item.timestamp : 0)
+    const createdAt = ts(item.timestamp ?? item.message?.timestamp)
       || baseTime + (indexOffset + index) * 1_000;
+    const notices = [item, ...(Array.isArray(item.message?.content) ? item.message.content : [])];
+    notices.forEach((row, ordinal) => {
+      const notice = cursorNoticeText(row);
+      if (notice) pushEntry({ fullText, out, seen, sessionId, kind: "status", text: notice,
+        createdAt, ordinal: (indexOffset + index) * 100 + ordinal, extras: childFields });
+    });
     if (item.role === "user") {
       const text = textBlocks(item.message?.content).join("\n").trim();
       if (!text) return;
@@ -53,7 +60,7 @@ function appendFileActivity(input: {
       if (block?.type === "text" && typeof block.text === "string" && block.text.trim()) {
         pushEntry({ fullText, out: out, seen: seen, sessionId: sessionId, kind: "message", text: block.text, createdAt: createdAt, ordinal: sequence, extras: childFields, idOverride: entryId(createdAt, sequence) });
       } else if (block?.type === "tool_use") {
-        pushEntry({ fullText, out: out, seen: seen, sessionId: sessionId, kind: "tool", text: toolSummary(block.name, block.input), createdAt: createdAt, ordinal: sequence, extras: {
+        pushEntry({ fullText, out: out, seen: seen, sessionId: sessionId, kind: cursorQuestionText(block.name, block.input) ? "message" : "tool", text: cursorQuestionText(block.name, block.input) ?? toolSummary(block.name, block.input), createdAt: createdAt, ordinal: sequence, extras: {
             ...childFields,
             ...classifyTool(block.name, block.input),
             estimatedContextTokens: estimateTokens(block.input),
@@ -85,6 +92,9 @@ export function cursorActivity(session: SessionInfo, fullText = false): Activity
       baseTime: base, indexOffset: index * 10_000, child,
     });
   });
+  for (const entry of cursorNativeAttention(session)) {
+    if (!out.some(existing => existing.text === entry.text)) out.push(entry);
+  }
   return out.sort((a, b) => a.createdAt - b.createdAt);
 }
 

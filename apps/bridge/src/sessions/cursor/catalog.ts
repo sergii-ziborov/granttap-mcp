@@ -258,6 +258,7 @@ export function composerActivityAt(composer: ComposerRow): number {
 
 export function composerState(status: string | undefined, lastActivityAt: number): SessionState {
   const value = (status ?? "").toLowerCase();
+  if (["waiting", "waiting_for_user", "awaiting_user_response"].includes(value)) return "waiting";
   if (["generating", "continuing", "applying", "running", "in_progress", "active"].includes(value)) {
     return "working";
   }
