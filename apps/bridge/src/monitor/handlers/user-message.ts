@@ -16,6 +16,7 @@ import { noteDeliveredRun } from "../../mesh/delivery/run-digest";
 import { evaluateCreateTask } from "../../mesh/tasks/create-task";
 import { sendSessionPayload } from "../../host/session-keys";
 import { scanSessions } from "../../sessions";
+import { publishedSession } from "../../session-catalog";
 import { agentEventForUserMessage, sendDeliveryReceipt } from "./receipts";
 import { resolveMessageAttachments } from "./receipts";
 import { acceptWhenStarted, PHONE_RUN_LIMIT_MS } from "../message-delivery/acceptance";
@@ -104,7 +105,11 @@ export async function handleUserMessage(
   }
   const attachments = resolved.attachments;
 
-  const target = scanSessions().sessions.find((session) => session.sessionId === message.sessionId);
+  // The catalog this monitor last published already names the chat. A full
+  // provider scan blocks the event loop for seconds on a large transcript set,
+  // so it runs only for a chat newer than that catalog.
+  const target = publishedSession(client, message.sessionId)
+    ?? scanSessions().sessions.find((session) => session.sessionId === message.sessionId);
   if (!target) {
     await say("This task is no longer available on the computer.", message.sessionId);
     return "rejected";

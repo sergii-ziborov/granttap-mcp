@@ -31,9 +31,21 @@ type ClaudeParseState = {
   tokensLastTurn: number;
   contextTokensUsed?: number;
   repositoryPaths: string[];
+  turnEnded: boolean;
 };
 
+/** Stop reasons after which Claude Code waits for the person's next prompt. */
+const FINISHED_TURN = new Set(["end_turn", "stop_sequence", "max_tokens"]);
+
+/** Metadata, progress and subagent lines do not start or end the chat's own turn. */
+function noteTurnBoundary(d: any, state: ClaudeParseState): void {
+  if (d.isSidechain === true) return;
+  if (d.type === "user" || d.type === "queue-operation") state.turnEnded = false;
+  else if (d.type === "assistant") state.turnEnded = FINISHED_TURN.has(d.message?.stop_reason);
+}
+
 function applyClaudeLine(d: any, state: ClaudeParseState): void {
+  noteTurnBoundary(d, state);
   state.repositoryPaths.push(...claudeRepositoryPaths(d));
   state.repositoryPaths = state.repositoryPaths.slice(-64);
   if (d.sessionId && !state.sessionId) state.sessionId = String(d.sessionId);
@@ -119,7 +131,7 @@ export function parseClaudeFile(file: string): {
       state:
         cached.session.childThreads?.some((child) => stateFor(child.lastActivityAt) === "working")
           ? "working" as const
-          : stateFor(cached.session.lastActivityAt),
+          : cached.turnEnded ? "idle" as const : stateFor(cached.session.lastActivityAt),
       childThreads: cached.session.childThreads?.map((child) => ({
         ...child,
         state: stateFor(child.lastActivityAt),
@@ -136,7 +148,7 @@ export function parseClaudeFile(file: string): {
   const lines = text.split("\n");
   const state: ClaudeParseState = {
     sessionId: "", startedAt: 0, lastActivityAt: 0, lastMessageAt: 0,
-    tokensSession: 0, tokensLastTurn: 0, repositoryPaths: [],
+    tokensSession: 0, tokensLastTurn: 0, repositoryPaths: [], turnEnded: false,
   };
   for (const line of lines) {
     if (!line) continue;
@@ -153,7 +165,7 @@ export function parseClaudeFile(file: string): {
     branch: state.branch,
     model: state.model,
     summary: state.summary,
-    state: stateFor(state.lastActivityAt),
+    state: state.turnEnded ? "idle" : stateFor(state.lastActivityAt),
     startedAt: state.startedAt || state.lastActivityAt,
     lastActivityAt: state.lastActivityAt,
     ...(state.lastMessageAt ? { lastMessageAt: state.lastMessageAt } : {}),
@@ -182,6 +194,7 @@ export function parseClaudeFile(file: string): {
     session,
     tokensSession: session.tokensSession,
     observations,
+    turnEnded: state.turnEnded,
   });
   return { session, tokensSession: session.tokensSession, childPaths: actualChildPaths };
 }

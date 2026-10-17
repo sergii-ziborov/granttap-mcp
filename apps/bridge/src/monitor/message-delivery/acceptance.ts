@@ -10,8 +10,12 @@
  * its answer — or the reason it stopped — reaches the chat when it ends.
  */
 
-/** Long enough for a provider CLI to refuse at once, short enough not to keep the phone waiting. */
-export const ACCEPTANCE_WINDOW_MS = 15_000;
+/**
+ * Long enough for a provider CLI to refuse at once (missing chat, bad flag,
+ * not signed in), short enough that the message leaves the phone's queue
+ * while the person is still looking at it.
+ */
+export const ACCEPTANCE_WINDOW_MS = 3_000;
 
 /** A safety bound for an unattended turn; the person stops a run with Stop, not with a deadline. */
 export const PHONE_RUN_LIMIT_MS = 6 * 60 * 60_000;

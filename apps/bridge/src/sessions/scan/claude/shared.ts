@@ -51,6 +51,8 @@ export type CachedClaudeSummary = {
   session: SessionInfo;
   tokensSession: number;
   observations: CapabilityObservation[];
+  /** The chat's own last turn ended; recent writes no longer mean it is working. */
+  turnEnded?: boolean;
 };
 
 export const claudeSummaryCache = new Map<string, CachedClaudeSummary>();

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { SessionInfo, TaskDispatch } from '../../../../../../packages/protocol/schema';
-import { taskDispatchReady } from '../readiness';
+import { QUEUED_CATALOG_REFRESH_MS, queuedCatalogRefreshDue, taskDispatchReady } from '../readiness';
 
 const now = 1_000_000;
 const job: TaskDispatch = { type: 'task.dispatch', jobId: 'ready-job-01', token: 'a'.repeat(64),
@@ -30,4 +30,14 @@ test('automatic queue release requires a fresh idle catalog rather than another 
   assert.equal(taskDispatchReady(job, { ...idle, generatedAt: now + 120_000 }, now), false);
   assert.equal(taskDispatchReady(job, { ...idle, session: undefined }, now), true);
   assert.equal(taskDispatchReady({ ...job, sessionId: undefined }, observation, now), true);
+});
+
+test('a queued job waiting for idle refreshes the catalog sooner than the 30 second loop, but not on every tick', () => {
+  const stale = { ...observation, generatedAt: now - QUEUED_CATALOG_REFRESH_MS };
+  assert.equal(queuedCatalogRefreshDue(job, stale, 0, now), true);
+  assert.equal(queuedCatalogRefreshDue(job, stale, now - 1_000, now), false, 'one refresh per window');
+  assert.equal(queuedCatalogRefreshDue(job, observation, 0, now), false, 'a fresh catalog is already the answer');
+  assert.equal(queuedCatalogRefreshDue({ ...job, deliveryMode: 'immediate' }, stale, 0, now), false);
+  assert.equal(queuedCatalogRefreshDue(job, { ...stale, paused: true }, 0, now), false);
+  assert.ok(QUEUED_CATALOG_REFRESH_MS <= 10_000);
 });

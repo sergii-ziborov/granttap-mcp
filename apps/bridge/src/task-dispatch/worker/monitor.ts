@@ -9,7 +9,7 @@ import { TaskDispatchInbox } from '../index';
 import { TaskDispatchWorker } from './index';
 import { relayTaskJobRemote } from './remote';
 import { NativeTaskQueueSender } from '../sender';
-import { taskDispatchReady } from './readiness';
+import { queuedCatalogRefreshDue, taskDispatchReady } from './readiness';
 
 /** Only the persistent monitor advertises durable submission capability. */
 export function startTaskDispatchMonitor(input: {
@@ -17,7 +17,7 @@ export function startTaskDispatchMonitor(input: {
   peerAllowed: (peer: string) => boolean; publish: () => Promise<void>;
 }): () => void {
   const inbox = new TaskDispatchInbox(join(configDir(), 'task-dispatch'), input.config.room);
-  let stopped = false, reportedAt = 0, maintainedAt = 0;
+  let stopped = false, reportedAt = 0, maintainedAt = 0, refreshedAt = 0;
   const sender = new NativeTaskQueueSender({ root: join(configDir(), 'native-task-queue'), config: input.config });
   const peerAllowed = (peer: string) => peer === input.config.myPublicKey || input.peerAllowed(peer);
   const worker = new TaskDispatchWorker({ inbox, remote: relayTaskJobRemote(input.config),
@@ -29,9 +29,15 @@ export function startTaskDispatchMonitor(input: {
       const catalog = publishedCatalog(input.client);
       const session = [...(catalog?.sessions ?? []), ...(catalog?.history ?? [])]
         .find(item => item.sessionId === job.sessionId);
-      return taskDispatchReady(job, { session, generatedAt: catalog?.generatedAt,
+      const observation = { session, generatedAt: catalog?.generatedAt,
         inFlight: isDeliveryInFlight(job.sessionId ?? `__new_${job.operation.agent ?? 'codex'}_task__`),
-        paused: !!job.sessionId && isSessionPaused(job.sessionId) });
+        paused: !!job.sessionId && isSessionPaused(job.sessionId) };
+      const ready = taskDispatchReady(job, observation);
+      if (!ready && queuedCatalogRefreshDue(job, observation, refreshedAt)) {
+        refreshedAt = Date.now();
+        void input.publish().catch(() => {});
+      }
+      return ready;
     },
     deliver: async (job, beforeStart) => {
       const outcome = job.operation.type === 'user.message'

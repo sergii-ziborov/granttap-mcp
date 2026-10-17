@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { acceptWhenStarted, PHONE_RUN_LIMIT_MS } from '../acceptance';
+import { ACCEPTANCE_WINDOW_MS, acceptWhenStarted, PHONE_RUN_LIMIT_MS } from '../acceptance';
 
 type Result = { ok: boolean; text?: string; error?: string };
 
@@ -35,4 +35,8 @@ test('a late failure is handed to the finisher instead of rejecting the delivery
 
 test('a long turn is not cut off at ten minutes', () => {
   assert.ok(PHONE_RUN_LIMIT_MS >= 60 * 60_000);
+});
+
+test('a started run leaves the phone queue within a few seconds', () => {
+  assert.ok(ACCEPTANCE_WINDOW_MS <= 3_000, 'a provider CLI that refuses does so at once; longer only delays the person');
 });
