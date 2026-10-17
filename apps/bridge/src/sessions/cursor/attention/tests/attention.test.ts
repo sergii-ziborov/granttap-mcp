@@ -43,7 +43,7 @@ test('native question cards and errors are read from this exact composer without
     name: 'ask_question', status: 'loading', params: JSON.stringify(question) } };
   const values = [['composerData:chat', composer], ['bubbleId:chat:question', bubble],
     ['bubbleId:chat:large-edit', { toolFormerData: { name: 'edit_file_v2', params: 'x'.repeat(2_200_000) } }],
-    ['bubbleId:chat:error', { createdAt: '2026-10-18T10:00:01Z', errorDetails: { message: 'Connection interrupted.' } }],
+    ['bubbleId:chat:error', { createdAt: '2026-10-18T10:00:01Z', errorDetails: { error: { details: { detail: 'Connection interrupted.' } } } }],
     ['bubbleId:other:question', { toolFormerData: { name: 'ask_question', params: JSON.stringify({ questions: [{ prompt: 'Other chat' }] }) } }]];
   execFileSync('sqlite3', [db], { input: 'CREATE TABLE cursorDiskKV(key TEXT PRIMARY KEY,value TEXT);' + values.map(([k,v]) =>
     `INSERT INTO cursorDiskKV VALUES(${quote(k as string)},${quote(JSON.stringify(v))});`).join('') });

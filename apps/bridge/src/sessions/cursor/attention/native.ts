@@ -26,7 +26,9 @@ export function cursorNativeAttention(session: SessionInfo, db = process.env.GRA
         json_extract(b.value,'$.toolFormerData.name') AS name,
         CASE WHEN lower(json_extract(b.value,'$.toolFormerData.name')) IN ('ask_question','askquestion','askuserquestion')
           THEN json_extract(b.value,'$.toolFormerData.params') END AS params,
-        coalesce(json_extract(b.value,'$.errorDetails.message'),json_extract(b.value,'$.warning.message')) AS warning
+        coalesce(json_extract(b.value,'$.errorDetails.error.details.detail'),
+          json_extract(b.value,'$.errorDetails.error.details.title'),
+          json_extract(b.value,'$.errorDetails.message'),json_extract(b.value,'$.warning.message')) AS warning
       FROM headers h JOIN cursorDiskKV b ON b.key=${sql('bubbleId:' + session.sessionId + ':')} || h.id;`;
     const raw = execFileSync('sqlite3', ['-readonly', '-json', db, query], {
       encoding: 'utf8', timeout: 1_000, maxBuffer: 2 * 1_024 * 1_024, stdio: ['ignore', 'pipe', 'ignore'],
