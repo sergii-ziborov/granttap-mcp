@@ -65,6 +65,8 @@ export const SessionSealed = z.object({
 export type SessionSealed = z.infer<typeof SessionSealed>;
 
 export const SessionInfo = z.object({
+  creationOrigins: z.array(z.object({ originId: z.string().min(1).max(180),
+    controllerPublicKey: z.string().min(1).max(180) }).strict()).max(32).optional(),
   transfer: TaskTransferNotice.optional(),
   sessionId: z.string(),
   agent: AgentId,

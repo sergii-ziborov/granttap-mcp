@@ -17,9 +17,7 @@ import { evaluateCreateTask } from "../../mesh/tasks/create-task";
 import { sendSessionPayload } from "../../host/session-keys";
 import { scanSessions } from "../../sessions";
 import { publishedSession } from "../../session-catalog";
-import { join } from 'node:path';
-import { configDir } from '../../config';
-import { TaskOriginRegistry, type TaskOriginScope } from '../../task-origins';
+import { localTaskOrigins, type TaskOriginRegistry, type TaskOriginScope } from '../../task-origins';
 import { agentEventForUserMessage, sendDeliveryReceipt } from "./receipts";
 import { resolveMessageAttachments } from "./receipts";
 import { acceptWhenStarted, PHONE_RUN_LIMIT_MS } from "../message-delivery/acceptance";
@@ -124,7 +122,7 @@ export async function handleUserMessage(
   };
   if (!message.sessionId) {
     const origin = message.taskOriginId && peerPublicKey ? {
-      registry: new TaskOriginRegistry(join(configDir(), 'task-origins')),
+      registry: localTaskOrigins(),
       scope: { room: client.room, peerPublicKey, originMessageId: message.taskOriginId },
     } : undefined;
     return startNewAgentTask({ client, message, say, onProcessing, origin });

@@ -27,6 +27,7 @@ import { scanCapabilityUsage, scanSessionHistory, scanSessions, scopeCapabilityU
 import { boundedCatalogHistory, INTERVAL_MS, publishSessionEvents } from "../handlers/catalog";
 import { sweepAttachments } from "../handlers/receipts";
 import { handleMonitorMessage } from "../handlers/inbound";
+import { decorateTaskOriginCatalog } from '../../task-origins';
 
 const HISTORY_INTERVAL_MS = 60_000;
 const resumedHeads = new WeakSet<RelayClient>();
@@ -124,7 +125,8 @@ async function publishMonitorTick(input: {
   if (!leadership.acquire()) return { lastHistoryPublishedAt, lastCapabilityPublishedAt };
   const initial = lastHistoryPublishedAt === 0;
   const includeHistory = forceHistory || (!initial && Date.now() - lastHistoryPublishedAt >= HISTORY_INTERVAL_MS);
-  const status = monitorSnapshot({ includeHistory, forceHistory, subscriptions, history });
+  const status = decorateTaskOriginCatalog(
+    monitorSnapshot({ includeHistory, forceHistory, subscriptions, history }), client.room);
   rememberPublishedCatalog(client, status);
   await client.send(status, "phone", { ttlMs: INTERVAL_MS * 24, reliable: false });
   if (initial && !resumedHeads.has(client)) {

@@ -10,7 +10,7 @@ import { TaskDispatchWorker } from './index';
 import { relayTaskJobRemote } from './remote';
 import { NativeTaskQueueSender } from '../sender';
 import { queuedCatalogRefreshDue, taskDispatchReady } from './readiness';
-import { TaskOriginRegistry, resolveTaskOriginJob } from '../../task-origins';
+import { localTaskOrigins, resolveTaskOriginJob } from '../../task-origins';
 
 /** Only the persistent monitor advertises durable submission capability. */
 export function startTaskDispatchMonitor(input: {
@@ -18,7 +18,7 @@ export function startTaskDispatchMonitor(input: {
   peerAllowed: (peer: string) => boolean; publish: () => Promise<void>;
 }): () => void {
   const inbox = new TaskDispatchInbox(join(configDir(), 'task-dispatch'), input.config.room);
-  const origins = new TaskOriginRegistry(join(configDir(), 'task-origins'));
+  const origins = localTaskOrigins();
   const resolve = (job: Parameters<typeof resolveTaskOriginJob>[1], peer: string) =>
     resolveTaskOriginJob(origins, job, input.config.room, peer);
   let stopped = false, reportedAt = 0, maintainedAt = 0, refreshedAt = 0;

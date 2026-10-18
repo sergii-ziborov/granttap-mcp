@@ -1,10 +1,12 @@
-import { mkdirSync, unlinkSync } from 'node:fs';
+import { mkdirSync, unlinkSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import type { UserMessage } from '../../../../packages/protocol/schema';
 import { withStoreLock } from '../../../../packages/core/store-file-lock';
 import { fingerprint, readOrigin, syncDirectory, writeOrigin } from './storage';
+import { configDir } from '../config';
 export { resolveTaskOriginJob } from './continuation';
+export { decorateTaskOriginCatalog } from './projection';
 
 const Scope = z.object({ room: z.string().min(1).max(180), peerPublicKey: z.string().min(1).max(180),
   originMessageId: z.string().min(1).max(180) }).strict();
@@ -21,6 +23,7 @@ export type OriginResolution = { state: 'started' | 'waiting' | 'ready' | 'faile
 
 /** Only a native creation result can resolve this controller's original message to a chat. */
 export class TaskOriginRegistry {
+  private readonly catalogCache = new Map<string, { version: string; record: OriginRecord }>();
   private readonly now: () => number;
   private readonly ownerAlive: (pid: number) => boolean;
   constructor(private readonly root: string, options: {
@@ -31,11 +34,11 @@ export class TaskOriginRegistry {
       try { process.kill(pid, 0); return true; }
       catch (error) { return (error as NodeJS.ErrnoException).code !== 'ESRCH'; }
     });
-    mkdirSync(root, { recursive: true, mode: 0o700 });
-    syncDirectory(dirname(root));
   }
 
   begin(scope: TaskOriginScope, message: UserMessage): OriginResolution {
+    mkdirSync(this.root, { recursive: true, mode: 0o700 });
+    syncDirectory(dirname(this.root));
     const { createdAt: _time, retryId: _retry, ...intent } = message;
     const path = this.path(scope), digest = fingerprint(intent);
     return withStoreLock(path, () => {
@@ -85,6 +88,23 @@ export class TaskOriginRegistry {
     return record ? this.resolve(record, agent, projectId) : { state: 'waiting' };
   }
 
+  readyInRoom(room: string) {
+    return readdirSync(this.root).filter(name => /^[a-f0-9]{64}\.json$/.test(name)).sort().flatMap(name => {
+      try {
+        const path = join(this.root, name), stat = statSync(path);
+        const version = `${stat.ino}:${stat.size}:${stat.mtimeMs}`;
+        const cached = this.catalogCache.get(path);
+        const record = cached?.version === version ? cached.record : Record.parse(readOrigin(path));
+        if (this.path(record.scope) !== path) return [];
+        this.catalogCache.set(path, { version, record });
+        if (record.scope.room !== room || record.phase !== 'ready' || !record.sessionId
+            || record.expiresAt <= this.now()) return [];
+        return [{ sessionId: record.sessionId, agent: record.agent, projectId: record.projectId,
+          originId: record.scope.originMessageId, controllerPublicKey: record.scope.peerPublicKey }];
+      } catch { return []; }
+    });
+  }
+
   private resolve(record: OriginRecord, agent: string, projectId?: string): OriginResolution {
     if (record.agent !== agent || (projectId !== undefined && projectId !== record.projectId)) {
       return { state: 'conflict' };
@@ -109,4 +129,11 @@ export class TaskOriginRegistry {
   private path(scope: TaskOriginScope): string {
     return join(this.root, fingerprint(Scope.parse(scope)) + '.json');
   }
+}
+
+let cachedLocal: { root: string; registry: TaskOriginRegistry } | undefined;
+export function localTaskOrigins(): TaskOriginRegistry {
+  const root = join(configDir(), 'task-origins');
+  if (cachedLocal?.root !== root) cachedLocal = { root, registry: new TaskOriginRegistry(root) };
+  return cachedLocal.registry;
 }
