@@ -1,8 +1,12 @@
 export type ReplyResult =
-  | { ok: true; text: string; sessionId?: string }
-  | { ok: false; error: string };
+  | { ok: true; text: string; sessionId?: string; delivery?: 'native' }
+  | { ok: false; error: string; delivery?: 'native' };
 
 export type DeliveryOptions = {
+  /** Stable controller delivery ID, also used by the provider's native admission. */
+  messageId?: string;
+  /** Computer-generated identity before temporary attachment paths are inserted. */
+  intentDigest?: string;
   preferredMcp?: string;
   skill?: string;
   model?: string;

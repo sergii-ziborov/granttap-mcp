@@ -29,6 +29,12 @@ requesting controller, and restricted to that native execution's admitted
 checkout. Received previews remain on the device for offline inspection.
 **Agents** opens nested execution conversations within the same Task.
 
+Messages sent to a chat open in Codex Desktop continue that same conversation,
+including while a turn is running. The runtime forwards them to the existing
+desktop owner and preserves the delivery ID across retries. **Pause** reaches
+that owner too. A confirmed receipt means Codex accepted the message; its answer
+then arrives through the existing chat history.
+
 The MCP runtime, plugins, and CLI use the GrantTap Commercial Source License.
 Product use requires authorized GrantTap account access; official TestFlight
 access remains free. Earlier releases through 0.8.75 retain their Apache-2.0

@@ -171,6 +171,7 @@ export async function handleUserMessage(
   await onProcessing?.();
   const startedAt = Date.now();
   const run = deliverToSession(target, message.text, PHONE_RUN_LIMIT_MS, attachments, {
+    messageId: message.messageId,
     preferredMcp: message.preferredMcp,
     skill: message.skill,
     model: message.model,
@@ -178,6 +179,7 @@ export async function handleUserMessage(
     effort: message.effort,
   });
   const settle = async (result: ReplyResult, late: boolean) => {
+    if (result.ok && result.delivery === 'native') return;
     // The run's turns are in the transcript, but a session holding this chat
     // open never sees them; the journal is how it finds out on its next prompt,
     // and the Task carries the same digest as progress.

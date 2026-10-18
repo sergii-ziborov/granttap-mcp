@@ -35,7 +35,8 @@ test("native replies preserve skill and permission choices and refuse disabled r
     text: "Synthetic request", skill: "fixture-review", permission_mode: "plan", effort: "high" };
   const result = await desktopTaskSend(request, store, deliver, "local") as { accepted: boolean };
   assert.equal(result.accepted, true);
-  assert.deepEqual(calls, [{ skill: "fixture-review", permissionMode: "plan", effort: "high" }]);
+  assert.deepEqual(calls, [{ skill: "fixture-review", permissionMode: "plan", effort: "high",
+    messageId: request.delivery_id }]);
   const config = loadRuntimeConfig();
   config.sessionSkillsDisabled.s = ["fixture-review"];
   saveRuntimeConfig(config);

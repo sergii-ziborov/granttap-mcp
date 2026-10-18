@@ -30,3 +30,9 @@ Explicit Cursor task turns pass `--trust` for the selected workspace so an
 updated CLI cannot wait for an invisible desktop trust prompt. Resumes without
 a reported workspace are refused. Tool approvals and global action bans remain
 active; `--force`, `--yolo` and automatic MCP approval are never added.
+
+An existing Codex desktop conversation receives follow-ups through its native
+owner, without a competing `exec resume` writer. The `codex-desktop` feature owns
+that versioned local connection and durable admission receipt. Headless resume is
+used only when no native owner exists. Native admission carries the controller's
+message ID and returns promptly; the provider transcript supplies the answer.

@@ -13,6 +13,7 @@ import { withAttachments } from "./payload/attachments";
 import { abortProcesses, runProcess } from "./process";
 import { routingPrompt } from "./payload/routing";
 import type { DeliveryOptions, ReplyResult } from "./payload/types";
+import { deliveryIntent } from './payload/identity';
 import {
   runCursorNew,
   runCursorResume,
@@ -20,6 +21,7 @@ import {
   runGrokResume,
 } from "./process/provider-headless";
 export type { DeliveryOptions, ReplyResult } from "./payload/types";
+export { prunePreparedAttachments } from './payload/attachments';
 
 export const GENERAL_WORKSPACE = "granttap:general";
 
@@ -59,6 +61,7 @@ export function deliverToSession(
   if (!options.ignorePause && isSessionPaused(session.sessionId)) {
     return Promise.resolve({ ok: false, error: PAUSED_SESSION_REASON });
   }
+  if (session.agent === 'codex') options = { ...options, intentDigest: deliveryIntent(text, attachments, options) };
   if (/^transfer-[a-f0-9]{48}$/.test(session.sessionId)) {
     return queued(session.sessionId, async () => (await localTaskTransfers().deliver(
       session.sessionId, text, attachments, options, {

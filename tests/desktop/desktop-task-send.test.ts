@@ -34,7 +34,8 @@ test("local Task send keeps the exact Mesh and native execution link", async () 
   });
   await desktopTaskSend(request, storePath, deliver, "computer-a");
   assert.deepEqual(calls, ["session-a:Continue"]);
-  assert.deepEqual(options, [{ model: "gpt-6-astra" }], "confirmed model must reach the exact resumed execution");
+  assert.deepEqual(options, [{ model: "gpt-6-astra", messageId: request.delivery_id }],
+    "confirmed model and idempotency ID must reach the exact resumed execution");
   assert.equal(await desktopTaskSend({ ...request, delivery_id: randomUUID(), model: "--invalid" }, storePath, deliver, "computer-a"), undefined);
 });
 

@@ -47,7 +47,7 @@ export function desktopTaskSend(input: unknown,
   if (prior) return prior;
   const attachments = readDesktopAttachments(query.attachments_json);
   if (!attachments || !text.trim() && attachments.length === 0) return Promise.resolve(undefined);
-  const operation = deliver(session, text.trim(), 240_000, attachments, options).then((result) => ({
+  const operation = deliver(session, text.trim(), 240_000, attachments, { ...options, messageId: deliveryId }).then((result) => ({
     operation: "desktop.task_send", accepted: result.ok,
     error: result.ok ? null : result.error.slice(0, 500),
   }), () => ({ operation: "desktop.task_send", accepted: false,

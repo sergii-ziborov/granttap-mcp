@@ -4,6 +4,7 @@ import { resolveCodexBinary } from "../../providers/codex-bin";
 import { runProcess } from ".";
 import { providerEffortArgs } from "./provider-effort";
 import type { DeliveryOptions, ReplyResult } from "../payload/types";
+import { deliverToCodexDesktop } from '../../codex-desktop';
 
 function parseCodexJsonl(stdout: string, fallbackSessionId?: string): ReplyResult {
   let lastMessage = "";
@@ -44,13 +45,15 @@ function parseCodexJsonl(stdout: string, fallbackSessionId?: string): ReplyResul
     : { ok: false, error: "Codex returned an empty response." };
 }
 
-export function runCodex(
+export async function runCodex(
   session: SessionInfo,
   text: string,
   timeoutMs: number,
   images: string[] = [],
   options: DeliveryOptions = {},
 ): Promise<ReplyResult> {
+  const native = await deliverToCodexDesktop({ session, text, images, options, timeoutMs });
+  if (native) return native;
   const configured = loadRuntimeConfig().sessionAccess[session.sessionId];
   const disabledMcp = loadRuntimeConfig().sessionMcpDisabled[session.sessionId] ?? [];
   const sandbox = configured === "read-only"
@@ -71,7 +74,7 @@ export function runCodex(
     "exec", "resume", ...accessArgs, ...mcpArgs, ...modelArgs, ...providerEffortArgs("codex", options.effort), ...imageArgs,
     session.sessionId, "--json", "-",
   ];
-  return runProcess(
+  const result = await runProcess(
     resolveCodexBinary(),
     args,
     session.cwd,
@@ -80,6 +83,9 @@ export function runCodex(
     text,
     session.sessionId,
   );
+  return !result.ok && /thread-store conflict|already has an active writer/i.test(result.error)
+    ? { ok: false, error: 'Codex already owns this chat. Keep its window open and retry the message in GrantTap.' }
+    : result;
 }
 
 function tomlKey(value: string): string {

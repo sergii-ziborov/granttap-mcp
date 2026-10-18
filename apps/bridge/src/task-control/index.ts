@@ -3,6 +3,7 @@ import { setSessionPaused } from "../config";
 import { compactCodexSession } from "../providers/codex-control";
 import { deliverToSession, stopDeliveries } from "../reply";
 import { scanSessionHistory, scanSessions } from "../sessions";
+import { interruptCodexDesktop } from '../codex-desktop';
 
 const DELIVERY_TIMEOUT_MS = 240_000;
 
@@ -31,6 +32,9 @@ export async function controlTaskSession(
   }
   if (message.action === "pause") {
     const stopped = stopDeliveries(sessionId);
+    const desktop = await interruptCodexDesktop(sessionId);
+    if (desktop?.ok) return reply(true,
+      'Paused. Codex acknowledged the stop request. Every new tool call from this chat is refused until you resume.');
     return reply(true, stopped > 0
       ? `Paused. Stop requested for ${stopped} running turn${stopped === 1 ? "" : "s"}; process exit is not yet confirmed. Every new tool call from this chat is refused until you resume.`
       : "Paused: every tool call from this chat is refused until you resume.");

@@ -3,6 +3,7 @@ import { MAX_USER_ATTACHMENTS } from "../../../../../packages/protocol/schema";
 import type { RelayClient } from "../../../../../packages/core/relay-client";
 import { pruneAttachments, takeAttachment } from "../../delivery/attachment-store";
 import { sendSessionPayload } from "../../host/session-keys";
+import { prunePreparedAttachments } from '../../reply';
 
 export async function sendDeliveryReceipt(
   client: RelayClient,
@@ -54,7 +55,7 @@ let attachmentsSweptAt = 0;
 export function sweepAttachments(now = Date.now()): number {
   if (now - attachmentsSweptAt < ATTACHMENT_SWEEP_MS) return 0;
   attachmentsSweptAt = now;
-  return pruneAttachments(now);
+  return pruneAttachments(now) + prunePreparedAttachments(now);
 }
 
 /**
