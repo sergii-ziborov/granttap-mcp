@@ -77,6 +77,19 @@ test("Cursor Project policy precedes full auto for shell and redacted MCP", asyn
   assert.doesNotMatch(mcp.stdout, /must-not-cross-policy-ipc|secret|token@example/);
 });
 
+test("Cursor ACP delegates one phone wait to its conversation after applying Project denial", async t => {
+  const root = await projectRuntime(t, "granttap-cursor-acp-handoff-");
+  const env = { GRANTTAP_CURSOR_ACP: "1", GRANTTAP_APPROVAL_TIMEOUT_MS: "60000" };
+  const shell = runProjectHook("cursor", root, { conversation_id: "cursor-chat",
+    cwd: "/work/project", command: "echo safe" }, env);
+  assert.equal(shell.value?.permission, "ask");
+  assert.match(shell.stdout, /active Cursor conversation/);
+  const blocked = runProjectHook("cursor", root, { conversation_id: "cursor-chat",
+    cwd: "/work/project", tool_name: "Write", tool_input: { file_path: "/work/project/private.ts" } }, env);
+  assert.equal(blocked.value?.permission, "deny");
+  assert.match(blocked.stdout, /requires deny/);
+});
+
 function codexCall(
   toolUseId: string,
   toolName: string,

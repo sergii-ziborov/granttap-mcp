@@ -4,36 +4,11 @@ import { runProcess } from ".";
 import { providerEffortArgs } from "./provider-effort";
 import type { ReplyResult } from "../payload/types";
 import type { DeliveryOptions } from "../payload/types";
-import { resolveCursorAgentBin } from "./cursor-agent-bin";
 import { resolveGrokBinary } from "../../providers/grok-bin";
-import { prepareCursorContinuation } from '../cursor-context';
-
-function cursorBin(): string {
-  return resolveCursorAgentBin();
-}
+import { runCursorConversation } from "../cursor-conversation";
 
 function grokBin(): string {
   return resolveGrokBinary();
-}
-
-function parseCursor(stdout: string, fallback?: string): ReplyResult {
-  try {
-    const value = JSON.parse(stdout) as {
-      is_error?: boolean; result?: unknown; session_id?: unknown;
-    };
-    const text = typeof value.result === "string" ? value.result.trim() : "";
-    if (value.is_error) return { ok: false, error: text || "Cursor returned an error." };
-    if (text) return {
-      ok: true, text: text.slice(0, 4_000),
-      sessionId: typeof value.session_id === "string" ? value.session_id : fallback,
-    };
-  } catch {
-    // Retain a bounded plain-text fallback for older Cursor CLI builds.
-  }
-  const text = stdout.trim();
-  return text
-    ? { ok: true, text: text.slice(0, 4_000), sessionId: fallback }
-    : { ok: false, error: "Cursor returned an empty response." };
 }
 
 function parseGrok(stdout: string, fallback: string): ReplyResult {
@@ -66,10 +41,7 @@ function parseGrok(stdout: string, fallback: string): ReplyResult {
 export function runCursorNew(
   text: string, cwd: string, timeoutMs: number, model?: string, operationKey?: string, effort?: string,
 ): Promise<ReplyResult> {
-  return runProcess(
-    cursorBin(), ["-p", "--trust", ...(model ? ["--model", model] : []),
-      "--output-format", "json", text], cwd, timeoutMs, parseCursor, undefined, operationKey,
-  );
+  return runCursorConversation({ text, cwd, timeoutMs, model, operationKey });
 }
 
 export async function runCursorResume(
@@ -77,19 +49,7 @@ export async function runCursorResume(
 ): Promise<ReplyResult> {
   if (!session.cwd) return Promise.resolve({ ok: false,
     error: "Cursor has not reported this task's workspace. Open the task in Cursor and retry." });
-  let context: ReturnType<typeof prepareCursorContinuation>;
-  try { context = prepareCursorContinuation(session, text); }
-  catch { return { ok: false, error: 'The existing Cursor conversation could not be restored safely. Refresh its history and retry.' }; }
-  const selectedModel = model ?? session.model;
-  const result = await runProcess(
-    cursorBin(), ["-p", "--trust", "--resume", session.sessionId,
-      ...(selectedModel ? ["--model", selectedModel] : []), "--output-format", "json",
-      ...(context.viaStdin ? [] : [context.prompt])],
-    session.cwd, timeoutMs, (stdout) => parseCursor(stdout, session.sessionId),
-    context.viaStdin ? context.prompt : undefined, session.sessionId,
-  );
-  if (result.ok) { try { context.complete(); } catch { /* Retry retains history if private metadata cannot be saved. */ } }
-  return result;
+  return runCursorConversation({ session, text, cwd: session.cwd, timeoutMs, model: model ?? session.model });
 }
 
 export function runGrokNew(

@@ -3,6 +3,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   createCodexSession,
   createCursorSession,
@@ -45,14 +46,10 @@ test("phone delivery starts and resumes Codex with the selected CLI", async (t) 
   if (resumed.ok) assert.match(resumed.text, /exec\|resume/);
 });
 
-test("Cursor new task and continuation use its persisted headless session", async (t) => {
+test("Cursor new task and continuation use the interactive persisted session", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "granttap-cursor-headless-"));
-  const bin = await executable(root, "cursor.mjs", [
-    "const args = process.argv.slice(2);",
-    "const at = args.indexOf('--resume');",
-    "const resumed = at >= 0 ? args[at + 1] : undefined;",
-    "process.stdout.write(JSON.stringify({ type: 'result', result: args.join('|'), session_id: resumed || 'cursor-new' }));",
-  ].join("\n"));
+  const fixture = fileURLToPath(new URL('../fixtures/cursor-control.cjs', import.meta.url));
+  const bin = await executable(root, "cursor.cjs", `require(${JSON.stringify(fixture)})();`);
   const previous = process.env.GRANTTAP_CURSOR_AGENT_BIN;
   process.env.GRANTTAP_CURSOR_AGENT_BIN = bin;
   t.after(() => previous == null
@@ -63,14 +60,15 @@ test("Cursor new task and continuation use its persisted headless session", asyn
   assert.equal(created.ok, true);
   if (!created.ok) return;
   assert.equal(created.sessionId, "cursor-new");
-  assert.match(created.text, /-p\|--trust\|--model\|composer-project\|--output-format\|json\|Implement/);
+  assert.deepEqual(JSON.parse(created.text), { args: ['--trust', '--model', 'composer-project', 'acp'],
+    sessionId: 'cursor-new', loaded: false, prompt: 'Implement' });
   const resumed = await deliverToSession({
     sessionId: "cursor-existing", agent: "cursor", cwd: root, state: "idle",
     startedAt: 1, lastActivityAt: 1, tokensSession: 0, tokensLastTurn: 0,
   }, "Continue", 5_000, [], { model: "composer-project" });
   assert.equal(resumed.ok, true);
-  if (resumed.ok) assert.match(resumed.text, /--resume\|cursor-existing/);
-  if (resumed.ok) assert.match(resumed.text, /--model\|composer-project/);
+  if (resumed.ok) assert.deepEqual(JSON.parse(resumed.text), { args: ['--trust', '--model', 'composer-project', 'acp'],
+    sessionId: 'cursor-existing', loaded: true, prompt: 'Continue' });
 });
 
 test("Grok Build new task fixes an identity and continuation resumes it", async (t) => {

@@ -4,7 +4,9 @@ import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { deliverToSession } from '../../index';
+import { cursorExecution, cursorRootSessionId } from '../../../sessions/cursor';
 
 test('a phone continuation of an IDE task passes retained history to the real child process', async t => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'granttap-cursor-retain-')));
@@ -20,11 +22,9 @@ test('a phone continuation of an IDE task passes retained history to the real ch
   execFileSync('sqlite3', [db, "CREATE TABLE cursorDiskKV(key TEXT PRIMARY KEY,value TEXT);"
     + `INSERT INTO cursorDiskKV VALUES('composerData:${sessionId}','${metadata.replace(/'/g, "''")}');`]);
   const bin = join(root, 'cursor.cjs');
+  const fixture = fileURLToPath(new URL('../../../../../../tests/fixtures/cursor-control.cjs', import.meta.url));
   await writeFile(bin, `#!/usr/bin/env node
-const args=process.argv.slice(2), fs=require('node:fs');
-const body=fs.readFileSync(0,'utf8') || args.at(-1);
-if (!body.includes('Keep authentication unchanged.') && body!=='Second') process.exit(3);
-process.stdout.write(JSON.stringify({result:'Context retained',session_id:'ide-existing'}));
+require(${JSON.stringify(fixture)})({ requireContext: true, rejectLoadIds: ['ide-existing'] });
 `, { mode: 0o755 });
   const env = { GRANTTAP_CONFIG_DIR: join(root, 'granttap'), GRANTTAP_CURSOR_STATE_DB: db,
     GRANTTAP_CURSOR_TRANSCRIPTS_DIR: transcripts, GRANTTAP_CURSOR_AGENT_BIN: bin };
@@ -37,6 +37,8 @@ process.stdout.write(JSON.stringify({result:'Context retained',session_id:'ide-e
     startedAt: 1, lastActivityAt: 2, tokensSession: 0, tokensLastTurn: 0 };
   assert.deepEqual(await deliverToSession(session, 'Continue', 5_000),
     { ok: true, text: 'Context retained', sessionId });
+  assert.equal(cursorExecution(sessionId, root)?.nativeSessionId, 'cursor-new');
+  assert.equal(cursorRootSessionId('cursor-new'), sessionId);
   assert.deepEqual(await deliverToSession(session, 'Second', 5_000),
     { ok: true, text: 'Context retained', sessionId });
 });

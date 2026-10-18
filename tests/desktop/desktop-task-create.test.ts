@@ -9,8 +9,14 @@ import { desktopTaskCreate } from "../../apps/mcp/src/desktop/delivery/task-crea
 import { inspectRepository } from "../../apps/bridge/src/mesh/catalog";
 import { MeshStore } from "../../apps/bridge/src/mesh/store";
 
-test("Mac creates a Task only through this Mesh's exact local repository binding", async () => {
+test("Mac creates a Task only through this Mesh's exact local repository binding", async t => {
   const root = mkdtempSync(join(tmpdir(), "granttap-desktop-task-create-"));
+  const previous = process.env.GRANTTAP_CONFIG_DIR;
+  process.env.GRANTTAP_CONFIG_DIR = join(root, "config");
+  t.after(() => {
+    if (previous === undefined) delete process.env.GRANTTAP_CONFIG_DIR; else process.env.GRANTTAP_CONFIG_DIR = previous;
+    rmSync(root, { recursive: true, force: true });
+  });
   const storePath = join(root, "project-mesh.json");
   const repository = join(root, "repository");
   execFileSync("git", ["init", "-q", repository]);

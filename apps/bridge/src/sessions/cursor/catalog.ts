@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { SessionState } from "../../../../../packages/protocol/schema";
 import { stateFor, WORKING_MS } from "../support/common";
+import { cursorExecutionRootSessionId } from "./executions";
 
 export type ComposerRow = {
   id: string;
@@ -225,6 +226,8 @@ export function cursorRootSessionId(
   if (typeof rawSessionId !== "string") return null;
   const sessionId = rawSessionId.trim();
   if (!sessionId || sessionId.length > 256) return null;
+  const executionRoot = cursorExecutionRootSessionId(sessionId);
+  if (executionRoot) return executionRoot;
   const composers = loadComposerCatalog(dbPath);
   const parentsByChild = composerParentSets(composers);
   const row = composers.find((composer) => composer.id === sessionId);

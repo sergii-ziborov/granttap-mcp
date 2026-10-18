@@ -18,6 +18,10 @@ function projectEnvForCwd(cwd?: string): NodeJS.ProcessEnv {
   }
 }
 
+export function providerProcessEnvironment(cwd?: string): NodeJS.ProcessEnv {
+  return { ...process.env, GRANTTAP_DELIVERY: "1", ...projectEnvForCwd(cwd) };
+}
+
 /**
  * Deliveries still running, by the chat they run for, so a pause from the
  * phone can stop the one in flight instead of letting it finish unseen.
@@ -26,7 +30,7 @@ const running = new Map<string, Set<ChildProcess>>();
 
 export const STOPPED_ERROR = "Stopped: the chat was paused from the phone.";
 
-function track(key: string, child: ChildProcess): () => void {
+export function trackProviderProcess(key: string, child: ChildProcess): () => void {
   const set = running.get(key) ?? new Set<ChildProcess>();
   set.add(child);
   running.set(key, set);
@@ -36,7 +40,7 @@ function track(key: string, child: ChildProcess): () => void {
   };
 }
 
-function signalOwnedProcess(child: ChildProcess, signal: NodeJS.Signals): boolean {
+export function signalOwnedProcess(child: ChildProcess, signal: NodeJS.Signals): boolean {
   if (process.platform !== "win32" && child.pid && child.pid > 0) {
     try {
       // POSIX detached children lead a new process group. Signal descendants
@@ -84,7 +88,7 @@ export function runProcess(
         cwd,
         // A delivery is itself a prompt submission; the prompt hook must not
         // hand a background run the journal kept for the live session.
-        env: { ...process.env, GRANTTAP_DELIVERY: "1", ...projectEnvForCwd(cwd) },
+        env: providerProcessEnvironment(cwd),
         stdio: [stdin == null ? "ignore" : "pipe", "pipe", "pipe"],
         detached: process.platform !== "win32",
       });
@@ -92,7 +96,7 @@ export function runProcess(
       resolve({ ok: false, error: `${command} did not start: ${(error as Error).message}` });
       return;
     }
-    const untrack = key ? track(key, child) : () => {};
+    const untrack = key ? trackProviderProcess(key, child) : () => {};
     let stdout = "";
     let stderr = "";
     let done = false;

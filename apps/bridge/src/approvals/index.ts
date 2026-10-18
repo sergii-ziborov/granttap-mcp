@@ -22,6 +22,7 @@ import { primeSessionKeys, sendSessionPayload } from "../host/session-keys";
 import { controllerPeerGate } from "../pairing/controllers";
 import { applyNetworkRoute } from "../device-network/settings";
 import { managedAdmissionOptions } from "../managed-admission";
+import { attachApprovalCancellation } from "./cancellation";
 
 /**
  * Nobody answered — relay unreachable, or the phone never responded before the
@@ -37,6 +38,7 @@ export function isUnanswered(decision: ApprovalDecision): boolean {
 
 export type RequestApprovalOpts = {
   timeoutMs?: number;
+  signal?: AbortSignal;
   /** Inject a client in tests instead of opening a socket. */
   client?: RelayClient;
 };
@@ -61,8 +63,11 @@ export async function requestApproval(
   }
   const registrationHandle = registration.handle;
   primeSessionKeys(client);
+  const detachCancellation = attachApprovalCancellation(client, req, { signal: opts.signal, handle: registrationHandle,
+    cancel: () => cancelDecisionWait(), close: ownsClient ? () => client.close() : undefined });
 
   try {
+    if (opts.signal?.aborted) return failClosed(req, "The agent stopped waiting for this answer");
     if (ownsClient) {
       try {
         await client.connect();
@@ -131,6 +136,7 @@ export async function requestApproval(
     ).catch(() => {});
     return decisionFromOutcome(expired.outcome, req);
   } finally {
+    detachCancellation();
     cancelDecisionWait();
     if (ownsClient) client.close();
   }

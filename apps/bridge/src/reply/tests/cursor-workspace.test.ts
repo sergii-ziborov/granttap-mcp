@@ -3,16 +3,15 @@ import { mkdtemp, realpath, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { createCursorSession, deliverToSession } from '..';
 
 test('explicit Cursor turns trust only their selected workspace and retain tool approval', async t => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'granttap-cursor-workspace-')));
-  const bin = join(root, 'cursor.mjs');
+  const bin = join(root, 'cursor.cjs');
+  const fixture = fileURLToPath(new URL('../../../../../tests/fixtures/cursor-control.cjs', import.meta.url));
   await writeFile(bin, `#!/usr/bin/env node
-const args = process.argv.slice(2);
-if (!args.includes('--trust')) { console.error('Workspace Trust Required'); process.exit(1); }
-if (args.some(a => ['--force', '--yolo', '-f', '--approve-mcps'].includes(a))) process.exit(2);
-process.stdout.write(JSON.stringify({ result: process.cwd(), session_id: args.includes('--resume') ? args[args.indexOf('--resume')+1] : 'new-cursor-chat' }));
+require(${JSON.stringify(fixture)})({ cwd: true, newId: 'new-cursor-chat' });
 `, { mode: 0o755 });
   const prior = { bin: process.env.GRANTTAP_CURSOR_AGENT_BIN, root: process.env.GRANTTAP_CONFIG_DIR };
   process.env.GRANTTAP_CURSOR_AGENT_BIN = bin;

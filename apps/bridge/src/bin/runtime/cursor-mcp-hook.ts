@@ -122,6 +122,11 @@ async function continueApproval(
     return;
   }
 
+  if (process.env.GRANTTAP_CURSOR_ACP === "1") {
+    nativeAsk("GrantTap will show this action through the active Cursor conversation.");
+    return;
+  }
+
   const timeoutMs = Number(process.env.GRANTTAP_APPROVAL_TIMEOUT_MS ?? 60_000);
   let decision;
   try {
@@ -170,6 +175,6 @@ function cursorWorkspaceRoot(input: CursorMcpHookInput): string | undefined {
 }
 
 main().catch(() => {
-  nativeAsk("GrantTap MCP hook failed; use Cursor approval.");
+  deny("GrantTap could not verify this Cursor Task's execution scope.");
   process.exit(0);
 });

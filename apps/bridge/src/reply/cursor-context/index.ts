@@ -52,3 +52,13 @@ export function prepareCursorContinuation(session: SessionInfo, text: string, so
   return { prompt, viaStdin: true, complete: () => writePrivateFile(path,
     JSON.stringify({ ...identity, importedAt: Date.now(), messages: entries.length }) + '\n') };
 }
+
+export function cursorHasRetainedConversation(sessionId: string): boolean {
+  return loadComposerCatalog().some(row => row.id === sessionId);
+}
+
+/** ACP uses its own execution store; an earlier print-mode import is not its history. */
+export function prepareCursorAcpContinuation(session: SessionInfo, text: string) {
+  return prepareCursorContinuation(session, text, { root: join(configDir(), 'cursor-acp-context'),
+    known: cursorHasRetainedConversation, entries: row => cursorActivity(row, true) });
+}
