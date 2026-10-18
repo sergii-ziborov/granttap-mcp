@@ -12,7 +12,11 @@ import { loadRuntimeConfig, saveRuntimeConfig } from "../../config";
  * step that exists only in a text editor. `setup` finds the binary, checksums
  * it, and writes the declaration the publishing LaunchAgent reads.
  */
-export function defaultEngineLocations(home: string = homedir()): string[] {
+export function defaultEngineLocations(home: string = homedir(), platform: NodeJS.Platform = process.platform): string[] {
+  if (platform === "win32") return [
+    join(configDir(), "engine", "granttap-engine.exe"),
+    join(home, "AppData", "Local", "GrantTap", "bin", "granttap-engine.exe"),
+  ];
   return [
     join(configDir(), "engine", "granttap-engine"),
     join(home, ".local", "bin", "granttap-engine"),

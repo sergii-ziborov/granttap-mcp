@@ -2,12 +2,14 @@ import { spawnSync } from "node:child_process";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { linuxServicePath } from "../../../bridge/src/install/linux-service";
 
 export const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..");
 export const HTTP_SERVICE_LABEL = "com.granttap.mcp-http";
 
 export function httpMcpLaunchAgentPath(): string {
   if (process.platform === "win32") return "GrantTap MCP HTTP";
+  if (process.platform === "linux") return linuxServicePath("http");
   const agentsDir = process.env.GRANTTAP_LAUNCH_AGENTS_DIR
     ?? join(homedir(), "Library", "LaunchAgents");
   return join(agentsDir, `${HTTP_SERVICE_LABEL}.plist`);

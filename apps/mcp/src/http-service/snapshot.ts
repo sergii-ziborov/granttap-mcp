@@ -12,6 +12,7 @@ import {
 } from "node:fs";
 import { dirname } from "node:path";
 import { inspectWindowsTask, restoreWindowsTask, snapshotWindowsTask, windowsTaskName } from "../../../bridge/src/install/windows-service";
+import { inspectLinuxService, restoreLinuxService, snapshotLinuxService, type LinuxServiceSnapshot } from "../../../bridge/src/install/linux-service";
 import {
   httpMcpLaunchAgentPath,
   isConfiguredHttpService,
@@ -29,10 +30,16 @@ export type HttpMcpServiceSnapshot = {
   owned: boolean;
   configured: boolean;
   running: boolean;
+  linux?: LinuxServiceSnapshot;
 };
 
 /** Exact plist bytes/mode and loaded state for transactional repair rollback. */
 export function snapshotHttpMcpService(): HttpMcpServiceSnapshot {
+  if (process.platform === "linux") {
+    const linux = snapshotLinuxService("http");
+    return { path: httpMcpLaunchAgentPath(), exists: linux.exists, owned: linux.owned, configured: linux.owned,
+      running: linux.running, mode: 0o600, plist: linux.definition === null ? null : Buffer.from(linux.definition), linux };
+  }
   if (process.platform === "win32") {
     const task = snapshotWindowsTask("http");
     const state = inspectWindowsTask("http");
@@ -75,6 +82,7 @@ function unreadableSnapshot(path: string): HttpMcpServiceSnapshot {
 
 /** Read-only plist/process inspection. Health is probed separately. */
 export function inspectHttpMcpService(): HttpMcpServiceStatus {
+  if (process.platform === "linux") return inspectLinuxService("http");
   if (process.platform === "win32") return inspectWindowsTask("http");
   if (process.platform !== "darwin") return { configured: false, running: false };
   const snapshot = snapshotHttpMcpService();
@@ -83,6 +91,7 @@ export function inspectHttpMcpService(): HttpMcpServiceStatus {
 
 /** Restore a failed repair, deleting the service only when this attempt created it. */
 export function restoreHttpMcpServiceAfterFailure(before: HttpMcpServiceSnapshot): boolean {
+  if (process.platform === "linux") return before.linux ? restoreLinuxService("http", before.linux) : false;
   if (process.platform === "win32") {
     if (before.exists && !before.owned) return false;
     return restoreWindowsTask("http", before.plist?.toString("utf8") ?? null);

@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join, win32 } from "node:path";
 import { writePrivateFile } from "../access/write-private";
 import type {
   AgentAccess,
@@ -132,7 +132,8 @@ function parseSessionList(raw: unknown): string[] {
 
 /** Only an absolute path can be verified, so a relative one is not kept. */
 function parseEnginePath(raw: unknown): string | null {
-  return typeof raw === "string" && raw.startsWith("/") && raw.length <= 1024 ? raw : null;
+  return typeof raw === "string" && raw.length <= 1024 && !/^[/\\]{2}/.test(raw)
+    && (isAbsolute(raw) || win32.isAbsolute(raw)) ? raw : null;
 }
 
 function parseEngineChecksum(raw: unknown): string | null {

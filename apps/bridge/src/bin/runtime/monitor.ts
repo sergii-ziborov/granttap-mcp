@@ -3,8 +3,10 @@ import { join } from "node:path";
 import { RelayClient } from "../../../../../packages/core/relay-client";
 import { configDir, loadConfig, machineConfigPath } from "../../config";
 import { EngineSupervisor } from "../../engine/runtime/engine-supervisor";
+import { prepareMonitorEngine } from "../../engine/distribution";
+import { startEngineRecovery } from "../../engine/startup";
 import { meshSnapshotsAsync } from "../../mesh/runtime";
-import { publishedCatalog, recoverCatalogBindings } from "../../session-catalog";
+import { publishedCatalog } from "../../session-catalog";
 import { recoverLocalGraphBindings } from "../../mesh/runtime/graph/binding-sync";
 import { startSessionMonitor } from "../../monitor";
 import { controllerPeerGate } from "../../pairing/controllers";
@@ -22,6 +24,7 @@ let stopping = false;
 let stopEndpointPublisher = () => {};
 let stopTaskDispatch = () => {};
 let stopTaskNetwork = () => {};
+let stopEngineRecovery = () => {};
 
 try {
   const cfg = applyNetworkRoute(loadConfig(machineConfigPath()));
@@ -47,6 +50,7 @@ try {
 const stop = (): void => {
   if (stopping) return;
   stopping = true;
+  stopEngineRecovery();
   stopTaskDispatch();
   stopTaskNetwork();
   monitor.close();
@@ -58,8 +62,9 @@ const stop = (): void => {
 process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
 
-void recoverCatalogBindings({
-  engineAvailable: async () => {
+stopEngineRecovery = startEngineRecovery({
+  prepare: prepareMonitorEngine,
+  available: async () => {
     const health = await engine.ensureAvailable();
     if (health.state !== "disabled" && health.state !== "healthy") {
       process.stderr.write(`[granttap-mcp] Project engine ${health.state}; legacy behavior remains active\n`);
@@ -74,9 +79,13 @@ void recoverCatalogBindings({
       throw error;
     }
   },
-  snapshots: () => {
+  recover: async () => {
     const known = publishedCatalog(client);
-    return meshSnapshotsAsync(known ? [...known.sessions, ...(known.history ?? [])] : []);
+    const snapshots = await meshSnapshotsAsync(known ? [...known.sessions, ...(known.history ?? [])] : []);
+    await recoverLocalGraphBindings(snapshots);
+    await monitor.publish();
   },
-  recover: recoverLocalGraphBindings,
-}).then(() => monitor.publish()).catch(() => undefined);
+  failed: error => {
+    process.stderr.write(`[granttap-mcp] Engine recovery will retry (${error instanceof Error ? error.name : "unknown"})\n`);
+  },
+});

@@ -38,7 +38,10 @@ test("monitor entry fails closed before pairing and stops cleanly on SIGTERM", a
   const config = join(root, "paired");
   await mkdir(config, { recursive: true });
   await writeFile(join(config, "machine.json"), JSON.stringify(createPairing(relay.url).machineCfg));
-  const paired = launch(config, { GRANTTAP_ENGINE_ENABLED: "1" });
+  // A deliberately missing custom declaration exercises unavailable health
+  // without starting a real release download in an isolated monitor fixture.
+  const paired = launch(config, { GRANTTAP_ENGINE_ENABLED: "1",
+    GRANTTAP_ENGINE_BINARY: join(root, "missing-custom-engine"), GRANTTAP_ENGINE_SHA256: "a".repeat(64) });
   t.after(() => { if (paired.exitCode === null) paired.kill("SIGTERM"); });
   const completion = closed(paired);
   await waitFor(() => relay.connections() === 1, 30_000);

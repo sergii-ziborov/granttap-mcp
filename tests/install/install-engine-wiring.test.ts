@@ -3,7 +3,7 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { installMonitorHelper } from "../../apps/bridge/src/install";
+import { installMonitorHelper, monitorPlistNeedsRepair } from "../../apps/bridge/src/install";
 import { saveRuntimeConfig } from "../../apps/bridge/src/config";
 import { installHttpMcpService } from "../../apps/mcp/src/http-service";
 
@@ -85,4 +85,23 @@ test("a malformed engine declaration is refused rather than half-applied", async
   installMonitorHelper();
   plist = await readFile(join(agentsDir, "com.granttap.monitor.plist"), "utf8");
   assert.doesNotMatch(plist, /GRANTTAP_ENGINE_ENABLED/);
+});
+
+test("an older generated no-engine helper is repaired instead of keeping Health disabled forever", async t => {
+  if (process.platform !== "darwin") return t.skip("LaunchAgent is macOS-only");
+  const { agentsDir, root } = await sandbox(t);
+  installMonitorHelper();
+  const path = join(agentsDir, "com.granttap.monitor.plist");
+  const current = (await readFile(path, "utf8")).replaceAll(root, "/Users/granttap/GrantTap");
+  await writeFile(path, current);
+  assert.equal(monitorPlistNeedsRepair(path), false);
+  const legacy = current.replace("  </dict>", [
+    "<key>GRANTTAP_ENGINE_ENABLED</key><string>0</string>",
+    "<key>GRANTTAP_PROJECT_POLICY_ENABLED</key><string>0</string>", "  </dict>",
+  ].join("\n"));
+  await writeFile(path, legacy);
+  assert.equal(monitorPlistNeedsRepair(path), true);
+  await writeFile(path, legacy.replace("  </dict>",
+    "<key>GRANTTAP_ENGINE_BINARY</key><string>/custom/engine</string>\n  </dict>"));
+  assert.equal(monitorPlistNeedsRepair(path), false, "a configured explicit disablement stays intact");
 });

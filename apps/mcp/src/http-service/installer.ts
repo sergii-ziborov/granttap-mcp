@@ -6,13 +6,14 @@ import { dirname, join } from "node:path";
 import { isCursorHelperNode, resolveMonitorNodeBin, type InstallResult } from "../../../bridge/src/install";
 import { configDir, normalizeRelayUrl, loadRuntimeConfig, verifiableEngine } from "../../../bridge/src/config";
 import { installWindowsTask } from "../../../bridge/src/install/windows-service";
+import { installLinuxService } from "../../../bridge/src/install/linux-service";
 import { configuredCursorHttpMcpUrl } from "../cursor-config";
 import { HTTP_SERVICE_LABEL, httpMcpLaunchAgentPath, isEphemeralNpxInstall, packageRoot, xml } from "./common";
 import { inspectHttpMcpService, restoreHttpMcpServiceAfterFailure, snapshotHttpMcpService } from "./snapshot";
 
 /** Install/repair and load a per-user, loopback-only OAuth MCP daemon. */
 export function installHttpMcpService(options: { forceReload?: boolean } = {}): InstallResult {
-  if (process.platform !== "darwin" && process.platform !== "win32") return macosOnly();
+  if (!["darwin", "linux", "win32"].includes(process.platform)) return macosOnly();
   const mcpUrl = configuredMcpUrl();
   if (mcpUrl instanceof Error) return { status: "manual", detail: mcpUrl.message };
   const nodeBin = safeNodeBin();
@@ -25,6 +26,12 @@ export function installHttpMcpService(options: { forceReload?: boolean } = {}): 
       return { status: "manual", detail: "Windows background service currently uses the default loopback endpoint." };
     }
     return installWindowsTask("http", nodeBin, executable, options.forceReload);
+  }
+  if (process.platform === "linux") {
+    if (mcpUrl.href !== "http://127.0.0.1:17342/mcp") {
+      return { status: "manual", detail: "Linux background service currently uses the default loopback endpoint." };
+    }
+    return installLinuxService("http", nodeBin, executable, options);
   }
   const path = httpMcpLaunchAgentPath();
   const logsDir = join(configDir(), "logs");

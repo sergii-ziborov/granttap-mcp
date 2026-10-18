@@ -2,9 +2,9 @@
 
 This module owns the versioned local IPC boundary between the public machine
 runtime and the separately distributed GrantTap Engine. `engine-client.ts`
-implements bounded length-prefixed framing and a persistent multiplexed Unix
-socket. A timed-out request is never retried automatically on the hook-critical
-path. `engine-supervisor.ts` keeps rollout opt-in, verifies the configured
+implements bounded length-prefixed framing and a persistent multiplexed local
+socket or Windows named pipe. A timed-out request is never retried automatically
+on the hook-critical path. `engine-supervisor.ts` verifies the configured
 binary by SHA-256 before launch, and reports explicit health without changing
 legacy hook behavior when the engine is disabled or unavailable.
 `engine-projects.ts` forwards only bounded local Project/binding records when
@@ -48,6 +48,19 @@ opaque Mesh capability. The Engine, not this bridge or Usage telemetry, owns
 the durable journal.
 
 The proprietary engine source and Project database do not live in this package.
+
+Every CLI entry point loads the persisted Engine declaration before importing
+its runtime. The monitor, HTTP MCP and provider hooks therefore share activation
+on macOS, Linux and Windows rather than relying on a LaunchAgent environment.
+Explicit disablement and a complete explicit executable/checksum pair win over
+the saved declaration. Partial environment overrides are never mixed with a
+different file's checksum. The supervisor still verifies the executable's bytes
+before launch. Windows clients derive a local named pipe from the normalized
+configuration path; remote shares never become Engine endpoints.
+The paired monitor installs the pinned managed Engine in the background when
+needed. Catalog delivery does not await that download. Failed preparation retries
+without losing phone questions, and a restarted helper re-admits verified local
+checkouts. Explicit disablement and custom declarations are preserved.
 
 License: this module is distributed under the GrantTap Commercial Source License
 in the repository-root `LICENSE` file.
