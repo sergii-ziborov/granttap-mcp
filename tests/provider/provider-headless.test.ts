@@ -63,7 +63,7 @@ test("Cursor new task and continuation use its persisted headless session", asyn
   assert.equal(created.ok, true);
   if (!created.ok) return;
   assert.equal(created.sessionId, "cursor-new");
-  assert.match(created.text, /-p\|--model\|composer-project\|--output-format\|json\|Implement/);
+  assert.match(created.text, /-p\|--trust\|--model\|composer-project\|--output-format\|json\|Implement/);
   const resumed = await deliverToSession({
     sessionId: "cursor-existing", agent: "cursor", cwd: root, state: "idle",
     startedAt: 1, lastActivityAt: 1, tokensSession: 0, tokensLastTurn: 0,

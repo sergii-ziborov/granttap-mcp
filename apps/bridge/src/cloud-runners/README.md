@@ -45,4 +45,4 @@ The first message is the Task Capsule: goal, status, repository, branch and
 commit, the person's comment, decisions and remaining work, bounded to 12,000
 characters. The visible conversation archive is not uploaded.
 
-Tests: [`tests/`](tests/). Apache License 2.0, see [LICENSE](../../../../LICENSE).
+Tests: [`tests/`](tests/). GrantTap Commercial Source License, see [LICENSE](../../../../LICENSE).

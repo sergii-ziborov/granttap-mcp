@@ -42,6 +42,7 @@ import { publishHistoryPage } from "../history/pages";
 import { requestProjectGraphRefresh } from "../graph-refresh";
 import { handleControllerPairRequest, handleInboundKnowledgeWrite } from "../controller-knowledge";
 import { acceptPhoneAccountLink } from "../../account-recovery/phone-link";
+import { approvalsStatus } from '../../approvals/state';
 
 export async function handleMonitorMessage(
   client: RelayClient,
@@ -86,7 +87,7 @@ export async function handleMonitorMessage(
     } else if (payload.type === "session.events" || payload.type === "session.image.query" || payload.type === "session.workspace.query") {
       return handleSessionRead(client, payload, input.peerPublicKey);
     } else if (payload.type === "sessions.refresh") {
-      return handleInboundRefresh(client, payload, publish);
+      return handleInboundRefresh(client, payload, publish, input.peerPublicKey);
     } else if (payload.type === "sessions.history.query") {
       await publishHistoryPage(client, payload);
       return true;
@@ -180,7 +181,11 @@ async function handleInboundClaimRelease(
 async function handleInboundRefresh(
   client: RelayClient, payload: Extract<Payload, { type: "sessions.refresh" }>,
   publish: (forceHistory?: boolean) => Promise<void>,
+  peerPublicKey?: string,
 ): Promise<boolean> {
+  // Notification actions must not wait behind provider scans or graph analysis.
+  await client.send(approvalsStatus(), 'phone', { peerPublicKey, reliable: false, ttlMs: 90_000 })
+    .catch(() => {});
   // An explicit refresh may pay for the full history scan; routine Mesh
   // snapshots use the cached history and fresh live sessions.
   invalidateMeshSessionHistory();

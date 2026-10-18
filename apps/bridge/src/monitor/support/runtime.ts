@@ -123,6 +123,7 @@ async function publishMonitorTick(input: {
   if (!client.isConnected) return { lastHistoryPublishedAt, lastCapabilityPublishedAt };
   await publishHeartbeat(client).catch(() => {});
   if (!leadership.acquire()) return { lastHistoryPublishedAt, lastCapabilityPublishedAt };
+  await client.send(approvalsStatus(), "phone", { ttlMs: INTERVAL_MS * 3, reliable: false });
   const initial = lastHistoryPublishedAt === 0;
   const includeHistory = forceHistory || (!initial && Date.now() - lastHistoryPublishedAt >= HISTORY_INTERVAL_MS);
   const status = decorateTaskOriginCatalog(
@@ -141,7 +142,6 @@ async function publishMonitorTick(input: {
   loadLoop.updateStatus(status);
   void refreshMcpLoad(status.sessions).catch(() => {});
   publishCatalogHeads(client, status, subscriptions, publishSessionEvents);
-  await client.send(approvalsStatus(), "phone", { ttlMs: INTERVAL_MS * 3, reliable: false });
   if (loadRuntimeConfig().meshEnabled) publishMonitorMeshes(client, status);
   if (Date.now() - lastCapabilityPublishedAt >= 30_000) {
     const usage = scanCapabilityUsage([
@@ -205,6 +205,10 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
     if (payload.type === "hello" && payload.role === "phone") {
       confirmPendingController(client.room, peerPublicKey);
       recordControllerName(peerPublicKey, payload.deviceName);
+      if (leadership.acquire()) {
+        await client.send(approvalsStatus(), 'phone', { peerPublicKey, reliable: false, ttlMs: 90_000 })
+          .catch(() => {});
+      }
     }
     return handleMonitorMessage(client, payload, { leadership, subscriptions, publish, peerPublicKey });
   });

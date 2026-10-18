@@ -14,7 +14,7 @@ their independent task keys in the background. Closed-history discovery runs
 separately from that first live publication. It does not republish an old catalog
 as fresh. The phone continues its durable historical backfill independently.
 
-Tests live in `tests/`. This runtime module uses the repository Apache License 2.0.
+Tests live in `tests/`. This runtime module uses the repository GrantTap Commercial Source License.
 
 Engine binding recovery waits for the first connected catalog publication before projecting repository graphs. A cold Engine cannot hold the initial relay handshake behind restored Mesh analysis.
 

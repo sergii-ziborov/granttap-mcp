@@ -8,4 +8,4 @@ only its own timers.
 
 The real WebSocket integration is in `tests/core/managed-relay-renewal.test.ts`.
 
-Licensed under the Apache License 2.0 in the repository root.
+Licensed under the GrantTap Commercial Source License in the repository root.

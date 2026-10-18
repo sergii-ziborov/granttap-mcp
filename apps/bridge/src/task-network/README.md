@@ -31,4 +31,4 @@ job metadata for seven more days; revocation immediately stops new work and reso
 Tests exercise real encryption, scope and revocation, restart and immutable retry,
 owner fencing, result recovery, context retirement and policy changes before work.
 
-Licensed under the Apache License, Version 2.0 (Apache-2.0). See LICENSE and NOTICE.
+Licensed under the GrantTap Commercial Source License. See LICENSE and NOTICE.

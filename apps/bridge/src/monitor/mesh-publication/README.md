@@ -9,4 +9,4 @@ snapshots, policy reports, and Engine enrichment remain separate from fresh chat
 catalog delivery. Monitor close stops publication from the old transport.
 
 Tests in `tests/` exercise current catalog progress while Mesh delivery is held.
-This module uses the repository Apache License 2.0.
+This module uses the repository GrantTap Commercial Source License.

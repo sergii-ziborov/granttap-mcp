@@ -15,4 +15,4 @@ status command/options, and stores only independently present 5h/7d windows.
 Cursor and Grok subscription limits remain unavailable when their installed
 interfaces do not report them; their session tokens and tools are still counted.
 
-Tests: `tests/status.test.ts`. Apache License 2.0, see root LICENSE.
+Tests: `tests/status.test.ts`. GrantTap Commercial Source License, see root LICENSE.

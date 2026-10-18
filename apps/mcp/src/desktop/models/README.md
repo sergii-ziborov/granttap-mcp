@@ -9,4 +9,4 @@ remains explicitly stale. Model descriptions never include provider instructions
 
 Behavior tests: [`tests/catalog.test.ts`](tests/catalog.test.ts).
 
-Apache License 2.0. See [LICENSE](../../../../../LICENSE).
+GrantTap Commercial Source License. See [LICENSE](../../../../../LICENSE).

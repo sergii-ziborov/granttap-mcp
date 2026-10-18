@@ -8,7 +8,7 @@ Install the separately licensed [SweepLoom CLI](https://github.com/Weavatrix/swe
 with its MCP feature. The scanner locates `~/.local/bin/sweeploom`,
 `~/.cargo/bin/sweeploom`, Homebrew locations or `GRANTTAP_SWEEPLOOM_PATH`.
 Only `list_ai_stores` and `list_sessions` metadata tools are called. SweepLoom
-is MPL-2.0 and is neither copied into nor bundled with GrantTap’s Apache-2.0 package.
+is MPL-2.0 and is neither copied into nor bundled with GrantTap’s GrantTap Commercial Source License package.
 
 Inspect returns Codex, Claude and Cursor storage categories, logical sizes and
 an unselected short-lived review. History, credentials, SQLite, settings, skills
@@ -25,5 +25,5 @@ requires a fresh review. Cache cleanup does not change capability approvals.
 Tests in `tests/storage.test.ts` use isolated provider roots and system-Trash
 fixtures; they never clear the developer’s provider state.
 
-This GrantTap module is distributed under the Apache License 2.0. SweepLoom retains
+This GrantTap module is distributed under the GrantTap Commercial Source License. SweepLoom retains
 its separate MPL-2.0 license.

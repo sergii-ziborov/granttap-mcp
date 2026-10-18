@@ -21,4 +21,4 @@ Native same-user configuration has a separate issuer domain and is accepted
 only by explicitly enabled native stores. It never enrolls a machine as a
 phone controller or grants ordinary controller message access.
 
-Licensed under the Apache License, Version 2.0 (Apache-2.0). See LICENSE and NOTICE.
+Licensed under the GrantTap Commercial Source License. See LICENSE and NOTICE.

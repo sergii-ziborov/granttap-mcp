@@ -12,7 +12,7 @@ requested to stop. The stop count records accepted signals, not confirmed exit
 of every descendant. Windows uses the direct-child stop path; remote jobs and
 resources that outlive the agent process need their own cancellation receipts.
 
-License: this module is distributed under the Apache License 2.0
+License: this module is distributed under the GrantTap Commercial Source License
 in the repository-root `LICENSE` file.
 
 Model reasoning effort reaches resumed and new provider turns as native arguments.
@@ -25,3 +25,8 @@ dropped rather than passed. A prepared transfer's first turn uses the model and
 effort that message carries, else the capsule's `targetModel`. Grok Build is
 resolved with `providers/grok-bin.ts`. Tests:
 [`tests/model-effort-args.test.ts`](tests/model-effort-args.test.ts).
+
+Explicit Cursor task turns pass `--trust` for the selected workspace so an
+updated CLI cannot wait for an invisible desktop trust prompt. Resumes without
+a reported workspace are refused. Tool approvals and global action bans remain
+active; `--force`, `--yolo` and automatic MCP approval are never added.

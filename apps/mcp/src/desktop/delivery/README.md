@@ -24,4 +24,4 @@ Tests: `tests/desktop/desktop-task-send.test.ts`,
 `tests/desktop/delivery/task-handoff.test.ts`, local `tests/attachments.test.ts`.
 Parent: [Desktop local channel](../README.md).
 
-This MCP component is covered by the repository [Apache License 2.0](../../../../../LICENSE).
+This MCP component is covered by the repository [GrantTap Commercial Source License](../../../../../LICENSE).

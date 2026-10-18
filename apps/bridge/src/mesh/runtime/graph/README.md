@@ -23,4 +23,4 @@ actual native scanner respects `.git/info/exclude` and retains untracked source.
 
 ## License
 
-Apache License 2.0. See [LICENSE](../../../../../../LICENSE).
+GrantTap Commercial Source License. See [LICENSE](../../../../../../LICENSE).

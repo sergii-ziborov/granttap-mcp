@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 
 const PUBLIC_FILES = new Set([
   "LICENSE",
+  "LICENSE-APACHE-2.0.txt",
   "NOTICE",
   "README.md",
   "SECURITY.md",

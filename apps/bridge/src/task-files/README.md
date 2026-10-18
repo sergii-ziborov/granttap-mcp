@@ -13,4 +13,4 @@ entries; file previews contain at most 128 KiB and explicitly mark truncation.
 
 Module tests cover real files, nested directories, boundaries and pagination.
 
-This module uses the repository Apache License 2.0.
+This module uses the repository GrantTap Commercial Source License.

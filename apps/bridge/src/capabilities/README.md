@@ -11,4 +11,4 @@ Catalog observations and Project requests do not install a skill or native MCP
 configuration on another host. Availability requires a separate native apply
 and independently observed initialization; that rollout is still unfinished.
 
-License: this module is distributed under the Apache License 2.0 in the repository-root `LICENSE` file.
+License: this module is distributed under the GrantTap Commercial Source License in the repository-root `LICENSE` file.

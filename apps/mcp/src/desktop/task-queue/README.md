@@ -11,4 +11,4 @@ pairing keys, relay credentials or plaintext queue contents are returned. Curren
 computer policies remain authoritative when the receiver starts a queued turn.
 
 Tests: `tests/scope.test.ts` and bridge task-dispatch sender/receiver tests.
-Licensed under the Apache License, Version 2.0 (Apache-2.0). See LICENSE and NOTICE.
+Licensed under the GrantTap Commercial Source License. See LICENSE and NOTICE.

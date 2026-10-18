@@ -1,6 +1,6 @@
 # Codex session catalog and activity
 
-Part of GrantTap MCP, licensed under the [Apache License 2.0](../../../../../../LICENSE).
+Part of GrantTap MCP, licensed under the [GrantTap Commercial Source License](../../../../../../LICENSE).
 
 Public entry point: [`index.ts`](index.ts). This module reads native Codex
 rollouts into GrantTap's Task catalog, root conversation history, nested child

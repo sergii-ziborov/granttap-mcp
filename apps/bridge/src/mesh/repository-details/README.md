@@ -22,4 +22,4 @@ identity and access scope.
 
 Behavior tests live in `tests/`. See the [runtime README](../../../../../README.md).
 
-Licensed under the [Apache License 2.0](../../../../../LICENSE).
+Licensed under the [GrantTap Commercial Source License](../../../../../LICENSE).

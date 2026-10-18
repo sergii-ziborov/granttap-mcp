@@ -10,4 +10,4 @@ inside MCP. Its encrypted configuration uses a separate native issuer domain;
 the machine key is never enrolled as a phone controller key. Changes are saved
 locally and confirmed by the relay before the client receives an acknowledgement.
 
-Licensed under the Apache License, Version 2.0 (Apache-2.0). See LICENSE and NOTICE.
+Licensed under the GrantTap Commercial Source License. See LICENSE and NOTICE.

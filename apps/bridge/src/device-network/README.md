@@ -12,7 +12,7 @@ forwarding or promise background iPhone delivery. Self-hosted mode has no
 managed directory announcement. Settings never contain pairing secret keys.
 
 Behavior tests live in `tests/network.test.ts`. This machine runtime module is
-covered by the repository Apache License 2.0; the separately installed relay follows
+covered by the repository GrantTap Commercial Source License; the separately installed relay follows
 its own license and customer terms.
 
-This runtime module is covered by the repository Apache License 2.0.
+This runtime module is covered by the repository GrantTap Commercial Source License.

@@ -16,4 +16,4 @@ present. Reports expire after at most 90 seconds.
 Tests live in `tests/` and cover measurement deltas, unknown GPU capacity,
 freshness, scope, native model evidence and required executable availability.
 
-Licensed under the Apache License, Version 2.0 (Apache-2.0). See LICENSE and NOTICE.
+Licensed under the GrantTap Commercial Source License. See LICENSE and NOTICE.

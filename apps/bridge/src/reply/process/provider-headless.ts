@@ -6,6 +6,7 @@ import type { ReplyResult } from "../payload/types";
 import type { DeliveryOptions } from "../payload/types";
 import { resolveCursorAgentBin } from "./cursor-agent-bin";
 import { resolveGrokBinary } from "../../providers/grok-bin";
+import { prepareCursorContinuation } from '../cursor-context';
 
 function cursorBin(): string {
   return resolveCursorAgentBin();
@@ -71,17 +72,24 @@ export function runCursorNew(
   );
 }
 
-export function runCursorResume(
+export async function runCursorResume(
   session: SessionInfo, text: string, timeoutMs: number, model?: string,
 ): Promise<ReplyResult> {
   if (!session.cwd) return Promise.resolve({ ok: false,
     error: "Cursor has not reported this task's workspace. Open the task in Cursor and retry." });
-  return runProcess(
+  let context: ReturnType<typeof prepareCursorContinuation>;
+  try { context = prepareCursorContinuation(session, text); }
+  catch { return { ok: false, error: 'The existing Cursor conversation could not be restored safely. Refresh its history and retry.' }; }
+  const selectedModel = model ?? session.model;
+  const result = await runProcess(
     cursorBin(), ["-p", "--trust", "--resume", session.sessionId,
-      ...(model ? ["--model", model] : []), "--output-format", "json", text],
+      ...(selectedModel ? ["--model", selectedModel] : []), "--output-format", "json",
+      ...(context.viaStdin ? [] : [context.prompt])],
     session.cwd, timeoutMs, (stdout) => parseCursor(stdout, session.sessionId),
-    undefined, session.sessionId,
+    context.viaStdin ? context.prompt : undefined, session.sessionId,
   );
+  if (result.ok) { try { context.complete(); } catch { /* Retry retains history if private metadata cannot be saved. */ } }
+  return result;
 }
 
 export function runGrokNew(

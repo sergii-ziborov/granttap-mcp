@@ -15,4 +15,4 @@ a valid signed lease independently, including when a modified client omits it.
 Expiry/refund stops hosted delivery; local provider approval remains available,
 and history, pairing keys and pending decisions are retained.
 
-Copyright (c) 2026 Sergii Ziborov. Licensed under the Apache License 2.0 in the repository root.
+Copyright (c) 2026 Sergii Ziborov. Licensed under the GrantTap Commercial Source License in the repository root.
