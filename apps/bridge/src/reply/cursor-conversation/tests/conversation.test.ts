@@ -8,6 +8,7 @@ import { setTimeout } from "node:timers/promises";
 import { runCursorResume } from "../../process/provider-headless";
 import { abortProcesses, runningProcessCount } from "../../process";
 import { runCursorConversation } from "../index";
+import { scanCursor, cursorActivity } from "../../../sessions/cursor";
 import { saveRuntimeConfig } from "../../../config";
 import type { ApprovalRequest } from "../../../../../../packages/protocol/schema";
 import type { SessionInfo } from "../../../../../../packages/protocol/schema";
@@ -17,7 +18,7 @@ function fixture(t: test.TestContext, mode = "normal") {
   const bin = join(root, "cursor-agent");
   const script = fileURLToPath(new URL("./native-fixture.cjs", import.meta.url));
   writeFileSync(bin, `#!/bin/sh\nexec "${process.execPath}" "${script}" "$@"\n`); chmodSync(bin, 0o700);
-  const env = { GRANTTAP_CONFIG_DIR: join(root, "config"), GRANTTAP_CURSOR_STATE_DB: join(root, "missing.db"),
+  const env = { GRANTTAP_CONFIG_DIR: join(root, "config"), GRANTTAP_CURSOR_STATE_DB: join(root, "missing.db"), GRANTTAP_CURSOR_TRANSCRIPTS_DIR: join(root, "no-transcripts"),
     GRANTTAP_CURSOR_AGENT_BIN: bin, CURSOR_FIXTURE_LOG: join(root, "calls"), CURSOR_FIXTURE_MARKER: join(root, "marker"), CURSOR_FIXTURE_MODE: mode };
   const previous = new Map(Object.keys(env).map(key => [key, process.env[key]])); Object.assign(process.env, env);
   saveRuntimeConfig({ autoAcceptBySession: { "fixture-task": "ask" } });
@@ -75,4 +76,25 @@ test("a new Cursor task remains stoppable through its pending delivery identity"
   assert.equal(runningProcessCount("fixture-task"), 1);
   assert.equal(abortProcesses("pending-create"), 1);
   assert.equal((await run).ok, false); assert.equal(waiting.aborted, true);
+});
+
+
+test("a new ACP chat is readable during its question and after reopening through the catalog", async t => {
+  const f = fixture(t); let waiting: SessionInfo | undefined;
+  const result = await runCursorConversation({ cwd: f.root, text: "Keep my visible request", timeoutMs: 10_000,
+    ask: async request => {
+      waiting ??= scanCursor().sessions.find(row => row.sessionId === request.sessionId);
+      return { type: "approval.decision", requestId: request.requestId, sessionId: request.sessionId,
+        decision: "allow", decidedAt: Date.now(), note: request.kind === "question" ? '{"Which action?":"Run tests"}' : undefined };
+    } });
+  assert.equal(result.ok, true);
+  assert(waiting, "The chat must be discoverable while its first form is open");
+  const waitingId = waiting.sessionId;
+  const reopened = scanCursor().sessions.find(row => row.sessionId === waitingId);
+  assert(reopened); assert.equal(reopened.state, "idle");
+  const entries = cursorActivity(reopened, true);
+  assert(entries.some(row => row.kind === "user" && row.text === "Keep my visible request"));
+  assert(entries.some(row => row.text === "Question answered; fixture completed."));
+  assert(!JSON.stringify(entries).includes("PRIVATE THOUGHT"));
+  assert(!JSON.stringify(entries).includes("OLD HISTORY"));
 });

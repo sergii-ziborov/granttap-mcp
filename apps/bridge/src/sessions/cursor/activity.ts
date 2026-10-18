@@ -7,6 +7,7 @@ import type { CapabilityObservation } from "../telemetry";
 import { cursorFiles, cursorUsage, scanCursor } from "./scan";
 import { textBlocks } from "./transcripts";
 import { cursorNativeAttention, cursorQuestionText, cursorNoticeText } from "./attention";
+import { cursorConversationHistory } from "./conversations";
 
 function appendFileActivity(input: {
   out: ActivityEntry[];
@@ -94,6 +95,9 @@ export function cursorActivity(session: SessionInfo, fullText = false): Activity
   });
   for (const entry of cursorNativeAttention(session)) {
     if (!out.some(existing => existing.text === entry.text)) out.push(entry);
+  }
+  for (const entry of cursorConversationHistory(session)?.entries ?? []) {
+    if (!out.some(existing => existing.id === entry.id)) out.push(entry);
   }
   return out.sort((a, b) => a.createdAt - b.createdAt);
 }

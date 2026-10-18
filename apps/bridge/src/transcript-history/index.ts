@@ -7,6 +7,7 @@ import { previousNativeLines } from "./native-lines";
 import { recordedFileChanges } from "./changes";
 import { recordedToolDetails } from "./tool-details";
 import { completedTurnChanges } from "./turn-changes";
+import { cursorActivity, cursorConversationHistory } from "../sessions/cursor";
 export { nativeImageLines } from "./images";
 export { nativeTranscriptImage } from './images/native';
 export { nativeTranscriptEntry } from './images/advertised-entry';
@@ -32,6 +33,13 @@ export function readTranscriptHistory(input: SessionInfo, cursor?: string): Sess
   const session = localTaskTransfers().nativeSession(input);
   if (session.sessionId === input.sessionId && session.sessionId.startsWith('transfer-')
     || cursor?.startsWith('transfer-context:')) return transferHistory(input, cursor);
+  if (session.agent === "cursor") {
+    const page = cursorConversationHistory(session, cursor);
+    if (!page || cursor) return page;
+    const entries = new Map(cursorActivity(session, true).map(entry => [entry.id, entry]));
+    for (const entry of page.entries) entries.set(entry.id, entry);
+    return { ...page, entries: [...entries.values()].sort((a, b) => a.createdAt - b.createdAt).slice(-80) };
+  }
   if (session.agent !== "codex" && session.agent !== "claude") return undefined;
   let path = session.agent === "claude" ? claudeLogPath(session.sessionId)
     : codexLogPathForSession(session.sessionId, session.startedAt);

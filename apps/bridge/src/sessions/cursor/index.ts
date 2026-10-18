@@ -11,3 +11,4 @@ export {
 } from "./catalog";
 export { scanCursor } from "./scan";
 export { cursorExecution, saveCursorExecution } from "./executions";
+export { beginCursorTurn, cursorConversationSession, cursorConversationHistory, mergeCursorConversations } from "./conversations";

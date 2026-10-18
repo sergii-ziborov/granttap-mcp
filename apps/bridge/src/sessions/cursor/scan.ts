@@ -3,6 +3,7 @@ import type { ChildThreadInfo, SessionInfo } from "../../../../../packages/proto
 import { aggregateChildThreads, childTitle } from "../support/child-threads";
 import { MAX_FILES, stateFor, TOKEN_WINDOW_MS, type Scan } from "../support/common";
 import type { CapabilityObservation } from "../telemetry";
+import { mergeCursorConversations } from "./conversations";
 import {
   composerActivityAt,
   composerParentSets,
@@ -247,7 +248,7 @@ export function scanCursor(maxFiles = MAX_FILES): Scan {
   filesBySession = context.files;
   usageBySession = context.usage;
   return {
-    sessions: context.sessions, tokensRecent: context.tokensRecent,
+    sessions: mergeCursorConversations(context.sessions), tokensRecent: context.tokensRecent,
     sourceLimited: listed.length > maxFiles,
   };
 }

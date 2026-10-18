@@ -63,13 +63,13 @@ test("a requested transcript grants and delivers only to its authenticated reque
     await new Promise<void>(resolve => server.close(() => resolve()));
   });
   await client.connect();
-  await new Promise<void>(resolve => setTimeout(resolve, 30));
+  await receivedFrames(frames, 2);
   frames.length = 0;
   await sendSessionPayload(client, { type: "session.activity", sessionId: "replica-wire-fixture",
     agent: "claude", state: "idle", entries: [], generatedAt: Date.now(),
     history: { hasMore: false } }, "replica-wire-fixture", "phone",
     { reliable: false, peerPublicKey: requester.publicKey });
-  await new Promise<void>(resolve => setTimeout(resolve, 30));
+  await receivedFrames(frames, 2);
   assert.equal(frames.length, 2, "One grant and one transcript belong to this read request.");
   assert.equal(frames.some(e => open(e.nonce, e.box, first.publicKey, machine.secretKey)), false);
   assert.deepEqual(frames.map(e => (open(e.nonce, e.box, requester.publicKey,
@@ -77,3 +77,11 @@ test("a requested transcript grants and delivers only to its authenticated reque
   await assert.rejects(client.send({ type: "machine.heartbeat", machine: "Fixture", createdAt: Date.now() },
     "phone", { peerPublicKey: generateKeyPair().publicKey }), /not authorized/);
 });
+
+async function receivedFrames(frames: unknown[], count: number): Promise<void> {
+  const deadline = Date.now() + 10_000;
+  while (frames.length < count && Date.now() < deadline) {
+    await new Promise<void>(resolve => setTimeout(resolve, 10));
+  }
+  assert.equal(frames.length, count, "The local receiver must observe every expected frame before the next phase.");
+}

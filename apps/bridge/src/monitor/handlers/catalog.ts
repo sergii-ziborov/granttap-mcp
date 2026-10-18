@@ -5,6 +5,7 @@ import { cachedSessionActivity } from "../support/session-activity";
 import { readTranscriptHistory } from "../../transcript-history";
 import { publishedSession } from "../../session-catalog";
 import { activityWithImages } from '../../session-images';
+import { cursorConversationSession } from "../../sessions/cursor";
 import {
   scanSessionHistory,
   scanSessions,
@@ -40,11 +41,13 @@ export function boundedCatalogHistory(
 }
 
 function resolveSession(client: RelayClient, sessionId: string, status?: SessionsStatus): SessionInfo | undefined {
-  if (status) {
-    return status.sessions.find((session) => session.sessionId === sessionId)
-      ?? status.history?.find((session) => session.sessionId === sessionId);
+  const cursor = cursorConversationSession(sessionId);
+  const known = status?.sessions.find((session) => session.sessionId === sessionId)
+    ?? status?.history?.find((session) => session.sessionId === sessionId)
+    ?? publishedSession(client, sessionId);
+  if (cursor && (!known || known.agent === "cursor" && cursor.lastActivityAt >= known.lastActivityAt)) {
+    return { ...known, ...cursor, title: known?.title ?? cursor.title };
   }
-  const known = publishedSession(client, sessionId);
   if (known) return known;
   return scanSessions().sessions.find((session) => session.sessionId === sessionId)
     ?? scanSessionHistory().find((session) => session.sessionId === sessionId);
