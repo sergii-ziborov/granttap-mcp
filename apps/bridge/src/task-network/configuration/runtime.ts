@@ -30,7 +30,7 @@ export function projectConfigurationPoller(config: PeerConfig): { refresh: () =>
   const run = async () => {
     const ids = localMeshStore().projectIds().slice(0, 128);
     for (let offset = 0; offset < ids.length; offset += 4) {
-      await Promise.all(ids.slice(offset, offset + 4).map(id => sync.refresh(id)));
+      await Promise.all(ids.slice(offset, offset + 4).map(id => sync.refresh(id, { background: true })));
     }
     refreshedAt = Date.now();
   };

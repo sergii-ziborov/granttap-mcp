@@ -11,6 +11,12 @@ admission requires a fresh successful fetch. Expired, wrong-Project,
 wrong-computer, revoked-controller and unauthenticated configurations grant
 nothing. Revision and creation order are enforced by `TaskNetworkStore`.
 
+Background discovery backs off for fifteen minutes when an opt-in configuration
+is absent or rejected, and for one minute after a relay failure. Actual work
+admission bypasses that delay and still requires a fresh authenticated response;
+a remembered failure never becomes permission. Concurrent reads of one Project
+join the same request, and retry bookkeeping is bounded to 128 Projects.
+
 Native same-user configuration has a separate issuer domain and is accepted
 only by explicitly enabled native stores. It never enrolls a machine as a
 phone controller or grants ordinary controller message access.
