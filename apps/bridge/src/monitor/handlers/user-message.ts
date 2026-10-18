@@ -2,6 +2,7 @@ import type { UserMessage } from "../../../../../packages/protocol/schema";
 import { ATTACHMENT_MISSING_ERROR } from "../../../../../packages/protocol/schema";
 import type { RelayClient } from "../../../../../packages/core/relay-client";
 import { takeAttachment } from "../../delivery/attachment-store";
+import { rejectCompletedDelivery } from '../../delivery';
 import { loadRuntimeConfig } from "../../config";
 import { deliveryRoutingError } from "../../capabilities";
 import {
@@ -28,6 +29,7 @@ async function startNewAgentTask(input: {
   say: (text: string, sessionId?: string, wake?: boolean, kind?: "status" | "response") => Promise<unknown>;
   onProcessing?: () => Promise<void>;
   origin?: { registry: TaskOriginRegistry; scope: TaskOriginScope };
+  peerPublicKey?: string;
 }): Promise<"accepted" | "rejected"> {
   const { client, message, say } = input;
   const agent = message.agent ?? "codex";
@@ -94,9 +96,14 @@ async function startNewAgentTask(input: {
     await say(`Could not create a ${displayName} task on this computer.`, undefined, true);
     return 'rejected';
   }
-  const settle = (result: ReplyResult, late: boolean) => {
+  const settle = async (result: ReplyResult, late: boolean) => {
     input.origin?.registry.complete(input.origin.scope,
       { ok: result.ok, sessionId: result.ok ? result.sessionId : undefined });
+    if (!result.ok && message.messageId) {
+      if (late) rejectCompletedDelivery(message.messageId, result.error);
+      await sendDeliveryReceipt(client, message.messageId, 'rejected', result.error,
+        undefined, input.peerPublicKey);
+    }
     return result.ok ? say(result.text, result.sessionId, true)
       : say(late ? `The ${displayName} task stopped: ${result.error}`
         : `Could not create a ${displayName} task: ${result.error}`, undefined, true);
@@ -115,7 +122,7 @@ export async function handleUserMessage(
 ): Promise<"accepted" | "rejected"> {
   const say = (text: string, sessionId?: string, wake = false, kind: "status" | "response" = "response") => {
     const payload = agentEventForUserMessage(message, text, sessionId, kind);
-    const options = { ttlMs: 15 * 60_000, wake: wake || undefined };
+    const options = { ttlMs: 15 * 60_000, wake: wake || undefined, peerPublicKey };
     return (sessionId
       ? sendSessionPayload(client, payload, sessionId, "phone", options)
       : client.send(payload, "phone", options)).catch(() => {});
@@ -125,7 +132,7 @@ export async function handleUserMessage(
       registry: localTaskOrigins(),
       scope: { room: client.room, peerPublicKey, originMessageId: message.taskOriginId },
     } : undefined;
-    return startNewAgentTask({ client, message, say, onProcessing, origin });
+    return startNewAgentTask({ client, message, say, onProcessing, origin, peerPublicKey });
   }
   const resolved = resolveMessageAttachments(message, (attachmentId) => takeAttachment(attachmentId, client.room));
   if (!resolved.ok) {
@@ -186,8 +193,13 @@ export async function handleUserMessage(
         .catch(() => {});
     }
     if (result.ok) await say(result.text, result.sessionId ?? target.sessionId, true);
-    else await say(late ? `The run stopped: ${result.error}` : `Could not deliver the message: ${result.error}`,
-      target.sessionId, true);
+    else {
+      if (late && message.messageId) rejectCompletedDelivery(message.messageId, result.error);
+      if (message.messageId) await sendDeliveryReceipt(client, message.messageId, 'rejected',
+        result.error, target.sessionId, peerPublicKey);
+      await say(late ? `The run stopped: ${result.error}` : `Could not deliver the message: ${result.error}`,
+        target.sessionId, true);
+    }
   };
   const early = await acceptWhenStarted(run, (result) => settle(result, true));
   if (early === "started") return "accepted";

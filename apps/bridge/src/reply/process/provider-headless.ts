@@ -66,7 +66,7 @@ export function runCursorNew(
   text: string, cwd: string, timeoutMs: number, model?: string, operationKey?: string, effort?: string,
 ): Promise<ReplyResult> {
   return runProcess(
-    cursorBin(), ["-p", ...(model ? ["--model", model] : []),
+    cursorBin(), ["-p", "--trust", ...(model ? ["--model", model] : []),
       "--output-format", "json", text], cwd, timeoutMs, parseCursor, undefined, operationKey,
   );
 }
@@ -74,8 +74,10 @@ export function runCursorNew(
 export function runCursorResume(
   session: SessionInfo, text: string, timeoutMs: number, model?: string,
 ): Promise<ReplyResult> {
+  if (!session.cwd) return Promise.resolve({ ok: false,
+    error: "Cursor has not reported this task's workspace. Open the task in Cursor and retry." });
   return runProcess(
-    cursorBin(), ["-p", "--resume", session.sessionId,
+    cursorBin(), ["-p", "--trust", "--resume", session.sessionId,
       ...(model ? ["--model", model] : []), "--output-format", "json", text],
     session.cwd, timeoutMs, (stdout) => parseCursor(stdout, session.sessionId),
     undefined, session.sessionId,

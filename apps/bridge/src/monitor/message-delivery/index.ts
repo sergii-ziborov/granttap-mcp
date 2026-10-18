@@ -1,7 +1,7 @@
 import type { Payload } from "../../../../../packages/protocol/schema";
 import type { RelayClient } from "../../../../../packages/core/relay-client";
 import { abandonDelivery, beginDelivery, completeDelivery,
-  acknowledgeProcessingDelivery, processingDeliveryAcknowledged } from "../../delivery";
+  acknowledgeProcessingDelivery, processingDeliveryAcknowledged, completedDeliveryFailure } from "../../delivery";
 import { sendDeliveryReceipt } from "../handlers/receipts";
 import { handleUserMessage } from "../handlers/user-message";
 
@@ -17,7 +17,9 @@ export async function handleInboundUserMessage(
     const state = beginDelivery(payload.messageId);
     if (state !== "started") {
       if (state === "completed" || processingDeliveryAcknowledged(payload.messageId)) {
-        await sendDeliveryReceipt(client, payload.messageId, "accepted", undefined, payload.sessionId);
+        const failure = completedDeliveryFailure(payload.messageId);
+        await sendDeliveryReceipt(client, payload.messageId, failure ? 'rejected' : 'accepted',
+          failure, payload.sessionId, peerPublicKey);
       }
       return true;
     }
@@ -27,13 +29,13 @@ export async function handleInboundUserMessage(
     const outcome = await handleUserMessage(client, payload, async () => {
       if (!payload.messageId) return;
       acknowledgeProcessingDelivery(payload.messageId);
-      await sendDeliveryReceipt(client, payload.messageId, "accepted", undefined, payload.sessionId);
+      await sendDeliveryReceipt(client, payload.messageId, "accepted", undefined, payload.sessionId, peerPublicKey);
     }, peerPublicKey);
     if (payload.messageId && deliveryStarted) {
       if (outcome === "rejected") abandonDelivery(payload.messageId);
       else {
         completeDelivery(payload.messageId);
-        await sendDeliveryReceipt(client, payload.messageId, "accepted", undefined, payload.sessionId);
+        await sendDeliveryReceipt(client, payload.messageId, "accepted", undefined, payload.sessionId, peerPublicKey);
       }
     }
     void publish().catch(() => {});

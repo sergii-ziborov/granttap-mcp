@@ -12,6 +12,7 @@ type DeliveryRecord = {
   state: "processing" | "completed";
   updatedAt: number;
   processingAcknowledged?: boolean;
+  rejectedError?: string;
 };
 
 export type DeliveryStart = "started" | "processing" | "completed";
@@ -87,6 +88,19 @@ export function completeDelivery(messageId: string, now = Date.now()): void {
   const records = load();
   records[messageId] = { state: "completed", updatedAt: now };
   save(records, now);
+}
+
+/** A late provider refusal remains terminal across reconnects and replayed boxes. */
+export function rejectCompletedDelivery(messageId: string, error: string, now = Date.now()): void {
+  const records = load();
+  records[messageId] = { state: 'completed', updatedAt: now, rejectedError: error.slice(0, 1_000) };
+  save(records, now);
+}
+
+export function completedDeliveryFailure(messageId: string): string | undefined {
+  const record = load()[messageId];
+  return record?.state === 'completed' && typeof record.rejectedError === 'string'
+    ? record.rejectedError : undefined;
 }
 
 /** Release a failed attempt so a relay retry can safely try again. */

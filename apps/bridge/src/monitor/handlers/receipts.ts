@@ -10,6 +10,7 @@ export async function sendDeliveryReceipt(
   status: "accepted" | "rejected",
   error?: string,
   sessionId?: string,
+  peerPublicKey?: string,
 ): Promise<void> {
   const payload = {
     type: "delivery.receipt" as const,
@@ -19,7 +20,7 @@ export async function sendDeliveryReceipt(
     error,
     receivedAt: Date.now(),
   };
-  const options = { ttlMs: 24 * 60 * 60_000 };
+  const options = { ttlMs: 24 * 60 * 60_000, peerPublicKey };
   await (sessionId
     ? sendSessionPayload(client, payload, sessionId, "phone", options)
     : client.send(payload, "phone", options)).catch(() => {});
