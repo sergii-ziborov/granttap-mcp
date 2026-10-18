@@ -15,3 +15,10 @@ Tests live in `tests/wire.test.ts`.
 ## License
 
 Licensed under the Apache License, Version 2.0 (Apache-2.0). See LICENSE and NOTICE.
+
+## Pending native chats
+
+`user.message.continue` names an original creation ID and has no native session
+ID or workspace override. MCP 0.8.75 resolves it using the authenticated sender
+and room before normal provider and Project validation. Older receivers reject
+the unknown operation; it can never be interpreted as a new task.

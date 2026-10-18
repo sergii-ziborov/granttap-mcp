@@ -84,9 +84,18 @@ async function startNewAgentTask(input: {
     cursor: createCursorSession,
     grok: createGrokSession,
   }[agent];
-  const run = create(
-    message.text, requestedCwd, PHONE_RUN_LIMIT_MS, resolved.attachments, message.model, undefined, message.effort,
-  );
+  let run: Promise<ReplyResult>;
+  try {
+    run = create(message.text, requestedCwd, PHONE_RUN_LIMIT_MS, resolved.attachments,
+      message.model, undefined, message.effort).catch(() => {
+      input.origin?.registry.complete(input.origin.scope, { ok: true });
+      return { ok: false, error: 'The provider task stopped unexpectedly.' } as ReplyResult;
+    });
+  } catch {
+    input.origin?.registry.complete(input.origin.scope, { ok: false });
+    await say(`Could not create a ${displayName} task on this computer.`, undefined, true);
+    return 'rejected';
+  }
   const settle = (result: ReplyResult, late: boolean) => {
     input.origin?.registry.complete(input.origin.scope,
       { ok: result.ok, sessionId: result.ok ? result.sessionId : undefined });

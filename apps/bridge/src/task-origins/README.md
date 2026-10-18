@@ -12,6 +12,11 @@ or missing native ID cannot authorize another new task.
 Tests live in `tests/`. Origin lookup does not bypass normal provider, pause,
 Project or controller authorization.
 
+Only clients that opt into origin registration change creation behavior.
+Transport timestamps and retries keep one origin. A definite failure can be
+retried with a new explicit controller retry generation; an interrupted or
+unknown native attempt requires confirmation instead of automatic replay.
+
 ## License
 
 Licensed under the Apache License, Version 2.0 (Apache-2.0). See LICENSE and NOTICE.
