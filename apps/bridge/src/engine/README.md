@@ -49,5 +49,14 @@ the durable journal.
 
 The proprietary engine source and Project database do not live in this package.
 
+Every CLI entry point loads the persisted Engine declaration before importing
+its runtime. The monitor, HTTP MCP and provider hooks therefore share activation
+on macOS, Linux and Windows rather than relying on a LaunchAgent environment.
+Explicit disablement and a complete explicit executable/checksum pair win over
+the saved declaration. Partial environment overrides are never mixed with a
+different file's checksum. The supervisor still verifies the executable's bytes
+before launch. Windows clients derive a local named pipe from the normalized
+configuration path; remote shares never become Engine endpoints.
+
 License: this module is distributed under the GrantTap Commercial Source License
 in the repository-root `LICENSE` file.

@@ -12,6 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { createHttpServiceFixture } from "../support/http-service/fixture";
 import {
   httpMcpLaunchAgentPath,
   inspectHttpMcpService,
@@ -103,103 +104,8 @@ async function waitFor(
 test("authorize installs a persistent loopback service, verifies health, then exits", async (t) => {
   if (process.platform !== "darwin") return t.skip("LaunchAgent is macOS-only");
   const root = mkdtempSync(join(tmpdir(), "granttap-http-service-"));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
   const port = await freePort();
-  const configDir = join(root, "config");
-  const cursorDir = join(root, "cursor");
-  const agentsDir = join(root, "LaunchAgents");
-  const fakeBin = join(root, "bin");
-  const pidFile = join(root, "http-service.pid");
-  mkdirSync(fakeBin, { recursive: true });
-  writeFileSync(join(fakeBin, "launchctl"), [
-    "#!/bin/sh",
-    'case "$1" in',
-    "  print)",
-    '    test -f "$GRANTTAP_FAKE_PID_FILE" || exit 1',
-    '    kill -0 "$(cat "$GRANTTAP_FAKE_PID_FILE")" 2>/dev/null',
-    "    ;;",
-    "  bootout)",
-    '    if test -f "$GRANTTAP_FAKE_PID_FILE"; then',
-    '      old_pid="$(cat "$GRANTTAP_FAKE_PID_FILE")"',
-    '      kill -TERM "$old_pid" 2>/dev/null || true',
-    "      count=0",
-    '      while kill -0 "$old_pid" 2>/dev/null && test "$count" -lt 40; do',
-    "        sleep 0.05",
-    "        count=$((count + 1))",
-    "      done",
-    '      rm -f "$GRANTTAP_FAKE_PID_FILE"',
-    "    fi",
-    "    exit 0",
-    "    ;;",
-    "  bootstrap)",
-    '    "$GRANTTAP_FAKE_NODE" "$GRANTTAP_FAKE_LAUNCHER" internal serve >>"$GRANTTAP_FAKE_LOG" 2>&1 &',
-    '    echo $! >"$GRANTTAP_FAKE_PID_FILE"',
-    "    exit 0",
-    "    ;;",
-    "esac",
-    "",
-  ].join("\n"), { mode: 0o755 });
-  const previous = {
-    config: process.env.GRANTTAP_CONFIG_DIR,
-    cursor: process.env.GRANTTAP_CURSOR_DIR,
-    agents: process.env.GRANTTAP_LAUNCH_AGENTS_DIR,
-    host: process.env.GRANTTAP_MCP_HTTP_HOST,
-    port: process.env.GRANTTAP_MCP_HTTP_PORT,
-    node: process.env.GRANTTAP_NODE,
-    skip: process.env.GRANTTAP_SKIP_LAUNCHCTL,
-    fakeLaunchctl: process.env.GRANTTAP_TEST_FAKE_LAUNCHCTL,
-    path: process.env.PATH,
-    fakePid: process.env.GRANTTAP_FAKE_PID_FILE,
-    fakeNode: process.env.GRANTTAP_FAKE_NODE,
-    fakeLauncher: process.env.GRANTTAP_FAKE_LAUNCHER,
-    fakeLog: process.env.GRANTTAP_FAKE_LOG,
-  };
-  Object.assign(process.env, {
-    GRANTTAP_CONFIG_DIR: configDir,
-    GRANTTAP_CURSOR_DIR: cursorDir,
-    GRANTTAP_LAUNCH_AGENTS_DIR: agentsDir,
-    GRANTTAP_MCP_HTTP_HOST: "127.0.0.1",
-    GRANTTAP_MCP_HTTP_PORT: String(port),
-    GRANTTAP_NODE: process.execPath,
-    // launchctl on PATH is the stub written above, so the installer may run its
-    // whole path against a temporary LaunchAgents directory.
-    GRANTTAP_TEST_FAKE_LAUNCHCTL: "1",
-    PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
-    GRANTTAP_FAKE_PID_FILE: pidFile,
-    GRANTTAP_FAKE_NODE: process.execPath,
-    GRANTTAP_FAKE_LAUNCHER: executable,
-    GRANTTAP_FAKE_LOG: join(root, "fake-service.log"),
-  });
-  delete process.env.GRANTTAP_SKIP_LAUNCHCTL;
-  const stopFakeService = () => {
-    try {
-      const pid = Number(readFileSync(pidFile, "utf8"));
-      if (Number.isInteger(pid) && pid > 1) process.kill(pid, "SIGTERM");
-    } catch {
-      /* already stopped */
-    }
-  };
-  t.after(stopFakeService);
-  t.after(() => {
-    for (const [key, value] of Object.entries({
-      GRANTTAP_CONFIG_DIR: previous.config,
-      GRANTTAP_CURSOR_DIR: previous.cursor,
-      GRANTTAP_LAUNCH_AGENTS_DIR: previous.agents,
-      GRANTTAP_MCP_HTTP_HOST: previous.host,
-      GRANTTAP_MCP_HTTP_PORT: previous.port,
-      GRANTTAP_NODE: previous.node,
-      GRANTTAP_SKIP_LAUNCHCTL: previous.skip,
-      GRANTTAP_TEST_FAKE_LAUNCHCTL: previous.fakeLaunchctl,
-      PATH: previous.path,
-      GRANTTAP_FAKE_PID_FILE: previous.fakePid,
-      GRANTTAP_FAKE_NODE: previous.fakeNode,
-      GRANTTAP_FAKE_LAUNCHER: previous.fakeLauncher,
-      GRANTTAP_FAKE_LOG: previous.fakeLog,
-    })) {
-      if (value == null) delete process.env[key];
-      else process.env[key] = value;
-    }
-  });
+  const { cursorDir, pidFile, stopFakeService } = createHttpServiceFixture(t, root, port, executable);
 
   mkdirSync(cursorDir, { recursive: true });
   writeFileSync(join(cursorDir, "mcp.json"), `${JSON.stringify({
@@ -257,7 +163,7 @@ test("authorize installs a persistent loopback service, verifies health, then ex
   assert.match(setup.stdout, /Cursor\s+Beta · Use GrantTap plugin/);
   assert.match(readFileSync(plistPath, "utf8"), /<string>internal<\/string>\s*<string>serve<\/string>/);
 
-  stopFakeService();
+  await stopFakeService();
   await waitFor(async () => !await probeHttpMcpHealth(mcpUrl, 100));
   await waitFor(() => !inspectHttpMcpService().running);
   assert.equal(await probeHttpMcpHealth(mcpUrl, 100), false);

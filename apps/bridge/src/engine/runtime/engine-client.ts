@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createConnection, type Socket } from "node:net";
+import { engineSocketEndpoint } from "../startup";
 import {
   DEFAULT_ENGINE_POLICY_TIMEOUT_MS,
   ENGINE_PROTOCOL_VERSION,
@@ -37,7 +38,7 @@ export class EngineClient {
   private closed = false;
 
   constructor(options: EngineClientOptions) {
-    this.socketPath = options.socketPath;
+    this.socketPath = engineSocketEndpoint(options.socketPath);
     this.connectTimeoutMs = options.connectTimeoutMs ?? DEFAULT_ENGINE_POLICY_TIMEOUT_MS;
     this.maxPendingRequests = options.maxPendingRequests ?? MAX_ENGINE_PENDING_REQUESTS;
   }

@@ -36,6 +36,8 @@ import {
 import { configDir, loadRuntimeConfig, verifiableEngine } from "../config";
 import { isCursorHelperNode, resolveMonitorNodeBin } from "../config/runtime/node-bin";
 import { inspectWindowsTask, installWindowsTask } from "./windows-service";
+import { installLinuxService } from "./linux-service";
+import { monitorEngineEnvironment } from "./monitor-launchd";
 import {
   type InstallResult,
   launchAgentLabel,
@@ -84,30 +86,6 @@ export function isNodvoxPinnedPlist(contents: string): boolean {
   );
 }
 
-/**
- * Carry a declared engine into the one process that publishes.
- *
- * The engine ships separately from this package, so its location is declared in
- * the runtime config rather than assumed. Without these four variables the
- * rollout flags stay off, `publishProjectPolicyStatuses` returns immediately,
- * and the phone shows "Governance not reported" forever with nothing in any log
- * to say why.
- */
-function engineEnvironment(): string[] {
-  const engine = verifiableEngine(loadRuntimeConfig());
-  if (!engine) return [];
-  return [
-    "    <key>GRANTTAP_ENGINE_BINARY</key>",
-    `    <string>${xml(engine.path)}</string>`,
-    "    <key>GRANTTAP_ENGINE_SHA256</key>",
-    `    <string>${engine.sha256}</string>`,
-    "    <key>GRANTTAP_ENGINE_ENABLED</key>",
-    '    <string>1</string>',
-    "    <key>GRANTTAP_PROJECT_POLICY_ENABLED</key>",
-    '    <string>1</string>',
-  ];
-}
-
 /** True when the plist is ours and, if it lives in the user Library, does not log to temp. */
 export function monitorPlistLooksInstalled(contents: string, agentsDir: string): boolean {
   const hasLabel = contents.includes(`<string>${launchAgentLabel}</string>`);
@@ -154,7 +132,7 @@ export function reloadMonitorHelper(): InstallResult {
   if (process.env.GRANTTAP_SKIP_LAUNCHCTL === "1" || process.env.NODE_TEST_CONTEXT) {
     return { status: "already", detail: "launchctl skipped" };
   }
-  if (process.platform === "win32") return installMonitorHelper();
+  if (process.platform === "win32" || process.platform === "linux") return installMonitorHelper();
   if (process.platform !== "darwin") {
     return { status: "manual", detail: "background task sync currently requires macOS" };
   }
@@ -203,7 +181,7 @@ function buildMonitorPlist(input: {
       : []),
     "    <key>GRANTTAP_MONITOR_PRIMARY</key>",
     "    <string>1</string>",
-    ...engineEnvironment(),
+    ...monitorEngineEnvironment(),
     "    <key>PATH</key>",
     `    <string>${xml(environmentPath)}</string>`,
     "  </dict>",
@@ -226,10 +204,16 @@ function buildMonitorPlist(input: {
 }
 
 export function installMonitorHelper(): InstallResult {
+  if (process.platform === "linux") {
+    const node = resolveMonitorNodeBin();
+    return node && !isCursorHelperNode(node)
+      ? installLinuxService("monitor", node, join(repoRoot, "bin", "granttap-mcp.mjs"), { forceReload: true })
+      : { status: "manual", detail: "A stable Node.js 20+ installation is required for Linux background sync." };
+  }
   if (process.platform === "win32") {
     const node = resolveMonitorNodeBin();
     return node && !isCursorHelperNode(node)
-      ? installWindowsTask("monitor", node, join(repoRoot, "bin", "granttap-mcp.mjs"))
+      ? installWindowsTask("monitor", node, join(repoRoot, "bin", "granttap-mcp.mjs"), true)
       : { status: "manual", detail: "A stable Node.js 20+ installation is required for Windows background sync." };
   }
   if (process.platform !== "darwin") {
@@ -311,10 +295,3 @@ export function installMonitorHelper(): InstallResult {
   }
   return { status: already ? "already" : "installed", detail };
 }
-
-function backupOnce(path: string): void {
-  const bak = path + ".bak-granttap";
-  if (existsSync(path) && !existsSync(bak)) copyFileSync(path, bak);
-}
-
-// ---------------------------------------------------------------- Claude Code

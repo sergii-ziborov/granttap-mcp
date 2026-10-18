@@ -71,3 +71,9 @@ test("the standard locations are searched when no path is given", async (t) => {
   assert.ok(locations.length >= 3, "a single location is not a search");
   assert.ok(locations.every((path) => path.startsWith("/")), "all absolute");
 });
+test("Windows discovery looks for the installed executable rather than the Unix filename", async t => {
+  const root = await sandbox(t);
+  const paths = defaultEngineLocations(root, "win32");
+  assert.equal(paths[0], join(process.env.GRANTTAP_CONFIG_DIR!, "engine", "granttap-engine.exe"));
+  assert.ok(paths.every(path => path.endsWith("granttap-engine.exe")));
+});

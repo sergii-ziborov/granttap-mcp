@@ -109,7 +109,9 @@ const forwardedArgs = ["connect", "status", "reset", "mesh", "setup", "restricti
   : [];
 const child = spawn(
   process.execPath,
-  ["--require", preflight, "--import", pathToFileURL(loader).href, entry, ...forwardedArgs],
+  ["--require", preflight, "--import", pathToFileURL(loader).href,
+    "--import", pathToFileURL(join(root, "apps", "bridge", "src", "engine", "startup", "activation-entry.ts")).href,
+    entry, ...forwardedArgs],
   {
     stdio: "inherit",
     cwd: root,

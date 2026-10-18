@@ -40,6 +40,7 @@ import { configDir, loadRuntimeConfig, verifiableEngine } from "../config";
 import { isCursorHelperNode, resolveMonitorNodeBin } from "../config/runtime/node-bin";
 import { inspectWindowsTask, installWindowsTask } from "./windows-service";
 import { monitorPlistLooksInstalled } from "./monitor-helper";
+import { inspectLinuxService } from "./linux-service";
 import { codexHooksExplicitlyDisabled } from "./hooks";
 import { cachedCodexHooks, codexHookSet } from "../codex-hook-trust";
 import type { ProviderHook } from "../../../../packages/protocol/messages/provider-hooks";
@@ -243,6 +244,7 @@ export type MonitorIntegrationStatus = {
 /** Read-only status check. It never installs, reloads, or repairs the helper. */
 export function inspectMonitorHelper(): MonitorIntegrationStatus {
   if (process.platform === "win32") return inspectWindowsTask("monitor");
+  if (process.platform === "linux") return inspectLinuxService("monitor");
   if (process.platform !== "darwin") return { configured: false, running: false };
   const agentsDir = process.env.GRANTTAP_LAUNCH_AGENTS_DIR
     ?? join(homedir(), "Library", "LaunchAgents");

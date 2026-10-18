@@ -11,7 +11,7 @@ import {
   type InstallResult,
 } from "../../install";
 import { createOneTimePairing, DEFAULT_RELAY, PAIRING_CODE_TTL_MINUTES } from "../../pairing";
-import { declareEngine } from "../../engine/protocol/engine-declaration";
+import { prepareEngine } from "../../engine/distribution";
 import { isMachineConfigured } from "../../../../mcp/src/status/pairing-status";
 import { removeCursorUserGrantTap } from "../../../../mcp/src/cursor-config";
 import { installHttpMcpService, waitForHttpMcpHealth } from "../../../../mcp/src/http-service";
@@ -59,15 +59,14 @@ async function main(): Promise<void> {
   // Declared before the helper is written, so the LaunchAgent picks the engine
   // up in the same run rather than needing a second one.
   const engineFlag = process.argv.indexOf("--engine");
-  const engine = declareEngine(
-    engineFlag >= 0 ? process.argv[engineFlag + 1] : undefined,
-  );
+  if (engineFlag >= 0 && !process.argv[engineFlag + 1]) throw new Error("Choose an executable after --engine");
+  const engine = await prepareEngine(engineFlag >= 0 ? process.argv[engineFlag + 1] : undefined);
   const helper = installMonitorHelper();
   let httpService: InstallResult | null = null;
   let cursorConfig: InstallResult | null = null;
   const mcpClientInstalled = before.agents.some((item) => item.installed);
   if (before.cursor.installed || mcpClientInstalled) {
-    httpService = installHttpMcpService();
+    httpService = installHttpMcpService({ forceReload: true });
     if (process.platform === "win32" && httpService.status !== "manual"
       && !await waitForHttpMcpHealth(undefined, 15_000)) {
       httpService = { status: "manual", detail: "Windows background service did not become healthy." };
@@ -112,9 +111,7 @@ async function main(): Promise<void> {
         ? "Next: keep the GrantTap plugin. Pair and change settings in the GrantTap app, not Cursor MCP settings."
         : !paired
           ? "Next: pair from the GrantTap plugin connection card or the GrantTap app."
-          : engine
-            ? "Governance is live. Restart the helper to pick it up: launchctl kickstart -k gui/$(id -u)/com.granttap.monitor"
-            : "Governance stays off until an engine is found. Point at one with: granttap setup --engine <path>",
+          : "Ready. Continue from GrantTap on your controller device.",
     "",
   ].join("\n"));
 }

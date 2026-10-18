@@ -10,6 +10,7 @@ import {
   readdirSync,
   rmSync,
   symlinkSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -101,8 +102,11 @@ test("published launcher resolves hoisted dependencies and runs setup/serve in i
   assert.deepEqual(readdirSync(isolated, { recursive: true }).map(String).sort(), before);
   assert.equal(dirname(installed), modules);
 
-  const setup = run(["setup"]);
+  const engine = join(isolated, "engine-fixture");
+  writeFileSync(engine, "#!/bin/sh\nexit 0\n", { mode: 0o700 });
+  const setup = run(["setup", "--engine", engine]);
   assert.equal(setup.status, 0, setup.stderr);
+  assert.match(setup.stdout, /Project Governance\s+Ready/);
   const helperState = process.platform === "darwin" ? "Ready" : "Needs attention";
   assert.match(setup.stdout, new RegExp(`Background helper\\s+${helperState}`));
   assert.match(setup.stdout, /Claude Code\s+(?:Authorize in Claude Code|Not installed)/);
