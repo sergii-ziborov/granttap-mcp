@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { TaskCreate, UserMessage } from '../messages/interaction';
+import { TaskContinuation } from './continuation';
 
 /** Signed scheduling and acceptance proof live inside authenticated ciphertext. */
 export const TaskDispatch = z.object({
@@ -12,7 +13,7 @@ export const TaskDispatch = z.object({
   notBefore: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   expiresAt: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   createdAt: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  operation: z.union([UserMessage, TaskCreate]),
+  operation: z.union([UserMessage, TaskCreate, TaskContinuation]),
 }).strict().superRefine((job, context) => {
   const reject = (message: string, path: string[]) => context.addIssue({
     code: z.ZodIssueCode.custom, message, path,
@@ -30,6 +31,10 @@ export const TaskDispatch = z.object({
     }
   } else if (job.sessionId !== undefined) {
     reject('New tasks cannot borrow an existing conversation encryption scope', ['sessionId']);
+  }
+  if (job.operation.type === 'user.message.continue'
+    && job.operation.originMessageId === job.operation.messageId) {
+    reject('A continuation cannot depend on itself', ['operation', 'originMessageId']);
   }
   if (job.operation.attachmentRefs?.length) {
     reject('Durable tasks must carry their attachments inline', ['operation', 'attachmentRefs']);

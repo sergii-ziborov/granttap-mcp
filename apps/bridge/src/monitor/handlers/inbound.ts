@@ -67,7 +67,7 @@ export async function handleMonitorMessage(
       return handleInboundKnowledgeWrite(client, payload, input.peerPublicKey, publish);
     }
     if (payload.type === "user.message") {
-      return handleInboundUserMessage(client, payload, publish);
+      return handleInboundUserMessage(client, payload, publish, input.peerPublicKey);
     } else if (payload.type === "user.attachment") {
       // Ahead of its message, so the message itself travels light.
       return storeAttachment(payload, client.room);

@@ -1,6 +1,6 @@
 {
   "name": "granttap-mcp",
-  "version": "0.8.74",
+  "version": "0.8.75",
   "description": "Apache-2.0 computer runtime connecting local coding agents to GrantTap on Mac, iPhone, iPad and Apple Watch.",
   "type": "module",
   "bin": {

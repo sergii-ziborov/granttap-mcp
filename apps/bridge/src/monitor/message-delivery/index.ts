@@ -9,6 +9,7 @@ import { handleUserMessage } from "../handlers/user-message";
 export async function handleInboundUserMessage(
   client: RelayClient, payload: Extract<Payload, { type: "user.message" }>,
   publish: (forceHistory?: boolean) => Promise<void>,
+  peerPublicKey?: string,
 ): Promise<boolean> {
   if (payload.requestId) return false;
   let deliveryStarted = false;
@@ -27,7 +28,7 @@ export async function handleInboundUserMessage(
       if (!payload.messageId) return;
       acknowledgeProcessingDelivery(payload.messageId);
       await sendDeliveryReceipt(client, payload.messageId, "accepted", undefined, payload.sessionId);
-    });
+    }, peerPublicKey);
     if (payload.messageId && deliveryStarted) {
       if (outcome === "rejected") abandonDelivery(payload.messageId);
       else {

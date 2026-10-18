@@ -41,6 +41,10 @@ export const ATTACHMENT_MISSING_ERROR = "attachment-missing";
 export const UserMessage = z.object({
   type: z.literal("user.message"),
   messageId: z.string().min(1).max(180).optional(),
+  /** Opt-in origin registration for follow-ups sent before a native chat ID exists. */
+  taskOriginId: z.string().min(1).max(180).optional(),
+  /** Changes only after an explicit controller Retry, never a transport retry. */
+  retryId: z.string().min(1).max(180).optional(),
   text: z.string(),
   agent: CodingAgent.optional(),
   cwd: z.string().max(4_096).optional(),

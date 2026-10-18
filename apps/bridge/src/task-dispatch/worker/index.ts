@@ -12,8 +12,10 @@ export type WorkerOptions = {
   onTerminal?: (job: TaskDispatch) => void;
   onError?: () => void;
   connected: () => boolean; authorized: (peer: string) => boolean;
-  ready: (job: TaskDispatch) => boolean;
-  deliver: (job: TaskDispatch, beforeStart: () => Promise<void>) => Promise<'accepted' | 'rejected'>;
+  conversationKey?: (job: TaskDispatch, peer: string) => string;
+  validationCode?: (job: TaskDispatch, peer: string) => string | undefined;
+  ready: (job: TaskDispatch, peer: string) => boolean;
+  deliver: (job: TaskDispatch, beforeStart: () => Promise<void>, peer: string) => Promise<'accepted' | 'rejected'>;
 };
 class DeferredLaunch extends Error {}
 
@@ -31,7 +33,8 @@ export class TaskDispatchWorker {
         || a.job.createdAt - b.job.createdAt);
     for (const record of records) {
       if (['completed', 'cancelled'].includes(record.phase) || this.active.has(record.job.jobId)) continue;
-      const key = record.job.sessionId ?? `new:${record.job.operation.agent ?? 'codex'}`;
+      const key = this.options.conversationKey?.(record.job, record.peerPublicKey)
+        ?? record.job.sessionId ?? `new:${record.job.operation.agent ?? 'codex'}`;
       if (this.conversations.has(key)) continue;
       this.conversations.add(key);
       const work = this.process(record).catch(() => { this.options.onError?.(); }).finally(() => {
@@ -71,8 +74,11 @@ export class TaskDispatchWorker {
       inbox.transition(job.jobId, 'failed', { code: 'already_finished' });
       inbox.transition(job.jobId, 'completed'); inbox.retire(job.jobId); return;
     }
-    if (job.notBefore > Date.now() || !this.options.ready(job)) return;
+    if (job.notBefore > Date.now()) return;
     if (!this.options.authorized(record.peerPublicKey)) return this.reject(record, 'policy_denied');
+    const validation = this.options.validationCode?.(job, record.peerPublicKey);
+    if (validation) return this.reject(record, validation);
+    if (!this.options.ready(job, record.peerPublicKey)) return;
     let started = false;
     try {
       const outcome = await this.options.deliver(job, async () => {
@@ -85,7 +91,7 @@ export class TaskDispatchWorker {
           throw new DeferredLaunch();
         }
         started = true;
-      });
+      }, record.peerPublicKey);
       if (!started) { if (outcome === 'rejected') await this.reject(record, 'policy_denied'); return; }
       inbox.transition(job.jobId, outcome === 'accepted' ? 'delivered' : 'failed',
         outcome === 'rejected' ? { code: 'delivery_failed' } : {});

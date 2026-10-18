@@ -17,6 +17,9 @@ import { evaluateCreateTask } from "../../mesh/tasks/create-task";
 import { sendSessionPayload } from "../../host/session-keys";
 import { scanSessions } from "../../sessions";
 import { publishedSession } from "../../session-catalog";
+import { join } from 'node:path';
+import { configDir } from '../../config';
+import { TaskOriginRegistry, type TaskOriginScope } from '../../task-origins';
 import { agentEventForUserMessage, sendDeliveryReceipt } from "./receipts";
 import { resolveMessageAttachments } from "./receipts";
 import { acceptWhenStarted, PHONE_RUN_LIMIT_MS } from "../message-delivery/acceptance";
@@ -26,6 +29,7 @@ async function startNewAgentTask(input: {
   message: UserMessage;
   say: (text: string, sessionId?: string, wake?: boolean, kind?: "status" | "response") => Promise<unknown>;
   onProcessing?: () => Promise<void>;
+  origin?: { registry: TaskOriginRegistry; scope: TaskOriginScope };
 }): Promise<"accepted" | "rejected"> {
   const { client, message, say } = input;
   const agent = message.agent ?? "codex";
@@ -60,7 +64,19 @@ async function startNewAgentTask(input: {
     }
     return "rejected";
   }
-  await input.onProcessing?.();
+  const admission = input.origin?.registry.begin(input.origin.scope,
+    { ...message, attachments: resolved.attachments, attachmentRefs: undefined });
+  if (admission && admission.state !== 'started') {
+    await say(admission.state === 'ready' ? 'This task has already been created.'
+      : 'The original task is being created or needs confirmation before it can be retried.',
+      admission.sessionId, false, 'status');
+    return ['ready', 'waiting'].includes(admission.state) ? 'accepted' : 'rejected';
+  }
+  try { await input.onProcessing?.(); }
+  catch (error) {
+    if (input.origin) input.origin.registry.abandonBeforeStart(input.origin.scope);
+    throw error;
+  }
   await say(`Creating a new ${displayName} task…`, undefined, false, "status");
   const create = {
     claude: createClaudeSession,
@@ -71,10 +87,13 @@ async function startNewAgentTask(input: {
   const run = create(
     message.text, requestedCwd, PHONE_RUN_LIMIT_MS, resolved.attachments, message.model, undefined, message.effort,
   );
-  const settle = (result: ReplyResult, late: boolean) => result.ok
-    ? say(result.text, result.sessionId, true)
-    : say(late ? `The ${displayName} task stopped: ${result.error}`
-      : `Could not create a ${displayName} task: ${result.error}`, undefined, true);
+  const settle = (result: ReplyResult, late: boolean) => {
+    input.origin?.registry.complete(input.origin.scope,
+      { ok: result.ok, sessionId: result.ok ? result.sessionId : undefined });
+    return result.ok ? say(result.text, result.sessionId, true)
+      : say(late ? `The ${displayName} task stopped: ${result.error}`
+        : `Could not create a ${displayName} task: ${result.error}`, undefined, true);
+  };
   const early = await acceptWhenStarted(run, (result) => settle(result, true));
   if (early === "started") return "accepted";
   await settle(early, false);
@@ -85,6 +104,7 @@ export async function handleUserMessage(
   client: RelayClient,
   message: UserMessage,
   onProcessing?: () => Promise<void>,
+  peerPublicKey?: string,
 ): Promise<"accepted" | "rejected"> {
   const say = (text: string, sessionId?: string, wake = false, kind: "status" | "response" = "response") => {
     const payload = agentEventForUserMessage(message, text, sessionId, kind);
@@ -94,7 +114,11 @@ export async function handleUserMessage(
       : client.send(payload, "phone", options)).catch(() => {});
   };
   if (!message.sessionId) {
-    return startNewAgentTask({ client, message, say, onProcessing });
+    const origin = message.taskOriginId && peerPublicKey ? {
+      registry: new TaskOriginRegistry(join(configDir(), 'task-origins')),
+      scope: { room: client.room, peerPublicKey, originMessageId: message.taskOriginId },
+    } : undefined;
+    return startNewAgentTask({ client, message, say, onProcessing, origin });
   }
   const resolved = resolveMessageAttachments(message, (attachmentId) => takeAttachment(attachmentId, client.room));
   if (!resolved.ok) {
