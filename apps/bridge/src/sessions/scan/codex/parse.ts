@@ -166,7 +166,10 @@ export function parseCodexFile(file: string): CodexCandidate | undefined {
     const d = safeParse(line);
     if (d) applyCodexLine(d, state);
   }
-  if (!state.title) adoptRequestTitle(state, codexHeadRequest(file, true)?.text);
+  if (!state.title && !state.child) adoptRequestTitle(state, codexHeadRequest(file, true)?.text);
+  if (!state.title && state.child?.agentPath) {
+    state.title = childTitle(state.child.agentPath.split('/').filter(Boolean).at(-1)?.replace(/_/g, ' '));
+  }
   state.title ??= state.provisionalTitle;
   state.lastActivityAt = Math.max(state.lastActivityAt, fileStat.mtimeMs);
   state.startedAt ||= fileStat.birthtimeMs || state.lastActivityAt;

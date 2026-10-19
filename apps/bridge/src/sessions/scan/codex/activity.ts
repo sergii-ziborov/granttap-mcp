@@ -227,7 +227,7 @@ export function codexActivity(session: SessionInfo): ActivityEntry[] {
   const out: ActivityEntry[] = [];
   const seen = new Set<string>();
   for (const source of sources) {
-    const head = codexHeadRequest(source.path);
+    const head = source.child ? undefined : codexHeadRequest(source.path);
     if (head) {
       const createdAt = head.createdAt || session.startedAt;
       const childFields = source.child ? childEntryFields(source.child) : {};

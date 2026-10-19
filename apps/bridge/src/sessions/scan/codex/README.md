@@ -12,5 +12,11 @@ as a person's message. A real request next to that context is retained. Ordinary
 JSON requests remain visible. Native rollouts are read without modifying the
 provider's conversation files.
 
+Forked child rollouts retain their first native identity. Copied parent metadata
+and entries older than the child's creation are excluded from the child's
+catalog, activity and usage; they must not replace the root Task or double count
+its history. `tests/forked-agents.test.ts` covers cached rescans and all three
+nested conversations through the public catalog and activity readers.
+
 Tests live in [`tests/`](tests/). The selected-Page regression covers the public
 catalog, cached rescans, live activity, and paginated transcript history.

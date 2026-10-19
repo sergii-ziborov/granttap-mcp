@@ -2,6 +2,7 @@ import { toolDescription } from "../../support/activity-helpers";
 import { diffPreviewFromInput, sensitivePath, statsFromInput } from "../../support/edit-stats";
 import { redactSecrets } from "../../telemetry/command-preview";
 import { recordObservedWrite, writtenPaths } from "../../../mesh/observed/writes";
+import { ownCodexLines } from './lineage';
 /**
  * Codex session logs:
  *   ~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl
@@ -135,7 +136,7 @@ export function readCodexLogWindow(
   tailBytes = CODEX_SUMMARY_TAIL_BYTES,
 ): string[] {
   const size = statSync(path).size;
-  if (size <= headBytes + tailBytes) return readFileSync(path, "utf8").split("\n");
+  if (size <= headBytes + tailBytes) return ownCodexLines(readFileSync(path, "utf8").split("\n"));
   const fd = openSync(path, "r");
   try {
     const head = Buffer.allocUnsafe(headBytes);
@@ -153,7 +154,7 @@ export function readCodexLogWindow(
       const tailBreak = tailText.indexOf("\n");
       tailText = tailBreak >= 0 ? tailText.slice(tailBreak + 1) : "";
     }
-    return `${headText}${tailText}`.split("\n");
+    return ownCodexLines(`${headText}${tailText}`.split("\n"));
   } finally {
     closeSync(fd);
   }
