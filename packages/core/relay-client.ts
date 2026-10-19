@@ -1,17 +1,16 @@
 /** Shared authenticated relay transport. See README.md for delivery and encryption boundaries. */
 import WebSocket from "ws";
-import { ManagedRelayLease, RelaySocketHealth, relayUpgradeHeaders } from "./socket-lifecycle";
+import { ManagedRelayLease, RelaySocketHealth, RelayReconnectBackoff, relayUpgradeHeaders } from "./socket-lifecycle";
 import { OutboundFrameQueue, sendEncryptedPayload } from "./outbound-scheduler";
 import { openRelayMessage } from "./relay-inbound";
 import { consumeTaskJobOffer, type TaskDispatchListener } from "./task-dispatch";
 import { Payload, type Role } from "../protocol/schema";
-import { peerPublicKeys, sealWithTransferKey } from "./crypto";
+import { peerPublicKeys } from "./crypto";
 import type { PeerConfig, RelayClientOptions, SendOptions } from "./relay-client-types";
 export type { PeerConfig, RelayClientOptions, SendOptions } from "./relay-client-types";
 import { RelayMessageAcceptance } from "./replay-store";
-import { sealEnvelope } from "./relay-envelope";
+import { sealEnvelope, sealSessionPayload } from "./relay-envelope";
 export { sealEnvelope } from "./relay-envelope";
-
 /** Return true only after this consumer has durably accepted the payload. */
 type Listener = (p: Payload, peerPublicKey: string) => boolean | void | Promise<boolean | void>;
 
@@ -25,7 +24,7 @@ export class RelayClient {
   private intentionalClose = false;
   private connectPromise?: Promise<void>;
   private reconnectTimer?: NodeJS.Timeout;
-  private reconnectDelay: number;
+  private readonly reconnect: RelayReconnectBackoff;
   private readonly socketHealth = new RelaySocketHealth();
   private readonly admissionLease = new ManagedRelayLease();
   private readonly sessionKeys = new Map<string, string>();
@@ -35,7 +34,7 @@ export class RelayClient {
     private readonly cfg: PeerConfig,
     private readonly opts: RelayClientOptions = {},
   ) {
-    this.reconnectDelay = opts.minReconnectMs ?? 1_000;
+    this.reconnect = new RelayReconnectBackoff(opts.minReconnectMs, opts.maxReconnectMs);
     if (opts.onTaskDispatch) this.taskDispatchListeners.add(opts.onTaskDispatch);
     this.replay = new RelayMessageAcceptance(opts.replayPath);
   }
@@ -57,6 +56,7 @@ export class RelayClient {
   connect(timeoutMs = 10_000): Promise<void> {
     if (this.isConnected) return Promise.resolve();
     if (this.connectPromise) return this.connectPromise;
+    if (this.reconnectTimer) return Promise.reject(new Error('Relay reconnect is waiting for its retry window.'));
 
     this.intentionalClose = false;
     this.recipientRouting = false;
@@ -76,7 +76,7 @@ export class RelayClient {
         ws.send(frame, error => error ? reject(error) : resolve());
       }));
       this.frames = frames;
-      let opened = false;
+      let opened = false, openedAt: number | undefined;
       const timer = setTimeout(() => {
         ws.terminate();
         reject(new Error(`relay connect timeout (${this.cfg.relayUrl})`));
@@ -85,7 +85,7 @@ export class RelayClient {
       ws.on("open", () => {
         opened = true;
         clearTimeout(timer);
-        this.reconnectDelay = this.opts.minReconnectMs ?? 1_000;
+        openedAt = Date.now();
         this.socketHealth.start(ws, this.opts.pingIntervalMs ?? 20_000);
         this.admissionLease.start(ws, this.opts);
         // Announce ourselves. The envelope's cleartext (room, from) is what the
@@ -99,16 +99,21 @@ export class RelayClient {
         resolve();
       });
       ws.on("message", (data: WebSocket.RawData) => void this.onRaw(data.toString()));
+      ws.on('unexpected-response', (_request, response) => {
+        this.reconnect.defer(response.headers['retry-after']);
+        response.resume(); ws.terminate();
+        clearTimeout(timer); reject(new Error('Relay upgrade was not accepted.'));
+      });
       ws.on("error", (err) => {
         clearTimeout(timer);
         if (!opened) reject(err);
       });
-      ws.on("close", () => {
+      ws.on("close", (code, reason) => {
         frames.cancel();
         clearTimeout(timer);
         this.socketHealth.stop(ws);
         this.admissionLease.stop(ws);
-        if (this.ws === ws) this.ws = undefined;
+        if (this.ws === ws) { this.reconnect.closed(openedAt, code, reason.toString()); this.ws = undefined; }
         if (!opened) reject(new Error(`relay connection closed (${this.cfg.relayUrl})`));
         this.scheduleReconnect();
       });
@@ -219,16 +224,7 @@ export class RelayClient {
     to: Role | "all" = this.otherRole(),
     options: SendOptions = {},
   ): Promise<void> {
-    const key = this.sessionKeys.get(sessionId);
-    if (!key) throw new Error(`no encryption key for task ${sessionId}`);
-    const sealed = sealWithTransferKey(payload, key);
-    await this.send({
-      type: "session.sealed",
-      sessionId,
-      nonce: sealed.nonce,
-      box: sealed.box,
-      createdAt: Date.now(),
-    }, to, options);
+    await this.send(sealSessionPayload(payload, sessionId, this.sessionKeys.get(sessionId)), to, options);
   }
 
   /** Register before connect so only durable receivers advertise task-job support. */
@@ -284,9 +280,7 @@ export class RelayClient {
 
   private scheduleReconnect(): void {
     if (!this.opts.autoReconnect || this.intentionalClose || this.reconnectTimer) return;
-    const delay = this.reconnectDelay;
-    const max = this.opts.maxReconnectMs ?? 15_000;
-    this.reconnectDelay = Math.min(max, delay * 2);
+    const delay = this.reconnect.delay();
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = undefined;
       void this.connect().catch(() => {

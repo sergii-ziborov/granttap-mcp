@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Envelope, PROTOCOL_VERSION, type Payload, type Role } from "../protocol/schema";
 import { publicKeyIdentifier } from "./ciphertext-recipient";
-import { seal } from "./crypto";
+import { seal, sealWithTransferKey } from "./crypto";
 import type { PeerConfig, SendOptions } from "./relay-client-types";
 
 /**
@@ -36,4 +36,11 @@ export function sealEnvelope(
     box,
   };
   return JSON.stringify(envelope);
+}
+
+/** Apply the independent task encryption layer before transport encryption. */
+export function sealSessionPayload(payload: Payload, sessionId: string, key: string | undefined): Payload {
+  if (!key) throw new Error(`no encryption key for task ${sessionId}`);
+  const { nonce, box } = sealWithTransferKey(payload, key);
+  return { type: 'session.sealed', sessionId, nonce, box, createdAt: Date.now() };
 }
