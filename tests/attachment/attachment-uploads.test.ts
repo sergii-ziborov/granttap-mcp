@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readdir, readFile, utimes, writeFile } from "node:fs/pr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
 import type { Payload } from "../../packages/protocol/schema";
 import {
   ATTACHMENT_MISSING_ERROR,
@@ -25,6 +26,20 @@ class FakeRelay {
   async send(payload: Payload) { this.sent.push(payload); }
   setSessionKey(sessionId: string, key: string) { this.keys.set(sessionId, key); }
   async sendSession(payload: Payload) { this.sent.push(payload); }
+}
+
+async function providerResponse(relay: FakeRelay, messageId: string, after: number) {
+  const deadline = Date.now() + 20_000;
+  while (Date.now() < deadline) {
+    const response = relay.sent.slice(after).find(item => item.type === "agent.event"
+      && item.originMessageId === messageId && item.kind === "response");
+    if (response?.type === "agent.event") return response;
+    const rejected = relay.sent.slice(after).find(item => item.type === "delivery.receipt"
+      && item.messageId === messageId && item.status === "rejected");
+    if (rejected?.type === "delivery.receipt") assert.fail(rejected.error ?? "Provider rejected delivery");
+    await delay(20);
+  }
+  assert.fail("The accepted delivery never produced its provider response");
 }
 
 test("an attachment sent ahead of its message is kept until the message names it", async (t) => {
@@ -132,6 +147,7 @@ process.stdout.write(JSON.stringify({ type: "end", sessionId: "grok-att" }) + "\
     attachmentRefs: [{ attachmentId: "att-photo", name: "screen.png", mimeType: "image/png" }], createdAt: Date.now(),
   }), true);
   assert.equal(receipts().at(-1)?.status, "accepted");
+  assert.equal((await providerResponse(fake, "m-refs", 0)).text, "seen");
   assert.match(await readFile(promptFile, "utf8"), /screen\.png/, "the message reached the agent with its attachment");
 
   assert.equal(await fake.emit({
@@ -144,12 +160,14 @@ process.stdout.write(JSON.stringify({ type: "end", sessionId: "grok-att" }) + "\
   assert.equal(receipts().filter((receipt) => receipt.messageId === "m-missing").length, 1, "rejected once, never also accepted");
 
   // The phone sends the same message again, this time with the bytes inside.
+  const retryStartsAt = fake.sent.length;
   assert.equal(await fake.emit({
     type: "user.message", messageId: "m-missing", text: "And this one", sessionId: "grok-att",
     attachments: [{ name: "never.png", mimeType: "image/png", data: Buffer.from("png2").toString("base64") }], createdAt: Date.now(),
   }), true);
   assert.equal(receipts().at(-1)?.status, "accepted");
   assert.equal(receipts().at(-1)?.messageId, "m-missing");
+  assert.equal((await providerResponse(fake, "m-missing", retryStartsAt)).text, "seen");
   assert.match(await readFile(promptFile, "utf8"), /never\.png/);
 
   // An attachment nobody's message names is swept on the publish loop, a few

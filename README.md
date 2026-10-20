@@ -32,17 +32,87 @@ checkout. Received previews remain on the device for offline inspection.
 Messages sent to a chat open in Codex Desktop continue that same conversation,
 including while a turn is running. The runtime forwards them to the existing
 desktop owner and preserves the delivery ID across retries. **Pause** reaches
-that owner too. A confirmed receipt means Codex accepted the message; its answer
-then arrives through the existing chat history.
+that owner too. A provider acceptance receipt means Codex accepted the message; its answer
+then arrives through the existing chat history. Relay storage is a separate stage.
 
 The MCP runtime, plugins, and CLI use the GrantTap Commercial Source License.
-Product use requires authorized GrantTap account access; official TestFlight
+Managed service use requires authorized GrantTap account access; official TestFlight
 access remains free. Earlier releases through 0.8.75 retain their Apache-2.0
 permissions. The Apple apps, Engine, relay, and website have their own terms.
 
 [Website](https://granttap.com) · [npm](https://www.npmjs.com/package/granttap-mcp) ·
 [Security model](SECURITY.md) ·
 [Relay source](https://github.com/sergii-ziborov/granttap-relay)
+
+## Start here
+
+- [Connect your computer and devices](#account-mesh-and-devices)
+- [Choose a connection mode and plan](#plans-and-what-you-pay-for)
+- [Provider support](#supported-providers)
+- [Install provider integrations](#install)
+- [Messages, queues and decisions](#messages-queues-and-decisions)
+- [Project Mesh and task transfer](#project-mesh-and-task-handoff)
+- [Approvals and questions](#decisions-and-claude-questions)
+- [Security and relay boundary](#relay-boundary)
+- [Troubleshooting and help](#troubleshooting-and-help)
+- [License](#license)
+
+## Plans and what you pay for
+
+Planned US prices for the first commercial release:
+
+| Plan | Monthly price | Managed publishing computers |
+| --- | ---: | ---: |
+| Personal | $4.99 | 2 |
+| Personal Plus | $7.99 | 5 |
+| Fleet | $13.99 | 15 |
+
+The same core GrantTap features are included in every monthly plan. A computer
+running several supported agents still uses one publishing-computer seat.
+iPhone, iPad, Apple Watch and Macs used only as controllers do not use additional
+execution-computer seats. Fleet is a larger personal allowance, without an
+enterprise SLA or a per-person license.
+
+An eligible new Apple subscription starts with **7 days free**, then renews
+monthly at the price shown by Apple. To avoid renewal, cancel at least 24 hours
+before the trial ends in Apple's subscription settings.
+A local cache is not deleted when managed access ends.
+
+**Official TestFlight builds include all features without a purchase or
+subscription.** A trial and TestFlight access are different forms of access.
+Paid products are still being prepared for commercial launch; the App Store
+purchase sheet determines availability, localized prices, eligibility and terms.
+Models, AI tokens and coding-provider plans are purchased separately.
+
+**Mac Local is a separate $39.99 one-time purchase** for local control and an
+own relay. Hosted managed delivery is not included in that purchase. An active
+Personal subscription already covers a managed Mac client; both purchases are
+not required for the same managed mode. npm distributes the computer runtime;
+it does not sell an independent subscription or unlock a hosted entitlement.
+
+See [current pricing](https://granttap.com/pricing),
+[terms](https://granttap.com/terms) and [Help / FAQ](https://granttap.com/support).
+
+## Messages, queues and decisions
+
+1. The controller encrypts the message or decision and submits it to the relay.
+2. A **relay storage receipt** confirms that the relay saved it durably. The
+   computer can be asleep or offline at this point.
+3. The computer receives the packet when connected, routes it to the intended
+   Task/execution and reports provider acceptance, failure or a required decision.
+4. The provider's answer returns through the existing conversation.
+
+A saved message does not mean the agent has started. Queue and delivery stages
+remain distinct; bounded storage, retention, access checks and service limits
+can reject a submission with an explicit error. A controller does not need to
+wait for the execution computer before showing a confirmed relay save.
+
+Use **Queue** to inspect waiting deliveries, **Send now** for an eligible queued
+entry, and the available cancel action to stop a pending delivery. Delivery IDs
+survive retries so a transport retry is not a request to run the prompt twice.
+An already accepted or completed provider operation cannot be undone by deleting
+its local queue card. Provider-wide deny rules always take precedence over a
+mobile approval, including workspace and native-tool restrictions.
 
 ## Account Mesh and devices
 
@@ -84,7 +154,7 @@ device pairing without a passkey account.
 ## Supported providers
 
 - Claude Code and Codex: primary local control and continuation paths.
-- Cursor: Task visibility and supported local controls, with narrower coverage.
+- Cursor (Beta): Task visibility and supported local controls, with narrower coverage.
 - Grok Build: observable work where the installed runtime exposes it.
 
 GrantTap reports the depth each provider actually exposes. Visibility does not
@@ -542,8 +612,8 @@ is still plain `Shell`.
 
 The Mesh keys a computer by an identity written down once, on first use, in
 `computer.json` in the config directory — the hostname it had then — and
-keeps it. A Mac renamed by the network it joins ("Mac.lan" at home,
-"Serhiis-MacBook-Pro.local" elsewhere) used to become a second computer with
+keeps it. A Mac renamed by the network it joins ("workstation.home" on one network,
+"workstation.local" elsewhere) used to become a second computer with
 its own open executions and repository bindings; now every later hostname is
 remembered as a former name of the same machine, its leftover executions are
 closed and its bindings marked unavailable, and the current hostname stays
@@ -678,6 +748,38 @@ that stays in the QR.
 APNs carries a content-neutral wake only. It contains no prompt, task title,
 command, path, request ID, or ciphertext. See [SECURITY.md](SECURITY.md) for the
 complete boundary and reporting instructions.
+
+## Troubleshooting and help
+
+- **Computer not visible:** run `granttap status`, check the helper is running,
+  then check Devices in the controller. The same passkey links the same account;
+  a display name or IP address is not a computer identity.
+- **Mac asks for local access:** complete GrantTap's local consent flow for the
+  installed helper. A provider OAuth login and granting the Mac app local access
+  serve different purposes.
+- **Message saved while the computer is offline:** keep the queued entry. A
+  relay receipt confirms storage, while the agent can continue only when its
+  execution computer and provider become available.
+- **An approval cannot be completed:** open the exact Task and inspect its native
+  restriction or pending form. GrantTap cannot override a provider's global deny.
+- **History or Agents missing:** check that the execution is routed to the right
+  computer and update both the helper and controller. Nested agents stay inside
+  their parent Task; they are not separate root Tasks.
+- **Health has no current architecture:** check the reported checkout and Engine
+  on the publishing computer, then request a rebuild. An old or partial report
+  remains inspectable and must not be treated as verified current architecture.
+- **No purchase shown:** the product may not be released in that storefront.
+  TestFlight does not require a purchase. Use Restore Purchases for an existing
+  Apple purchase and the same GrantTap passkey for account access.
+
+Update the helper with `npm install -g granttap-mcp@latest`, then reopen the
+coding-provider integration if it still runs an older process. Keep existing
+pairings; resetting an account or removing local history is not an update step.
+
+[Help and connection pictures](https://granttap.com/support) are also available
+in the Apple apps. Use the support contact there for product issues. Report
+security vulnerabilities through [SECURITY.md](SECURITY.md); do not put pairing
+QR codes, credentials or private chat transcripts into public issues.
 
 ## Development
 
