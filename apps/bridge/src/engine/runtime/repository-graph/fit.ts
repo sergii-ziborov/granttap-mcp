@@ -16,7 +16,12 @@ export function fitRepositoryGraph(
   }
   while (bytes() > maxBytes) {
     const map = bounded.codeMap;
-    if (map?.files.some((file) => file.symbols.length > 0)) {
+    // Dense import graphs must not consume the source-section budget. Keep
+    // observed directed links across the inventory before reducing symbols.
+    if (map && map.roads.length > 16
+      && Buffer.byteLength(JSON.stringify(map.roads), "utf8") > maxBytes / 3) {
+      bounded = { ...bounded, codeMap: trimRoads(map) };
+    } else if (map?.files.some((file) => file.symbols.length > 0)) {
       bounded = { ...bounded, codeMap: trimSymbols(map) };
     } else if (bounded.relations.length > 8) {
       bounded = { ...bounded, relations: strongestRelations(bounded.relations,
@@ -27,8 +32,7 @@ export function fitRepositoryGraph(
       bounded = { ...bounded, nodes, relations: bounded.relations.filter((edge) =>
         ids.has(edge.source) && ids.has(edge.target)), truncated: true };
     } else if (map && map.roads.length > 16) {
-      bounded = { ...bounded, codeMap: { ...map, truncated: true,
-        roads: map.roads.slice(0, Math.ceil(map.roads.length / 2)) } };
+      bounded = { ...bounded, codeMap: trimRoads(map) };
     } else if (map && map.files.length > 8) {
       bounded = { ...bounded, codeMap: trimFiles(map) };
     } else if (map) {
@@ -38,6 +42,20 @@ export function fitRepositoryGraph(
     }
   }
   return bounded;
+}
+
+function trimRoads(map: CodeMap): CodeMap {
+  const limit = Math.max(16, Math.ceil(map.roads.length / 2));
+  const kept = new Set<number>(), endpoints = new Set<string>();
+  for (const [index, road] of map.roads.entries()) {
+    if (kept.size === limit) break;
+    if (endpoints.has(road.source) && endpoints.has(road.target)) continue;
+    kept.add(index);
+    endpoints.add(road.source);
+    endpoints.add(road.target);
+  }
+  for (let index = 0; kept.size < limit; index++) kept.add(index);
+  return { ...map, truncated: true, roads: map.roads.filter((_, index) => kept.has(index)) };
 }
 
 function strongestRelations(relations: Relation[], limit: number): Relation[] {

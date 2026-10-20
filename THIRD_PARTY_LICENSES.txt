@@ -324,8 +324,8 @@ hasown 2.0.4 — MIT
 Source: https://www.npmjs.com/package/hasown/v/2.0.4
 Notices: bf9b0d665be2a689851eea667ca9f42066ea1d903b38349c51e6a44b2577680a
 
-hono 4.13.7 — MIT
-Source: https://www.npmjs.com/package/hono/v/4.13.7
+hono 4.13.13 — MIT
+Source: https://www.npmjs.com/package/hono/v/4.13.13
 Notices: a6ab98e5c77b9070c443eaff2ff81034a6f8cc05a7524d5098eb0f24defa0115
 
 http-errors 2.0.1 — MIT
