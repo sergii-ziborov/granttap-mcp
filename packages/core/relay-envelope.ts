@@ -20,18 +20,22 @@ export function sealEnvelope(
   options: SendOptions = {},
 ): string {
   const { nonce, box } = seal(payload, cfg.peerPublicKey, cfg.mySecretKey);
+  const retained = cfg.role === "machine" && to === "phone" && options.retainedState && options.stateKey;
   const envelope: Envelope = {
+    ...(retained ? { stateKey: options.stateKey, stateRevision: options.stateRevision,
+      statePriority: options.statePriority } : {}),
     v: PROTOCOL_VERSION,
     room: cfg.room,
     from: cfg.role,
     to,
     senderId: cfg.senderId,
-    recipientKeyId: options.recipientRouting ? publicKeyIdentifier(cfg.peerPublicKey) : undefined,
-    deliveryId: options.reliable === false
+    recipientKeyId: options.recipientRouting || retained ? publicKeyIdentifier(cfg.peerPublicKey) : undefined,
+    deliveryId: retained || options.reliable === false
       ? undefined
       : options.deliveryId ?? randomUUID(),
     wake: options.wake,
-    expiresAt: options.ttlMs == null ? undefined : Date.now() + options.ttlMs,
+    expiresAt: retained ? Date.now() + 7 * 86400000
+      : options.ttlMs == null ? undefined : Date.now() + options.ttlMs,
     nonce,
     box,
   };

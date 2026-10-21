@@ -843,3 +843,5 @@ sustained structured work in a different checkout without interpreting chat
 titles. Task identity and its original coordination/access scope survive.
 
 See [repository observations](apps/bridge/src/mesh/repository-details/README.md).
+
+The relay can retain recipient-encrypted catalogs, Mesh snapshots and recent chat heads for reconnect without the computer. This bounded seven-day read cache is separate from the durable encrypted command queue. See [relay state publication](packages/core/retained-state/README.md). The relay never receives decryption keys or readable chat content.

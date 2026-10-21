@@ -54,3 +54,5 @@ function unwrapTaskPayload(payload: Payload, role: string, sessionKeys: Map<stri
     || sessionId !== payload.sessionId) return undefined;
   return inner.data;
 }
+
+export { waitForRelayPayload } from "./wait-for";

@@ -1,8 +1,9 @@
+import { retainedPayloadOptions } from "./retained-state";
 /** Shared authenticated relay transport. See README.md for delivery and encryption boundaries. */
 import WebSocket from "ws";
 import { ManagedRelayLease, RelaySocketHealth, RelayReconnectBackoff, RelayConnectionNotifications, relayUpgradeHeaders } from "./socket-lifecycle";
 import { OutboundFrameQueue, sendEncryptedPayload } from "./outbound-scheduler";
-import { openRelayMessage, parseRelayControl } from "./relay-inbound";
+import { openRelayMessage, parseRelayControl, waitForRelayPayload } from "./relay-inbound";
 import { consumeTaskJobOffer, type TaskDispatchListener } from "./task-dispatch";
 import { Payload, type Role } from "../protocol/schema";
 import { peerPublicKeys } from "./crypto";
@@ -17,6 +18,7 @@ type Listener = (p: Payload, peerPublicKey: string) => boolean | void | Promise<
 export class RelayClient {
   private ws?: WebSocket;
   private recipientRouting = false;
+  private retainedState = false;
   private frames?: OutboundFrameQueue;
   private listeners = new Set<Listener>();
   private readonly connections = new RelayConnectionNotifications();
@@ -61,6 +63,7 @@ export class RelayClient {
 
     this.intentionalClose = false;
     this.recipientRouting = false;
+    this.retainedState = false;
     const pending = Promise.resolve().then(() => this.opts.upgradeHeaders?.() ?? {})
       .then(headers => new Promise<void>((resolve, reject) => {
       // The room rides in the URL: the Cloudflare relay must pick a Durable
@@ -127,9 +130,10 @@ export class RelayClient {
   }
 
   private async onRaw(raw: string): Promise<void> {
-    const control = parseRelayControl(raw) as { type?: string; recipientRouting?: boolean } | null;
+    const control = parseRelayControl(raw) as { type?: string; recipientRouting?: boolean; retainedState?: boolean } | null;
     if (control?.type === "relay.capabilities" && control.recipientRouting === true) {
       this.recipientRouting = true;
+      this.retainedState = control.retainedState === true;
       return;
     }
     if (control?.type === "relay.task-job") {
@@ -181,6 +185,7 @@ export class RelayClient {
     const ws = this.ws;
     if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error("relay not connected");
     if (!this.frames) throw new Error("relay not connected");
+    options = { ...retainedPayloadOptions(payload), ...options, retainedState: this.retainedState };
     if (options.peerPublicKey) {
       await this.sendToPeer(payload, options.peerPublicKey, options);
       return;
@@ -208,7 +213,7 @@ export class RelayClient {
     if (!peerPublicKeys(this.cfg.peerPublicKey, this.cfg.extraPeerPublicKeys).includes(peerPublicKey)
       || !this.peerIsAllowed(peerPublicKey)) throw new Error("controller peer is not authorized");
     if (!this.frames) throw new Error("relay not connected");
-    await this.frames.send(sealEnvelope({ ...this.cfg, peerPublicKey }, payload, this.otherRole(), { ...options, recipientRouting: this.recipientRouting }), true);
+    await this.frames.send(sealEnvelope({ ...this.cfg, peerPublicKey }, payload, this.otherRole(), { ...retainedPayloadOptions(payload), ...options, retainedState: this.retainedState, recipientRouting: this.recipientRouting }), true);
   }
 
   setSessionKey(sessionId: string, key: string): void {
@@ -226,7 +231,7 @@ export class RelayClient {
     to: Role | "all" = this.otherRole(),
     options: SendOptions = {},
   ): Promise<void> {
-    await this.send(sealSessionPayload(payload, sessionId, this.sessionKeys.get(sessionId)), to, options);
+    await this.send(sealSessionPayload(payload, sessionId, this.sessionKeys.get(sessionId)), to, { ...retainedPayloadOptions(payload), ...options });
   }
 
   /** Register before connect so only durable receivers advertise task-job support. */
@@ -253,21 +258,7 @@ export class RelayClient {
 
   /** Resolve with the first payload matching `pred`, or reject on timeout. */
   waitFor<T extends Payload>(pred: (p: Payload) => p is T, timeoutMs: number): Promise<T> {
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        off();
-        reject(new Error("waitFor timeout"));
-      }, timeoutMs);
-      const off = this.onMessage((p) => {
-        if (pred(p)) {
-          clearTimeout(timer);
-          off();
-          resolve(p);
-          return true;
-        }
-        return false;
-      });
-    });
+    return waitForRelayPayload(listener => this.onMessage(listener), pred, timeoutMs);
   }
 
   close(): void {
@@ -279,6 +270,10 @@ export class RelayClient {
     this.reconnectTimer = undefined;
     this.ws?.close();
     this.ws = undefined;
+  }
+
+  get supportsRetainedState(): boolean {
+    return this.retainedState;
   }
 
   get isConnected(): boolean {

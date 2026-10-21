@@ -46,6 +46,11 @@ export type RelayClientOptions = {
 };
 
 export type SendOptions = {
+  /** Negotiated opaque latest-state replay, independent of delivery ACKs. */
+  retainedState?: boolean;
+  stateKey?: string;
+  stateRevision?: number;
+  statePriority?: 0 | 1 | 2 | 3;
   /** Set by negotiated RelayClient transport; absent for older relays. */
   recipientRouting?: boolean;
   /** Reply only to the authenticated requester; absent means all authorized peers. */
