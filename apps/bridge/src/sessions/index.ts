@@ -40,6 +40,7 @@ import {
 import { createCapabilityTotals } from "./support/capability-totals";
 import { createExecutionSummaries, budgetExecutionSummaries } from './telemetry/execution-summaries';
 import { readCodexCapabilityHistory, type NativeCapabilityEvidence } from './native-capability-history';
+import { recordedClaudeUsage } from './scan/claude';
 
 export { MAX_ACTIVITY_ENTRIES, MAX_ACTIVITY_TEXT, TOKEN_WINDOW_HOURS };
 export { nativeTranscriptRoots, nativeTranscriptSource, restoreNativeTranscriptSource } from "./native-source";
@@ -136,16 +137,21 @@ export function scanCapabilityUsage(
             : session.agent === "grok" ? grokCapabilityUsage(session)
             : [];
     const recorded = session.agent === 'codex' && native?.scopes.includes(session.sessionId);
+    const claudeRecorded = session.agent === 'claude' ? recordedClaudeUsage(observations) : undefined;
     const events = observations.map(toRemoteCapabilityUsageEvent).filter(
       (event): event is RemoteCapabilityUsageEvent => event != null
         && !(recorded && event.kind === 'mcp'));
     if (recorded) events.push(...native!.events.filter(event => event.sessionId === session.sessionId));
     for (const converted of events) {
       const event = { ...converted, agent: session.agent };
-      totals.add(event);
-      summaries.add(event, recorded && event.kind === 'mcp' ? 'native-history' : 'transcript');
+      if (!claudeRecorded || event.kind === 'cli') {
+        totals.add(event);
+        summaries.add(event, recorded && event.kind === 'mcp' ? 'native-history' : 'transcript');
+      }
       rememberCapabilityUsageCandidate(candidates, event);
     }
+    for (const summary of claudeRecorded?.summaries ?? []) summaries.merge(summary);
+    for (const total of claudeRecorded?.totals ?? []) totals.merge(total);
   }
   const metadata = { type: "capability.usage.status" as const,
     totals: totals.rows(), generatedAt: Date.now() };

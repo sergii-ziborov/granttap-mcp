@@ -1,4 +1,5 @@
 import { readFileSync, statSync } from "node:fs";
+import { mergeRecordedClaudeUsage } from './recorded-usage';
 import { basename } from "node:path";
 import type { ChildThreadInfo, SessionInfo } from "../../../../../../packages/protocol/schema";
 import { aggregateChildThreads, childTitle } from "../../support/child-threads";
@@ -182,9 +183,11 @@ export function parseClaudeFile(file: string): {
     if (!childLines) continue;
     const child = claudeChildSummary(childPath, state.sessionId, childLines);
     childThreads.push(child);
-    for (const observation of claudeCapabilityUsage(ownSession, childLines, child.threadId)) {
+    const childObservations = claudeCapabilityUsage(ownSession, childLines, child.threadId);
+    for (const observation of childObservations) {
       rememberCapabilityObservation(observations, observation);
     }
+    mergeRecordedClaudeUsage(observations, childObservations);
   }
   const session = aggregateChildThreads(ownSession, childThreads);
   claudeSummaryCache.set(file, {

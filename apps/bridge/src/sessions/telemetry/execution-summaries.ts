@@ -25,6 +25,19 @@ export function createExecutionSummaries() {
       }
       rows.set(key, row);
     },
+    merge(summary: CapabilityExecutionSummary) {
+      const key = JSON.stringify([summary.agent, summary.sessionId, summary.kind, summary.name]);
+      const previous = rows.get(key);
+      if (!previous) { rows.set(key, { ...summary }); return; }
+      previous.count += summary.count;
+      previous.failures += summary.failures;
+      previous.cancelled += summary.cancelled;
+      previous.lastUsedAt = Math.max(previous.lastUsedAt, summary.lastUsedAt);
+      if (summary.durationCount) {
+        previous.durationCount = (previous.durationCount ?? 0) + summary.durationCount;
+        previous.durationMs = (previous.durationMs ?? 0) + (summary.durationMs ?? 0);
+      }
+    },
     rows: () => [...rows.values()].sort((a, b) => b.lastUsedAt - a.lastUsedAt).slice(0, 128),
   };
 }

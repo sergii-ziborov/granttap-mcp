@@ -1,4 +1,5 @@
 import { claudeMessageIdentity } from "./message-identity";
+import { createClaudeUsageRecorder } from './recorded-usage';
 import { readFileSync, statSync } from "node:fs";
 import type { ActivityEntry, ChildThreadInfo, SessionInfo } from "../../../../../../packages/protocol/schema";
 import { safeParse, ts } from "../../support/common";
@@ -60,6 +61,11 @@ export function claudeCapabilityUsage(
   if (!lines) return [];
   const pending = new Map<string, PendingCapabilityTool>();
   const out: CapabilityObservation[] = [];
+  const recorder = createClaudeUsageRecorder();
+  const remember = (observation: CapabilityObservation) => {
+    recorder.remember(observation);
+    rememberCapabilityObservation(out, observation);
+  };
 
   let commandOrdinal = 0;
   for (const line of lines) {
@@ -71,7 +77,7 @@ export function claudeCapabilityUsage(
     const command = slashCommandSkill(row);
     if (command) {
       commandOrdinal += 1;
-      rememberCapabilityObservation(out, {
+      remember({
         sourceId: `${sourceThreadId}:command:${typeof row.uuid === "string" ? row.uuid : commandOrdinal}`,
         sessionId: session.sessionId,
         toolName: `/${command}`,
@@ -115,15 +121,16 @@ export function claudeCapabilityUsage(
           errorClass: block.is_error === true ? "tool_result" : undefined,
         }, "claude") ??
         pendingCapabilityObservation(item);
-      if (observation) rememberCapabilityObservation(out, observation);
+      if (observation) remember(observation);
       pending.delete(block.tool_use_id);
     }
   }
 
   for (const item of pending.values()) {
     const observation = pendingCapabilityObservation(item);
-    if (observation) rememberCapabilityObservation(out, observation);
+    if (observation) remember(observation);
   }
+  recorder.finish(out);
   return out;
 }
 
