@@ -23,7 +23,7 @@ export function sealEnvelope(
   const retained = cfg.role === "machine" && to === "phone" && options.retainedState && options.stateKey;
   const envelope: Envelope = {
     ...(retained ? { stateKey: options.stateKey, stateRevision: options.stateRevision,
-      statePriority: options.statePriority } : {}),
+      statePriority: options.statePriority, stateGroup: options.stateGroup } : {}),
     v: PROTOCOL_VERSION,
     room: cfg.room,
     from: cfg.role,

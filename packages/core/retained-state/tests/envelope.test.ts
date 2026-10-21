@@ -31,3 +31,12 @@ test('task keys precede task heads; history pages and commands never replace a h
   assert.equal(retainedPayloadOptions({ ...activity, history: { requestedCursor: 'older', hasMore: true } } as never).stateKey, undefined);
   assert.equal(retainedPayloadOptions({ type: 'hello', role: 'machine', deviceName: 'Fixture', createdAt: Date.now() }).stateKey, undefined);
 });
+
+test('scoped keys and heads use one opaque group, while oversized payloads reserve no key slot', () => {
+  const now = Date.now();
+  const grant = retainedPayloadOptions({ type: 'session.key.grant', sessionId: 'shared-task', key: 'fixture', createdAt: now });
+  const head = retainedPayloadOptions({ type: 'session.activity', sessionId: 'shared-task', agent: 'codex', state: 'idle', entries: [], generatedAt: now });
+  assert.equal(grant.stateGroup, head.stateGroup);
+  assert.match(head.stateGroup!, /^[a-f0-9]{64}$/);
+  assert.equal(retainedPayloadOptions({ ...payload, machine: 'x'.repeat(1000000) }).stateKey, undefined);
+});

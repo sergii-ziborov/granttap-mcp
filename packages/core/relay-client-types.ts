@@ -49,6 +49,7 @@ export type SendOptions = {
   /** Negotiated opaque latest-state replay, independent of delivery ACKs. */
   retainedState?: boolean;
   stateKey?: string;
+  stateGroup?: string;
   stateRevision?: number;
   statePriority?: 0 | 1 | 2 | 3;
   /** Set by negotiated RelayClient transport; absent for older relays. */

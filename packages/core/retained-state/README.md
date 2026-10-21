@@ -19,3 +19,5 @@ continue using live updates and the existing acknowledged mailbox.
 Tests live in `tests/` and run with the repository's test and release commands.
 
 GrantTap Commercial Source License; see the repository LICENSE.
+
+Opaque group identifiers keep each scoped key with its encrypted snapshots during eviction. Grants for historical pages or other noncached replies are not retained as read state. Oversized read payloads stay live rather than reserving an orphan key slot.

@@ -1,3 +1,4 @@
+import { retainedPayloadOptions } from "../../../../packages/core/retained-state";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { loadSessionKeys, persistedSessionKey } from "./session-key-store";
@@ -70,6 +71,9 @@ async function sendScopedPayload(input: {
   options: SendOptions;
 }): Promise<void> {
   const { client, payload, sessionId, purpose, to, options } = input;
+  const retained = retainedPayloadOptions(payload);
+  const grantOptions = retained.stateKey ? {}
+    : { stateKey: undefined, stateRevision: undefined, statePriority: undefined, stateGroup: undefined };
   const key = sessionKey(sessionId);
   client.setSessionKey(sessionId, key);
   await client.send({
@@ -78,6 +82,6 @@ async function sendScopedPayload(input: {
     key,
     purpose,
     createdAt: Date.now(),
-  }, to, { ttlMs: options.ttlMs, peerPublicKey: options.peerPublicKey });
+  }, to, { ttlMs: options.ttlMs, peerPublicKey: options.peerPublicKey, ...grantOptions });
   await client.sendSession(payload, sessionId, to, options);
 }
