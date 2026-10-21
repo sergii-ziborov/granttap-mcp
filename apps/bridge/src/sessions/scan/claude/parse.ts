@@ -1,5 +1,5 @@
 import { readFileSync, statSync } from "node:fs";
-import { mergeRecordedClaudeUsage } from './recorded-usage';
+import { mergeRecordedClaudeUsage, recordedClaudeUsageIsCurrent } from './recorded-usage';
 import { basename } from "node:path";
 import type { ChildThreadInfo, SessionInfo } from "../../../../../../packages/protocol/schema";
 import { aggregateChildThreads, childTitle } from "../../support/child-threads";
@@ -125,7 +125,8 @@ export function parseClaudeFile(file: string): {
     cached &&
     cached.mtimeMs === fileStat.mtimeMs &&
     cached.size === fileStat.size &&
-    cached.childFingerprint === childFingerprint
+    cached.childFingerprint === childFingerprint &&
+    recordedClaudeUsageIsCurrent(cached.observations)
   ) {
     const session = {
       ...cached.session,

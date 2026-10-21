@@ -55,4 +55,9 @@ test('Claude preserves MCP and skill counts after newer CLI calls evict their de
     assert.ok(!JSON.stringify(status.executionSummaries).includes('PRIVATE_'));
     assert.ok(Buffer.byteLength(JSON.stringify(status)) <= 48 * 1024);
   }
+  const later = Date.now() + 24 * 3600_000 + 120_000;
+  t.mock.method(Date, 'now', () => later);
+  const refreshed = scanCapabilityUsage(scanClaude().sessions);
+  assert.equal(refreshed.totals?.find(row => row.kind === 'mcp' && row.windowHours === 24)?.count, undefined);
+  assert.equal(refreshed.totals?.find(row => row.kind === 'mcp' && row.windowHours === 168)?.count, 355);
 });
