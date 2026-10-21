@@ -128,17 +128,20 @@ async function publishMonitorTick(input: {
   if (!leadership.acquire()) return { lastHistoryPublishedAt };
   await client.send(approvalsStatus(), "phone", { ttlMs: INTERVAL_MS * 3, reliable: false });
   const initial = lastHistoryPublishedAt === 0;
+  if (initial && !resumedHeads.has(client)) {
+    const saved = publishedCatalog(client);
+    if (saved) await client.send(saved, "phone", { ttlMs: INTERVAL_MS * 24, reliable: false });
+    if (!input.active()) return { lastHistoryPublishedAt };
+    resumedHeads.add(client);
+    void resumePublishedChats(client,
+      (session, saved) => publishSessionEvents(client, session.sessionId, saved)).catch(() => {});
+  }
   const includeHistory = forceHistory || (!initial && Date.now() - lastHistoryPublishedAt >= HISTORY_INTERVAL_MS);
   const snapshot = await monitorSnapshot({ includeHistory, forceHistory, subscriptions, history });
   if (!input.active()) return { lastHistoryPublishedAt };
   const status = decorateTaskOriginCatalog(snapshot, client.room);
   rememberPublishedCatalog(client, status);
   await client.send(status, "phone", { ttlMs: INTERVAL_MS * 24, reliable: false });
-  if (initial && !resumedHeads.has(client)) {
-    resumedHeads.add(client);
-    void resumePublishedChats(client,
-      (session, saved) => publishSessionEvents(client, session.sessionId, saved)).catch(() => {});
-  }
   // Provider review is independent of task visibility; a hung hook RPC must
   // never hold the current catalog behind its discovery timeout.
   void refreshCodexHooks().catch(() => {});
