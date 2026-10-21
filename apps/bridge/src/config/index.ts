@@ -4,6 +4,7 @@ export * from "./access/pairing";
 export { writePrivateFile } from "./access/write-private";
 export * from "./runtime/paths";
 export * from "./runtime";
+export { isSupportedNode, minimumNodeVersion } from "./runtime/node-requirement.mjs";
 export {
   classifyAction,
   isSafeReadonlyShell,

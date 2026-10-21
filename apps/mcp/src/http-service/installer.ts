@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileS
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { isCursorHelperNode, resolveMonitorNodeBin, type InstallResult } from "../../../bridge/src/install";
-import { configDir, normalizeRelayUrl, loadRuntimeConfig, verifiableEngine } from "../../../bridge/src/config";
+import { configDir, normalizeRelayUrl, loadRuntimeConfig, verifiableEngine, isSupportedNode, minimumNodeVersion } from "../../../bridge/src/config";
 import { installWindowsTask } from "../../../bridge/src/install/windows-service";
 import { installLinuxService } from "../../../bridge/src/install/linux-service";
 import { configuredCursorHttpMcpUrl } from "../cursor-config";
@@ -65,9 +65,8 @@ function validateInstallation(nodeBin: string, executable: string): InstallResul
     return { status: "manual", detail: "Authorization requires a stable granttap-mcp install; npm's temporary _npx cache is not durable." };
   }
   const version = spawnSync(nodeBin, ["--version"], { encoding: "utf8" });
-  const major = Number(/^v(\d+)/.exec(version.stdout.trim())?.[1]);
-  return version.status !== 0 || !Number.isInteger(major) || major < 20
-    ? { status: "manual", detail: `Persistent OAuth requires Node 20+ (${nodeBin}).` }
+  return version.status !== 0 || !isSupportedNode(version.stdout.trim())
+    ? { status: "manual", detail: `Persistent OAuth requires Node ${minimumNodeVersion}+ (${nodeBin}).` }
     : undefined;
 }
 

@@ -7,7 +7,7 @@ const { spawn } = require("node:child_process");
 const { existsSync } = require("node:fs");
 const { delimiter, dirname, join } = require("node:path");
 
-const PACKAGE = "granttap-mcp@0.8.83";
+const PACKAGE = "granttap-mcp@0.8.84";
 const dryRun = process.env.GRANTTAP_BOOTSTRAP_DRY_RUN === "1";
 const platform = dryRun && process.env.GRANTTAP_BOOTSTRAP_PLATFORM
   ? process.env.GRANTTAP_BOOTSTRAP_PLATFORM : process.platform;
@@ -31,7 +31,7 @@ function launch() {
   const npx = first(roots.map((root) =>
     join(root, "node_modules", "npm", "bin", "npx-cli.js")));
   if (npx) return { command: process.execPath, args: [npx, "-y", PACKAGE] };
-  throw new Error("Node.js/npm 20+ is required on this Windows device. Install npm and retry GrantTap.");
+  throw new Error("Node.js/npm 22.13.0+ is required on this Windows device. Install npm and retry GrantTap.");
 }
 
 let target;

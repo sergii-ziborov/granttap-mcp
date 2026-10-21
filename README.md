@@ -791,6 +791,14 @@ in the Apple apps. Use the support contact there for product issues. Report
 security vulnerabilities through [SECURITY.md](SECURITY.md); do not put pairing
 QR codes, credentials or private chat transcripts into public issues.
 
+## Node.js requirement
+
+Install the latest patched Node.js LTS release. GrantTap requires Node.js
+22.13.0 or newer; Node.js 18 and 20 are not supported. The CLI checks this
+before loading dependencies or changing local configuration. The npm `engines`
+field also reports this requirement, but npm may only warn unless engine checks
+are enforced by the installer.
+
 ## Development
 
 ```bash

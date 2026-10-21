@@ -209,13 +209,13 @@ export function installMonitorHelper(): InstallResult {
     const node = resolveMonitorNodeBin();
     return node && !isCursorHelperNode(node)
       ? installLinuxService("monitor", node, join(repoRoot, "bin", "granttap-mcp.mjs"), { forceReload: true })
-      : { status: "manual", detail: "A stable Node.js 20+ installation is required for Linux background sync." };
+      : { status: "manual", detail: "A stable Node.js 22.13.0+ installation is required for Linux background sync." };
   }
   if (process.platform === "win32") {
     const node = resolveMonitorNodeBin();
     return node && !isCursorHelperNode(node)
       ? installWindowsTask("monitor", node, join(repoRoot, "bin", "granttap-mcp.mjs"), true)
-      : { status: "manual", detail: "A stable Node.js 20+ installation is required for Windows background sync." };
+      : { status: "manual", detail: "A stable Node.js 22.13.0+ installation is required for Windows background sync." };
   }
   if (process.platform !== "darwin") {
     return { status: "manual", detail: "background task sync currently requires macOS" };

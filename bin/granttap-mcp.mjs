@@ -5,6 +5,13 @@ import { createRequire } from "node:module";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { isSupportedNode, minimumNodeVersion } from "../apps/bridge/src/config/runtime/node-requirement.mjs";
+
+if (!isSupportedNode(process.versions.node)) {
+  process.stderr.write(`[granttap-mcp] requires Node.js ${minimumNodeVersion} or newer; found ${process.versions.node}. Install the latest supported Node.js LTS release.\n`);
+  process.exit(1);
+}
+
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const [command = "mcp", ...commandArgs] = process.argv.slice(2);
 const argument = commandArgs[0];
