@@ -38,6 +38,8 @@ import {
   toRemoteCapabilityUsageEvent,
 } from "./telemetry";
 import { createCapabilityTotals } from "./support/capability-totals";
+import { createExecutionSummaries, budgetExecutionSummaries } from './telemetry/execution-summaries';
+import { readCodexCapabilityHistory, type NativeCapabilityEvidence } from './native-capability-history';
 
 export { MAX_ACTIVITY_ENTRIES, MAX_ACTIVITY_TEXT, TOKEN_WINDOW_HOURS };
 export { nativeTranscriptRoots, nativeTranscriptSource, restoreNativeTranscriptSource } from "./native-source";
@@ -115,11 +117,13 @@ export function scanSessionActivity(session: SessionInfo): SessionActivity {
  */
 export function scanCapabilityUsage(
   sessions: SessionInfo[] = [...scanSessions().sessions, ...scanSessionHistory()],
+  native?: NativeCapabilityEvidence,
 ): CapabilityUsageStatus {
   const candidates: RemoteCapabilityUsageEvent[] = [];
   // Totals count every observation as it streams past; the candidate list is
   // trimmed to a byte budget and can never answer for a whole period.
   const totals = createCapabilityTotals();
+  const summaries = createExecutionSummaries();
   const seenSessions = new Set<string>();
   for (const session of sessions) {
     const nativeScope = `${session.agent}\0${session.sessionId}`;
@@ -131,17 +135,28 @@ export function scanCapabilityUsage(
           : session.agent === "cursor" ? cursorCapabilityUsage(session)
             : session.agent === "grok" ? grokCapabilityUsage(session)
             : [];
-    for (const observation of observations) {
-      const converted = toRemoteCapabilityUsageEvent(observation);
-      if (!converted) continue;
+    const recorded = session.agent === 'codex' && native?.scopes.includes(session.sessionId);
+    const events = observations.map(toRemoteCapabilityUsageEvent).filter(
+      (event): event is RemoteCapabilityUsageEvent => event != null
+        && !(recorded && event.kind === 'mcp'));
+    if (recorded) events.push(...native!.events.filter(event => event.sessionId === session.sessionId));
+    for (const converted of events) {
       const event = { ...converted, agent: session.agent };
       totals.add(event);
+      summaries.add(event, recorded && event.kind === 'mcp' ? 'native-history' : 'transcript');
       rememberCapabilityUsageCandidate(candidates, event);
     }
   }
-  const envelope = { type: "capability.usage.status" as const,
+  const metadata = { type: "capability.usage.status" as const,
     totals: totals.rows(), generatedAt: Date.now() };
+  const executionSummaries = budgetExecutionSummaries(summaries.rows(), metadata);
+  const envelope = { ...metadata, ...(executionSummaries.length ? { executionSummaries } : {}) };
   return { ...envelope, events: limitCapabilityUsageEvents(candidates, envelope) };
+}
+
+/** Native metadata enrichment runs off the relay event loop. */
+export async function scanRecordedCapabilityUsage(sessions: SessionInfo[]): Promise<CapabilityUsageStatus> {
+  return scanCapabilityUsage(sessions, await readCodexCapabilityHistory(sessions));
 }
 
 /** Bind every local observation to the authenticated relay room before publish. */

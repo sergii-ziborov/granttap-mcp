@@ -1,7 +1,7 @@
 import { setImmediate } from "node:timers/promises";
 import type { RelayClient } from "../../../../../packages/core/relay-client";
 import type { SessionInfo, SessionsStatus } from "../../../../../packages/protocol/schema";
-import { scanCapabilityUsage, scopeCapabilityUsageToRoom } from "../../sessions";
+import { scanRecordedCapabilityUsage, scopeCapabilityUsageToRoom } from "../../sessions";
 
 type Publication = { running: boolean; closed: boolean; lastPublishedAt: number };
 const publications = new WeakMap<RelayClient, Publication>();
@@ -16,11 +16,16 @@ export function publishMonitorCapabilities(client: RelayClient, status: Sessions
   const work = (async () => {
     await setImmediate();
     if (state.closed || !client.isConnected) return;
+    const publish = async (sessions: SessionInfo[]) => {
+      const usage = await scanRecordedCapabilityUsage(sessions);
+      if (state.closed || !client.isConnected) return;
+      await client.send(scopeCapabilityUsageToRoom(usage, client.room), "phone",
+        { ttlMs: 90_000, reliable: false });
+    };
+    await publish(status.sessions);
     const older = await history();
     if (state.closed || !client.isConnected) return;
-    const usage = scanCapabilityUsage([...status.sessions, ...older]);
-    await client.send(scopeCapabilityUsageToRoom(usage, client.room), "phone",
-      { ttlMs: 90_000, reliable: false });
+    if (older.length) await publish([...status.sessions, ...older]);
     state.lastPublishedAt = Date.now();
   })();
   void work.catch(() => {}).finally(() => { state.running = false; });

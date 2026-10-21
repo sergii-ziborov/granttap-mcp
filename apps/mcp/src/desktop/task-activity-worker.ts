@@ -1,7 +1,7 @@
 import { createInterface } from "node:readline";
 import { desktopTaskActivity } from "./task-activity";
 import { desktopTaskImage } from "./image";
-import { scanCapabilityUsage, scanSessions, scanSessionHistory } from "../../../bridge/src/sessions";
+import { scanRecordedCapabilityUsage, scanSessions, scanSessionHistory } from "../../../bridge/src/sessions";
 import { desktopSelectedMesh } from "./projection/selected-mesh";
 import { desktopUsageSessions } from "./projection/session-usage";
 import { desktopLiveCatalog } from "./live-catalog";
@@ -23,10 +23,10 @@ function cachedActivity(query: unknown, storePath?: string) {
   return result;
 }
 
-function cachedUsage(): unknown {
+async function cachedUsage(): Promise<unknown> {
   if (usageCache && Date.now() - usageCache.at < 120_000) return usageCache.result;
   const sessions = [...scanSessions().sessions, ...scanSessionHistory()];
-  const result = { ...scanCapabilityUsage(sessions), operation: "desktop.capability_usage",
+  const result = { ...await scanRecordedCapabilityUsage(sessions), operation: "desktop.capability_usage",
     sessions: desktopUsageSessions(sessions) };
   usageCache = { at: Date.now(), result };
   return result;
@@ -39,7 +39,7 @@ for await (const line of createInterface({ input: process.stdin, crlfDelay: Infi
     const request = JSON.parse(line) as { id: string; query: unknown; storePath?: string };
     const result = request.query && typeof request.query === "object"
       && (request.query as { operation?: string }).operation === "desktop.capability_usage"
-      ? cachedUsage()
+      ? await cachedUsage()
       : request.query && typeof request.query === "object"
         && (request.query as { operation?: string }).operation === "desktop.task_capabilities"
         ? desktopTaskCapabilities(request.query, request.storePath) ?? null

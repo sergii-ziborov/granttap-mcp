@@ -16,6 +16,8 @@ export function retainedPayloadOptions(payload: Payload): SendOptions {
       if (!payload.history?.requestedCursor) scope = `activity:${payload.sessionId}:${payload.threadId ?? ''}`;
       revision = payload.generatedAt; priority = 3; break;
     case 'mesh.snapshot': session = payload.sessionId; scope = `mesh:${payload.projectId}`; revision = payload.generatedAt; priority = 2; break;
+    case 'capability.usage.status': session = 'capability-usage'; scope = 'capability-usage';
+      revision = payload.generatedAt; priority = 2; break;
   }
   if (!scope || !Number.isSafeInteger(revision) || revision! < 0
     || Buffer.byteLength(JSON.stringify(payload)) > 900000) return {};

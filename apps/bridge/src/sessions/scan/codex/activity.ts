@@ -20,6 +20,7 @@ import {
 } from "../../telemetry";
 import { safeParse, ts } from "../../support/common";
 import { codexHeadRequest } from "../../support/codex-head";
+import { completedCodexMcp, recordedCodexToolName } from '../../native-capability-history';
 import {
   CODEX_ACTIVITY_HEAD_BYTES,
   CODEX_ACTIVITY_TAIL_BYTES,
@@ -93,9 +94,10 @@ export function codexCapabilityUsage(
   const pending = new Map<string, PendingCapabilityTool>();
   const nestedByCall = new Map<string, Array<{ toolName: string; server: string }>>();
   const out: CapabilityObservation[] = [];
+  const host = { observed: false };
 
   lines.forEach((line, index) => ingestCodexCapabilityRow({
-    line, index, session, pending, nestedByCall, out,
+    line, index, session, pending, nestedByCall, out, host,
   }));
 
   for (const [callId, item] of pending) {
@@ -103,7 +105,7 @@ export function codexCapabilityUsage(
     const nested = nestedByCall.get(callId) ?? [];
     if (observation && nested.length === 0) rememberCapabilityObservation(out, observation);
     const perCapability = Math.max(1, Math.ceil(estimateTokens(item.input) / Math.max(1, nested.length)));
-    for (const [nestedIndex, tool] of nested.entries()) {
+    for (const [nestedIndex, tool] of (host.observed ? [] : nested).entries()) {
       rememberCapabilityObservation(out, {
         sourceId: `${item.sourceId}:nested:${nestedIndex}`,
         sessionId: item.sessionId,
@@ -115,7 +117,7 @@ export function codexCapabilityUsage(
       });
     }
   }
-  return out;
+  return host.observed ? out.filter(item => !/:nested:\d+$/.test(item.sourceId)) : out;
 }
 
 function ingestCodexCapabilityRow(input: {
@@ -125,10 +127,18 @@ function ingestCodexCapabilityRow(input: {
   pending: Map<string, PendingCapabilityTool>;
   nestedByCall: Map<string, Array<{ toolName: string; server: string }>>;
   out: CapabilityObservation[];
+  host: { observed: boolean };
 }): void {
   const { line, index, session, pending, nestedByCall, out } = input;
   const row = safeParse(line);
-  if (!row || row.type !== "response_item") return;
+  if (!row) return;
+  if (row.type === 'event_msg' && row.payload?.type === 'item_completed') {
+    input.host.observed = true;
+    const actual = completedCodexMcp(row, session);
+    if (actual) rememberCapabilityObservation(out, actual);
+    return;
+  }
+  if (row.type !== "response_item") return;
   const payload = row.payload ?? {};
   const rowAt = ts(row.timestamp);
   if (["function_call", "custom_tool_call", "local_shell_call"].includes(payload.type)) {
@@ -136,7 +146,7 @@ function ingestCodexCapabilityRow(input: {
       const item: PendingCapabilityTool = {
         sourceId: `${session.sessionId}:${callId}`,
         sessionId: session.sessionId,
-        toolName: String(payload.name ?? payload.type),
+        toolName: recordedCodexToolName(payload),
         input: codexToolInput(payload),
         createdAt: rowAt || session.lastActivityAt,
         cwd: session.cwd ?? undefined,

@@ -34,13 +34,14 @@ test("one usage read is shared while pending and closing discards its queued sen
   publishMonitorCapabilities(client as never, status, history);
   await setImmediate();
   assert.equal(reads, 1);
+  assert.equal(sent, 1, "Current execution usage is published before historical discovery finishes");
   stopMonitorCapabilities(client as never);
   release([]);
   await setImmediate();
-  assert.equal(sent, 0);
+  assert.equal(sent, 1, "Closing discards the historical follow-up");
   client.isConnected = false;
   publishMonitorCapabilities(client as never, status, async () => []);
   await setImmediate();
-  assert.equal(sent, 0);
+  assert.equal(sent, 1, "An offline transport publishes nothing further");
   stopMonitorCapabilities(client as never);
 });

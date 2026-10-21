@@ -143,10 +143,27 @@ export const CapabilityUsageTotal = z.object({
 }).strict();
 export type CapabilityUsageTotal = z.infer<typeof CapabilityUsageTotal>;
 
+/** Recorded usage before the recent-call transport budget is applied. */
+export const CapabilityExecutionSummary = z.object({
+  sessionId: z.string().trim().min(1).max(256),
+  agent: z.string().trim().min(1).max(80),
+  kind: z.enum(["mcp", "skill"]),
+  name: CapabilityName,
+  count: z.number().int().positive(),
+  failures: z.number().int().nonnegative(),
+  cancelled: z.number().int().nonnegative(),
+  lastUsedAt: z.number().nonnegative(),
+  durationMs: z.number().int().nonnegative().optional(),
+  durationCount: z.number().int().nonnegative().optional(),
+  source: z.enum(["native-history", "transcript"]),
+}).strict();
+export type CapabilityExecutionSummary = z.infer<typeof CapabilityExecutionSummary>;
+
 export const CapabilityUsageStatus = z.object({
   type: z.literal("capability.usage.status"),
   events: z.array(CapabilityUsageEvent).max(200),
   totals: z.array(CapabilityUsageTotal).max(160).optional(),
+  executionSummaries: z.array(CapabilityExecutionSummary).max(128).optional(),
   generatedAt: z.number(),
 });
 export type CapabilityUsageStatus = z.infer<typeof CapabilityUsageStatus>;
