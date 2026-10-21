@@ -34,7 +34,7 @@ export function sealEnvelope(
       ? undefined
       : options.deliveryId ?? randomUUID(),
     wake: options.wake,
-    expiresAt: retained ? Date.now() + 7 * 86400000
+    expiresAt: retained ? Date.now() + 7 * 86400000 - 300000
       : options.ttlMs == null ? undefined : Date.now() + options.ttlMs,
     nonce,
     box,

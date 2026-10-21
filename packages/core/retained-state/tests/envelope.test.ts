@@ -21,6 +21,7 @@ test('only a negotiated recipient gets opaque retained snapshot metadata', () =>
   assert.equal(saved.stateRevision, payload.generatedAt);
   assert.match(saved.recipientKeyId, /^[a-f0-9]{64}$/);
   assert.ok(saved.expiresAt > Date.now() + 6 * 86400000);
+  assert.ok(saved.expiresAt <= Date.now() + 7 * 86400000 - 240000, "Leave room for ordinary clock skew between computer and relay");
 });
 
 test('task keys precede task heads; history pages and commands never replace a head', () => {
