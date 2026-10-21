@@ -11,8 +11,10 @@ remote claim. Changed remote identities and local paths to different checkouts
 remain rejected. Neither Task identity nor Project membership is rewritten.
 
 After admission, `graphAnalysisBindings` selects one graph per endpoint and real
-checkout path, preferring an admitted canonical binding over a duplicate local
-alias. Failed bindings remain visible with their original error. Both the Mac
+checkout path, preferring the currently verified canonical binding over retired aliases.
+Observed Git revisions replace old catalog observations in admission and report
+provenance. A subfolder with a remembered parent commit is not a checkout. Each
+computer analyzes only its own endpoint bindings. Failed bindings remain visible with their original error. Both the Mac
 projection and phone refresh use this rule. The graph contains actual Engine
 analysis; unavailable analysis is never synthesized as a successful graph.
 

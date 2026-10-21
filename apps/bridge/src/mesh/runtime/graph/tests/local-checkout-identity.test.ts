@@ -39,6 +39,8 @@ test("a path-scoped checkout still builds after Git discovers its origin", async
 test("graph checkout selection prefers its admitted canonical identity and retains other computers", t => {
   const root = mkdtempSync(join(tmpdir(), "granttap-graph-selection-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
+  execFileSync("git", ["init", "--quiet", root]);
+  execFileSync("git", ["-C", root, "remote", "add", "origin", "https://github.com/example/project.git"]);
   const local = { bindingId: "local", projectId: "mesh", endpointId: "mac",
     repositoryId: `local:${root}`, localPathHint: root, displayName: "Project", available: true };
   const canonical = { ...local, bindingId: "canonical", repositoryId: "github.com/example/project" };

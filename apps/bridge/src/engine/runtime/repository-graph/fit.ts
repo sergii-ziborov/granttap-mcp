@@ -1,4 +1,5 @@
 import type { ProjectRepositoryGraph } from "../../../../../../packages/protocol/schema";
+import { representativeSourcePaths, canReduceSymbols, sampleSymbols } from "./source-sampling";
 
 type CodeMap = NonNullable<ProjectRepositoryGraph["codeMap"]>;
 type Relation = ProjectRepositoryGraph["relations"][number];
@@ -21,7 +22,7 @@ export function fitRepositoryGraph(
     if (map && map.roads.length > 16
       && Buffer.byteLength(JSON.stringify(map.roads), "utf8") > maxBytes / 3) {
       bounded = { ...bounded, codeMap: trimRoads(map) };
-    } else if (map?.files.some((file) => file.symbols.length > 0)) {
+    } else if (map && canReduceSymbols(map)) {
       bounded = { ...bounded, codeMap: trimSymbols(map) };
     } else if (bounded.relations.length > 8) {
       bounded = { ...bounded, relations: strongestRelations(bounded.relations,
@@ -75,27 +76,31 @@ function roadDegree(map: CodeMap): Map<string, number> {
   return degree;
 }
 
-function rankedFiles(map: CodeMap): CodeMap["files"] {
+function rankedFiles(map: CodeMap, preserveSource = false): CodeMap["files"] {
   const degree = roadDegree(map);
+  const representatives = preserveSource ? representativeSourcePaths(map) : new Set<string>();
   return [...map.files].sort((left, right) =>
-    (degree.get(right.path) ?? 0) - (degree.get(left.path) ?? 0)
+    Number(representatives.has(right.path)) - Number(representatives.has(left.path))
+      || (preserveSource ? Number(right.symbols.length > 0) - Number(left.symbols.length > 0) : 0)
+      || (degree.get(right.path) ?? 0) - (degree.get(left.path) ?? 0)
       || (right.lineCount ?? 0) - (left.lineCount ?? 0)
       || left.path.localeCompare(right.path));
 }
 
 function trimSymbols(map: CodeMap): CodeMap {
   const ranked = rankedFiles(map).filter((file) => file.symbols.length > 0);
-  const keep = new Set(ranked.slice(0, Math.floor(ranked.length / 2)).map((file) => file.path));
+  if (ranked.length <= 16) return { ...map, truncated: true,
+    files: map.files.map(file => ({ ...file, symbols: sampleSymbols(file.symbols) })) };
+  const candidates = [...representativeSourcePaths(map), ...ranked.map(file => file.path)];
+  const keep = new Set([...new Set(candidates)].slice(0, Math.max(16, Math.floor(ranked.length / 2))));
   return { ...map, truncated: true, files: map.files.map((file) => {
     if (!keep.has(file.path)) return { ...file, symbols: [] };
-    if (ranked.length === 1) return { ...file, symbols: file.symbols.slice(0,
-      Math.floor(file.symbols.length / 2)) };
     return file;
   }) };
 }
 
 function trimFiles(map: CodeMap): CodeMap {
-  const files = rankedFiles(map).slice(0, Math.ceil(map.files.length / 2))
+  const files = rankedFiles(map, true).slice(0, Math.ceil(map.files.length / 2))
     .sort((left, right) => left.path.localeCompare(right.path));
   const paths = new Set(files.map((file) => file.path));
   for (const external of map.externals ?? []) paths.add(external.id);

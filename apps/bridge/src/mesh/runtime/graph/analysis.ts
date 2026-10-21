@@ -6,6 +6,8 @@ import { publishedCatalog } from "../../../session-catalog";
 import { meshSnapshot, meshSnapshots } from "..";
 import { refreshLocalGraphBindings } from "./binding-sync";
 import { graphAnalysisBindings } from "./checkout-identity";
+import { computerId } from "../../identity/computer";
+import { repositoryDetails } from "../../repository-details";
 
 /** A person's explicit Graph refresh bypasses background job backoff. */
 type GraphAnalysisDependencies = {
@@ -16,6 +18,8 @@ type GraphAnalysisDependencies = {
   backbone: typeof projectBackbone;
   graphs: typeof projectRepositoryGraphs;
   send: (client: RelayClient, snapshot: MeshSnapshot) => Promise<void>;
+  endpoint?: () => string;
+  details?: (snapshot: MeshSnapshot) => ReturnType<typeof repositoryDetails>;
 };
 
 const graphAnalysisDependencies: GraphAnalysisDependencies = {
@@ -24,6 +28,8 @@ const graphAnalysisDependencies: GraphAnalysisDependencies = {
   sync: refreshLocalGraphBindings,
   backbone: projectBackbone,
   graphs: projectRepositoryGraphs,
+  endpoint: computerId,
+  details: snapshot => repositoryDetails(snapshot, computerId()),
   send: (client, snapshot) => sendMeshPayload(client, snapshot, "phone", {
     ttlMs: 60_000, reliable: true,
   }),
@@ -47,10 +53,13 @@ export async function analyzeProjectGraphNow(
   if (!current) return false;
   const failures = dependencies.sync ? await dependencies.sync(current) : [];
   const rejected = new Set(failures.map(report => report.repositoryId));
-  const [backbone, repositoryGraphs] = await Promise.all([
+  const bindings = graphAnalysisBindings((current.bindings ?? [])
+    .filter(binding => !rejected.has(binding.repositoryId)), dependencies.endpoint?.());
+  if (dependencies.endpoint && !bindings.length && !failures.length && current.bindings?.length) return false;
+  const [backbone, repositoryGraphs, details] = await Promise.all([
     dependencies.backbone(projectId),
-    dependencies.graphs(projectId, graphAnalysisBindings((current.bindings ?? [])
-      .filter(binding => !rejected.has(binding.repositoryId))), { background: false }),
+    dependencies.graphs(projectId, bindings, { background: false }),
+    dependencies.details?.(current),
   ]);
   const observed = [...repositoryGraphs, ...failures];
   const reports = observed.length > 0 ? observed : [{
@@ -63,6 +72,7 @@ export async function analyzeProjectGraphNow(
   for (const id of receipts) {
     await dependencies.send(client, {
       ...current, backbone, repositoryGraphs: reports, generatedAt: Date.now(),
+      ...(details ? { repositoryDetails: details } : {}),
       ...(id ? { graphAnalysisRequestId: id } : {}),
     });
   }

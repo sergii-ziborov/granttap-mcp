@@ -17,6 +17,7 @@ import type {
 import { RepositoryGraphJobs } from "./repository-graph-jobs";
 import { fitRepositoryGraph } from "./repository-graph/fit";
 import { RepositoryGraphCache } from "./repository-graph/cache";
+import { repositorySourceMap } from "./repository-graph/source-map";
 
 export type LocalProjectBinding = {
   summary: ProjectBindingSummary;
@@ -229,20 +230,7 @@ async function analyzeRepositoryGraph(
       analysisId: graph.analysis_id ?? undefined,
       analysisStatus: graph.analysis_status,
       architectureHypotheses: graph.architecture_hypotheses,
-      codeMap: graph.code_map ? {
-        files: graph.code_map.files.map((file) => ({
-          path: file.path, language: file.language, lineCount: file.line_count,
-          symbols: file.symbols.map((symbol) => ({
-            id: symbol.id, label: symbol.label, kind: symbol.kind,
-            startLine: symbol.start_line, lineCount: symbol.line_count,
-          })),
-        })),
-        externals: graph.code_map.externals ?? [],
-        roads: graph.code_map.roads,
-        totalFiles: graph.code_map.total_files,
-        totalExternals: graph.code_map.total_externals ?? 0,
-        truncated: graph.code_map.truncated,
-      } : undefined,
+      codeMap: repositorySourceMap(graph),
       nodes: graph.nodes,
       relations: graph.relations.map((edge) => ({
         source: edge.source, target: edge.target, relation: edge.relation,

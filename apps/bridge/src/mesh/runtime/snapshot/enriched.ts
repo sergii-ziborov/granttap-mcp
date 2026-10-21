@@ -18,7 +18,7 @@ export async function enrichMeshSnapshot(
   const identityFailures = await refreshLocalGraphBindings(snapshot);
   const excludedRepositories = new Set(identityFailures.map((report) => report.repositoryId));
   const bindings = graphAnalysisBindings((snapshot.bindings ?? [])
-    .filter((binding) => !excludedRepositories.has(binding.repositoryId)));
+    .filter((binding) => !excludedRepositories.has(binding.repositoryId)), computerId());
   await waitForProjectBindingSync(snapshot.projectId);
   queueProjectKnowledgeSync({
     projectId: snapshot.projectId,

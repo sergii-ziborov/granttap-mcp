@@ -14,6 +14,12 @@ export const ProjectCodeMap = z.object({
       kind: z.string().trim().min(1).max(64),
       startLine: z.number().int().positive(),
       lineCount: z.number().int().positive(),
+      metrics: z.object({
+        measured: z.literal(true), sourceLines: z.number().int().positive().max(0xffff_ffff),
+        cyclomatic: z.number().int().positive().max(0xffff_ffff),
+        maxLoopDepth: z.number().int().nonnegative().max(0xffff_ffff),
+        callers: z.number().int().nonnegative().max(0xffff_ffff),
+      }).strict().optional(),
     }).strict()).max(72),
   }).strict()).max(650),
   externals: z.array(z.object({

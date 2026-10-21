@@ -44,7 +44,7 @@ export async function refreshLocalGraphBindings(
     }
     try {
       const admitted = await dependencies.sync(snapshot.project, {
-        summary: binding,
+        summary: { ...binding, revision: facts.revision ?? binding.revision },
         localRoot: facts.root,
         // A local binding is scoped by its verified path. Do not relabel it as
         // a remote repository or move it into that repository's Project scope.

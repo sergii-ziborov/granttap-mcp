@@ -4,6 +4,7 @@ import { parsePolicyResult } from "../engine-policy-protocol";
 import { parseImpactResult } from "../impact/engine-impact-protocol";
 import { parseEngineIdentityResult } from "./identity-result-parser";
 import { parseProjectCatalog } from "./project-catalog-parser";
+import { parseCodeChecks } from "./code-checks";
 import {
   ENGINE_PROTOCOL_VERSION,
   EngineProtocolError,
@@ -186,6 +187,7 @@ function parseCodeMap(value: unknown): void {
       requireBoundedString(symbol.id, "code symbol id", 512);
       requireBoundedString(symbol.label, "code symbol label", 160);
       requireBoundedString(symbol.kind, "code symbol kind", 64);
+      parseCodeChecks(symbol.metrics);
       if (!Number.isSafeInteger(symbol.start_line) || Number(symbol.start_line) < 1
         || !Number.isSafeInteger(symbol.line_count) || Number(symbol.line_count) < 1) invalidResult();
     }

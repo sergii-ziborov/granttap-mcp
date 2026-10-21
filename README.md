@@ -239,7 +239,17 @@ manual rebuilds join pending work and return their own delivery receipts.
 Usable reports persist privately on the computer across MCP restarts, while
 the phone keeps its last received map visible during a rebuild. Source Git
 revision and analysis content fingerprint are separate freshness facts.
-Partial and unavailable reports retain their scope and status.
+Partial and unavailable reports retain their scope and status. Health separates
+report freshness from completeness and offers local filtering, sorting and
+diagnostics options. The code city has an independent legend, symbol-kind and
+size colours, label and relation controls, and optional measured code checks.
+
+Engine source checks carry measured function extent, a token-based cyclomatic
+estimate, loop nesting and resolved call fan-in. The clients compare those
+measurements with the selected thresholds. Green means within those checks; red
+means review a threshold; unmeasured code remains unknown. Correctness, test
+coverage and runtime performance are not inferred. Analysis uses this computer's
+verified Git checkout roots, observed revision and local Git exclusions.
 
 <p align="center">
   <img src="docs/images/iphone-chat-work-summary.png" width="200" alt="Files and Agents above the composer with deterministic sample work">

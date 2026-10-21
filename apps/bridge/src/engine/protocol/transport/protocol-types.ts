@@ -49,7 +49,9 @@ export type EngineRepositoryGraph = {
   code_map?: {
     files: Array<{ path: string; language: string | null; line_count: number | null;
       symbols: Array<{ id: string; label: string; kind: string;
-        start_line: number; line_count: number }> }>;
+        start_line: number; line_count: number;
+        metrics?: { measured: boolean; source_lines: number; cyclomatic: number;
+          max_loop_depth: number; callers: number } }> }>;
     externals?: Array<{ id: string; label: string; kind: string }>;
     roads: Array<{ source: string; target: string; relation: string }>;
     total_files: number;

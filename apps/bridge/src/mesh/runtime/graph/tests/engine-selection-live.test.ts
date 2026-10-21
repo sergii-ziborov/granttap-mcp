@@ -17,7 +17,11 @@ test("native Engine excludes local Git build artifacts while retaining untracked
   execFileSync("git", ["init", "--quiet", checkout]);
   mkdirSync(join(checkout, "src"));
   mkdirSync(join(checkout, ".artifacts"));
-  writeFileSync(join(checkout, ".git/info/exclude"), "/.artifacts/\n");
+  writeFileSync(join(checkout, ".git/info/exclude"), "/.artifacts/\n.hidden/worktrees/\n");
+  const nested = join(checkout, ".hidden/worktrees/archived");
+  mkdirSync(join(nested, "src"), { recursive: true });
+  execFileSync("git", ["init", "--quiet", nested]);
+  writeFileSync(join(nested, "src/foreign.ts"), "export function foreignCheckout() { return 3; }\n");
   writeFileSync(join(checkout, "src/main.ts"), "export function realSource() { return 1; }\n");
   writeFileSync(join(checkout, ".artifacts/generated.ts"), "export function buildArtifact() { return 2; }\n");
   const socketPath = join(root, "engine.sock");
@@ -48,4 +52,5 @@ test("native Engine excludes local Git build artifacts while retaining untracked
   const files = result.graph.code_map?.files.map(file => file.path) ?? [];
   assert.ok(files.includes("src/main.ts"), "uncommitted source remains visible");
   assert.ok(!files.includes(".artifacts/generated.ts"), "Git-local excluded build output must not enter analysis");
+  assert.ok(!files.some(path => path.startsWith(".hidden/worktrees/")), "Ignored nested checkouts are outside the report");
 });

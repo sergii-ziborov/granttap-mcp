@@ -8,12 +8,12 @@ export type EngineArtifact = {
 
 /** Release hashes are part of the reviewed MCP, never supplied by a remote manifest. */
 export const ENGINE_ARTIFACTS: readonly EngineArtifact[] = [
-  { version: "0.1.1", platform: "darwin", arch: "arm64",
-    sha256: "3381b757cf79470267976c3e74f8262c9a9a754bcff3b45f74d6f2b00d74e1e4", bytes: 12067440 },
-  { version: "0.1.1", platform: "darwin", arch: "x64",
-    sha256: "c08752079cd58b9249c345e81cef02130da553ac7066494323a41e2204d581a8", bytes: 13915384 },
-  { version: "0.1.1", platform: "linux", arch: "x64",
-    sha256: "e2d322857be5a628795ffa088bd873dbffb42697a77e79b9d98b80a290d574b2", bytes: 14726408 },
+  { version: "0.1.2", platform: "darwin", arch: "arm64",
+    sha256: "fa23668f2f2cbb716a0ba66c5a6e027a25ed4e7e2dedf0c870edb32199045b97", bytes: 12101408 },
+  { version: "0.1.2", platform: "darwin", arch: "x64",
+    sha256: "b3235a15936a77ec323d5ecbc54a0bc19994fe6e5a36044da964b68524b4c1dd", bytes: 13944984 },
+  { version: "0.1.2", platform: "linux", arch: "x64",
+    sha256: "1a6b227289b69459a64cd13078044960cf83bb858e6be1b70b1b38c950b00cc0", bytes: 14753312 },
 ];
 
 export function selectEngineArtifact(platform: string = process.platform, arch: string = process.arch): EngineArtifact | undefined {
