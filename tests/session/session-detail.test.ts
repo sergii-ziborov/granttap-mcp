@@ -144,6 +144,7 @@ test("subscribe republishes rich catalog detail and session.events can fetch it 
   assert.ok(initial);
   assert.equal(initial.sessions.find((item) => item.sessionId === sessionId)?.skills, undefined);
   assert.equal(initial.sessions.find((item) => item.sessionId === sessionId)?.shellAllowed, true);
+  await waitFor(() => relay.sent.some(payload => payload.type === "capability.usage.status"));
   const usage = relay.sent.find((payload) => payload.type === "capability.usage.status");
   assert.deepEqual(usage?.events[0]?.deepLinkTarget, {
     kind: "chat",

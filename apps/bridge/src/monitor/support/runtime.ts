@@ -23,7 +23,7 @@ import { publishedCatalog, rememberPublishedCatalog, resumePublishedChats,
   publishCatalogHeads, stopCatalogHeads } from "../../session-catalog";
 import { createMachineLoadPublisher } from "../../machine-load";
 import { startMachineLoadLoop } from "../../machine-load/host/loop";
-import { scanCapabilityUsage, scanSessionHistoryCooperatively, scanSessionsCooperatively, scopeCapabilityUsageToRoom, TOKEN_WINDOW_HOURS } from "../../sessions";
+import { scanSessionHistoryCooperatively, scanSessionsCooperatively, TOKEN_WINDOW_HOURS } from "../../sessions";
 import { boundedCatalogHistory, INTERVAL_MS, publishSessionEvents } from "../handlers/catalog";
 import { sweepAttachments } from "../handlers/receipts";
 import { handleMonitorMessage } from "../handlers/inbound";
@@ -32,6 +32,7 @@ import { decorateTaskOriginCatalog } from '../../task-origins';
 const HISTORY_INTERVAL_MS = 60_000;
 const resumedHeads = new WeakSet<RelayClient>();
 import { publishMonitorMeshes, stopMonitorMeshes } from "../mesh-publication";
+import { publishMonitorCapabilities, stopMonitorCapabilities } from "../capability-publication";
 
 export type SessionMonitor = {
   publish: () => Promise<void>;
@@ -114,22 +115,22 @@ async function publishMonitorTick(input: {
   leadership: ReturnType<typeof monitorLeadership>;
   subscriptions: Set<string>;
   history: (force?: boolean) => Promise<SessionsStatus["sessions"]>;
-  clocks: { lastHistoryPublishedAt: number; lastCapabilityPublishedAt: number };
+  clocks: { lastHistoryPublishedAt: number };
   loadLoop: { updateStatus: (status: SessionsStatus) => void };
   forceHistory: boolean;
   active: () => boolean;
-}): Promise<{ lastHistoryPublishedAt: number; lastCapabilityPublishedAt: number }> {
+}): Promise<{ lastHistoryPublishedAt: number }> {
   const { client, leadership, subscriptions, history, clocks, loadLoop, forceHistory } = input;
-  let { lastHistoryPublishedAt, lastCapabilityPublishedAt } = clocks;
-  if (!client.isConnected) return { lastHistoryPublishedAt, lastCapabilityPublishedAt };
+  let { lastHistoryPublishedAt } = clocks;
+  if (!client.isConnected) return { lastHistoryPublishedAt };
   await publishHeartbeat(client).catch(() => {});
-  if (!input.active()) return { lastHistoryPublishedAt, lastCapabilityPublishedAt };
-  if (!leadership.acquire()) return { lastHistoryPublishedAt, lastCapabilityPublishedAt };
+  if (!input.active()) return { lastHistoryPublishedAt };
+  if (!leadership.acquire()) return { lastHistoryPublishedAt };
   await client.send(approvalsStatus(), "phone", { ttlMs: INTERVAL_MS * 3, reliable: false });
   const initial = lastHistoryPublishedAt === 0;
   const includeHistory = forceHistory || (!initial && Date.now() - lastHistoryPublishedAt >= HISTORY_INTERVAL_MS);
   const snapshot = await monitorSnapshot({ includeHistory, forceHistory, subscriptions, history });
-  if (!input.active()) return { lastHistoryPublishedAt, lastCapabilityPublishedAt };
+  if (!input.active()) return { lastHistoryPublishedAt };
   const status = decorateTaskOriginCatalog(snapshot, client.room);
   rememberPublishedCatalog(client, status);
   await client.send(status, "phone", { ttlMs: INTERVAL_MS * 24, reliable: false });
@@ -146,15 +147,8 @@ async function publishMonitorTick(input: {
   void refreshMcpLoad(status.sessions).catch(() => {});
   publishCatalogHeads(client, status, subscriptions, publishSessionEvents);
   if (loadRuntimeConfig().meshEnabled) publishMonitorMeshes(client, status);
-  if (Date.now() - lastCapabilityPublishedAt >= 30_000) {
-    const usage = scanCapabilityUsage([
-      ...status.sessions,
-      ...await history(false),
-    ]);
-    await client.send(scopeCapabilityUsageToRoom(usage, client.room), "phone", { ttlMs: 90_000, reliable: false });
-    lastCapabilityPublishedAt = Date.now();
-  }
-  return { lastHistoryPublishedAt, lastCapabilityPublishedAt };
+  publishMonitorCapabilities(client, status, () => history(false));
+  return { lastHistoryPublishedAt };
 }
 
 /**
@@ -168,8 +162,8 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
   primeSessionKeys(client);
   publishedCatalog(client);
   let historyCache: { generatedAt: number; sessions: SessionsStatus["sessions"] } | undefined;
+  let historyRead: Promise<SessionsStatus["sessions"]> | undefined;
   let lastHistoryPublishedAt = 0;
-  let lastCapabilityPublishedAt = 0;
   let closed = false;
   const publishMachineLoad = createMachineLoadPublisher({
     log: (line) => process.stderr.write(`[monitor] ${line}\n`),
@@ -189,11 +183,16 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
     },
   });
 
-  const history = async (force = false): Promise<SessionsStatus["sessions"]> => {
-    if (force || !historyCache || Date.now() - historyCache.generatedAt > 60_000) {
-      historyCache = { generatedAt: Date.now(), sessions: await scanSessionHistoryCooperatively() };
+  const history = (force = false): Promise<SessionsStatus["sessions"]> => {
+    if (historyRead) return historyRead;
+    if (!force && historyCache && Date.now() - historyCache.generatedAt <= 60_000) {
+      return Promise.resolve(historyCache.sessions);
     }
-    return historyCache.sessions;
+    historyRead = scanSessionHistoryCooperatively().then(sessions => {
+      historyCache = { generatedAt: Date.now(), sessions };
+      return sessions;
+    }).finally(() => { historyRead = undefined; });
+    return historyRead;
   };
 
   const publish = singleFlightPublisher(async (forceHistory: boolean): Promise<void> => {
@@ -201,10 +200,9 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
     const next = await publishMonitorTick({
       client, leadership, subscriptions, history, loadLoop, forceHistory,
       active: () => !closed,
-      clocks: { lastHistoryPublishedAt, lastCapabilityPublishedAt },
+      clocks: { lastHistoryPublishedAt },
     });
     lastHistoryPublishedAt = next.lastHistoryPublishedAt;
-    lastCapabilityPublishedAt = next.lastCapabilityPublishedAt;
   });
 
   const off = client.onMessage(async (payload: Payload, peerPublicKey) => {
@@ -245,6 +243,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       offConnected?.();
       stopCatalog();
       stopCatalogHeads(client);
+      stopMonitorCapabilities(client);
       stopMonitorMeshes(client);
       stopHeartbeat();
       loadLoop.stop();

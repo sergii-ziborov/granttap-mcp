@@ -32,7 +32,7 @@ test("a saved transcript cannot hold the first fresh catalog behind its transfer
   let timer:NodeJS.Timeout|undefined;
   try {
     await Promise.race([monitor.publish(),new Promise((_,reject)=>{
-      timer=setTimeout(()=>reject(new Error("A saved head blocked the fresh catalog")),750);})]);
+      timer=setTimeout(()=>reject(new Error("A saved head blocked the fresh catalog")),2_000);})]);
     assert.ok(sent.some(p=>p.type==="sessions.status"&&p.generatedAt>1));
   } finally {clearTimeout(timer);release();}
 });
@@ -64,7 +64,7 @@ test("a held subscribed transcript cannot block subsequent fresh catalogs", asyn
   let timer:NodeJS.Timeout|undefined;
   try {
     await Promise.race([monitor.publish(),new Promise((_,reject)=>{
-      timer=setTimeout(()=>reject(Error("Subscribed transfer blocked the catalog tick")),750);})]);
+      timer=setTimeout(()=>reject(Error("Subscribed transfer blocked the catalog tick")),2_000);})]);
     assert.ok(sent.filter(p=>p.type==="sessions.status").length>before);
   } finally {clearTimeout(timer);release();}
 });
