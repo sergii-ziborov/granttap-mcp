@@ -19,6 +19,7 @@ import { readIntegrationMap } from "../observed/integration-map";
 import type { MeshStore } from "../store";
 import { queueProjectBindingSync } from "../../engine/runtime/engine-projects";
 import { isCursorTaskCloneId } from "../../sessions/cursor/catalog";
+export { inspectRepositoryAsync } from "./repository-inspection";
 
 export type RepositoryFacts = {
   root: string;

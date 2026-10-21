@@ -1,7 +1,7 @@
 import { realpathSync } from "node:fs";
 import type { MeshSnapshot, ProjectRepositoryGraph } from "../../../../../../packages/protocol/schema";
 import { queueProjectBindingSync } from "../../../engine/runtime/engine-projects";
-import { inspectRepository } from "../../catalog";
+import { inspectRepositoryAsync, type RepositoryFacts } from "../../catalog";
 import { computerId } from "../../identity/computer";
 import { matchesLocalCheckout } from "./checkout-identity";
 
@@ -18,18 +18,18 @@ export async function refreshLocalGraphBindings(
   snapshot: MeshSnapshot,
   dependencies: {
     endpoint: () => string;
-    inspect: typeof inspectRepository;
+    inspect: (cwd: string) => RepositoryFacts | Promise<RepositoryFacts>;
     sync: typeof queueProjectBindingSync;
-  } = { endpoint: computerId, inspect: inspectRepository, sync: queueProjectBindingSync },
+  } = { endpoint: computerId, inspect: inspectRepositoryAsync, sync: queueProjectBindingSync },
 ): Promise<ProjectRepositoryGraph[]> {
   const localEndpoint = dependencies.endpoint();
   const candidates = (snapshot.bindings ?? []).filter((binding) =>
     binding.endpointId === localEndpoint && binding.available && binding.localPathHint);
   const failures: ProjectRepositoryGraph[] = [];
-  const checkouts = candidates.flatMap((binding) => {
-    const facts = readCheckout(dependencies.inspect, binding.localPathHint!);
+  const checkouts = (await Promise.all(candidates.map(async binding => {
+    const facts = await readCheckout(dependencies.inspect, binding.localPathHint!);
     return facts ? [{ binding, facts, real: realpathSync(facts.root) }] : [];
-  });
+  }))).flat();
   await Promise.all(checkouts.map(async ({ binding, facts, real }) => {
     const pathIdentity = matchesLocalCheckout(binding.repositoryId, facts.root);
     if (facts.canonicalRepositoryId !== binding.repositoryId && !pathIdentity) {
@@ -58,9 +58,9 @@ export async function refreshLocalGraphBindings(
 }
 
 /** A Git checkout rooted exactly at the bound path, or nothing a Graph can be built from. */
-function readCheckout(inspect: typeof inspectRepository, path: string) {
+async function readCheckout(inspect: (cwd: string) => RepositoryFacts | Promise<RepositoryFacts>, path: string) {
   try {
-    const facts = inspect(path);
+    const facts = await inspect(path);
     if (!facts.worktree || realpathSync(facts.root) !== realpathSync(path)) return undefined;
     return facts;
   } catch {

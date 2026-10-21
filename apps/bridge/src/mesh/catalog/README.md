@@ -17,6 +17,16 @@ negative probes nor old repository identities persist across refreshes.
 Behavior tests: `tests/agentic/codex-workspace-binding.test.ts` and
 `tests/project/project-mesh-core.test.ts`.
 
+## Background Graph admission
+
+`inspectRepositoryAsync` provides the same repository facts without blocking
+relay callbacks. Native Git subprocesses are limited to two across the process.
+Concurrent inspections of the same path share their in-flight result; a later
+inspection verifies the checkout again. Missing Git facts remain unknown.
+
+Tests for asynchronous inspection live in `tests/`; Graph admission also has
+`runtime/graph/tests/responsiveness/checkout-inspection.test.ts`.
+
 ## License
 
 GrantTap Commercial Source License. See [LICENSE](../../../../../LICENSE).
