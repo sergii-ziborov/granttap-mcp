@@ -11,3 +11,7 @@ their parent execution. Missing duration or resource evidence stays unknown.
 
 Tests live in [`tests/recorded-usage.test.ts`](tests/recorded-usage.test.ts).
 The repository quality and public package boundaries apply to this module.
+
+## License
+
+This module is covered by the [GrantTap Commercial Source License](../../../../../../../LICENSE).
