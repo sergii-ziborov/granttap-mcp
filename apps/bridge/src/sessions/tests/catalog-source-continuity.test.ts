@@ -38,3 +38,35 @@ for (const provider of ["claude", "codex"] as const) {
     assert.equal(nativeTranscriptSource(session), path);
   });
 }
+
+test("cached catalog discovery is not delayed by a background turn for every unchanged file", async t => {
+  const root = mkdtempSync(join(tmpdir(), "granttap-cached-discovery-"));
+  const prior = process.env.GRANTTAP_CODEX_SESSIONS_DIR;
+  process.env.GRANTTAP_CODEX_SESSIONS_DIR = root;
+  t.after(() => {
+    if (prior === undefined) delete process.env.GRANTTAP_CODEX_SESSIONS_DIR;
+    else process.env.GRANTTAP_CODEX_SESSIONS_DIR = prior;
+    rmSync(root, { recursive: true, force: true });
+  });
+  const timestamp = new Date().toISOString();
+  for (let index = 0; index < 200; index++) {
+    writeFileSync(join(root, `rollout-${index}.jsonl`), JSON.stringify({
+      type: "session_meta", timestamp, payload: { id: `cached-${index}` },
+    }) + "\n");
+  }
+  scanCodex(200);
+  let backgroundTurns = 0, stopped = false;
+  const background = () => {
+    if (stopped) return;
+    backgroundTurns++;
+    globalThis.setImmediate(background);
+  };
+  globalThis.setImmediate(background);
+  try {
+    const scanned = await scanCodexCooperatively(200);
+    assert.equal(scanned.sessions.length, 200);
+    assert.ok(backgroundTurns > 0, "Queued relay work still gets a turn");
+    assert.ok(backgroundTurns < 50,
+      `Unchanged cached files gave background projections ${backgroundTurns} turns before completing`);
+  } finally { stopped = true; }
+});

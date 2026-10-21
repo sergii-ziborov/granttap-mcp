@@ -4,7 +4,7 @@ Public entry: `index.ts`. Provider readers discover local executions and keep
 their native source identity for explicit chat and nested-conversation requests.
 `session-activity.ts` owns provider selection and bounded child replies.
 `catalog.ts` owns provider selection and bounded live/history catalogs. The
-monitor uses cooperative Codex and Claude readers, yielding between native files
+monitor uses cooperative Codex and Claude readers, yielding between timed batches
 so discovery cannot monopolize relay callbacks. Synchronous CLI readers use the
 same parsers. Published native bindings stay readable until a complete scan
 replaces them; checkout verification caches belong to one scan across its yields.

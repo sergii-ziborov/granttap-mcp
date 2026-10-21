@@ -24,7 +24,9 @@ Subscribed transcript heads use a separate, single-flight transfer loop. A stall
 
 Authenticated subscription and transcript requests pass the verified requester key to the encrypted reply. A requested page does not wait for copies addressed to other paired controllers. Shared catalogue and chat updates remain available to passive controllers.
 
-Periodic native discovery yields between source files. The same provider parsers
+Periodic native discovery yields between small timed batches of source files.
+Warm metadata-cache hits share a batch instead of waiting behind one background
+Project projection for every unchanged file. The same provider parsers
 and metadata caches serve synchronous CLI readers and cooperative live-monitor
 readers. Checkout observations are scoped to one asynchronous scan, so unrelated
 requests cannot inherit an old directory result. Socket recovery immediately
