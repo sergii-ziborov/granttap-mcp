@@ -16,5 +16,8 @@ transient machine hooks, so a server can refuse a cooled identity before it
 receives any ciphertext. This digest grants no permissions or decryption rights.
 
 The real WebSocket integration is in `tests/core/managed-relay-renewal.test.ts`.
+`RelayClient.onConnected` observes each actual socket opening, including recovery.
+Consumers can immediately replace stale snapshots; notification failures cannot
+interrupt the transport, and unsubscribing prevents later callbacks.
 
 Licensed under the GrantTap Commercial Source License in the repository root.

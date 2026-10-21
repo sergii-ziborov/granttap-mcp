@@ -1,18 +1,17 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { execFileSync } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { isAbsolute } from "node:path";
 
-let scanRoots: Map<string, string | undefined> | undefined;
+const checkoutScans = new AsyncLocalStorage<Map<string, string | undefined>>();
 
-/** Share verified lookups only during this synchronous catalog pass. */
+/** Share verified lookups only during one catalog pass, including cooperative asynchronous readers. */
 export function withCheckoutObservationCache<T>(scan: () => T): T {
-  if (scanRoots) return scan();
-  scanRoots = new Map();
-  try { return scan(); }
-  finally { scanRoots = undefined; }
+  return checkoutScans.getStore() ? scan() : checkoutScans.run(new Map(), scan);
 }
 
 function gitRoot(path: string): string | undefined {
+  const scanRoots = checkoutScans.getStore();
   if (scanRoots?.has(path)) return scanRoots.get(path);
   let root: string | undefined;
   try {

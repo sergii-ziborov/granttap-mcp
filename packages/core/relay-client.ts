@@ -1,8 +1,8 @@
 /** Shared authenticated relay transport. See README.md for delivery and encryption boundaries. */
 import WebSocket from "ws";
-import { ManagedRelayLease, RelaySocketHealth, RelayReconnectBackoff, relayUpgradeHeaders } from "./socket-lifecycle";
+import { ManagedRelayLease, RelaySocketHealth, RelayReconnectBackoff, RelayConnectionNotifications, relayUpgradeHeaders } from "./socket-lifecycle";
 import { OutboundFrameQueue, sendEncryptedPayload } from "./outbound-scheduler";
-import { openRelayMessage } from "./relay-inbound";
+import { openRelayMessage, parseRelayControl } from "./relay-inbound";
 import { consumeTaskJobOffer, type TaskDispatchListener } from "./task-dispatch";
 import { Payload, type Role } from "../protocol/schema";
 import { peerPublicKeys } from "./crypto";
@@ -19,6 +19,7 @@ export class RelayClient {
   private recipientRouting = false;
   private frames?: OutboundFrameQueue;
   private listeners = new Set<Listener>();
+  private readonly connections = new RelayConnectionNotifications();
   private taskDispatchListeners = new Set<TaskDispatchListener>();
   private taskOfferListeners = new Set<(control: unknown) => void | Promise<void>>();
   private intentionalClose = false;
@@ -97,6 +98,7 @@ export class RelayClient {
           )
           .catch(() => {});
         resolve();
+        this.connections.connected();
       });
       ws.on("message", (data: WebSocket.RawData) => void this.onRaw(data.toString()));
       ws.on('unexpected-response', (_request, response) => {
@@ -125,7 +127,7 @@ export class RelayClient {
   }
 
   private async onRaw(raw: string): Promise<void> {
-    const control = safeJson(raw) as { type?: string; recipientRouting?: boolean } | null;
+    const control = parseRelayControl(raw) as { type?: string; recipientRouting?: boolean } | null;
     if (control?.type === "relay.capabilities" && control.recipientRouting === true) {
       this.recipientRouting = true;
       return;
@@ -239,6 +241,11 @@ export class RelayClient {
     return () => { this.taskOfferListeners.delete(listener); };
   }
 
+  /** Observe each actual socket recovery so replaceable snapshots are sent immediately. */
+  onConnected(listener: () => void | Promise<void>): () => void {
+    return this.connections.subscribe(listener);
+  }
+
   onMessage(l: Listener): () => void {
     this.listeners.add(l);
     return () => this.listeners.delete(l);
@@ -288,13 +295,5 @@ export class RelayClient {
       });
     }, delay);
     this.reconnectTimer.unref?.();
-  }
-}
-
-function safeJson(s: string): unknown {
-  try {
-    return JSON.parse(s);
-  } catch {
-    return null;
   }
 }

@@ -23,3 +23,13 @@ export function timedProviderScan<T extends { sessions: unknown[] }>(
   });
   return result;
 }
+
+/** Includes elapsed time across cooperative yields; selected capability is never usage. */
+export async function timedProviderScanAsync<T extends { sessions: unknown[] }>(
+  agent: string, scan: () => Promise<T>,
+): Promise<T> {
+  const startedAt = Date.now();
+  const result = await scan();
+  samples.set(agent, { durationMs: Date.now() - startedAt, sessions: result.sessions.length });
+  return result;
+}

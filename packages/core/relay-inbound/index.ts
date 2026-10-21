@@ -4,6 +4,12 @@ import type { PeerConfig } from '../relay-client-types';
 import { publicKeyIdentifier } from '../ciphertext-recipient';
 import { openFromPeersWithIdentity, openWithTransferKey } from '../crypto';
 
+/** Invalid control frames have no routing or delivery effect. */
+export function parseRelayControl(raw: string): unknown {
+  try { return JSON.parse(raw); }
+  catch { return null; }
+}
+
 /** Authenticate routing, peer identity and optional task encryption before consumers run. */
 export function openRelayMessage(cfg: PeerConfig, raw: unknown, sessionKeys: Map<string, string>,
   peerAllowed: (key: string) => boolean) {
