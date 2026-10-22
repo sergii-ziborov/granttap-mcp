@@ -164,9 +164,9 @@ export function scanGrok(maxFiles = MAX_FILES): Scan {
     try { stat = statSync(join(directory, "chat_history.jsonl")); } catch {
       try { stat = statSync(path); } catch { continue; }
     }
-    const parsed = parseLog(join(directory, "chat_history.jsonl"), sessionId, stat.mtimeMs);
     const updatedAt = ts(summary.updated_at) || stat.mtimeMs;
     const startedAt = ts(summary.created_at) || stat.birthtimeMs || updatedAt;
+    const parsed = parseLog(join(directory, "chat_history.jsonl"), sessionId, startedAt);
     const title = [summary.generated_title, summary.session_summary, parsed.firstUser]
       .find((value): value is string => typeof value === "string" && value.trim().length > 0);
     const cwd = typeof summary.info?.cwd === "string" ? summary.info.cwd : undefined;

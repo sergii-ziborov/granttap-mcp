@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -42,4 +42,15 @@ test("Grok typed history exposes real turns without environment, reminders, or r
   ]);
   assert.doesNotMatch(JSON.stringify(activity), /private/);
   assert.equal(new Set(activity.map((entry) => entry.id)).size, 4);
+  assert.deepEqual(grokActivity(session).map((entry) => entry.id), activity.map((entry) => entry.id),
+    "Catalog and full transcript must identify the same messages");
+  const history = join(directory, "chat_history.jsonl");
+  await appendFile(history, "\n" + JSON.stringify({ type: "user", prompt_index: 2, content: "One more request" }));
+  const later = new Date(Date.now() + 60_000);
+  await utimes(history, later, later);
+  const refreshed = scanGrok().sessions[0]!;
+  const updated = grokActivity(refreshed);
+  assert.deepEqual(updated.slice(0, 4).map((entry) => [entry.id, entry.createdAt]),
+    activity.map((entry) => [entry.id, entry.createdAt]), "Appending a turn must not move earlier messages");
+  assert.equal(updated.length, 5);
 });
