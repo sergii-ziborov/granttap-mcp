@@ -1,4 +1,3 @@
-import { refreshCodexHooks } from "../../../bridge/src/codex-hook-trust";
 /**
  * GrantTap MCP over Streamable HTTP + loopback OAuth with website consent.
  *
@@ -99,8 +98,7 @@ export async function startHttpMcpServer(options: ServeOptions = {}): Promise<{
       mcp: mcpUrl.href,
     });
   });
-  app.get("/desktop/status", async (_req, res) => {
-    await refreshCodexHooks();
+  app.get("/desktop/status", (_req, res) => {
     res.set("Cache-Control", "no-store");
     res.json(desktopStatusSnapshot(desktopBridge.socketPath));
   });
