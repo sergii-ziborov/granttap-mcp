@@ -1,3 +1,4 @@
+import { grokAdmission, parseGrok } from "../grok-response";
 import { randomUUID } from "node:crypto";
 import type { SessionInfo } from "../../../../../packages/protocol/schema";
 import { runProcess } from ".";
@@ -9,33 +10,6 @@ import { runCursorConversation } from "../cursor-conversation";
 
 function grokBin(): string {
   return resolveGrokBinary();
-}
-
-function parseGrok(stdout: string, fallback: string): ReplyResult {
-  let text = "";
-  let sessionId = fallback;
-  for (const line of stdout.split("\n")) {
-    if (!line.trim()) continue;
-    try {
-      const value = JSON.parse(line) as {
-        type?: string; data?: unknown; sessionId?: unknown; session_id?: unknown;
-        result?: unknown; error?: unknown;
-      };
-      if (value.type === "text" && typeof value.data === "string") text += value.data;
-      if (value.type === "result" && typeof value.result === "string") text = value.result;
-      if (typeof value.sessionId === "string") sessionId = value.sessionId;
-      if (typeof value.session_id === "string") sessionId = value.session_id;
-      if (value.type === "error" && typeof value.error === "string") {
-        return { ok: false, error: value.error.slice(0, 500) };
-      }
-    } catch {
-      // Ignore diagnostic lines outside Grok's streaming JSON contract.
-    }
-  }
-  const visible = text.trim() || stdout.trim();
-  return visible
-    ? { ok: true, text: visible.slice(0, 4_000), sessionId }
-    : { ok: false, error: "Grok Build returned an empty response." };
 }
 
 export function runCursorNew(
@@ -62,7 +36,7 @@ export function runGrokNew(
     "-p", text, "--output-format", "streaming-json",
   ];
   return runProcess(grokBin(), args, cwd, timeoutMs, (stdout) => parseGrok(stdout, sessionId),
-    undefined, operationKey);
+    undefined, operationKey, grokAdmission);
 }
 
 export function runGrokResume(
@@ -79,6 +53,6 @@ export function runGrokResume(
   return runProcess(
     grokBin(), args, session.cwd, timeoutMs,
     (stdout) => parseGrok(stdout, session.sessionId),
-    undefined, session.sessionId,
+    undefined, session.sessionId, grokAdmission,
   );
 }

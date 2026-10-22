@@ -98,20 +98,20 @@ async function startNewAgentTask(input: {
   }
   const settle = async (result: ReplyResult, late: boolean) => {
     input.origin?.registry.complete(input.origin.scope,
-      { ok: result.ok, sessionId: result.ok ? result.sessionId : undefined });
-    if (!result.ok && message.messageId) {
+      { ok: result.ok || result.delivery === 'native', sessionId: result.ok ? result.sessionId : undefined });
+    if (!result.ok && message.messageId && result.delivery !== 'native') {
       if (late) rejectCompletedDelivery(message.messageId, result.error);
       await sendDeliveryReceipt(client, message.messageId, 'rejected', result.error,
         undefined, input.peerPublicKey);
     }
     return result.ok ? say(result.text, result.sessionId, true)
-      : say(late ? `The ${displayName} task stopped: ${result.error}`
+      : say(late || result.delivery === 'native' ? `The ${displayName} task stopped: ${result.error}`
         : `Could not create a ${displayName} task: ${result.error}`, undefined, true);
   };
   const early = await acceptWhenStarted(run, (result) => settle(result, true));
   if (early === "started") return "accepted";
   await settle(early, false);
-  return early.ok ? "accepted" : "rejected";
+  return early.ok || early.delivery === 'native' ? "accepted" : "rejected";
 }
 
 export async function handleUserMessage(
@@ -196,15 +196,18 @@ export async function handleUserMessage(
     }
     if (result.ok) await say(result.text, result.sessionId ?? target.sessionId, true);
     else {
-      if (late && message.messageId) rejectCompletedDelivery(message.messageId, result.error);
-      if (message.messageId) await sendDeliveryReceipt(client, message.messageId, 'rejected',
-        result.error, target.sessionId, peerPublicKey);
-      await say(late ? `The run stopped: ${result.error}` : `Could not deliver the message: ${result.error}`,
+      if (result.delivery !== 'native') {
+        if (late && message.messageId) rejectCompletedDelivery(message.messageId, result.error);
+        if (message.messageId) await sendDeliveryReceipt(client, message.messageId, 'rejected',
+          result.error, target.sessionId, peerPublicKey);
+      }
+      await say(late || result.delivery === 'native' ? `The run stopped: ${result.error}`
+        : `Could not deliver the message: ${result.error}`,
         target.sessionId, true);
     }
   };
   const early = await acceptWhenStarted(run, (result) => settle(result, true));
   if (early === "started") return "accepted";
   await settle(early, false);
-  return early.ok ? "accepted" : "rejected";
+  return early.ok || early.delivery === 'native' ? "accepted" : "rejected";
 }

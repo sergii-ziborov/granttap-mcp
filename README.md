@@ -155,7 +155,8 @@ device pairing without a passkey account.
 
 - Claude Code and Codex: primary local control and continuation paths.
 - Cursor (Beta): Task visibility and supported local controls, with narrower coverage.
-- Grok Build: observable work where the installed runtime exposes it.
+- Grok Build: local history and headless follow-ups through an installed,
+  authenticated CLI; provider hook and scoped Mesh coverage remain narrower.
 
 GrantTap reports the depth each provider actually exposes. Visibility does not
 imply deterministic remote blocking or full mobile continuation.
@@ -476,6 +477,13 @@ claude plugin install granttap@granttap
 grok plugin marketplace add sergii-ziborov/granttap-mcp
 grok plugin install granttap --trust
 ```
+
+In Grok, open `/mcps` and authenticate the GrantTap server, then run
+`/granttap-connect`. GrantTap's phone pairing and Grok's permission to use that
+MCP server are separate. An existing pairing does not authorize a new MCP client.
+If a Grok session does not start responding within one minute, GrantTap asks you
+to inspect the original task before retrying. A turn that has started can keep
+running; its later failure does not mean that the message was never delivered.
 
 For Cursor, use the reviewed **GrantTap** Marketplace listing when it is visible
 to your account. Reload Cursor. On this computer, run `granttap setup`. Pair

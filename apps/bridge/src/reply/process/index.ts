@@ -72,6 +72,12 @@ export function runningProcessCount(key: string): number {
   return running.get(key)?.size ?? 0;
 }
 
+export type ProviderAdmission = {
+  confirmed: (stdout: string) => boolean;
+  withinMs: number;
+  timeoutMessage: string;
+};
+
 export function runProcess(
   command: string,
   args: string[],
@@ -80,6 +86,7 @@ export function runProcess(
   parse: (stdout: string) => ReplyResult,
   stdin?: string,
   key?: string,
+  admission?: ProviderAdmission,
 ): Promise<ReplyResult> {
   return new Promise((resolve) => {
     let child: ChildProcess;
@@ -104,14 +111,20 @@ export function runProcess(
       if (done) return;
       done = true;
       clearTimeout(timer);
+      clearTimeout(startupTimer);
       untrack();
-      resolve(result);
+      resolve(!result.ok && admission?.confirmed(stdout) ? { ...result, delivery: 'native' } : result);
     };
     const timer = setTimeout(() => {
       if (done) return;
       signalOwnedProcess(child, "SIGKILL");
       finish({ ok: false, error: `${command} did not respond within ${Math.round(timeoutMs / 1000)}s.` });
     }, timeoutMs);
+    const startupTimer = admission ? setTimeout(() => {
+      if (done || admission.confirmed(stdout)) return;
+      signalOwnedProcess(child, "SIGKILL");
+      finish({ ok: false, error: admission.timeoutMessage });
+    }, admission.withinMs) : undefined;
     child.stdout?.on("data", (chunk) => { stdout += chunk; });
     child.stderr?.on("data", (chunk) => { stderr += chunk; });
     child.on("error", (error) => {
