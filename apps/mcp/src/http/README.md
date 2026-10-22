@@ -10,3 +10,6 @@ unconfirmed. Opening the Mac client does not wait for a Codex subprocess.
 
 Authenticated native operations use the desktop bridge. Pairing material and
 credentials are excluded from public status responses.
+## License
+
+Licensed under the GrantTap Commercial Source License. See LICENSE and NOTICE.
