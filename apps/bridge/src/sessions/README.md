@@ -18,6 +18,14 @@ the child snapshot. Root chat pagination remains in `TranscriptHistory`.
 Feature tests live in `tests/`; the reusable multi-provider conversation harness
 lives in the repository `tests/thread/` directory.
 
+## Grok Build history
+
+Grok discovery reads the local session summaries and visible conversation history.
+Both role-based records and current typed user/assistant records are supported.
+Typed user records must have a valid prompt index. Environment preambles, synthetic
+reminders, system messages, and hidden reasoning are excluded from the timeline.
+Session continuation uses the installed Grok CLI and its existing authentication.
+
 ## License
 
 Licensed under the GrantTap Commercial Source License. See LICENSE and NOTICE.

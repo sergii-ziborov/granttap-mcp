@@ -71,6 +71,16 @@ function textBlocks(content: unknown): string[] {
   });
 }
 
+function visibleRole(row: Record<string, unknown>, message: Record<string, unknown>): string {
+  if (row.synthetic_reason != null || message.synthetic_reason != null) return "";
+  const role = message.role ?? row.role;
+  if (role != null) return String(role);
+  const type = message.type ?? row.type;
+  const index = message.prompt_index ?? row.prompt_index;
+  if (type === "user" && (typeof index !== "number" || !Number.isSafeInteger(index) || index < 0)) return "";
+  return typeof type === "string" ? type : "";
+}
+
 function parseLog(path: string, sessionId: string, fallbackTime: number, fullText = false): ParsedLog {
   let lines: string[];
   try { lines = readFileSync(path, "utf8").split("\n"); } catch {
@@ -87,7 +97,7 @@ function parseLog(path: string, sessionId: string, fallbackTime: number, fullTex
     const row = safeParse(line);
     if (!row) return;
     const message = row.message && typeof row.message === "object" ? row.message : row;
-    const role = String(message.role ?? row.role ?? "");
+    const role = visibleRole(row, message);
     if (role === "reasoning" || role === "system") return;
     const messageAt = ts(row.timestamp ?? message.timestamp);
     const createdAt = messageAt || fallbackTime + index;
