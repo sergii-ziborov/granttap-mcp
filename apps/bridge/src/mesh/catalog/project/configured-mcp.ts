@@ -16,6 +16,7 @@ export function configuredProjectMcpServers(
         const implementation = server.configDigest ?? "";
         const value: ProjectMcpServer = {
           name: server.name, title: server.title, provider, endpointId,
+          description: server.description, websiteUrl: server.websiteUrl, icons: server.icons,
           configuredEnabled: server.configuredEnabled, allowed: server.allowed,
           authStatus: server.authStatus, version: server.version,
           configDigest: server.configDigest,
@@ -29,6 +30,7 @@ export function configuredProjectMcpServers(
           // Two admitted workspaces disagree. Avoid claiming either version
           // as the Project's selected implementation.
           rows.set(key, { ...value, version: undefined, configDigest: undefined,
+            description: undefined, websiteUrl: undefined, icons: undefined,
             authStatus: "conflict" });
         } else if (!prior) rows.set(key, value);
         if (!prior) implementations.set(key, implementation);
@@ -63,6 +65,7 @@ export function mergeConfiguredMcpServers(
       || (configuredRow.configDigest != null || execution.configDigest != null)
       && configuredRow.configDigest !== execution.configDigest) {
       rows.set(key, { ...configuredRow, version: undefined, configDigest: undefined,
+        description: undefined, websiteUrl: undefined, icons: undefined,
         authStatus: "conflict",
         sessionIds: execution.sessionIds });
       continue;
@@ -70,6 +73,9 @@ export function mergeConfiguredMcpServers(
     rows.set(key, {
       ...configuredRow, ...execution,
       version: execution.version ?? configuredRow.version,
+      description: execution.description ?? configuredRow.description,
+      websiteUrl: execution.websiteUrl ?? configuredRow.websiteUrl,
+      icons: execution.icons ?? configuredRow.icons,
       configDigest: execution.configDigest ?? configuredRow.configDigest,
       authStatus: execution.authStatus ?? configuredRow.authStatus,
     });

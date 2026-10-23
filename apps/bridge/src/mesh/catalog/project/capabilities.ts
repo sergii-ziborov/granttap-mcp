@@ -30,10 +30,16 @@ export function projectMcpServers(
         current.configuredEnabled &&= server.configuredEnabled;
         current.allowed &&= server.allowed;
         current.title ??= server.title;
+        if (server.description) current.description ??= server.description;
+        if (server.websiteUrl) current.websiteUrl ??= server.websiteUrl;
+        if (server.icons) current.icons ??= server.icons;
       } else {
         catalog.set(key, {
           name: server.name,
           title: server.title,
+          ...(server.description ? { description: server.description } : {}),
+          ...(server.websiteUrl ? { websiteUrl: server.websiteUrl } : {}),
+          ...(server.icons ? { icons: server.icons } : {}),
           provider,
           endpointId: session.computerId,
           configuredEnabled: server.configuredEnabled,

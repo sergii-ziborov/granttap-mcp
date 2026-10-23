@@ -183,6 +183,7 @@ export const McpServerInfo = z.object({
   allowed: z.boolean(),
   authStatus: z.string().optional(),
   title: z.string().max(160).optional(),
+  description: z.string().max(4_000).optional(),
   websiteUrl: z.string().url().optional(),
   version: z.string().max(80).optional(),
   configDigest: z.string().regex(/^[a-f0-9]{64}$/).optional(),

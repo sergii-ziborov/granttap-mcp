@@ -117,9 +117,12 @@ function stringRecord(value: unknown): Record<string, string> {
 async function normalizeServerMetadata(info: Implementation | undefined, descriptor: McpDescriptor): Promise<ServerMetadata | undefined> {
   if (!info) return undefined;
   const title = typeof info.title === "string" && info.title.trim() ? info.title.trim().slice(0, 160) : undefined;
+  const description = typeof info.description === "string" && info.description.trim()
+    ? info.description.trim().slice(0, 4_000) : undefined;
   const website = typeof info.websiteUrl === "string" ? safeHttpsUrl(info.websiteUrl) : undefined;
   const version = typeof info.version === "string" && info.version.trim() ? info.version.trim().slice(0, 80) : undefined;
-  return { title, websiteUrl: website?.toString(), version, icons: await normalizedIcons(info, descriptor), metadataSource: "mcp" };
+  return { title, ...(description ? { description } : {}), websiteUrl: website?.toString(),
+    version, icons: await normalizedIcons(info, descriptor), metadataSource: "mcp" };
 }
 
 async function normalizedIcons(info: Implementation, descriptor: McpDescriptor): Promise<NonNullable<McpServerInfo["icons"]> | undefined> {

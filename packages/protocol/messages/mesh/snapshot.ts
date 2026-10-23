@@ -3,6 +3,7 @@ import { SharedSkill, EndpointModelCatalog } from "./catalog/provider";
 export * from "./catalog/provider";
 import { ProjectCodeMap } from "./graph/code-map";
 import { Identifier, Label, MeshProvider } from "./endpoint";
+import { McpIcon } from "../capabilities";
 import {
   ProjectEnvironment,
   ProjectExecutionPolicy,
@@ -44,6 +45,9 @@ export type IntegrationPeer = z.infer<typeof IntegrationPeer>;
 export const ProjectMcpServer = z.object({
   name: Label,
   title: Label.optional(),
+  description: z.string().max(4_000).optional(),
+  websiteUrl: z.string().url().optional(),
+  icons: z.array(McpIcon).max(2).optional(),
   provider: MeshProvider,
   endpointId: Identifier,
   configuredEnabled: z.boolean(),

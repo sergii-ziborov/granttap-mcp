@@ -30,5 +30,5 @@ export type McpDescriptor = {
 
 export type ServerMetadata = Pick<
   McpServerInfo,
-  "title" | "websiteUrl" | "version" | "icons" | "metadataSource"
+  "title" | "description" | "websiteUrl" | "version" | "icons" | "metadataSource"
 >;

@@ -17,7 +17,7 @@ test("metadata probing caches failures and normalizes only bounded safe icons", 
     "process.stdin.on('data', chunk => { pending += chunk; for (;;) {",
     " const at=pending.indexOf('\\n'); if(at<0) break; const line=pending.slice(0,at); pending=pending.slice(at+1); if(!line) continue;",
     " const request=JSON.parse(line); if(request.method==='initialize') process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:request.id,result:{",
-    " protocolVersion:'2025-11-25',capabilities:{},serverInfo:{name:'edges',title:'  ',version:'  ',websiteUrl:'http://unsafe.test',icons:[",
+    " protocolVersion:'2025-11-25',capabilities:{},serverInfo:{name:'edges',title:'  ',description:'  Inspect repository changes  ',version:'  ',websiteUrl:'http://unsafe.test',icons:[",
     " {src:'data:image/svg+xml;base64,AAA=',mimeType:'image/svg+xml'},",
     " {src:'data:image/png;base64,bm90LWltYWdl',mimeType:'image/png'},",
     " {src:'https://other.test/icon.png',mimeType:'image/png'},",
@@ -43,6 +43,7 @@ test("metadata probing caches failures and normalizes only bounded safe icons", 
   assert.equal(metadata?.title, undefined);
   assert.equal(metadata?.version, undefined);
   assert.equal(metadata?.websiteUrl, undefined);
+  assert.equal(metadata?.description, "Inspect repository changes");
   assert.deepEqual(metadata?.icons, [{
     src: "data:image/jpeg;base64,/9j/AA==", mimeType: "image/jpeg",
     sizes: ["1x1"], theme: "dark",
