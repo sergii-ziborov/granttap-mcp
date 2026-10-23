@@ -20,6 +20,7 @@ import { desktopTaskHandoff } from "../delivery/task-handoff";
 import { desktopTaskCreate } from "../delivery/task-create";
 import { desktopMeshCreate } from "../delivery/mesh-create";
 import { desktopInvocationHistory } from "../invocation";
+import { desktopProjectKnowledge } from "../../../../bridge/src/mesh/knowledge/runtime-read";
 import { desktopUsage } from "../projection/usage";
 import { desktopInstalledSkills } from "../projection/installed-skills";
 import type { DesktopControllerEnrollment } from "../pairing";
@@ -74,6 +75,7 @@ export function desktopReadOperation(input: {
   if (operation === "desktop.invocation_history") {
     return desktopInvocationHistory(queryInput, engine, storePath);
   }
+  if (operation === "desktop.project_knowledge") return desktopProjectKnowledge(queryInput);
   if (operation === "desktop.project") {
     return Promise.resolve(desktopMeshProject(queryInput, storePath));
   }

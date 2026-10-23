@@ -45,6 +45,7 @@ import { PairingJoin } from "./messages/pairing-join";
 import { ControllerPairOffer, ControllerPairRequest } from "./messages/device/controller-pairing";
 import { AccountMachineLink } from "./messages/device/account-machine-link";
 import { KnowledgeWrite, KnowledgeWriteResult } from "./messages/mesh/knowledge/write";
+import { ProjectKnowledgeQuery, ProjectKnowledgePage } from "./messages/mesh/knowledge/refresh";
 import { MeshInvocationPage, MeshInvocationQuery } from "./messages/mesh/invocations";
 import {
   ProjectPolicyAck,
@@ -82,6 +83,7 @@ export * from "./messages/pairing-join";
 export * from "./messages/device/controller-pairing";
 export * from "./messages/device/account-machine-link";
 export * from "./messages/mesh/knowledge/write";
+export * from "./messages/mesh/knowledge/refresh";
 export * from "./messages/mesh";
 export * from "./messages/mesh/invocations";
 export * from "./messages/primitives";
@@ -165,6 +167,8 @@ export const Payload = z.union([
   ProjectCapabilityRequestSet,
   MeshInvocationQuery,
   MeshInvocationPage,
+  ProjectKnowledgeQuery,
+  ProjectKnowledgePage,
   MeshEndpointPolicy,
   ProjectPolicySet,
   ProjectPolicyStatus,

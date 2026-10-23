@@ -17,7 +17,7 @@ const MAX_PROJECTS = 256;
 
 const GovernedFile = z.object({
   version: z.literal(1),
-  projects: z.record(z.object({
+  projects: z.record(z.string(), z.object({
     revision: z.number().int().nonnegative(),
     at: z.number().nonnegative(),
   })),

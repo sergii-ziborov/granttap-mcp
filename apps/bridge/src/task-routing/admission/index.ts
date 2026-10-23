@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TaskRoutingNeeds } from '../../../../../packages/protocol/task-resources';
 import { loadConfig, loadRuntimeConfig, machineConfigPath } from '../../config';
 import { applyNetworkRoute } from '../../device-network/settings';
 import { scanSessions } from '../../sessions';
@@ -14,7 +15,7 @@ import { observedRoutingSession } from '../observed-turn';
 
 export const OffloadInput = z.object({ action: z.enum(['request', 'cancel', 'status']).optional(),
   operationId: z.string().trim().min(1).max(128).optional(),
-  requirements: RoutingRequirementsInput.partial().extend({ reason: RoutingRequirementsInput.shape.reason }).optional() }).strict();
+  requirements: TaskRoutingNeeds.partial().extend({ reason: RoutingRequirementsInput.shape.reason }).optional() }).strict();
 export type OffloadArguments = z.infer<typeof OffloadInput>;
 type Proof = { sessionId: string; provider: RoutingRequestSource['provider'] };
 type Ports = { store: RoutingRequests; enabled: () => boolean;

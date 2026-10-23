@@ -15,7 +15,7 @@ export function questionAnswers(questions: z.infer<typeof ApprovalQuestions> | u
   note: string | null | undefined): Record<string, string> | undefined {
   if (!questions || !note || note.length > 20_000) return undefined;
   try {
-    const answers = z.record(z.string().trim().min(1).max(4_000)).parse(JSON.parse(note));
+    const answers = z.record(z.string(), z.string().trim().min(1).max(4_000)).parse(JSON.parse(note));
     if (Object.keys(answers).length !== questions.length
       || questions.some(item => !Object.hasOwn(answers, item.question))) return undefined;
     return answers;

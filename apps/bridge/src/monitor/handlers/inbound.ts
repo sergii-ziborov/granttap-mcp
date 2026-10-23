@@ -18,6 +18,7 @@ import {
 } from "../../mesh/runtime";
 import { releaseClaimByPerson, releaseResult } from "../../mesh/admin";
 import { handleInvocationQuery } from "../../engine/invocation/query";
+import { handleProjectKnowledgeQuery } from "../../mesh/knowledge/runtime-read";
 import { applyPairingJoin } from "../../pairing";
 import { recordPhoneSeen } from "../../pairing/presence";
 import { handleProjectPolicySet } from "../../project-policy/runtime";
@@ -123,6 +124,8 @@ export async function handleMonitorMessage(
       const accepted = requestProjectCapability(payload);
       if (accepted) void publish().catch(() => {});
       return accepted;
+    } else if (payload.type === "mesh.knowledge.query" && loadRuntimeConfig().meshEnabled) {
+      return handleProjectKnowledgeQuery(client, payload, input.peerPublicKey);
     } else if (payload.type === "mesh.invocation.query" && loadRuntimeConfig().meshEnabled) {
       return handleInvocationQuery(client, payload);
     } else if ((payload.type === "mesh.event" || payload.type === "mesh.snapshot")
