@@ -60,6 +60,24 @@ function sourceSession(cwd: string): SessionInfo {
   };
 }
 
+test("a missing source chat reports a scoped failure instead of leaving the phone preparing", async () => {
+  const run = await harness();
+  run.store.upsertProject({ projectId: "known-project", name: "Project",
+    canonicalRepositoryId: "repo", createdAt: now });
+  run.store.upsertTask({ taskId: "known-task", projectId: "known-project", title: "Existing Task",
+    goal: "Continue", state: "planned", ownerSessionId: "missing-chat", createdAt: now, updatedAt: now });
+  const accepted = await run.runtime.prepare(client, {
+    type: "mesh.handoff.prepare", sessionId: "missing-chat", projectId: "known-project", taskId: "known-task",
+    targetProvider: "codex", targetComputer: "Workstation", prepareOnly: true, createdAt: now,
+  });
+  assert.equal(accepted, false);
+  const result = run.sent.find(item => item.type === "mesh.event" && item.eventType === "TASK_BLOCKED") as MeshEvent;
+  assert.ok(result, "Every rejected preparation must produce a result the controller can display");
+  assert.equal(result.taskId, "known-task");
+  assert.equal(result.sourceSessionId, "missing-chat");
+  assert.match(result.payload.reason ?? "", /source.*(chat|Task)/i);
+});
+
 test("uncommitted work is left behind with a warning, not refused", async () => {
   const repo = await gitRepository(true);
   assert.equal(hasUncommittedWork(repo), true);

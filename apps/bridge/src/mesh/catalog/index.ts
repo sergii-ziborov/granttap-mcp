@@ -139,6 +139,11 @@ export function linkSessionsToProjects(
   // Share one consistent reading within this catalog batch, then discard it.
   // A new Git checkout or origin must be discovered on the next refresh.
   const repositories = new Map<string, RepositoryFacts>();
+  const workingTrees = new Map<string, boolean | undefined>();
+  const inspectWorkingTree = (cwd: string): boolean | undefined => {
+    if (!workingTrees.has(cwd)) workingTrees.set(cwd, hasUncommittedWork(cwd));
+    return workingTrees.get(cwd);
+  };
   const inspectOnce = (cwd: string): RepositoryFacts => {
     let facts = repositories.get(cwd);
     if (!facts) {
@@ -147,7 +152,7 @@ export function linkSessionsToProjects(
     }
     return facts;
   };
-  return visible.map((session) => linkSession({ store, session, computerId, inspect: inspectOnce }));
+  return visible.map((session) => linkSession({ store, session, computerId, inspect: inspectOnce, inspectWorkingTree }));
 }
 
 function linkSession(input: {
@@ -155,6 +160,7 @@ function linkSession(input: {
   session: SessionInfo;
   computerId: string;
   inspect: (cwd: string) => RepositoryFacts;
+  inspectWorkingTree: (cwd: string) => boolean | undefined;
 }): SessionInfo {
   const { store, session, computerId, inspect } = input;
   const agent = provider(session.agent);
@@ -228,7 +234,7 @@ function linkSession(input: {
     state: session.state, continuedAt: session.transfer?.continuedAt,
     branch: repository.branch ?? session.branch,
     worktree: repository.worktree,
-    uncommitted: hasUncommittedWork(repository.worktree ?? cwd),
+    uncommitted: input.inspectWorkingTree(repository.worktree ?? cwd),
     startedAt: session.startedAt,
   });
   return { ...session, projectId, taskId, computerId, worktree: repository.worktree };

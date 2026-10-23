@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
+import { realpathSync } from "node:fs";
 import {
   TaskCapsule,
   type MeshHandoffPrepare,
@@ -42,6 +43,11 @@ function changedFiles(cwd: string): string[] {
   return [...new Set(files)].slice(0, 64);
 }
 
+function sameCheckout(path: string | undefined, cwd: string): boolean {
+  try { return path != null && realpathSync(path) === realpathSync(cwd); }
+  catch { return false; }
+}
+
 /** The identity of the uncommitted changes, so a later reading can tell they are the same. */
 export function dirtyDiffHash(cwd: string): string | undefined {
   const diff = git(cwd, ["diff", "--binary", "HEAD"]);
@@ -74,6 +80,9 @@ export function buildTaskCapsule(
   if (!head) return undefined;
   const tree = workingTreeState(cwd);
   const files = changedFiles(cwd);
+  const sourceBinding = snapshot.bindings?.find(binding => binding.endpointId === computerId
+    && binding.available && sameCheckout(binding.localPathHint, cwd)
+    && (!request.sourceBindingId || binding.bindingId === request.sourceBindingId));
   const capsule = {
     taskId: request.taskId,
     goal: task.goal,
@@ -85,7 +94,7 @@ export function buildTaskCapsule(
     targetComputer: request.targetComputer,
     targetModel: request.targetModel,
     userComment: request.userComment,
-    repository: project.canonicalRepositoryId,
+    repository: sourceBinding?.repositoryId ?? project.canonicalRepositoryId,
     baseSha: head,
     branch: session.branch ?? git(cwd, ["branch", "--show-current"]),
     latestCommit: head,

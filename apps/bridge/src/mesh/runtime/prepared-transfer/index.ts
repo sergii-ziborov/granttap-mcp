@@ -9,7 +9,8 @@ export function preparedHandoffMetadata(event: MeshEvent): MeshEvent {
 }
 
 /** Retains the original archive facts so reconfirmation hashes the same conversation. */
-export async function capturePreparedHandoff(deps: MeshRuntimeDependencies, session: SessionInfo, facts: TaskCapsule) {
+export async function capturePreparedHandoff(deps: MeshRuntimeDependencies, session: SessionInfo,
+  facts: TaskCapsule, native = session) {
   const capture = deps.captureTransferContext ?? captureTransferContext;
   const captured = await capture(session, facts);
   const task = deps.store().task(facts.taskId);
@@ -19,9 +20,10 @@ export async function capturePreparedHandoff(deps: MeshRuntimeDependencies, sess
     confirm: async () => {
       const current = deps.sessions().find(row => row.sessionId === session.sessionId);
       if (!current || current.state === 'working' || current.model !== session.model || current.effort !== session.effort
-        || (current.worktree ?? current.cwd) !== (session.worktree ?? session.cwd)
-        || deps.sourceCaptureCurrent && !deps.sourceCaptureCurrent(current, facts)) return false;
-      try { return (await capture(current, facts)).hash === captured.hash; }
+        || (current.worktree ?? current.cwd) !== (native.worktree ?? native.cwd)) return false;
+      const resolved = { ...current, worktree: session.worktree, branch: session.branch };
+      if (deps.sourceCaptureCurrent && !deps.sourceCaptureCurrent(resolved, facts)) return false;
+      try { return (await capture(resolved, facts)).hash === captured.hash; }
       catch { return false; }
     } };
 }

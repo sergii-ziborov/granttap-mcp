@@ -38,6 +38,7 @@ export async function desktopTaskHandoff(
     sessionId: row.session_id, projectId: row.project_id, taskId: row.task_id,
     targetProvider: row.target_provider, targetComputer: row.target_computer,
     targetModel: row.target_model, userComment: row.user_comment,
+    ...(row.source_binding_id === undefined ? {} : { sourceBindingId: row.source_binding_id }),
     checkpoint: row.checkpoint, push: row.push, createdAt: Date.now(),
     ...(row.cloud === true ? { cloud: {
       ...(row.cloud_environment === undefined ? {} : { environment: row.cloud_environment }),

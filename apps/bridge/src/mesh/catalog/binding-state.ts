@@ -69,6 +69,11 @@ export function workspaceForRepository(
   canonicalRepositoryId: string,
   computerId?: string,
 ): string | undefined {
+  // A Project can contain several repositories. Its first execution may be
+  // rooted in their parent folder, so an exact owned binding takes precedence.
+  const binding = state.bindings.find(item => item.repositoryId === canonicalRepositoryId
+    && item.available && (computerId == null || item.endpointId === computerId));
+  if (binding?.localPathHint) return binding.localPathHint;
   const projectIds = new Set([
     ...state.bindings
       .filter((binding) => binding.repositoryId === canonicalRepositoryId)

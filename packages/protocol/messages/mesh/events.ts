@@ -206,6 +206,7 @@ export const MeshClaimReleaseResult = z.object({
 export type MeshClaimReleaseResult = z.infer<typeof MeshClaimReleaseResult>;
 
 export const MeshHandoffPrepare = z.object({
+  sourceBindingId: Identifier.optional(),
   prepareOnly: z.boolean().optional(),
   type: z.literal("mesh.handoff.prepare"),
   sessionId: Identifier,
