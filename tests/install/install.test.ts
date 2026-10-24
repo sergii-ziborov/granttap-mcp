@@ -164,9 +164,12 @@ test("setup replaces stale GrantTap and Nodvox hook paths for every provider", a
   assert.equal(installCursorHook().status, "installed");
   assert.equal(installClaudeHook().status, "installed");
   assert.equal(installCodexHook().status, "installed");
-  assert.match(await readFile(join(claudeDir, "settings.json"), "utf8"), /granttap-mcp\/bin\/granttap-mcp\.mjs/);
+  const expectedCli = join(import.meta.dirname, "../../bin/granttap-mcp.mjs").replaceAll("\\", "/");
+  const claude = await readFile(join(claudeDir, "settings.json"), "utf8");
+  assert.ok(claude.replace(/\\+/g, "/").includes(expectedCli), "Claude uses this checkout's executable");
+  assert.doesNotMatch(claude, /old-granttap/);
   const codex = await readFile(join(codexDir, "config.toml"), "utf8");
-  assert.match(codex, /granttap-mcp\/bin\/granttap-mcp\.mjs/);
+  assert.ok(codex.replace(/\\+/g, "/").includes(expectedCli), "Codex uses this checkout's executable");
   assert.doesNotMatch(codex, /nodvox\.mjs/);
   assert.match(codex, /\[\[hooks\.PreToolUse\]\]/);
   const cursor = JSON.parse(await readFile(join(cursorDir, "hooks.json"), "utf8")) as {
