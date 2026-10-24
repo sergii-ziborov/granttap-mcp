@@ -3,9 +3,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AdvertisedModel, EndpointModelCatalog } from "../../../../packages/protocol/schema";
 
-import { readClaudeUsage } from "../provider-account-status/claude-statusline";
 import { cachedCLIModels } from "./cli-models";
-import { cachedProviderAccount } from "../provider-account-status";
+import { cachedNativeAccountUsage, cachedProviderAccount } from "../provider-account-status";
 
 const MAX_BYTES = 2_000_000;
 const MAX_AGE = 24 * 60 * 60_000;
@@ -82,6 +81,6 @@ export function readProviderModelCatalog(endpointId: string): EndpointModelCatal
   const codex = readCodexModelCatalog(endpointId);
   const cli = cachedCLIModels(endpointId);
   return { ...codex, observedAt: Math.max(codex.observedAt, ...cli.map(row => row.observedAt)),
-    accountUsage: [...(codex.accountUsage ?? []), ...readClaudeUsage()],
+    accountUsage: [...(codex.accountUsage ?? []), ...cachedNativeAccountUsage()],
     stale: codex.stale === true && cli.length === 0, models: [...codex.models, ...cli].slice(0, 256) };
 }

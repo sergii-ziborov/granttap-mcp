@@ -6,6 +6,7 @@ import { codexHookRpc, type HookRpc } from "../codex-hook-trust";
 import { projectAccountModels, projectAccountUsage } from "./projection";
 
 export { projectAccountModels, projectAccountUsage } from "./projection";
+export { cachedNativeAccountUsage } from "./native-usage";
 
 /** A bounded read of an already signed-in provider; no threads, turns or login. */
 export function createProviderAccountReader(rpc: HookRpc, clock = Date.now) {
