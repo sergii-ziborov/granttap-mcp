@@ -9,6 +9,12 @@ so discovery cannot monopolize relay callbacks. Synchronous CLI readers use the
 same parsers. Published native bindings stay readable until a complete scan
 replaces them; checkout verification caches belong to one scan across its yields.
 
+Claude root records update the current working folder and branch as the native
+conversation moves. Its launch directory is not a permanent repository binding.
+Sidechain folders and tool observations cannot replace the root conversation's
+checkout. Catalog linking verifies the current Git root while preserving the
+existing Task and Project identities.
+
 Claude child reads use only the requested owned log and its bounded recent
 window. Native `agentId` remains authoritative when it differs from the filename;
 the scanner records that mapping. Parent and sibling logs are not reparsed for

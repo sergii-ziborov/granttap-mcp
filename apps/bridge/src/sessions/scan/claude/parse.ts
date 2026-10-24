@@ -47,11 +47,13 @@ function noteTurnBoundary(d: any, state: ClaudeParseState): void {
 
 function applyClaudeLine(d: any, state: ClaudeParseState): void {
   noteTurnBoundary(d, state);
-  state.repositoryPaths.push(...claudeRepositoryPaths(d));
+  if (d.isSidechain !== true) state.repositoryPaths.push(...claudeRepositoryPaths(d));
   state.repositoryPaths = state.repositoryPaths.slice(-64);
   if (d.sessionId && !state.sessionId) state.sessionId = String(d.sessionId);
-  if (d.cwd && !state.cwd) state.cwd = String(d.cwd);
-  if (d.gitBranch && !state.branch) state.branch = String(d.gitBranch);
+  if (d.isSidechain !== true) {
+    if (typeof d.cwd === "string" && d.cwd.trim()) state.cwd = d.cwd;
+    if (typeof d.gitBranch === "string" && d.gitBranch.trim()) state.branch = d.gitBranch;
+  }
   if (d.type === "ai-title" && typeof d.content === "string" && !state.title) state.title = d.content;
   if (!state.title && (d.type === "user" || d.message?.role === "user")) {
     const raw =
