@@ -12,12 +12,19 @@ Catalog batches share a working-tree probe for chats in the same checkout.
 The next batch reads it again, including unknown results, so this never hides
 new uncommitted work behind a persistent cache.
 
-For a chat started above its repositories, `source-binding.ts` resolves an
-explicit `sourceBindingId` only within the owning endpoint's available Project
-bindings. It verifies the actual Git root and identity before capturing context.
+For a chat started above its repositories, `source-binding.ts` first uses the
+Task's own execution, current resource claim, Project repository, or sole owned
+checkout. Multiple unresolved choices require an explicit `sourceBindingId`.
+Both paths stay within the owning endpoint's available Project bindings and
+verify the actual Git root and identity before capturing context. A catalog
+refresh preserves an established checkout when the native chat still reports
+the same parent folder; missing known checkouts never select another repository.
 An exact repository binding takes precedence over a Project's parent execution
 folder. Preparing keeps the native source folder unchanged and launches no
 provider. Rejected preparations also publish their retained Project state.
+
+Capsule status is bounded independently from the complete conversation capture;
+a long native summary cannot invalidate an otherwise transferable Git Task.
 
 Tests: `tests/metadata.test.ts`, `tests/source-checkout.test.ts`,
 `tests/mesh/mesh-handoff-safety.test.ts`, and catalog

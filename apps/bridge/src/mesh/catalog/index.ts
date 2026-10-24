@@ -166,8 +166,17 @@ function linkSession(input: {
   const agent = provider(session.agent);
   const cwd = session.cwd?.trim();
   if (!agent || !cwd) return session;
-  const repository = inspect(session.worktree ?? cwd);
   const knownTaskId = store.taskForExecution(computerId, agent, session.sessionId);
+  const knownProjectId = knownTaskId ? store.task(knownTaskId)?.projectId : undefined;
+  const previous = knownProjectId ? store.snapshot(knownProjectId)?.executions.find(row =>
+    row.taskId === knownTaskId && row.provider === agent && row.sessionId === session.sessionId
+      && row.computerId === computerId && row.workspace === cwd) : undefined;
+  let repository = inspect(session.worktree ?? cwd);
+  if (!repository.worktree && previous?.worktree) {
+    const retained = inspect(previous.worktree);
+    if (retained.worktree && retained.revision
+      && retained.canonicalRepositoryId === previous.repositoryId) repository = retained;
+  }
   const projectId = (knownTaskId ? store.task(knownTaskId)?.projectId : undefined)
     ?? store.projectIdForRepository(repository.canonicalRepositoryId, computerId)
     ?? projectIdentity(repository.canonicalRepositoryId);
@@ -229,13 +238,14 @@ function linkSession(input: {
     provider: agent,
     computerId,
     workspace: cwd,
-    repositoryId: repository.canonicalRepositoryId,
+    repositoryId: repository.worktree ? repository.canonicalRepositoryId
+      : previous?.repositoryId ?? repository.canonicalRepositoryId,
     activeAt: session.lastActivityAt,
     state: session.state, continuedAt: session.transfer?.continuedAt,
     branch: repository.branch ?? session.branch,
-    worktree: repository.worktree,
+    worktree: repository.worktree ?? previous?.worktree,
     uncommitted: input.inspectWorkingTree(repository.worktree ?? cwd),
     startedAt: session.startedAt,
   });
-  return { ...session, projectId, taskId, computerId, worktree: repository.worktree };
+  return { ...session, projectId, taskId, computerId, worktree: repository.worktree ?? previous?.worktree };
 }

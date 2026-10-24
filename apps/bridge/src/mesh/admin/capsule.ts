@@ -86,7 +86,7 @@ export function buildTaskCapsule(
   const capsule = {
     taskId: request.taskId,
     goal: task.goal,
-    currentStatus: session.summary ?? session.title ?? task.title,
+    currentStatus: (session.summary?.trim() || session.title?.trim() || task.title).slice(0, 1_000),
     sourceProvider: session.agent,
     sourceComputer: computerId,
     targetProvider: request.targetProvider,
