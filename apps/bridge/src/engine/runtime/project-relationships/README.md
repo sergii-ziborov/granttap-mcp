@@ -15,3 +15,5 @@ an explicit static/runtime-unverified explanation. They never enter the
 verified Backbone and never merge independent Project groups or change grants.
 Full relative source evidence stays in the typed Engine response. No source
 excerpts or absolute machine roots are published to the phone.
+
+License: GrantTap Commercial Source License. See the repository-root `LICENSE`.
