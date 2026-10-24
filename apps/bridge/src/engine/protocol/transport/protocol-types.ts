@@ -1,4 +1,4 @@
-import type { EngineProjectRelationships } from "./project-relationships";
+import type { EngineProjectRelationships } from "../project-relationships";
 import type {
   EnginePolicyOperation,
   EnginePolicyResult,

@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import type { IntegrationPeer, ProjectBindingSummary } from "../../../../../../packages/protocol/schema";
-import type { EngineProjectRelationships } from "../../protocol/transport/project-relationships";
+import type { EngineProjectRelationships } from "../../protocol/project-relationships";
 import { configDir } from "../../../config/runtime/paths";
 import { EngineClient } from "../engine-client";
 import { engineFeatureEnabled, type EngineClientLike } from "../engine-supervisor";

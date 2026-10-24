@@ -1,4 +1,4 @@
-import { parseProjectRelationships } from "./project-relationships";
+import { parseProjectRelationships } from "../project-relationships";
 import { parseInvocationResult } from "../engine-invocation-protocol";
 import { parseMemoryResult } from "../engine-memory-protocol";
 import { parsePolicyResult } from "../engine-policy-protocol";

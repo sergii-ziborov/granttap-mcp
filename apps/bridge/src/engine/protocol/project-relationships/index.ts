@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { EngineProtocolError } from "./protocol-base";
+import { EngineProtocolError } from "../transport/protocol-base";
 
 const text = z.string().min(1).max(512).refine(value => !/[\x00-\x1f\x7f]/.test(value));
 const location = z.object({
