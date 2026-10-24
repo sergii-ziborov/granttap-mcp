@@ -19,6 +19,7 @@ import { readIntegrationMap } from "../observed/integration-map";
 import type { MeshStore } from "../store";
 import { queueProjectBindingSync } from "../../engine/runtime/engine-projects";
 import { isCursorTaskCloneId } from "../../sessions/cursor/catalog";
+import { localTaskTransfers } from '../../task-transfer';
 export { inspectRepositoryAsync } from "./repository-inspection";
 
 export type RepositoryFacts = {
@@ -122,6 +123,7 @@ export function linkSessionsToProjects(
   inspect: (cwd: string) => RepositoryFacts = inspectRepository,
   formerNames: string[] = formerComputerNames(),
 ): SessionInfo[] {
+  localTaskTransfers().reconcileCatalogOwnership(store, computerId);
   // Records kept under a name this computer used to go by are this computer's
   // leftovers, not a second machine: their executions are over and their
   // bindings unavailable.

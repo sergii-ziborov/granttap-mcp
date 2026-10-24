@@ -16,3 +16,9 @@ This module uses the repository GrantTap Commercial Source License.
 Replies and receipts target the requesting controller. A provider refusal after
 the processing acknowledgement emits a rejected receipt and retains that final
 outcome across ciphertext retries; it never silently turns back into accepted.
+
+`delivery.receipt.query` reads the original durable result without sending a
+message again. Only the original authenticated controller, room, and session
+may read it. Older unscoped records are not exposed through this query.
+Receipts to a known controller use its device encryption directly, so a missed
+task-key grant cannot hide a provider rejection or processing acknowledgement.

@@ -22,7 +22,9 @@ export async function sendDeliveryReceipt(
     receivedAt: Date.now(),
   };
   const options = { ttlMs: 24 * 60 * 60_000, peerPublicKey };
-  await (sessionId
+  // A controller receipt is control-plane state. It remains device-encrypted,
+  // and must not depend on a separately retained task-key grant arriving first.
+  await (sessionId && !peerPublicKey
     ? sendSessionPayload(client, payload, sessionId, "phone", options)
     : client.send(payload, "phone", options)).catch(() => {});
 }

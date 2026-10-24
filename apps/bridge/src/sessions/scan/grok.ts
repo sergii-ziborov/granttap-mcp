@@ -18,6 +18,7 @@ import {
   type Scan,
 } from "../support/common";
 import type { CapabilityObservation } from "../telemetry";
+import { grokNativeActivity } from '../../providers/grok-activity';
 
 type Summary = {
   info?: { id?: unknown; cwd?: unknown };
@@ -170,10 +171,11 @@ export function scanGrok(maxFiles = MAX_FILES): Scan {
     const title = [summary.generated_title, summary.session_summary, parsed.firstUser]
       .find((value): value is string => typeof value === "string" && value.trim().length > 0);
     const cwd = typeof summary.info?.cwd === "string" ? summary.info.cwd : undefined;
+    const live = grokNativeActivity(sessionId, directory);
     sessions.push({
       sessionId, agent: "grok", title: title?.trim().slice(0, 120), cwd,
       model: typeof summary.current_model_id === "string" ? summary.current_model_id : undefined,
-      state: stateFor(updatedAt), startedAt, lastActivityAt: updatedAt,
+      state: live?.state ?? stateFor(updatedAt), startedAt, lastActivityAt: Math.max(updatedAt, live?.updatedAt ?? 0),
       ...(parsed.lastMessageAt ? { lastMessageAt: parsed.lastMessageAt } : {}),
       tokensSession: parsed.tokens, tokensLastTurn: parsed.lastTurn,
       contextTokensUsed: parsed.tokens,

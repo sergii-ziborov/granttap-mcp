@@ -27,6 +27,8 @@ export function closeVanished(
     if (execution.computerId !== computerId || execution.endedAt != null) continue;
     // A provider cloud run is never a local chat, so its absence here says nothing.
     if (execution.external) continue;
+    // Prepared aliases are owned by the durable transfer catalog, not a native CLI scan.
+    if (/^transfer-[a-f0-9]{48}$/.test(execution.sessionId)) continue;
     if (!scannedProviders.has(execution.provider)) continue;
     if (liveSessionIds.has(execution.sessionId)) continue;
     execution.endedAt = endedAt;

@@ -13,9 +13,12 @@ type DeliveryRecord = {
   updatedAt: number;
   processingAcknowledged?: boolean;
   rejectedError?: string;
+  scope?: DeliveryScope;
 };
 
-export type DeliveryStart = "started" | "processing" | "completed";
+export type DeliveryScope = { room: string; peerPublicKey: string; sessionId: string };
+
+export type DeliveryStart = "started" | "processing" | "completed" | "foreign";
 
 export function deliveryLedgerPath(): string {
   return join(configDir(), "delivery-ledger.json");
@@ -62,7 +65,7 @@ function save(records: Record<string, DeliveryRecord>, now: number): void {
 export function acknowledgeProcessingDelivery(messageId: string, now = Date.now()): void {
   const records = load();
   if (records[messageId]?.state !== "processing") return;
-  records[messageId] = { state: "processing", updatedAt: now, processingAcknowledged: true };
+  records[messageId] = { ...records[messageId], state: "processing", updatedAt: now, processingAcknowledged: true };
   save(records, now);
 }
 
@@ -72,28 +75,30 @@ export function processingDeliveryAcknowledged(messageId: string): boolean {
 }
 
 /** Acquire a durable processing lease before invoking an agent. */
-export function beginDelivery(messageId: string, now = Date.now()): DeliveryStart {
+export function beginDelivery(messageId: string, now = Date.now(), scope?: DeliveryScope): DeliveryStart {
   const records = load();
   const current = records[messageId];
+  if (current?.scope && (!scope || current.scope.room !== scope.room
+    || current.scope.peerPublicKey !== scope.peerPublicKey || current.scope.sessionId !== scope.sessionId)) return 'foreign';
   if (current?.state === "completed" && current.updatedAt >= now - MAX_AGE_MS) return "completed";
   if (current?.state === "processing" && current.updatedAt >= now - PROCESSING_LEASE_MS) {
     return "processing";
   }
-  records[messageId] = { state: "processing", updatedAt: now };
+  records[messageId] = { state: "processing", updatedAt: now, scope };
   save(records, now);
   return "started";
 }
 
 export function completeDelivery(messageId: string, now = Date.now()): void {
   const records = load();
-  records[messageId] = { state: "completed", updatedAt: now };
+  records[messageId] = { ...records[messageId], state: "completed", updatedAt: now };
   save(records, now);
 }
 
 /** A late provider refusal remains terminal across reconnects and replayed boxes. */
 export function rejectCompletedDelivery(messageId: string, error: string, now = Date.now()): void {
   const records = load();
-  records[messageId] = { state: 'completed', updatedAt: now, rejectedError: error.slice(0, 1_000) };
+  records[messageId] = { ...records[messageId], state: 'completed', updatedAt: now, rejectedError: error.slice(0, 500) };
   save(records, now);
 }
 
@@ -101,6 +106,15 @@ export function completedDeliveryFailure(messageId: string): string | undefined 
   const record = load()[messageId];
   return record?.state === 'completed' && typeof record.rejectedError === 'string'
     ? record.rejectedError : undefined;
+}
+
+/** Receipt replay is scoped to the original authenticated controller and route. */
+export function deliveryReceiptStatus(messageId: string, scope: DeliveryScope, now = Date.now()) {
+  const record = load()[messageId], saved = record?.scope;
+  if (!saved || saved.room !== scope.room || saved.peerPublicKey !== scope.peerPublicKey
+    || saved.sessionId !== scope.sessionId || record.updatedAt < now - MAX_AGE_MS
+    || record.updatedAt > now || record.state === 'processing' && !record.processingAcknowledged) return undefined;
+  return { status: record.rejectedError ? 'rejected' as const : 'accepted' as const, error: record.rejectedError };
 }
 
 /** Release a failed attempt so a relay retry can safely try again. */

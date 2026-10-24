@@ -14,7 +14,8 @@ export async function handleInboundUserMessage(
   if (payload.requestId) return false;
   let deliveryStarted = false;
   if (payload.messageId) {
-    const state = beginDelivery(payload.messageId);
+    const state = beginDelivery(payload.messageId, Date.now(), payload.sessionId && peerPublicKey
+      ? { room: client.room, sessionId: payload.sessionId, peerPublicKey } : undefined);
     if (state !== "started") {
       if (state === "completed" || processingDeliveryAcknowledged(payload.messageId)) {
         const failure = completedDeliveryFailure(payload.messageId);

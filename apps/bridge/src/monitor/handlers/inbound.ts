@@ -44,6 +44,7 @@ import { requestProjectGraphRefresh } from "../graph-refresh";
 import { handleControllerPairRequest, handleInboundKnowledgeWrite } from "../controller-knowledge";
 import { acceptPhoneAccountLink } from "../../account-recovery/phone-link";
 import { approvalsStatus } from '../../approvals/state';
+import { handleDeliveryReceiptQuery } from '../message-delivery/status-query';
 
 export async function handleMonitorMessage(
   client: RelayClient,
@@ -70,6 +71,8 @@ export async function handleMonitorMessage(
     }
     if (payload.type === "user.message") {
       return handleInboundUserMessage(client, payload, publish, input.peerPublicKey);
+    } else if (payload.type === 'delivery.receipt.query') {
+      return handleDeliveryReceiptQuery(client, payload, input.peerPublicKey);
     } else if (payload.type === "user.attachment") {
       // Ahead of its message, so the message itself travels light.
       return storeAttachment(payload, client.room);

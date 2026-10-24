@@ -2,6 +2,7 @@ import type { CodingAgent, SessionInfo, UserAttachment } from '../../../../packa
 import type { DeliveryOptions, ReplyResult } from '../reply';
 import { TransferPersistence } from './persistence';
 import type { PreparedTransfer } from './records';
+import type { MeshStore } from '../mesh/store';
 export type { PreparedTransfer, TransferPreparation } from './records';
 
 type TransferProvider = {
@@ -14,6 +15,12 @@ const interrupted = (): ReplyResult => ({ ok: false,
 
 /** Prepared executions are visible immediately and start only with a person's first message. */
 export class PreparedTaskTransfers extends TransferPersistence {
+  reconcileCatalogOwnership(store: MeshStore, computerId: string): number {
+    return store.reconcilePreparedTransfers(this.records().filter(row => row.capsule.targetComputer === computerId), row => {
+      try { this.readContext(row); return true; } catch { return false; }
+    });
+  }
+
   catalog(native: SessionInfo[]): SessionInfo[] {
     const rows = this.records().map(row => {
       if (row.phase !== 'starting' || ownerAlive(row.ownerPid)) return row;

@@ -7,6 +7,7 @@ import type { ReplyResult } from "../payload/types";
 import type { DeliveryOptions } from "../payload/types";
 import { resolveGrokBinary } from "../../providers/grok-bin";
 import { runCursorConversation } from "../cursor-conversation";
+import { grokResumeActivity } from '../../providers/grok-activity';
 
 function grokBin(): string {
   return resolveGrokBinary();
@@ -42,6 +43,10 @@ export function runGrokNew(
 export function runGrokResume(
   session: SessionInfo, text: string, timeoutMs: number, options: DeliveryOptions = {},
 ): Promise<ReplyResult> {
+  const live = grokResumeActivity(session);
+  if (live?.state === 'working' || live?.state === 'waiting') return Promise.resolve({ ok: false,
+    error: live.state === 'working' ? 'Grok is still running a turn in this task. Wait for it to finish, then retry this message.'
+      : 'Grok is waiting for permission in its open task. Resolve that request, then retry this message.' });
   const permission = options.permissionMode === "manual" ? "default" : options.permissionMode;
   const args = [
     "--no-auto-update", ...(session.cwd ? ["--cwd", session.cwd] : []),

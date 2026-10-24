@@ -28,14 +28,14 @@ import { projectSharedSkills } from "../../capabilities/skills";
 import { loadExecutionPolicy } from "../runtime/execution-policy";
 import { loadEnvironment, redactEnvironment } from "../context/env";
 import { loadRestrictions } from "../restrictions";
-import { MeshStoreBase } from "./base";
+import { MeshPreparedStore } from "./receipts/prepared-availability";
 import { activeProjectKnowledge, supersededProjectKnowledgeIds } from "../knowledge/active";
 import { restoreHandoffResult, validStoredReceipt } from './receipts';
 import {
   projectCapabilityRequests,
 } from "../catalog/project/requests";
 
-export class MeshStore extends MeshStoreBase {
+export class MeshStore extends MeshPreparedStore {
   recordReceipt(input: ReceiptValue): void {
     this.sync();
     const receipt = HandoffReceipt.parse(input);

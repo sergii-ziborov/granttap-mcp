@@ -21,6 +21,7 @@ import { CapabilityUsageStatus } from "./messages/capabilities";
 import {
   AgentEvent,
   DeliveryReceipt,
+  DeliveryReceiptQuery,
   MAX_ATTACHMENT_BASE64_CHARS,
   SessionEventsRequest,
   SessionsRefresh,
@@ -130,6 +131,7 @@ export const Payload = z.union([
   HostGrant,
   UserAttachmentUpload,
   DeliveryReceipt,
+  DeliveryReceiptQuery,
   AgentEvent,
   SessionSubscription,
   SessionEventsRequest,

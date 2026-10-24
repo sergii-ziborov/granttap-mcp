@@ -137,7 +137,7 @@ export async function handleUserMessage(
   const resolved = resolveMessageAttachments(message, (attachmentId) => takeAttachment(attachmentId, client.room));
   if (!resolved.ok) {
     if (message.messageId) {
-      await sendDeliveryReceipt(client, message.messageId, "rejected", ATTACHMENT_MISSING_ERROR, message.sessionId);
+      await sendDeliveryReceipt(client, message.messageId, "rejected", ATTACHMENT_MISSING_ERROR, message.sessionId, peerPublicKey);
     }
     return "rejected";
   }

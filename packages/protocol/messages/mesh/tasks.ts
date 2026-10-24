@@ -73,6 +73,8 @@ export type CloudLaunchRequest = z.infer<typeof CloudLaunchRequest>;
 
 export const ExecutionSessionLink = z.object({
   continuedAt: z.number().nonnegative().optional(),
+  // Revalidated local preparation, independent of consent to resume an ended source.
+  preparedVerifiedAt: z.number().finite().nonnegative().optional(),
   state: z.enum(["working", "waiting", "idle"]).optional(),
   taskId: Identifier,
   sessionId: Identifier,
@@ -100,6 +102,10 @@ export const ExecutionSessionLink = z.object({
   // Set only for a provider cloud run: where to look at it, never progress.
   external: ExternalExecution.optional(),
 }).strict().superRefine((value, ctx) => {
+  if (value.preparedVerifiedAt != null && !/^transfer-[a-f0-9]{48}$/.test(value.sessionId)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['preparedVerifiedAt'],
+      message: 'Prepared availability requires a transfer execution' });
+  }
   if ((value.provider === "grok_bot") !== (value.actorId != null)) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom, path: ["actorId"],

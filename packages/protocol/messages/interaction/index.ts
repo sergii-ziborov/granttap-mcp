@@ -110,6 +110,13 @@ export const DeliveryReceipt = z.object({
 });
 export type DeliveryReceipt = z.infer<typeof DeliveryReceipt>;
 
+/** Reads the original operation; it cannot submit or resume a provider turn. */
+export const DeliveryReceiptQuery = z.object({
+  type: z.literal('delivery.receipt.query'), messageId: z.string().min(1).max(180),
+  sessionId: z.string().min(1).max(256), createdAt: z.number().finite(),
+}).strict();
+export type DeliveryReceiptQuery = z.infer<typeof DeliveryReceiptQuery>;
+
 export const AgentEvent = z.object({
   type: z.literal("agent.event"),
   text: z.string(),
