@@ -1,3 +1,4 @@
+import { parseProjectRelationships } from "./project-relationships";
 import { parseInvocationResult } from "../engine-invocation-protocol";
 import { parseMemoryResult } from "../engine-memory-protocol";
 import { parsePolicyResult } from "../engine-policy-protocol";
@@ -47,6 +48,7 @@ function parseResult(value: unknown): EngineResult {
   else if (operation === "project.listed") parseProjectCatalog(result.page);
   else if (operation === "project.bindings") parseBindings(result.bindings);
   else if (operation === "project.binding_upserted") parseBinding(result.binding);
+  else if (operation === "graph.project_relationships") parseProjectRelationships(result.graph);
   else if (operation === "graph.backbone") parseBackbone(result.backbone);
   else if (operation === "graph.repository") parseRepositoryGraph(result.graph);
   else if (operation === "context.compiled") {

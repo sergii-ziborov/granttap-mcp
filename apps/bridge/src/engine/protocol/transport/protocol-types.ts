@@ -1,3 +1,4 @@
+import type { EngineProjectRelationships } from "./project-relationships";
 import type {
   EnginePolicyOperation,
   EnginePolicyResult,
@@ -105,6 +106,7 @@ export type EngineOperation = EnginePolicyOperation | InvocationEngineOperation 
   | { operation: "project.get"; input: { project_id: string } }
   | { operation: "project.list"; input: { after_project_id?: string; limit: number } }
   | { operation: "project.list_bindings"; input: { project_id: string } }
+  | { operation: "graph.analyze_project"; input: {project_id:string;repository_ids:string[]} }
   | { operation: "graph.get_backbone"; input: { project_id: string } }
   | { operation: "graph.analyze_repository"; input: {
     project_id: string; repository_id: string;
@@ -136,6 +138,7 @@ export type EngineResult = EnginePolicyResult | InvocationEngineResult | MemoryE
     projects: EngineProject[]; next_after_project_id: string | null;
   } }
   | { operation: "project.bindings"; bindings: EngineProjectBinding[] }
+  | { operation: "graph.project_relationships"; graph:EngineProjectRelationships }
   | { operation: "graph.backbone"; backbone: EngineProjectBackbone }
   | { operation: "graph.repository"; graph: EngineRepositoryGraph }
   | { operation: "context.compiled"; compilation: EngineContextCompilation }

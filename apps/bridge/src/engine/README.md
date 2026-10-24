@@ -25,6 +25,13 @@ reports are retained in a bounded private computer cache across restarts, served
 while a new observation runs, and refreshed after the observation expires. Git
 admission revision (`sourceRevision`) remains separate from Weavatrix's content
 fingerprint (`revision`). Failed analyses cannot erase the durable last report.
+Explicit Graph builds also invoke the Engine's `graph.analyze_project` for two
+to eight admitted local repositories. The projection labels these shared static
+contracts and keeps their runtime destination unverified. They do not become
+verified Backbone dependencies or merge Project grants. The Apple Silicon
+artifact pins Engine 0.1.3 with Weavatrix 2.17.5; unsupported Engine operations
+leave this analysis unavailable. See `runtime/project-relationships/README.md`.
+
 Claude, Codex, and Cursor hooks can evaluate the engine's local Project
 Governance policy only when both `GRANTTAP_ENGINE_ENABLED` and
 `GRANTTAP_PROJECT_POLICY_ENABLED` are enabled. Project `DENY` and `ASK` precede

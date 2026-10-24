@@ -201,6 +201,7 @@ function expectedResultOperation(
   if (operation === "graph.get_backbone") return "graph.backbone";
   if (operation === "graph.get_heads") return "graph.heads";
   if (operation === "graph.compute_impact") return "graph.impact";
+  if (operation === "graph.analyze_project") return "graph.project_relationships";
   if (operation === "graph.analyze_repository") return "graph.repository";
   if (operation === "context.compile_project") return "context.compiled";
   if (operation === "invocation.observe") return "invocation.observed";

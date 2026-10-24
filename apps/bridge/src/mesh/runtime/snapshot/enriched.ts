@@ -1,3 +1,4 @@
+import { projectRelationshipPeers, mergeRelationshipPeers } from "../../../engine/runtime/project-relationships";
 import { refreshLocalGraphBindings } from "../graph/binding-sync";
 import { graphAnalysisBindings } from "../graph/checkout-identity";
 import type { MeshSnapshot } from "../../../../../../packages/protocol/schema";
@@ -33,6 +34,10 @@ export async function enrichMeshSnapshot(
     projectKnowledge(snapshot.projectId),
     repositoryDetails(snapshot, computerId()),
   ]);
+  const relationships = await projectRelationshipPeers(snapshot.projectId, bindings, {
+    background: options.refreshGraph !== true,
+  });
+  const peers = mergeRelationshipPeers(snapshot.peers, relationships);
   const sharedKnowledge = knowledge?.filter((item) => item.visibility === "project");
   if (sharedKnowledge) localMeshStore().cacheKnowledge(snapshot.projectId, sharedKnowledge);
   const memoryRows = new Map((snapshot.knowledge ?? []).map((item) => [item.recordId, item]));
@@ -42,7 +47,7 @@ export async function enrichMeshSnapshot(
     ...(snapshot.supersededKnowledgeRecordIds ?? []),
     ...supersededProjectKnowledgeIds(snapshot.projectId, allMemory),
   ])].sort().slice(-128);
-  const enriched = { ...snapshot, backbone, ...(repositoryGraphs.length || identityFailures.length
+  const enriched = { ...snapshot, backbone, peers, ...(repositoryGraphs.length || identityFailures.length
       ? { repositoryGraphs: [...repositoryGraphs, ...identityFailures] } : {}),
     repositoryDetails: details,
     knowledge: activeProjectKnowledge(snapshot.projectId, allMemory)

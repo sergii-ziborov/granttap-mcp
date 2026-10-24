@@ -56,6 +56,12 @@ export class RepositoryGraphJobs<T> {
     return new Promise(resolve => entry.listeners.push(resolve));
   }
 
+  /** Read a fresh in-memory result without starting or queueing an analysis. */
+  cached(key: string): T | undefined {
+    const entry = this.entries.get(key);
+    return entry && this.now() < entry.retryAt ? entry.value : undefined;
+  }
+
   private admit(priority: number): boolean {
     if (this.queue.length < this.capacity) return true;
     const last = this.queue[this.queue.length - 1];

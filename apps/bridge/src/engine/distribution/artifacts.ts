@@ -8,8 +8,8 @@ export type EngineArtifact = {
 
 /** Release hashes are part of the reviewed MCP, never supplied by a remote manifest. */
 export const ENGINE_ARTIFACTS: readonly EngineArtifact[] = [
-  { version: "0.1.2", platform: "darwin", arch: "arm64",
-    sha256: "fa23668f2f2cbb716a0ba66c5a6e027a25ed4e7e2dedf0c870edb32199045b97", bytes: 12101408 },
+  { version: "0.1.3", platform: "darwin", arch: "arm64",
+    sha256: "d948b6cfc572fa062af602c72d7b0e14bedcc5b48ecb8fb8d7af5b6fc33e9920", bytes: 12185568 },
   { version: "0.1.2", platform: "darwin", arch: "x64",
     sha256: "b3235a15936a77ec323d5ecbc54a0bc19994fe6e5a36044da964b68524b4c1dd", bytes: 13944984 },
   { version: "0.1.2", platform: "linux", arch: "x64",

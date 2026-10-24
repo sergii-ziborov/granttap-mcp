@@ -18,6 +18,13 @@ computer analyzes only its own endpoint bindings. Failed bindings remain visible
 projection and phone refresh use this rule. The graph contains actual Engine
 analysis; unavailable analysis is never synthesized as a successful graph.
 
+After repository analysis, explicit builds request bounded cross-repository
+contract matches from the same admitted bindings. These are projected as shared
+static contracts with an unverified runtime target. Background snapshots reuse
+fresh in-memory results; they do not queue additional multi-repository scans.
+A verified Backbone remains authoritative. Project identities and grants are
+preserved.
+
 Behavior tests: `tests/`, root `tests/graph/graph-binding-sync.test.ts`, and
 `apps/mcp/src/desktop/projection/tests/graph-refresh.test.ts`. The optional
 `engine-selection-live.test.ts` uses `GRANTTAP_ENGINE_TEST_BINARY` to verify the

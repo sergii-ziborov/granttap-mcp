@@ -1,3 +1,4 @@
+import { projectRelationshipPeers, mergeRelationshipPeers } from "../../../engine/runtime/project-relationships";
 import type { RelayClient } from "../../../../../../packages/core/relay-client";
 import type { MeshSnapshot } from "../../../../../../packages/protocol/schema";
 import { projectBackbone, projectRepositoryGraphs, waitForProjectBindingSync } from "../../../engine/runtime/engine-projects";
@@ -17,6 +18,7 @@ type GraphAnalysisDependencies = {
   sync?: typeof refreshLocalGraphBindings;
   backbone: typeof projectBackbone;
   graphs: typeof projectRepositoryGraphs;
+  relationships?: typeof projectRelationshipPeers;
   send: (client: RelayClient, snapshot: MeshSnapshot) => Promise<void>;
   endpoint?: () => string;
   details?: (snapshot: MeshSnapshot) => ReturnType<typeof repositoryDetails>;
@@ -28,6 +30,7 @@ const graphAnalysisDependencies: GraphAnalysisDependencies = {
   sync: refreshLocalGraphBindings,
   backbone: projectBackbone,
   graphs: projectRepositoryGraphs,
+  relationships: projectRelationshipPeers,
   endpoint: computerId,
   details: snapshot => repositoryDetails(snapshot, computerId()),
   send: (client, snapshot) => sendMeshPayload(client, snapshot, "phone", {
@@ -61,6 +64,9 @@ export async function analyzeProjectGraphNow(
     dependencies.graphs(projectId, bindings, { background: false }),
     dependencies.details?.(current),
   ]);
+  const relationships = await dependencies.relationships?.(projectId, bindings, { background: false });
+  const peers = relationships === undefined ? current.peers
+    : mergeRelationshipPeers(current.peers, relationships);
   const observed = [...repositoryGraphs, ...failures];
   const reports = observed.length > 0 ? observed : [{
     projectId, repositoryId: current.project.canonicalRepositoryId,
@@ -71,7 +77,7 @@ export async function analyzeProjectGraphNow(
   const receipts = requestIds?.size ? requestIds : new Set<string | undefined>([undefined]);
   for (const id of receipts) {
     await dependencies.send(client, {
-      ...current, backbone, repositoryGraphs: reports, generatedAt: Date.now(),
+      ...current, backbone, peers, repositoryGraphs: reports, generatedAt: Date.now(),
       ...(details ? { repositoryDetails: details } : {}),
       ...(id ? { graphAnalysisRequestId: id } : {}),
     });
