@@ -82,3 +82,29 @@ test("a fresh catalog passes queued bulk data", async t => {
   release(); await Promise.all([first, bulk, catalog]);
   assert.deepEqual(writes, ["first", "sessions.status", "bulk"]);
 });
+
+test("an encrypted wake result passes queued replaceable snapshots", async t => {
+  const machine = generateKeyPair(), phone = generateKeyPair();
+  let release!: () => void, start!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  const started = new Promise<void>(resolve => { start = resolve; });
+  const writes: string[] = [];
+  const queue = new OutboundFrameQueue(async frame => {
+    if (frame === 'first') { writes.push(frame); start(); await held; return; }
+    if (frame === 'snapshot') { writes.push(frame); return; }
+    const envelope = JSON.parse(frame);
+    const payload = open(envelope.nonce, envelope.box, phone.publicKey, machine.secretKey) as { type: string };
+    writes.push(payload.type);
+  }, 0);
+  t.after(() => queue.cancel());
+  const first = queue.send('first'); await started;
+  const snapshot = queue.send('snapshot');
+  const receipt = sendEncryptedPayload(queue, { relayUrl: 'ws://127.0.0.1', room: 'fixture',
+    role: 'machine', senderId: 'machine', deviceName: 'Fixture', myPublicKey: machine.publicKey,
+    mySecretKey: machine.secretKey, peerPublicKey: phone.publicKey }, () => true, {
+      payload: { type: 'agent.event', kind: 'status', text: 'Synthetic transfer result', createdAt: 1 },
+      to: 'phone', options: { wake: true },
+    });
+  release(); await Promise.all([first, snapshot, receipt]);
+  assert.deepEqual(writes, ['first', 'agent.event', 'snapshot']);
+});

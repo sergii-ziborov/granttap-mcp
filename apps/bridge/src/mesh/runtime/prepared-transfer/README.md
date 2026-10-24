@@ -25,6 +25,10 @@ provider. Rejected preparations also publish their retained Project state.
 
 Capsule status is bounded independently from the complete conversation capture;
 a long native summary cannot invalidate an otherwise transferable Git Task.
+Local prepared handoffs persist their destination and validated receipt before
+publishing to the phone. A blocked socket cannot hold the local preparation
+behind a notification. Publication errors retain both durable events for the
+next snapshot; they never replay the transfer or start a provider.
 
 Tests: `tests/metadata.test.ts`, `tests/source-checkout.test.ts`,
 `tests/mesh/mesh-handoff-safety.test.ts`, and catalog

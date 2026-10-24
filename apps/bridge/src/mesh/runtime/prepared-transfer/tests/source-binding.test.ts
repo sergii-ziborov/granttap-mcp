@@ -25,9 +25,9 @@ test('a chat launched in a parent folder transfers only through an explicitly se
     title: 'Existing Task', startedAt: 1, lastActivityAt: 2, tokensSession: 0, tokensLastTurn: 0 }];
   const sent: MeshEvent[] = [], captures: string[] = [];
   const transfers = new PreparedTaskTransfers(join(root, 'prepared'));
-  let starts = 0;
+  let starts = 0, eventSequence = 0;
   const runtime = createMeshRuntime({ store: () => store, sessions: () => sessions, computer: () => 'mac',
-    now: Date.now, eventId: () => `event-${sent.length}`, providerEnabled: () => true,
+    now: Date.now, eventId: () => `event-${eventSequence++}`, providerEnabled: () => true,
     transfers: () => transfers, send: async (_, event) => { sent.push(event as MeshEvent); },
     captureTransferContext: async (source, facts) => {
       captures.push(source.worktree ?? source.cwd!);

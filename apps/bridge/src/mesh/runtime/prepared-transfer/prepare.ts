@@ -6,6 +6,7 @@ import { prepareCloudHandoff } from "../cloud-handoff";
 import { capturePreparedHandoff, preparedHandoffMetadata } from ".";
 import { prepareSourceCapsule } from "./source";
 import { resolveHandoffSource } from "./source-binding";
+import { prepareLocalHandoff } from "./local";
 
 export async function prepareHandoff(
   deps: MeshRuntimeDependencies,
@@ -86,6 +87,7 @@ export async function prepareHandoff(
     return false;
   }
   deps.store().acceptEvent(event);
+  if (local && request.prepareOnly) return prepareLocalHandoff(deps, client, event);
   await deps.send(client, request.prepareOnly ? preparedHandoffMetadata(event) : event, { ttlMs: 60 * 60_000, wake: true });
   if (local) await acceptHandoff(client, event);
   return true;

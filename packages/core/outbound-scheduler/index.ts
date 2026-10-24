@@ -83,6 +83,6 @@ export async function sendEncryptedPayload(queue: OutboundFrameQueue, config: Pe
   if (!peers.length) throw new Error("no authorized pairing peers");
   for (const peerPublicKey of peers) {
     await queue.send(sealEnvelope({ ...config, peerPublicKey }, payload, to,
-      peers.length === 1 ? options : { ...options, deliveryId: undefined }), control(payload.type));
+      peers.length === 1 ? options : { ...options, deliveryId: undefined }), control(payload.type) || options.wake === true);
   }
 }
