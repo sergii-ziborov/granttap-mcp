@@ -23,17 +23,20 @@ test('a previously ended source cannot reclaim a Task even after its destination
   assert.equal(mayOwnTask(task, 'old-source', [
     { ...execution('old-source'), endedAt: 10 }, { ...execution(target), endedAt: 20 },
   ]), false);
+  assert.equal(mayOwnTask({ ...task, ownerSessionId: 'old-source' }, 'old-source', [
+    { ...execution('old-source'), endedAt: 10 },
+  ]), true, 'The current owner can still report an explicit terminal result.');
 });
 
 test('durably verified prepared availability repairs a false closure but not a newer handoff', () => {
-  const live = { ...execution(target), preparedVerifiedAt: 30 };
+  const live = { ...execution(target), updatedAt: 30 };
   const ended = { ...execution(target), endedAt: 20 };
-  assert.equal(preferExecution(ended, live).endedAt, undefined);
-  assert.equal(preferExecution(live, ended).endedAt, undefined);
-  assert.equal(preferExecution(live, { ...ended, endedAt: 40 }).endedAt, 40);
+  assert.equal(preferExecution(ended, live).endedAt, 20, 'A live reading alone cannot reopen an ended branch.');
+  assert.equal(preferExecution(ended, live, true).endedAt, undefined);
+  assert.equal(preferExecution(live, ended, true).endedAt, undefined);
+  assert.equal(preferExecution(live, { ...ended, endedAt: 40 }, true).endedAt, 40);
   const refreshed = preferExecution(live, { ...execution(target), updatedAt: 40 });
-  assert.equal(refreshed.preparedVerifiedAt, 30);
-  assert.equal(preferExecution(refreshed, ended).endedAt, undefined);
+  assert.equal(preferExecution(refreshed, ended, true).endedAt, undefined);
   assert.equal(preferExecution({ ...ended, sessionId: 'native' },
-    { ...live, sessionId: 'native' }).endedAt, 20);
+    { ...live, sessionId: 'native' }, true).endedAt, 20);
 });

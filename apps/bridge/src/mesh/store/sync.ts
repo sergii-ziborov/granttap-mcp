@@ -19,6 +19,7 @@ import type {
   MeshTask as TaskValue,
 } from "../../../../../packages/protocol/schema";
 import { preferExecution, preferTask } from "../admin/convergence";
+import { preferScopedExecution } from './receipts/execution-merge';
 import { integrationPeerKey } from "../handoff/other-side";
 import {
   MAX_RELEASED_CLAIMS, MAX_STORE_MIGRATIONS, MAX_STORE_PEERS, type StoreState,
@@ -115,7 +116,7 @@ export function applyStoreDelta(disk: StoreState, delta: StoreDelta): StoreState
       const key = rowKey(name, item);
       const theirs = rows.get(key);
       const untouched = theirs == null || JSON.stringify(theirs) === before;
-      rows.set(key, untouched ? item : settle(name, theirs, item));
+      rows.set(key, untouched ? item : settle(name, theirs, item, merged as StoreState));
     }
     let items = [...rows.values()];
     const bound = BOUNDS[name];
@@ -125,9 +126,9 @@ export function applyStoreDelta(disk: StoreState, delta: StoreDelta): StoreState
   return merged as StoreState;
 }
 
-function settle(name: Collection, theirs: unknown, ours: unknown): unknown {
+function settle(name: Collection, theirs: unknown, ours: unknown, state: StoreState): unknown {
   if (name === "tasks") return preferTask(theirs as TaskValue, ours as TaskValue);
-  if (name === "executions") return preferExecution(theirs as ExecutionValue, ours as ExecutionValue);
+  if (name === "executions") return preferScopedExecution(state, theirs as ExecutionValue, ours as ExecutionValue);
   if (name === "knowledge") return theirs;
   return ours;
 }

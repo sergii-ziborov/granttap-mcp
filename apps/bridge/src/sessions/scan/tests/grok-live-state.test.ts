@@ -40,4 +40,6 @@ test('a native Grok turn stays busy between summary writes and cannot be resumed
   session = scanGrok().sessions[0]!; assert.equal(session.state, 'waiting');
   writeFileSync(join(directory, 'events.jsonl'), JSON.stringify({ type: 'turn_ended', outcome: 'success', ts: now }) + '\n');
   assert.equal(scanGrok().sessions[0]!.state, 'idle');
+  writeFileSync(join(root, 'active_sessions.json'), '[]');
+  assert.equal(scanGrok().sessions[0]!.state, 'idle', 'A completed headless turn stays idle after its process exits.');
 });

@@ -15,7 +15,7 @@ export function grokResumeActivity(session: { sessionId: string; cwd?: string })
 /** Native events, unlike summary.json, advance during a long running turn. */
 export function grokNativeActivity(sessionId: string, directory: string, now = Date.now()): LiveActivity | undefined {
   const root = process.env.GRANTTAP_GROK_DIR ?? process.env.GROK_HOME ?? join(homedir(), '.grok');
-  if (!ownedSession(root, sessionId)) return undefined;
+  const owned = ownedSession(root, sessionId);
   const lines = tail(join(directory, 'events.jsonl'));
   for (const line of lines.reverse()) {
     let row: Record<string, unknown>;
@@ -23,11 +23,11 @@ export function grokNativeActivity(sessionId: string, directory: string, now = D
     const updatedAt = typeof row.ts === 'string' ? Date.parse(row.ts) : NaN;
     if (!Number.isFinite(updatedAt) || updatedAt > now + 5_000) continue;
     if (row.type === 'turn_ended') return { state: 'idle', updatedAt };
-    if (row.type === 'turn_started') return { state: 'working', updatedAt };
+    if (row.type === 'turn_started') return owned ? { state: 'working', updatedAt } : undefined;
     if (row.type !== 'phase_changed') continue;
-    if (row.phase === 'permission_prompt') return { state: 'waiting', updatedAt };
+    if (row.phase === 'permission_prompt') return owned ? { state: 'waiting', updatedAt } : undefined;
     if (['waiting_for_model', 'streaming_reasoning', 'streaming_text', 'tool_execution'].includes(String(row.phase))) {
-      return { state: 'working', updatedAt };
+      return owned ? { state: 'working', updatedAt } : undefined;
     }
   }
   return undefined;

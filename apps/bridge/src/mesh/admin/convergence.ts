@@ -50,21 +50,20 @@ function taskOrderKey(task: TaskValue): string {
 export function preferExecution(
   current: ExecutionValue,
   incoming: ExecutionValue,
+  preparedOwner = false,
 ): ExecutionValue {
   if ((current.endedAt != null) !== (incoming.endedAt != null)) {
     const ended = current.endedAt != null ? current : incoming;
     const live = current.endedAt != null ? incoming : current;
     if (live.continuedAt != null && live.continuedAt > ended.endedAt!) return live;
-    if (/^transfer-[a-f0-9]{48}$/.test(live.sessionId)
-      && live.preparedVerifiedAt != null && live.preparedVerifiedAt > ended.endedAt!) return live;
+    if (preparedOwner && /^transfer-[a-f0-9]{48}$/.test(live.sessionId)
+      && (live.updatedAt ?? live.startedAt) > ended.endedAt!) return live;
     return { ...live, endedAt: ended.endedAt };
   }
   const currentAt = current.updatedAt ?? current.startedAt;
   const incomingAt = incoming.updatedAt ?? incoming.startedAt;
-  const preferred = currentAt !== incomingAt ? (incomingAt > currentAt ? incoming : current)
-    : JSON.stringify(incoming) > JSON.stringify(current) ? incoming : current;
-  const preparedVerifiedAt = Math.max(current.preparedVerifiedAt ?? 0, incoming.preparedVerifiedAt ?? 0);
-  return preparedVerifiedAt > 0 ? { ...preferred, preparedVerifiedAt } : preferred;
+  if (currentAt !== incomingAt) return incomingAt > currentAt ? incoming : current;
+  return JSON.stringify(incoming) > JSON.stringify(current) ? incoming : current;
 }
 
 /**
@@ -82,9 +81,10 @@ export function mayOwnTask(
   sessionId: string,
   executions: readonly ExecutionValue[],
 ): boolean {
+  if (task.ownerSessionId === sessionId) return true;
   const candidate = executions.find(item => item.taskId === task.taskId && item.sessionId === sessionId);
   if (candidate?.endedAt != null) return false;
-  if (task.ownerSessionId == null || task.ownerSessionId === sessionId) return true;
+  if (task.ownerSessionId == null) return true;
   const owner = executions.find((item) =>
     item.taskId === task.taskId && item.sessionId === task.ownerSessionId);
   return owner == null || owner.endedAt != null;

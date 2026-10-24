@@ -4,6 +4,7 @@ import { upsertBinding } from "../catalog/binding-state";
 import { integrationPeerKey } from "../handoff/other-side";
 import { mergeBy, mergeWith } from "../store/support";
 import { MAX_STORE_PEERS, type StoreState } from "../store/state";
+import { preferScopedExecution } from '../store/receipts/execution-merge';
 
 export function mergeSnapshotState(state: StoreState, input: SnapshotValue): void {
   const snapshot = MeshSnapshot.parse(input);
@@ -25,11 +26,12 @@ export function mergeSnapshotState(state: StoreState, input: SnapshotValue): voi
   candidate.peers = mergeBy(candidate.peers, snapshot.peers ?? [], integrationPeerKey)
     .slice(-MAX_STORE_PEERS);
   candidate.tasks = mergeWith(candidate.tasks, snapshot.tasks, (item) => item.taskId, preferTask);
+  candidate.events = mergeBy(candidate.events, snapshot.events, (item) => item.eventId).slice(-512);
   candidate.executions = mergeWith(
     candidate.executions,
     snapshot.executions,
     (item) => `${item.computerId}\0${item.provider}\0${item.sessionId}`,
-    preferExecution,
+    (current, incoming) => preferScopedExecution(candidate, current, incoming),
   );
   candidate.claims = mergeBy(candidate.claims, snapshot.claims, (item) => item.claimId);
   candidate.dependencies = mergeBy(
@@ -37,7 +39,6 @@ export function mergeSnapshotState(state: StoreState, input: SnapshotValue): voi
     snapshot.dependencies,
     (item) => `${item.taskId}\0${item.dependsOnTaskId}`,
   );
-  candidate.events = mergeBy(candidate.events, snapshot.events, (item) => item.eventId).slice(-512);
   for (const incoming of snapshot.knowledge ?? []) {
     const known = candidate.knowledge.find((item) => item.projectId === incoming.projectId
       && item.recordId === incoming.recordId);

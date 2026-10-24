@@ -36,17 +36,21 @@ function fixture() {
 test('a retained accepted transfer repairs the owner and destination without starting a provider', () => {
   const f = fixture();
   try {
+    const stale = f.store.snapshot('project')!;
     f.transfers.reconcileCatalogOwnership(f.store, 'target');
     const snapshot = new MeshStore(f.path).snapshot('project')!;
     assert.equal(snapshot.tasks[0]!.ownerSessionId, f.row.sessionId);
     const destination = snapshot.executions.find(item => item.sessionId === f.row.sessionId)!;
     assert.equal(destination.endedAt, undefined);
-    assert.equal(destination.preparedVerifiedAt, f.now + 100);
     assert.equal(destination.continuedAt, undefined, 'No consent to resume the source was invented.');
     assert.ok(snapshot.executions.find(item => item.sessionId === f.row.sourceSessionId)?.endedAt);
     const revision = snapshot.tasks[0]!.revision;
     f.transfers.reconcileCatalogOwnership(f.store, 'target');
     assert.equal(f.store.task('task')?.revision, revision, 'Recovery is idempotent.');
+    f.store.mergeSnapshot(stale);
+    assert.equal(f.store.task('task')?.ownerSessionId, f.row.sessionId);
+    assert.equal(f.store.snapshot('project')?.executions.find(item => item.sessionId === f.row.sessionId)?.endedAt, undefined);
+    assert.equal(JSON.stringify(destination).includes('preparedVerifiedAt'), false, 'Version 1 readers keep the execution.');
   } finally { f.cleanup(); }
 });
 

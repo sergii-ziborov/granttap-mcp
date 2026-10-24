@@ -17,7 +17,6 @@ export class MeshPreparedStore extends MeshStoreBase {
         if (!facts || !verify(row)) continue;
         const at = Math.max(this.now(), (facts.destination.endedAt ?? 0) + 1, facts.task.updatedAt);
         facts.destination.endedAt = undefined;
-        facts.destination.preparedVerifiedAt = at;
         facts.destination.updatedAt = at;
         facts.task.ownerSessionId = row.sessionId;
         facts.task.state = 'planned';
