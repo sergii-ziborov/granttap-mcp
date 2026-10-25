@@ -120,6 +120,7 @@ export async function handleUserMessage(
   message: UserMessage,
   onProcessing?: () => Promise<void>,
   peerPublicKey?: string,
+  native?: { messageId: string; nativeOnly: true },
 ): Promise<"accepted" | "rejected"> {
   const say = (text: string, sessionId?: string, wake = false, kind: "status" | "response" = "response") => {
     const payload = agentEventForUserMessage(message, text, sessionId, kind);
@@ -172,7 +173,8 @@ export async function handleUserMessage(
   await onProcessing?.();
   const startedAt = Date.now();
   const run = deliverToSession(target, message.text, PHONE_RUN_LIMIT_MS, attachments, {
-    messageId: message.messageId,
+    messageId: native?.messageId ?? message.messageId,
+    nativeOnly: native?.nativeOnly,
     onAgentActivity: () => reportMessageAgentActivity(client, message, peerPublicKey),
     preferredMcp: message.preferredMcp,
     skill: message.skill,

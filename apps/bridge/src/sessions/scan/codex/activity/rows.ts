@@ -8,6 +8,7 @@ import { redactSecrets } from "../../../telemetry/command-preview";
 import { activityTelemetry, pendingCapabilityObservation, type CapabilityObservation, type PendingCapabilityTool } from "../../../telemetry";
 import type { RecordedFileChange } from "../../../../transcript-history/changes";
 import type { ToolCallDetail } from "../../../../transcript-history/tool-details";
+import { codexQuestionText } from '../../../../codex-questions';
 
 function codexToolInput(payload: any): unknown {
   const input = payload.arguments ?? payload.input ?? payload.action;
@@ -82,6 +83,7 @@ export function appendCodexActivity(input: {
       const toolName = String(p.name ?? p.type);
       const callId = String(p.call_id ?? p.id ?? `${createdAt}:${index}`);
       const sourceId = `${sourceThreadId}:${callId}`;
+      if (appendQuestionIfPresent(input, toolName, args, createdAt, sourceId)) return;
       const pending: PendingCapabilityTool = {
         sourceId,
         sessionId: session.sessionId,
@@ -110,4 +112,14 @@ export function appendCodexActivity(input: {
         }, idOverride: sourceId });
     }
   });
+}
+
+function appendQuestionIfPresent(input: Parameters<typeof appendCodexActivity>[0], toolName: string,
+  args: unknown, createdAt: number, sourceId: string): boolean {
+  const question = toolName === 'request_user_input_async' ? codexQuestionText(args) : undefined;
+  if (!question) return false;
+  appendEntry({ out: input.out, seen: input.seen, sessionId: input.session.sessionId,
+    kind: 'message', text: question, createdAt, ordinal: 0, idOverride: sourceId,
+    fullText: input.fullText, extras: input.child ? childEntryFields(input.child) : {} });
+  return true;
 }

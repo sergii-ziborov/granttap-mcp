@@ -54,6 +54,7 @@ export async function runCodex(
 ): Promise<ReplyResult> {
   const native = await deliverToCodexDesktop({ session, text, images, options, timeoutMs });
   if (native) return native;
+  if (options.nativeOnly) return { ok: false, error: 'Open this conversation in Codex to answer its question.' };
   const configured = loadRuntimeConfig().sessionAccess[session.sessionId];
   const disabledMcp = loadRuntimeConfig().sessionMcpDisabled[session.sessionId] ?? [];
   const sandbox = configured === "read-only"

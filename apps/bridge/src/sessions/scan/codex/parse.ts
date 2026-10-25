@@ -16,6 +16,7 @@ import type { SessionInfo } from "../../../../../../packages/protocol/schema";
 import { childTitle } from "../../support/child-threads";
 import { visibleUserText } from "../../support/activity-helpers";
 import { codexHeadRequest, isProvisionalPageTitle } from "../../support/codex-head";
+import { heartbeatDisplayText } from '../../host-heartbeat';
 
 type CodexParseState = {
   sessionId: string;
@@ -107,7 +108,9 @@ function applyCodexLine(d: any, state: CodexParseState): void {
   }
 
   if (d.type === "event_msg" && d.payload?.type === "agent_message") {
-    state.summary = childTitle(d.payload.message ?? d.payload.text)?.slice(0, 180);
+    const raw = d.payload.message ?? d.payload.text;
+    const visible = heartbeatDisplayText(raw, 'message') ?? raw;
+    if (visible) state.summary = childTitle(visible)?.slice(0, 180);
   }
   if (
     d.type === "response_item" &&
@@ -117,7 +120,8 @@ function applyCodexLine(d: any, state: CodexParseState): void {
   ) {
     for (const block of d.payload.content) {
       if (["output_text", "text"].includes(block?.type) && typeof block.text === "string") {
-        state.summary = childTitle(block.text)?.slice(0, 180);
+        const visible = heartbeatDisplayText(block.text, 'message') ?? block.text;
+        if (visible) state.summary = childTitle(visible)?.slice(0, 180);
       }
     }
   }

@@ -28,6 +28,7 @@ import { boundedCatalogHistory, INTERVAL_MS, publishSessionEvents } from "../han
 import { sweepAttachments } from "../handlers/receipts";
 import { handleMonitorMessage } from "../handlers/inbound";
 import { decorateTaskOriginCatalog } from '../../task-origins';
+import { publishCodexQuestions } from '../../codex-questions';
 
 const HISTORY_INTERVAL_MS = 60_000;
 const resumedHeads = new WeakSet<RelayClient>();
@@ -215,6 +216,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       if (leadership.acquire()) {
         await client.send(approvalsStatus(), 'phone', { peerPublicKey, reliable: false, ttlMs: 90_000 })
           .catch(() => {});
+        await replayNativeQuestions(client, peerPublicKey);
       }
     }
     return handleMonitorMessage(client, payload, { leadership, subscriptions, publish, peerPublicKey });
@@ -237,6 +239,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
     immediate: true,
     publish: () => publishHeartbeat(client).catch(() => {}),
   });
+  const stopQuestions = startQuestionLoop(client, leadership, subscriptions);
 
   return {
     publish: () => publish(false),
@@ -249,10 +252,30 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       stopMonitorCapabilities(client);
       stopMonitorMeshes(client);
       stopHeartbeat();
+      stopQuestions();
       loadLoop.stop();
       off();
       subscriptions.clear();
       leadership.release();
     },
   };
+}
+
+function startQuestionLoop(client: RelayClient, leadership: { acquire: () => boolean }, subscriptions: Set<string>) {
+  return startPublishLoop({
+    connected: () => client.isConnected,
+    intervalMs: 2_000,
+    immediate: true,
+    publish: async () => {
+      if (!leadership.acquire()) return;
+      const known = publishedCatalog(client);
+      if (known) await publishCodexQuestions(client, [...known.sessions,
+        ...(known.history ?? []).filter(s => subscriptions.has(s.sessionId))]).catch(() => {});
+    },
+  });
+}
+
+async function replayNativeQuestions(client: RelayClient, peerPublicKey: string) {
+  const known = publishedCatalog(client);
+  if (known) await publishCodexQuestions(client, known.sessions, { replay: true, peerPublicKey }).catch(() => {});
 }

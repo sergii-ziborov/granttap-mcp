@@ -10,7 +10,7 @@ export function nativeTranscriptRoots(): { claude: string; codex: string } {
 }
 
 /** Native paths come only from discovery; a phone never supplies one. */
-export function nativeTranscriptSource(session: SessionInfo): string | undefined {
+export function nativeTranscriptSource(session: Pick<SessionInfo, 'agent' | 'sessionId'>): string | undefined {
   if (session.agent === "claude") return claudeLogPathBySession.get(session.sessionId);
   if (session.agent === "codex") return codexLogPathBySession.get(session.sessionId);
   return undefined;

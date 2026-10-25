@@ -7,6 +7,8 @@ export type DeliveryOptions = {
   onAgentActivity?: (nativeSessionId: string) => void;
   /** Stable controller delivery ID, also used by the provider's native admission. */
   messageId?: string;
+  /** Native host questions must never fall back to a second CLI conversation. */
+  nativeOnly?: boolean;
   /** Computer-generated identity before temporary attachment paths are inserted. */
   intentDigest?: string;
   preferredMcp?: string;

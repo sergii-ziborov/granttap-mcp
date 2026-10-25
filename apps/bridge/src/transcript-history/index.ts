@@ -8,6 +8,7 @@ import { recordedFileChanges } from "./changes";
 import { recordedToolDetails } from "./tool-details";
 import { completedTurnChanges } from "./turn-changes";
 import { cursorActivity, cursorConversationHistory } from "../sessions/cursor";
+import { parseCodexFile } from '../sessions/scan/codex/parse';
 export { nativeImageLines } from "./images";
 export { nativeTranscriptImage } from './images/native';
 export { nativeTranscriptEntry } from './images/advertised-entry';
@@ -93,7 +94,8 @@ export function readTranscriptHistory(input: SessionInfo, cursor?: string): Sess
     : window.lines[0]?.offset ?? window.start;
   const prior = input.sessionId !== session.sessionId && offset === 0 ? transferHistory(input) : undefined;
   return { type: "session.activity", sessionId: input.sessionId, agent: session.agent,
-    state: session.state, entries, generatedAt: Date.now(), history: {
+    state: session.agent === 'codex' ? parseCodexFile(path)?.session.state ?? session.state : session.state,
+    entries, generatedAt: Date.now(), history: {
       hasMore: offset > 0 || Boolean(prior?.entries.length),
       ...(offset > 0 ? { cursor: window.cursorAt(offset) }
         : prior?.entries.length ? { cursor: `transfer-context:${prior.entries.length + (prior.history?.hasMore ? Number(prior.history.cursor?.split(':')[1]) : 0)}` } : {}),

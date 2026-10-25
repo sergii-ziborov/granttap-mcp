@@ -45,6 +45,8 @@ import { handleControllerPairRequest, handleInboundKnowledgeWrite } from "../con
 import { acceptPhoneAccountLink } from "../../account-recovery/phone-link";
 import { approvalsStatus } from '../../approvals/state';
 import { handleDeliveryReceiptQuery } from '../message-delivery/status-query';
+import { handleCodexQuestionReply, publishCodexQuestions } from '../../codex-questions';
+import { publishedCatalog } from '../../session-catalog';
 
 export async function handleMonitorMessage(
   client: RelayClient,
@@ -70,7 +72,7 @@ export async function handleMonitorMessage(
       return handleInboundKnowledgeWrite(client, payload, input.peerPublicKey, publish);
     }
     if (payload.type === "user.message") {
-      return handleInboundUserMessage(client, payload, publish, input.peerPublicKey);
+      return handlePhoneUserMessage(client, payload, publish, input.peerPublicKey);
     } else if (payload.type === 'delivery.receipt.query') {
       return handleDeliveryReceiptQuery(client, payload, input.peerPublicKey);
     } else if (payload.type === "user.attachment") {
@@ -145,6 +147,13 @@ export async function handleMonitorMessage(
     return false;
 }
 
+function handlePhoneUserMessage(client: RelayClient, payload: Extract<Payload, { type: 'user.message' }>,
+  publish: (forceHistory?: boolean) => Promise<void>, peerPublicKey?: string) {
+  return payload.requestId?.startsWith('codex-question-')
+    ? handleCodexQuestionReply(client, payload, () => publish(), peerPublicKey)
+    : handleInboundUserMessage(client, payload, publish, peerPublicKey);
+}
+
 function handlePeerConfiguration(client: RelayClient, payload: Payload, peerPublicKey: string | undefined,
   publish: (forceHistory?: boolean) => Promise<void>): Promise<boolean> | undefined {
   if (payload.type === 'project.transport.set') {
@@ -192,6 +201,9 @@ async function handleInboundRefresh(
   // Notification actions must not wait behind provider scans or graph analysis.
   await client.send(approvalsStatus(), 'phone', { peerPublicKey, reliable: false, ttlMs: 90_000 })
     .catch(() => {});
+  const known = publishedCatalog(client);
+  if (known) await publishCodexQuestions(client, [...known.sessions, ...(known.history ?? [])],
+    { replay: true, peerPublicKey }).catch(() => {});
   // An explicit refresh may pay for the full history scan; routine Mesh
   // snapshots use the cached history and fresh live sessions.
   invalidateMeshSessionHistory();

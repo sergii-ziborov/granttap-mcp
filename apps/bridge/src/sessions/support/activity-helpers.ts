@@ -4,6 +4,7 @@
  * Provider-specific thinking/reasoning blocks are deliberately ignored.
  */
 import type { ActivityEntry } from "../../../../../packages/protocol/schema";
+import { heartbeatDisplayText } from '../host-heartbeat';
 import {
   parseMcpToolName,
   skillNameFromInput,
@@ -61,6 +62,8 @@ export function stripAttachmentNote(text: string): string {
 }
 
 export function visibleUserText(value: unknown): string {
+  const heartbeat = heartbeatDisplayText(value, 'user');
+  if (heartbeat !== undefined) return heartbeat;
   // Codex records the selected Page as a user row, including a null selection.
   // Remove the host-owned block, retaining any real request alongside it.
   const contextFree = String(value ?? "").replace(
@@ -246,7 +249,8 @@ export function pushEntry(input: PushEntryInput): void {
   const shownKind: ActivityEntry["kind"] = notification ? "status" : kind;
   const limit = shownKind === "tool" || shownKind === "status" ? MAX_ACTIVITY_TEXT
     : input.fullText ? Infinity : MAX_MESSAGE_TEXT;
-  const clean = activityText(notification ?? (kind === "user" ? visibleUserText(text) : text), limit);
+  const presented = heartbeatDisplayText(text, kind) ?? text;
+  const clean = activityText(notification ?? (kind === "user" ? visibleUserText(text) : presented), limit);
   if (!clean) return;
   const duplicateKey = idOverride ? `${idOverride}:${shownKind}`
     : `${createdAt}:${extras.childThreadId ?? "root"}:${shownKind}:${extras.toolName ?? ""}:${clean}`;
