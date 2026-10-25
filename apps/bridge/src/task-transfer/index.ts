@@ -7,7 +7,7 @@ export type { PreparedTransfer, TransferPreparation } from './records';
 
 type TransferProvider = {
   start: (request: { provider: CodingAgent; text: string; cwd: string; attachments: UserAttachment[];
-    model?: string; effort?: string; operationKey: string }) => Promise<ReplyResult>;
+    model?: string; effort?: string; operationKey: string; onNativeSession: (sessionId: string) => void }) => Promise<ReplyResult>;
   resume: (session: SessionInfo, text: string, attachments: UserAttachment[], options: DeliveryOptions) => Promise<ReplyResult>;
 };
 const interrupted = (): ReplyResult => ({ ok: false,
@@ -68,7 +68,17 @@ export class PreparedTaskTransfers extends TransferPersistence {
       ownsLaunch = true;
       const result = await provider.start({ provider: row.capsule.targetProvider as CodingAgent,
         text: this.prompt(row, context, text), cwd: row.workspace, attachments,
-        model: options.model ?? row.capsule.targetModel, effort: options.effort, operationKey: id });
+        model: options.model ?? row.capsule.targetModel, effort: options.effort, operationKey: id,
+        onNativeSession: nativeId => {
+          if (!/^[a-zA-Z0-9_-]{1,256}$/.test(nativeId)) throw new Error('Invalid native session identity');
+          this.update(id, current => {
+            if (current.phase !== 'starting' || current.ownerPid !== process.pid
+              || current.nativeSessionId && current.nativeSessionId !== nativeId) {
+              throw new Error('The transfer no longer owns this provider launch');
+            }
+            return { ...current, nativeSessionId: nativeId, updatedAt: Date.now() };
+          });
+        } });
       if (!result.ok || !result.sessionId) {
         this.update(id, current => ({ ...current, phase: 'uncertain', updatedAt: Date.now() }));
         return result.ok ? interrupted() : result;

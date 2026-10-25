@@ -70,3 +70,30 @@ test('a failed or interrupted first launch never silently starts a second native
     assert.equal(transfers.catalog([])[0]?.state, 'waiting');
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+test('confirmed first-turn identity is durable while the provider is still running', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'granttap-live-transfer-'));
+  let finish!: () => void;
+  const complete = new Promise<void>(resolve => { finish = resolve; });
+  try {
+    const transfers = new PreparedTaskTransfers(root);
+    const row = transfers.prepare({ eventId: 'live-fixture', projectId: 'project-fixture', title: 'Live task',
+      sourceSessionId: 'source', capsule, workspace: '/fixture', branch: 'granttap/fixture',
+      context: 'Visible context', acceptedAt: 1 });
+    let starts = 0;
+    const provider = { start: async (request: any) => {
+      starts++; request.onNativeSession?.('confirmed-native-chat'); await complete;
+      return { ok: true as const, sessionId: 'confirmed-native-chat', text: 'Done' };
+    }, resume: async () => ({ ok: true as const, text: 'Unused' }) };
+    const pending = transfers.deliver(row.sessionId, 'Work now', [], {}, provider);
+    await new Promise<void>(resolve => setImmediate(resolve));
+    const restored = new PreparedTaskTransfers(root);
+    const alias = restored.catalog([])[0]!;
+    assert.equal(restored.nativeSession(alias).sessionId, 'confirmed-native-chat');
+    assert.equal(restored.catalog([{ ...alias, sessionId: 'confirmed-native-chat', state: 'working' }]).length, 1);
+    assert.equal((await restored.deliver(row.sessionId, 'Repeat', [], {}, provider))?.ok, false);
+    assert.equal(starts, 1, 'An unfinished first turn cannot start a second execution');
+    finish(); await pending;
+    assert.equal(new PreparedTaskTransfers(root).nativeSession(alias).sessionId, 'confirmed-native-chat');
+  } finally { finish?.(); rmSync(root, { recursive: true, force: true }); }
+});

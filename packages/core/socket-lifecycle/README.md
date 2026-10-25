@@ -21,3 +21,7 @@ Consumers can immediately replace stale snapshots; notification failures cannot
 interrupt the transport, and unsubscribing prevents later callbacks.
 
 Licensed under the GrantTap Commercial Source License in the repository root.
+
+Controller-addressed history uses the snapshot queue. Delivery receipts and
+heartbeats use the control queue, so a history download cannot put them behind
+its pending frames. An in-flight WebSocket frame is allowed to finish.

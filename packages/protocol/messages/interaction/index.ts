@@ -107,6 +107,7 @@ export const DeliveryReceipt = z.object({
   status: z.enum(["accepted", "rejected"]),
   error: z.string().max(500).optional(),
   receivedAt: z.number(),
+  agentActivityAt: z.number().finite().positive().optional(),
 });
 export type DeliveryReceipt = z.infer<typeof DeliveryReceipt>;
 

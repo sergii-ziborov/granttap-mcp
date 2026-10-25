@@ -65,9 +65,15 @@ export function deliverToSession(
   if (/^transfer-[a-f0-9]{48}$/.test(session.sessionId)) {
     return queued(session.sessionId, async () => (await localTaskTransfers().deliver(
       session.sessionId, text, attachments, options, {
-        start: request => ({ claude: createClaudeSession, codex: createCodexSession,
-          cursor: createCursorSession, grok: createGrokSession }[request.provider])(
-          request.text, request.cwd, timeoutMs, request.attachments, request.model, request.operationKey, request.effort),
+        start: request => request.provider === "grok"
+          ? createGrokSession(request.text, request.cwd, timeoutMs, request.attachments,
+            request.model, request.operationKey, request.effort, nativeId => {
+              request.onNativeSession(nativeId);
+              options.onAgentActivity?.(nativeId);
+            })
+          : ({ claude: createClaudeSession, codex: createCodexSession,
+            cursor: createCursorSession }[request.provider])(request.text, request.cwd,
+            timeoutMs, request.attachments, request.model, request.operationKey, request.effort),
         resume: (native, body, images, settings) => withAttachments(images, body, prepared => runDelivery(native,
           native.agent === "codex" ? prepared.prompt : prepared.claudePrompt, timeoutMs, prepared.images, settings)),
       },
@@ -139,10 +145,11 @@ export function createGrokSession(
   model?: string,
   operationKey?: string,
   effort?: string,
+  onNativeSession?: (sessionId: string) => void,
 ): Promise<ReplyResult> {
   const workspace = resolveAgentWorkspace(cwd, "grok");
   return queued("__new_grok_task__", () => withAttachments(attachments, text, (prepared) =>
-    runGrokNew(prepared.claudePrompt, workspace, timeoutMs, model, operationKey, effort),
+    runGrokNew(prepared.claudePrompt, workspace, timeoutMs, model, operationKey, effort, onNativeSession),
   ));
 }
 

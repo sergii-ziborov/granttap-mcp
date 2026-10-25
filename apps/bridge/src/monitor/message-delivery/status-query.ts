@@ -7,6 +7,6 @@ export async function handleDeliveryReceiptQuery(client: RelayClient, query: Del
   peerPublicKey?: string): Promise<boolean> {
   if (!peerPublicKey) return true;
   const receipt = deliveryReceiptStatus(query.messageId, { room: client.room, peerPublicKey, sessionId: query.sessionId });
-  if (receipt) await sendDeliveryReceipt(client, query.messageId, receipt.status, receipt.error, query.sessionId, peerPublicKey);
+  if (receipt) await sendDeliveryReceipt(client, query.messageId, receipt.status, receipt.error, query.sessionId, peerPublicKey, receipt.agentActivityAt);
   return true;
 }

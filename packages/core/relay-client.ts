@@ -2,7 +2,7 @@ import { retainedPayloadOptions } from "./retained-state";
 /** Shared authenticated relay transport. See README.md for delivery and encryption boundaries. */
 import WebSocket from "ws";
 import { ManagedRelayLease, RelaySocketHealth, RelayReconnectBackoff, RelayConnectionNotifications, relayUpgradeHeaders } from "./socket-lifecycle";
-import { OutboundFrameQueue, sendEncryptedPayload } from "./outbound-scheduler";
+import { OutboundFrameQueue, sendEncryptedPayload, priorityControlPayload } from "./outbound-scheduler";
 import { openRelayMessage, parseRelayControl, waitForRelayPayload } from "./relay-inbound";
 import { consumeTaskJobOffer, type TaskDispatchListener } from "./task-dispatch";
 import { Payload, type Role } from "../protocol/schema";
@@ -213,7 +213,8 @@ export class RelayClient {
     if (!peerPublicKeys(this.cfg.peerPublicKey, this.cfg.extraPeerPublicKeys).includes(peerPublicKey)
       || !this.peerIsAllowed(peerPublicKey)) throw new Error("controller peer is not authorized");
     if (!this.frames) throw new Error("relay not connected");
-    await this.frames.send(sealEnvelope({ ...this.cfg, peerPublicKey }, payload, this.otherRole(), { ...retainedPayloadOptions(payload), ...options, retainedState: this.retainedState, recipientRouting: this.recipientRouting }), true);
+    await this.frames.send(sealEnvelope({ ...this.cfg, peerPublicKey }, payload, this.otherRole(), { ...retainedPayloadOptions(payload), ...options, retainedState: this.retainedState, recipientRouting: this.recipientRouting }),
+      priorityControlPayload(payload.type) || options.wake === true);
   }
 
   setSessionKey(sessionId: string, key: string): void {

@@ -85,3 +85,27 @@ async function receivedFrames(frames: unknown[], count: number): Promise<void> {
   }
   assert.equal(frames.length, count, "The local receiver must observe every expected frame before the next phase.");
 }
+
+test('a controller receipt overtakes queued transcript snapshots for the same phone', async t => {
+  const server = new WebSocketServer({ port: 0 }); await once(server, 'listening');
+  const address = server.address(); assert.ok(address && typeof address !== 'string');
+  const machine = generateKeyPair(), phone = generateKeyPair();
+  const cfg = { relayUrl: `ws://127.0.0.1:${address.port}`, room: 'receipt-priority',
+    role: 'machine' as const, deviceName: 'Fixture', senderId: 'machine',
+    myPublicKey: machine.publicKey, mySecretKey: machine.secretKey, peerPublicKey: phone.publicKey };
+  const frames: any[] = [];
+  server.on('connection', socket => socket.on('message', raw => frames.push(JSON.parse(raw.toString()))));
+  const client = new RelayClient(cfg);
+  t.after(async () => { client.close(); for (const socket of server.clients) socket.terminate();
+    await new Promise<void>(resolve => server.close(() => resolve())); });
+  await client.connect(); await receivedFrames(frames, 1); frames.length = 0;
+  const snapshots = Array.from({ length: 16 }, (_, n) => client.send({ type: 'session.activity',
+    sessionId: `fixture-${n}`, agent: 'grok', state: 'idle', entries: [], generatedAt: Date.now() },
+  'phone', { peerPublicKey: phone.publicKey, reliable: false }));
+  const receipt = client.send({ type: 'delivery.receipt', messageId: 'original-message',
+    status: 'accepted', receivedAt: Date.now() }, 'phone', { peerPublicKey: phone.publicKey });
+  await Promise.all([...snapshots, receipt]); await receivedFrames(frames, 17);
+  const types = frames.map(frame => (open(frame.nonce, frame.box, phone.publicKey, machine.secretKey) as any)?.type);
+  assert.ok(types.indexOf('delivery.receipt') <= 1, 'Receipt cannot wait behind a history download');
+  assert.equal(types.filter(type => type === 'session.activity').length, 16);
+});

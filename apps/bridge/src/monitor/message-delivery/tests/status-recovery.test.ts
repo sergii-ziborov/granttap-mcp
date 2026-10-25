@@ -36,3 +36,25 @@ test('status refresh recovers original receipts across restart without another p
     ['missing'], ['unvalidated-message']]) { await query(...args as [string, string?, string?]); assert.equal(sent.length, 0); }
   client.room = 'other-room'; await query('failed-message'); assert.equal(sent.length, 0);
 });
+
+test('confirmed provider activity survives receipt replay without becoming a response', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'granttap-started-status-'));
+  const prior = process.env.GRANTTAP_CONFIG_DIR; process.env.GRANTTAP_CONFIG_DIR = root;
+  t.after(() => { if (prior == null) delete process.env.GRANTTAP_CONFIG_DIR;
+    else process.env.GRANTTAP_CONFIG_DIR = prior; rmSync(root, { recursive: true, force: true }); });
+  const scope = { room: 'room', peerPublicKey: 'origin', sessionId: 'grok-chat' }, now = Date.now();
+  beginDelivery('active-message', now - 10, scope); acknowledgeProcessingDelivery('active-message', now - 5);
+  completeDelivery('active-message', now - 2);
+  const delivery = await import('../../../delivery');
+  delivery.acknowledgeAgentActivity('active-message', now - 1);
+  const sent: any[] = [];
+  const client = { room: 'room', send: async (payload: unknown) => { sent.push(payload); } };
+  await handleMonitorMessage(client as never, { type: 'delivery.receipt.query', messageId: 'active-message',
+    sessionId: scope.sessionId, createdAt: now } as never,
+  { leadership: { acquire: () => true }, subscriptions: new Set(), publish: async () => {}, peerPublicKey: 'origin' });
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].status, 'accepted');
+  assert.equal(sent[0].agentActivityAt, now - 1);
+  rejectCompletedDelivery('active-message', 'Provider stopped', now);
+  assert.equal(delivery.deliveryReceiptStatus('active-message', scope)?.status, 'rejected');
+});

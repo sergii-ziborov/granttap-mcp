@@ -12,6 +12,7 @@ export async function sendDeliveryReceipt(
   error?: string,
   sessionId?: string,
   peerPublicKey?: string,
+  agentActivityAt?: number,
 ): Promise<void> {
   const payload = {
     type: "delivery.receipt" as const,
@@ -20,6 +21,7 @@ export async function sendDeliveryReceipt(
     status,
     error,
     receivedAt: Date.now(),
+    ...(agentActivityAt ? { agentActivityAt } : {}),
   };
   const options = { ttlMs: 24 * 60 * 60_000, peerPublicKey };
   // A controller receipt is control-plane state. It remains device-encrypted,

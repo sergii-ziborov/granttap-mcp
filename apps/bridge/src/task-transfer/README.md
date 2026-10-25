@@ -21,3 +21,7 @@ Tests: `tests/prepared.test.ts` covers preparation, restart, model/effort forwar
 context persistence, stable catalog identity and ambiguous first submissions.
 
 Licensed under the GrantTap Commercial Source License. See LICENSE and NOTICE.
+
+The first Grok turn binds its confirmed native session before the final answer,
+so the transferred Task can publish live native history while the turn runs.
+The durable launch remains in progress and cannot start another execution.

@@ -22,3 +22,7 @@ message again. Only the original authenticated controller, room, and session
 may read it. Older unscoped records are not exposed through this query.
 Receipts to a known controller use its device encryption directly, so a missed
 task-key grant cannot hide a provider rejection or processing acknowledgement.
+
+A correlated `agentActivityAt` receipt is emitted only after provider stream output
+confirms activity. It is retained under the original controller, room and session
+scope, survives receipt refresh, and does not claim a final response.

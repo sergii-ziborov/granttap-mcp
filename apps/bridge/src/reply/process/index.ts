@@ -74,6 +74,7 @@ export function runningProcessCount(key: string): number {
 
 export type ProviderAdmission = {
   confirmed: (stdout: string) => boolean;
+  onConfirmed?: () => void;
   withinMs: number;
   timeoutMessage: string;
 };
@@ -107,6 +108,7 @@ export function runProcess(
     let stdout = "";
     let stderr = "";
     let done = false;
+    let admissionReported = false;
     const finish = (result: ReplyResult): void => {
       if (done) return;
       done = true;
@@ -125,7 +127,17 @@ export function runProcess(
       signalOwnedProcess(child, "SIGKILL");
       finish({ ok: false, error: admission.timeoutMessage });
     }, admission.withinMs) : undefined;
-    child.stdout?.on("data", (chunk) => { stdout += chunk; });
+    child.stdout?.on("data", (chunk) => {
+      stdout += chunk;
+      if (done || admissionReported || !admission?.confirmed(stdout)) return;
+      admissionReported = true;
+      clearTimeout(startupTimer);
+      try { admission.onConfirmed?.(); }
+      catch {
+        signalOwnedProcess(child, "SIGTERM");
+        finish({ ok: false, error: "Provider activity could not be recorded safely.", delivery: "native" });
+      }
+    });
     child.stderr?.on("data", (chunk) => { stderr += chunk; });
     child.on("error", (error) => {
       finish({ ok: false, error: `${command}: ${error.message}` });

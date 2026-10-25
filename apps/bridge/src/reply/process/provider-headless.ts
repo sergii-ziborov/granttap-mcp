@@ -29,6 +29,7 @@ export async function runCursorResume(
 
 export function runGrokNew(
   text: string, cwd: string, timeoutMs: number, model?: string, operationKey?: string, effort?: string,
+  onNativeSession?: (sessionId: string) => void,
 ): Promise<ReplyResult> {
   const sessionId = randomUUID();
   const args = [
@@ -37,7 +38,7 @@ export function runGrokNew(
     "-p", text, "--output-format", "streaming-json",
   ];
   return runProcess(grokBin(), args, cwd, timeoutMs, (stdout) => parseGrok(stdout, sessionId),
-    undefined, operationKey, grokAdmission);
+    undefined, operationKey, { ...grokAdmission, onConfirmed: () => onNativeSession?.(sessionId) });
 }
 
 export function runGrokResume(
@@ -58,6 +59,7 @@ export function runGrokResume(
   return runProcess(
     grokBin(), args, session.cwd, timeoutMs,
     (stdout) => parseGrok(stdout, session.sessionId),
-    undefined, session.sessionId, grokAdmission,
+    undefined, session.sessionId, { ...grokAdmission,
+      onConfirmed: () => options.onAgentActivity?.(session.sessionId) },
   );
 }

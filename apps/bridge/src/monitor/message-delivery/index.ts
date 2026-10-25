@@ -1,7 +1,7 @@
 import type { Payload } from "../../../../../packages/protocol/schema";
 import type { RelayClient } from "../../../../../packages/core/relay-client";
 import { abandonDelivery, beginDelivery, completeDelivery,
-  acknowledgeProcessingDelivery, processingDeliveryAcknowledged, completedDeliveryFailure } from "../../delivery";
+  acknowledgeProcessingDelivery, processingDeliveryAcknowledged, completedDeliveryFailure, deliveryReceiptStatus } from "../../delivery";
 import { sendDeliveryReceipt } from "../handlers/receipts";
 import { handleUserMessage } from "../handlers/user-message";
 
@@ -20,7 +20,9 @@ export async function handleInboundUserMessage(
       if (state === "completed" || processingDeliveryAcknowledged(payload.messageId)) {
         const failure = completedDeliveryFailure(payload.messageId);
         await sendDeliveryReceipt(client, payload.messageId, failure ? 'rejected' : 'accepted',
-          failure, payload.sessionId, peerPublicKey);
+          failure, payload.sessionId, peerPublicKey, peerPublicKey && payload.sessionId
+            ? deliveryReceiptStatus(payload.messageId, { room: client.room, peerPublicKey,
+              sessionId: payload.sessionId })?.agentActivityAt : undefined);
       }
       return true;
     }

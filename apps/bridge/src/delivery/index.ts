@@ -12,6 +12,7 @@ type DeliveryRecord = {
   state: "processing" | "completed";
   updatedAt: number;
   processingAcknowledged?: boolean;
+  agentActivityAt?: number;
   rejectedError?: string;
   scope?: DeliveryScope;
 };
@@ -69,6 +70,22 @@ export function acknowledgeProcessingDelivery(messageId: string, now = Date.now(
   save(records, now);
 }
 
+/** Provider output, rather than process creation, confirms the original operation started. */
+export function acknowledgeAgentActivity(messageId: string, at = Date.now(), scope?: DeliveryScope): number | undefined {
+  const records = load();
+  const record = records[messageId] ?? (scope
+    ? { state: 'completed' as const, updatedAt: at, processingAcknowledged: true, scope } : undefined);
+  if (!record || record.rejectedError || !Number.isFinite(at) || at <= 0
+    || records[messageId] && scope && !record.scope
+    || scope && record.scope && (scope.room !== record.scope.room
+      || scope.peerPublicKey !== record.scope.peerPublicKey || scope.sessionId !== record.scope.sessionId)) return undefined;
+  if (record.agentActivityAt == null) {
+    records[messageId] = { ...record, agentActivityAt: at };
+    save(records, Date.now());
+  }
+  return records[messageId]?.agentActivityAt;
+}
+
 export function processingDeliveryAcknowledged(messageId: string): boolean {
   const record = load()[messageId];
   return record?.state === "processing" && record.processingAcknowledged === true;
@@ -114,7 +131,8 @@ export function deliveryReceiptStatus(messageId: string, scope: DeliveryScope, n
   if (!saved || saved.room !== scope.room || saved.peerPublicKey !== scope.peerPublicKey
     || saved.sessionId !== scope.sessionId || record.updatedAt < now - MAX_AGE_MS
     || record.updatedAt > now || record.state === 'processing' && !record.processingAcknowledged) return undefined;
-  return { status: record.rejectedError ? 'rejected' as const : 'accepted' as const, error: record.rejectedError };
+  return { status: record.rejectedError ? 'rejected' as const : 'accepted' as const,
+    error: record.rejectedError, agentActivityAt: record.agentActivityAt };
 }
 
 /** Release a failed attempt so a relay retry can safely try again. */

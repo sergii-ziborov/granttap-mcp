@@ -71,9 +71,9 @@ export class OutboundFrameQueue {
   }
 }
 
-const control = (type: Payload["type"]) => type === "hello" || type.startsWith("approval.")
+export const priorityControlPayload = (type: Payload["type"]) => type === "hello" || type.startsWith("approval.")
   || type.startsWith("config.") || type.startsWith("pairing.") || type === "session.key.grant"
-  || type === "sessions.status" || type === "machine.heartbeat" || type === "approvals.status";
+  || type === "delivery.receipt" || type === "sessions.status" || type === "machine.heartbeat" || type === "approvals.status";
 
 export async function sendEncryptedPayload(queue: OutboundFrameQueue, config: PeerConfig,
   allowed: (key: string) => boolean,
@@ -83,6 +83,6 @@ export async function sendEncryptedPayload(queue: OutboundFrameQueue, config: Pe
   if (!peers.length) throw new Error("no authorized pairing peers");
   for (const peerPublicKey of peers) {
     await queue.send(sealEnvelope({ ...config, peerPublicKey }, payload, to,
-      peers.length === 1 ? options : { ...options, deliveryId: undefined }), control(payload.type) || options.wake === true);
+      peers.length === 1 ? options : { ...options, deliveryId: undefined }), priorityControlPayload(payload.type) || options.wake === true);
   }
 }

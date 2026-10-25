@@ -21,6 +21,7 @@ import { publishedSession } from "../../session-catalog";
 import { localTaskOrigins, type TaskOriginRegistry, type TaskOriginScope } from '../../task-origins';
 import { agentEventForUserMessage, sendDeliveryReceipt } from "./receipts";
 import { resolveMessageAttachments } from "./receipts";
+import { reportMessageAgentActivity } from '../message-delivery/activity';
 import { acceptWhenStarted, PHONE_RUN_LIMIT_MS } from "../message-delivery/acceptance";
 
 async function startNewAgentTask(input: {
@@ -172,6 +173,7 @@ export async function handleUserMessage(
   const startedAt = Date.now();
   const run = deliverToSession(target, message.text, PHONE_RUN_LIMIT_MS, attachments, {
     messageId: message.messageId,
+    onAgentActivity: () => reportMessageAgentActivity(client, message, peerPublicKey),
     preferredMcp: message.preferredMcp,
     skill: message.skill,
     model: message.model,
