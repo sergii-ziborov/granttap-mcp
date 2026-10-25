@@ -46,7 +46,7 @@ test('disabled, local, unowned, and source checkout launchers never download pac
   delete process.env.NODE_TEST_CONTEXT;process.env.GRANTTAP_DISABLE_AUTO_UPDATE='1';startRuntimeUpdates(()=>true)();
   delete process.env.GRANTTAP_DISABLE_AUTO_UPDATE;process.env.GRANTTAP_LOCAL='1';startRuntimeUpdates(()=>true)();
   delete process.env.GRANTTAP_LOCAL;process.send=undefined;startRuntimeUpdates(()=>true)();
-  process.send=(()=>true) as typeof process.send;startRuntimeUpdates(()=>true)();
+  process.send=(()=>true) as NonNullable<NodeJS.Process['send']>;startRuntimeUpdates(()=>true)();
 });
 test('the default periodic check handles a normal no-update registry response',async t=>{
   const directory=mkdtempSync(join(tmpdir(),'granttap-update-current-'));
