@@ -22,3 +22,5 @@ Public entry: `startRuntimeUpdates`, `runtimeUpdateReadiness`, and the launcher'
 `selection.mjs` / `supervision.mjs` boundary. Tests exercise failed downloads and
 verification, deferred activation, concurrent installation, selection, and startup
 rollback using isolated directories and owned child processes.
+
+License: [GrantTap Commercial Source License](../../../../LICENSE).
