@@ -12,7 +12,7 @@ test('an installed cache without its loader rolls back before service startup',(
   for(const file of ['bin/granttap-mcp.mjs','apps/bridge/src/runtime-updates/selection.mjs','apps/bridge/src/runtime-updates/supervision.mjs','apps/bridge/src/config/runtime/node-requirement.mjs']){
    const target=join(bundled,file);mkdirSync(dirname(target),{recursive:true});copyFileSync(join(source,file),target);
   }
-  writeFileSync(join(bundled,'package.json'),JSON.stringify({name:'granttap-mcp',version:'0.8.102'}));
+  writeFileSync(join(bundled,'package.json'),readFileSync(join(source,'package.json')));
   const bad=join(updates,'versions','0.8.103','node_modules','granttap-mcp');mkdirSync(join(bad,'bin'),{recursive:true});
   writeFileSync(join(bad,'package.json'),JSON.stringify({name:'granttap-mcp',version:'0.8.103'}));writeFileSync(join(bad,'bin/granttap-mcp.mjs'),'');
   writeFileSync(join(updates,'active.json'),JSON.stringify({root:bad,version:'0.8.103'}));
