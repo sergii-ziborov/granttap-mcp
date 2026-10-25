@@ -26,3 +26,9 @@ controller, with priority over queued periodic snapshots. Older callers without
 a requester retain the complete authorized recipient set. Every explicit target
 passes the pairing and controller authorization checks. Routing never deletes a
 pairing or changes approval policy.
+
+Requested image chunks retain their local scheduling priority through task
+encryption and precede background transcript backfill. The local `urgent` send
+hint is never serialized into relay routing metadata and does not request APNs.
+The image-priority test receives and decrypts both layers and verifies ordering
+while preserving every background frame and the existing six-millisecond pace.

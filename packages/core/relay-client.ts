@@ -214,7 +214,7 @@ export class RelayClient {
       || !this.peerIsAllowed(peerPublicKey)) throw new Error("controller peer is not authorized");
     if (!this.frames) throw new Error("relay not connected");
     await this.frames.send(sealEnvelope({ ...this.cfg, peerPublicKey }, payload, this.otherRole(), { ...retainedPayloadOptions(payload), ...options, retainedState: this.retainedState, recipientRouting: this.recipientRouting }),
-      priorityControlPayload(payload.type) || options.wake === true);
+      priorityControlPayload(payload.type) || options.urgent === true || options.wake === true);
   }
 
   setSessionKey(sessionId: string, key: string): void {
@@ -232,7 +232,8 @@ export class RelayClient {
     to: Role | "all" = this.otherRole(),
     options: SendOptions = {},
   ): Promise<void> {
-    await this.send(sealSessionPayload(payload, sessionId, this.sessionKeys.get(sessionId)), to, { ...retainedPayloadOptions(payload), ...options });
+    await this.send(sealSessionPayload(payload, sessionId, this.sessionKeys.get(sessionId)), to, { ...retainedPayloadOptions(payload), ...options,
+      urgent: options.urgent === true || priorityControlPayload(payload.type) });
   }
 
   /** Register before connect so only durable receivers advertise task-job support. */

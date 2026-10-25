@@ -46,6 +46,8 @@ export type RelayClientOptions = {
 };
 
 export type SendOptions = {
+  /** Local scheduling only; never serialized into relay routing metadata. */
+  urgent?: boolean;
   /** Negotiated opaque latest-state replay, independent of delivery ACKs. */
   retainedState?: boolean;
   stateKey?: string;
