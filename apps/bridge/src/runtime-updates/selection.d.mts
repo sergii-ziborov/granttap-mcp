@@ -1,0 +1,10 @@
+export type RuntimeState = {root?:string;version?:string;rejectedVersion?:string;previous?:RuntimeState};
+export function stableVersion(value:unknown):value is string;
+export function newerVersion(candidate:string,current:string):boolean;
+export function readState(directory:string):RuntimeState;
+export function saveState(directory:string,state:RuntimeState):void;
+export function runtimeVersion(root:string):string;
+export function versionRoot(directory:string,version:string):string;
+export function validRuntime(root:string|undefined,directory:string,version:string|undefined):boolean;
+export function selectedRuntime(bundled:string,directory:string):string;
+export function rollbackRuntime(bundled:string,directory:string,failedRoot?:string):boolean;

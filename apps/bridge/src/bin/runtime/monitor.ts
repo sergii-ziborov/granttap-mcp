@@ -1,3 +1,5 @@
+import { startRuntimeUpdates } from "../../runtime-updates";
+import { runtimeUpdateReadiness } from "../../runtime-updates/readiness";
 /** Persistent, terminal-free task sync for the GrantTap phone app on macOS. */
 import { join } from "node:path";
 import { RelayClient } from "../../../../../packages/core/relay-client";
@@ -25,6 +27,8 @@ let stopEndpointPublisher = () => {};
 let stopTaskDispatch = () => {};
 let stopTaskNetwork = () => {};
 let stopEngineRecovery = () => {};
+let stopRuntimeUpdates = () => {};
+let stopUpdateReadiness = () => {};
 
 try {
   const cfg = applyNetworkRoute(loadConfig(machineConfigPath()));
@@ -40,6 +44,8 @@ try {
   stopTaskNetwork = startTaskNetworkMonitor({ config: cfg, client,
     isLeader: monitor.isLeader, peerAllowed: controllerPeerGate(cfg), publish: monitor.publish });
   stopEndpointPublisher = startEndpointPublisher(cfg);
+  stopRuntimeUpdates = startRuntimeUpdates(monitor.canUpdate);
+  stopUpdateReadiness = runtimeUpdateReadiness(monitor.canUpdate);
 } catch (error) {
   process.stderr.write(
     `[granttap-mcp] monitor is not paired: ${error instanceof Error ? error.message : String(error)}\n`,
@@ -50,6 +56,8 @@ try {
 const stop = (): void => {
   if (stopping) return;
   stopping = true;
+  stopRuntimeUpdates();
+  stopUpdateReadiness();
   stopEngineRecovery();
   stopTaskDispatch();
   stopTaskNetwork();

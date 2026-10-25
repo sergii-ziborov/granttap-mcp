@@ -855,3 +855,10 @@ See [repository observations](apps/bridge/src/mesh/repository-details/README.md)
 The relay can retain recipient-encrypted catalogs, Mesh snapshots, capability usage and recent chat heads for reconnect without the computer. This bounded seven-day read cache is separate from the durable encrypted command queue. See [relay state publication](packages/core/retained-state/README.md). The relay never receives decryption keys or readable chat content.
 
 Tools & Skills matches recorded usage to the exact computer, provider and execution. Codex's native history projection supplies actual MCP invocation IDs, results and durations, including calls made through Code Mode. Claude Code uses observed tool-use, result and Skill records, aggregating MCP and skill calls before its recent-detail cache is trimmed. Execution summaries remain available when older call details fall outside the recent-event budget. Counts describe recorded evidence; installation and permission do not prove usage. Missing resource measurements remain unknown. See [native capability history](apps/bridge/src/sessions/native-capability-history/README.md).
+
+## Automatic runtime updates
+
+Installed GrantTap background services check for stable MCP updates automatically.
+Verified updates are staged separately and applied after active requests and pending
+decisions finish. Startup failures restore the previous version. Pairing and task
+policies are retained; source checkouts and running provider processes stay in place.

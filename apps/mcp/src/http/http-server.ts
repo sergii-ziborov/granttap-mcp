@@ -1,3 +1,6 @@
+import { trackHttpRuntimeWork } from "../../../bridge/src/runtime-updates/http-readiness";
+import { runtimeUpdateReadiness } from "../../../bridge/src/runtime-updates/readiness";
+import { approvalsStatus } from "../../../bridge/src/approvals/state";
 /**
  * GrantTap MCP over Streamable HTTP + loopback OAuth with website consent.
  *
@@ -63,6 +66,7 @@ export async function startHttpMcpServer(options: ServeOptions = {}): Promise<{
   const issuerUrl = new URL(`http://${host === "::1" ? "[::1]" : host}:${port}`);
   const provider = new GrantTapOAuthProvider(mcpUrl.href);
   const app = createMcpExpressApp({ host });
+  const httpIdle = trackHttpRuntimeWork(app);
   app.use(express.urlencoded({ extended: false }));
   app.use(mcpAuthRouter({
     provider,
@@ -120,11 +124,13 @@ export async function startHttpMcpServer(options: ServeOptions = {}): Promise<{
   const stopAccountRecovery = accountOrigin
     ? startAccountRecoveryPoller(accountOrigin, refreshRecoveredPairing) : () => {};
 
+  const stopUpdateReadiness=runtimeUpdateReadiness(()=>httpIdle() && approvalsStatus().pending.length===0);
   return {
     host,
     port,
     mcpUrl: mcpUrl.href,
     close: async () => {
+      stopUpdateReadiness();
       stopAccountRecovery();
       await sessions.close();
       resetConnectWatchers();

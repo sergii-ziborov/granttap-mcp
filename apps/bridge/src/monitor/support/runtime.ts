@@ -1,3 +1,4 @@
+import { runtimeWorkTracker } from "../../runtime-updates/readiness";
 import { refreshCodexHooks } from "../../codex-hook-trust";
 import { computerDisplayName } from "../../../../../packages/core/computer-name";
 import { RelayClient } from "../../../../../packages/core/relay-client";
@@ -38,6 +39,7 @@ import { publishMonitorCapabilities, stopMonitorCapabilities } from "../capabili
 export type SessionMonitor = {
   publish: () => Promise<void>;
   isLeader: () => boolean;
+  canUpdate: () => boolean;
   close: () => void;
 };
 
@@ -163,29 +165,13 @@ async function publishMonitorTick(input: {
 export function startSessionMonitor(client: RelayClient): SessionMonitor {
   const subscriptions = new Set<string>();
   const leadership = monitorLeadership();
-  primeSessionKeys(client);
-  publishedCatalog(client);
+  restoreMonitorState(client);
   let historyCache: { generatedAt: number; sessions: SessionsStatus["sessions"] } | undefined;
   let historyRead: Promise<SessionsStatus["sessions"]> | undefined;
   let lastHistoryPublishedAt = 0;
   let closed = false;
-  const publishMachineLoad = createMachineLoadPublisher({
-    log: (line) => process.stderr.write(`[monitor] ${line}\n`),
-  });
-  const loadLoop = startMachineLoadLoop({
-    connected: () => client.isConnected,
-    // Only the leader reports load. Every MCP server used to run this loop
-    // too, each with the code of the day it started, and the phone flickered
-    // between their answers.
-    publish: (status, intervalMs) => (leadership.acquire()
-      ? publishMachineLoad(client, status, intervalMs)
-      : Promise.resolve(undefined)),
-    onError: (error) => {
-      process.stderr.write(
-        `[monitor] load report failed: ${error instanceof Error ? error.message : String(error)}\n`,
-      );
-    },
-  });
+  const work = runtimeWorkTracker(() => approvalsStatus().pending.length > 0);
+  const loadLoop = monitorLoadLoop(client, leadership);
 
   const history = (force = false): Promise<SessionsStatus["sessions"]> => {
     if (historyRead) return historyRead;
@@ -209,7 +195,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
     lastHistoryPublishedAt = next.lastHistoryPublishedAt;
   });
 
-  const off = client.onMessage(async (payload: Payload, peerPublicKey) => {
+  const off = client.onMessage((payload: Payload, peerPublicKey) => work.run(async () => {
     if (payload.type === "hello" && payload.role === "phone") {
       confirmPendingController(client.room, peerPublicKey);
       recordControllerName(peerPublicKey, payload.deviceName);
@@ -219,8 +205,8 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
         await replayNativeQuestions(client, peerPublicKey);
       }
     }
-    return handleMonitorMessage(client, payload, { leadership, subscriptions, publish, peerPublicKey });
-  });
+    return await handleMonitorMessage(client, payload, { leadership, subscriptions, publish, peerPublicKey });
+  }));
 
   const offConnected = client.onConnected?.(() => publish().catch(() => {}));
 
@@ -244,6 +230,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
   return {
     publish: () => publish(false),
     isLeader: () => leadership.acquire(),
+    canUpdate: work.idle,
     close: () => {
       closed = true;
       offConnected?.();
@@ -278,4 +265,29 @@ function startQuestionLoop(client: RelayClient, leadership: { acquire: () => boo
 async function replayNativeQuestions(client: RelayClient, peerPublicKey: string) {
   const known = publishedCatalog(client);
   if (known) await publishCodexQuestions(client, known.sessions, { replay: true, peerPublicKey }).catch(() => {});
+}
+
+function restoreMonitorState(client: RelayClient): void {
+  primeSessionKeys(client);
+  publishedCatalog(client);
+}
+
+function monitorLoadLoop(client: RelayClient, leadership: ReturnType<typeof monitorLeadership>) {
+  const publishMachineLoad = createMachineLoadPublisher({
+    log: (line) => process.stderr.write(`[monitor] ${line}\n`),
+  });
+  return startMachineLoadLoop({
+    connected: () => client.isConnected,
+    // Only the leader reports load. Every MCP server used to run this loop
+    // too, each with the code of the day it started, and the phone flickered
+    // between their answers.
+    publish: (status, intervalMs) => (leadership.acquire()
+      ? publishMachineLoad(client, status, intervalMs)
+      : Promise.resolve(undefined)),
+    onError: (error) => {
+      process.stderr.write(
+        `[monitor] load report failed: ${error instanceof Error ? error.message : String(error)}\n`,
+      );
+    },
+  });
 }

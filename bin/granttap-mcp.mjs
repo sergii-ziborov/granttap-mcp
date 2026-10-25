@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { selectedRuntime, runtimeVersion } from "../apps/bridge/src/runtime-updates/selection.mjs";
+import { superviseRuntime } from "../apps/bridge/src/runtime-updates/supervision.mjs";
 import { createRequire } from "node:module";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -12,7 +15,12 @@ if (!isSupportedNode(process.versions.node)) {
   process.exit(1);
 }
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const bundledRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+const updateDirectory = join(process.env.GRANTTAP_CONFIG_DIR ?? process.env.NODVOX_CONFIG_DIR
+  ?? join(homedir(), ".granttap"), "runtime-updates");
+const managed = bundledRoot.includes("node_modules") && process.env.GRANTTAP_LOCAL !== "1"
+  && process.env.GRANTTAP_DISABLE_AUTO_UPDATE !== "1" && !process.env.NODE_TEST_CONTEXT;
+const root = managed ? selectedRuntime(bundledRoot, updateDirectory) : bundledRoot;
 const [command = "mcp", ...commandArgs] = process.argv.slice(2);
 const argument = commandArgs[0];
 
@@ -85,7 +93,7 @@ if (command === "mcp") {
 
 // Cursor (and LaunchAgents) often spawn with cwd=$HOME. Bare `--import tsx` then
 // resolves from home and dies with ERR_MODULE_NOT_FOUND. Pin absolute loaders + cwd.
-const requireFromBin = createRequire(import.meta.url);
+const requireFromBin = createRequire(join(root,"package.json"));
 let preflight;
 let loader;
 try {
@@ -114,22 +122,27 @@ if (!preflight || !loader) {
 const forwardedArgs = ["connect", "status", "reset", "mesh", "setup", "restrictions", "phone"].includes(command)
   ? (command === "mesh" || command === "restrictions" ? commandArgs.slice(1) : commandArgs)
   : [];
+const background = command === "internal" && ["monitor", "serve"].includes(argument);
 const child = spawn(
   process.execPath,
   ["--require", preflight, "--import", pathToFileURL(loader).href,
     "--import", pathToFileURL(join(root, "apps", "bridge", "src", "engine", "startup", "activation-entry.ts")).href,
     entry, ...forwardedArgs],
   {
-    stdio: "inherit",
+    stdio: background ? ["inherit", "inherit", "inherit", "ipc"] : "inherit",
     cwd: root,
     env: {
       ...process.env,
+      GRANTTAP_PACKAGE_VERSION: runtimeVersion(root),
       NODE_PATH: [join(root, "node_modules"), process.env.NODE_PATH].filter(Boolean).join(delimiter),
     },
   },
 );
 
+const supervision = background && managed ? superviseRuntime(child, {bundled:bundledRoot, root, directory:updateDirectory}) : undefined;
+
 function stopChild() {
+  supervision?.stop();
   try {
     if (process.platform === "win32") child.kill();
     else child.kill("SIGTERM");
@@ -148,6 +161,7 @@ child.on("error", (error) => {
 });
 
 child.on("exit", (code, signal) => {
+  supervision?.onExit(code, signal);
   if (signal && process.platform !== "win32") {
     try { process.kill(process.pid, signal); } catch { process.exit(code ?? 1); }
   } else process.exit(code ?? 1);
