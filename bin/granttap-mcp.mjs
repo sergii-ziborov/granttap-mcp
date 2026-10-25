@@ -2,7 +2,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { selectedRuntime, runtimeVersion } from "../apps/bridge/src/runtime-updates/selection.mjs";
+import { selectedRuntime, runtimeVersion, rollbackRuntime } from "../apps/bridge/src/runtime-updates/selection.mjs";
 import { superviseRuntime } from "../apps/bridge/src/runtime-updates/supervision.mjs";
 import { createRequire } from "node:module";
 import { delimiter, dirname, join } from "node:path";
@@ -113,6 +113,7 @@ try {
   }
 }
 if (!preflight || !loader) {
+  if (root !== bundledRoot) rollbackRuntime(bundledRoot, updateDirectory, root);
   process.stderr.write(
     "[granttap-mcp] unable to resolve the installed tsx runtime — reinstall granttap-mcp\n",
   );
