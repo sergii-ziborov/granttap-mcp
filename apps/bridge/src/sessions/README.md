@@ -30,6 +30,9 @@ Grok discovery reads the local session summaries and visible conversation histor
 Both role-based records and current typed user/assistant records are supported.
 Typed user records must have a valid prompt index. Environment preambles, synthetic
 reminders, system messages, and hidden reasoning are excluded from the timeline.
+Rows without timestamps use recorded native prompt clocks, keeping resumed
+answers below the current request. Native completion marks the final visible
+answer. Existing entry IDs replace cached timestamps without duplicating history.
 Session continuation uses the installed Grok CLI and its existing authentication.
 
 ## License

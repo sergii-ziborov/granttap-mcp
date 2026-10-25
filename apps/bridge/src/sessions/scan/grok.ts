@@ -19,6 +19,7 @@ import {
 } from "../support/common";
 import type { CapabilityObservation } from "../telemetry";
 import { grokNativeActivity } from '../../providers/grok-activity';
+import { grokTimeline } from '../../providers/grok-timeline';
 
 type Summary = {
   info?: { id?: unknown; cwd?: unknown };
@@ -94,6 +95,8 @@ function parseLog(path: string, sessionId: string, fallbackTime: number, fullTex
   let lastMessageAt = 0;
   let tokens = 0;
   let lastTurn = 0;
+  const timeline = grokTimeline(dirname(path));
+  let prompt: { at: number; row: number } | undefined;
   lines.forEach((line, index) => {
     const row = safeParse(line);
     if (!row) return;
@@ -101,14 +104,23 @@ function parseLog(path: string, sessionId: string, fallbackTime: number, fullTex
     const role = visibleRole(row, message);
     if (role === "reasoning" || role === "system") return;
     const messageAt = ts(row.timestamp ?? message.timestamp);
-    const createdAt = messageAt || fallbackTime + index;
+    const legacyTime = messageAt || fallbackTime + index;
+    const indexValue = message.prompt_index ?? row.prompt_index;
+    const indexedUser = (message.role ?? row.role ?? message.type ?? row.type) === 'user'
+      && typeof indexValue === 'number' && Number.isSafeInteger(indexValue) && indexValue >= 0;
+    if (role === 'user' || indexedUser) {
+      const at = messageAt || (indexedUser ? timeline.prompts.get(indexValue as number) : undefined);
+      if (role === 'user' || at) prompt = at ? { at, row: index } : undefined;
+    }
+    const createdAt = messageAt || (prompt ? prompt.at + index - prompt.row : legacyTime);
     const texts = textBlocks(message.content);
     if (role === "user") {
       const text = texts.join("\n").trim();
       if (text) {
-        if (messageAt) lastMessageAt = Math.max(lastMessageAt, messageAt);
+        if (messageAt || prompt) lastMessageAt = Math.max(lastMessageAt, createdAt);
         firstUser ??= text;
-        pushEntry({ fullText, out: entries, seen: seen, sessionId: sessionId, kind: "user", text: text, createdAt: createdAt, ordinal: index });
+        pushEntry({ fullText, out: entries, seen, sessionId, kind: "user", text, createdAt, ordinal: index,
+          idOverride: `${sessionId}:${legacyTime}:${index}` });
         tokens += estimateTokens(text);
       }
       return;
@@ -116,11 +128,12 @@ function parseLog(path: string, sessionId: string, fallbackTime: number, fullTex
     if (role !== "assistant") return;
     let turnTokens = 0;
     texts.forEach((text, block) => {
-      pushEntry({ fullText, out: entries, seen: seen, sessionId: sessionId, kind: "message", text: text, createdAt: createdAt, ordinal: index * 100 + block });
+      pushEntry({ fullText, out: entries, seen, sessionId, kind: "message", text, createdAt, ordinal: index * 100 + block,
+        idOverride: `${sessionId}:${legacyTime}:${index * 100 + block}` });
       turnTokens += estimateTokens(text);
     });
-    if (texts.some((text) => !!text.trim()) && messageAt) {
-      lastMessageAt = Math.max(lastMessageAt, messageAt);
+    if (texts.some((text) => !!text.trim()) && (messageAt || prompt)) {
+      lastMessageAt = Math.max(lastMessageAt, createdAt);
     }
     const blocks = Array.isArray(message.content) ? message.content : [];
     blocks.forEach((block: Record<string, unknown>, blockIndex: number) => {
@@ -129,7 +142,9 @@ function parseLog(path: string, sessionId: string, fallbackTime: number, fullTex
       const input = block.input;
       const identity = classifyTool(name, input);
       const sourceId = String(block.id ?? `${sessionId}:${index}:${blockIndex}`);
-      pushEntry({ fullText, out: entries, seen: seen, sessionId: sessionId, kind: "tool", text: toolSummary(name, input), createdAt: createdAt, ordinal: index * 100 + blockIndex, extras: identity });
+      pushEntry({ fullText, out: entries, seen, sessionId, kind: "tool", text: toolSummary(name, input),
+        createdAt, ordinal: index * 100 + blockIndex, extras: identity,
+        idOverride: `${sessionId}:${legacyTime}:${index * 100 + blockIndex}` });
       usage.push({
         sourceId, sessionId, toolName: identity.toolName, createdAt,
         mcpServer: identity.mcpServer, skill: identity.skill,
@@ -141,6 +156,11 @@ function parseLog(path: string, sessionId: string, fallbackTime: number, fullTex
     tokens += turnTokens;
     if (turnTokens > 0) lastTurn = turnTokens;
   });
+  const last = entries.at(-1);
+  if (prompt && last?.kind === 'message' && timeline.completedAt && timeline.completedAt >= last.createdAt) {
+    last.kind = 'final'; last.createdAt = timeline.completedAt;
+    lastMessageAt = Math.max(lastMessageAt, timeline.completedAt);
+  }
   return { entries, usage, firstUser, lastMessageAt: lastMessageAt || undefined, tokens, lastTurn };
 }
 
