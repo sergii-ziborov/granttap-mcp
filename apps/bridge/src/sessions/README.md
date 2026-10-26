@@ -35,6 +35,11 @@ answers below the current request. Native completion marks the final visible
 answer. Existing entry IDs replace cached timestamps without duplicating history.
 Session continuation uses the installed Grok CLI and its existing authentication.
 
+Prepared transfer chats retain their stable Task identity and are ranked again
+after native-session aliasing, before the bounded live and history windows.
+A transferred chat therefore keeps its native activity position instead of
+being appended behind older chats and disappearing from the phone's catalog.
+
 ## License
 
 Licensed under the GrantTap Commercial Source License. See LICENSE and NOTICE.

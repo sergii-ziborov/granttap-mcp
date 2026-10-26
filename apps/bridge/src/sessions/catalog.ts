@@ -56,9 +56,9 @@ async function cooperativeProviderScans(maxFiles = MAX_FILES): Promise<ProviderS
   return scans;
 }
 
-function sortedUniqueSessions(scans: ProviderScan[]): SessionInfo[] {
+function sortedUniqueSessions(sessions: SessionInfo[]): SessionInfo[] {
   const merged = new Map<string, SessionInfo>();
-  for (const session of scans.flatMap((scan) => scan.sessions)) {
+  for (const session of sessions) {
     const key = sessionKey(session);
     const previous = merged.get(key);
     if (!previous || session.lastActivityAt >= previous.lastActivityAt) {
@@ -97,8 +97,12 @@ function pickWithReserve(
 }
 
 function catalogFromScans(scans: ProviderScan[]) {
+  const native = sortedUniqueSessions(scans.flatMap((scan) => scan.sessions));
+  // Prepared transfers replace native ids; rank their native activity before
+  // the bounded live/history windows, rather than appending them after older chats.
+  const sessions = sortedUniqueSessions(localTaskTransfers().catalog(native));
   return {
-    all: localTaskTransfers().catalog(sortedUniqueSessions(scans)).map(session => ({ ...session,
+    all: sessions.map(session => ({ ...session,
       transfer: localTransferContinuations().notice(session.sessionId) })),
     tokensRecent: scans.reduce((sum, scan) => sum + scan.tokensRecent, 0),
     sourceLimited: scans.some((scan) => scan.sourceLimited === true),
