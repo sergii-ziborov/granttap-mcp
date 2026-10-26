@@ -29,3 +29,8 @@ consumed them. Tests exercise native delivery, framing, socket trust, durable
 deduplication, and refusal without launching the CLI.
 
 License: GrantTap Commercial Source License in the repository-root `LICENSE`.
+
+Document staging for a native-only question keeps the file note inside its
+original answer envelope. The host's native question and all paired controllers
+therefore observe the same question item as answered; document paths remain
+available to the admitted turn. Ordinary chat text is unchanged.

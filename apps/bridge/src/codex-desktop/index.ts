@@ -1,3 +1,4 @@
+import { nativeQuestionAttachmentEnvelope } from './question-attachment-envelope';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import type { SessionInfo } from '../../../../packages/protocol/schema';
@@ -72,7 +73,7 @@ function turnRequest(input: { session: SessionInfo; text: string; images: string
       networkAccess: false, excludeTmpdirEnvVar: false, excludeSlashTmp: false }
     : access === 'full' ? { type: 'dangerFullAccess' } : undefined;
   return { threadId: session.sessionId, clientUserMessageId: options.messageId ?? randomUUID(),
-    input: [{ type: 'text', text, text_elements: [] }, ...images.map(path => ({ type: 'localImage', path }))],
+    input: [{ type: 'text', text: options.nativeOnly ? nativeQuestionAttachmentEnvelope(text) : text, text_elements: [] }, ...images.map(path => ({ type: 'localImage', path }))],
     ...(options.model ? { model: options.model } : {}), ...(effort ? { effort } : {}),
     ...(sandboxPolicy ? { sandboxPolicy } : {}) };
 }

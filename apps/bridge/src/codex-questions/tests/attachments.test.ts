@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 import { fixture } from '../../codex-desktop/tests/fixture';
@@ -61,10 +61,30 @@ test('an attachment-capable answer delivers its image and durable document to th
   assert.ok(input.input[0].text.includes('call_attachment_fixture'));
   assert.ok(input.input[0].text.includes('Inspect these attached files'));
   assert.equal(input.input[1].type, 'localImage');
-  const file = input.input[0].text.split('\n').at(-1).split(': ').at(-1);
+  const reply = JSON.parse(input.input[0].text.split('<send_user_message_question_reply>')[1]
+    .split('</send_user_message_question_reply>')[0])[0];
+  const file = reply.answer.split('\n').at(-1).split(': ').at(-1);
   assert.equal(readFileSync(file, 'utf8'), 'Synthetic document bytes');
   await handleCodexQuestionReply(f.client, { ...message, messageId: 'question-attachment-phone-two' }, async () => {}, 'phone');
   assert.equal(f.requests.filter(r => r.method === 'thread-follower-start-turn').length, 1);
   assert.ok(f.sent.some(p => p.type === 'delivery.receipt' && p.messageId === message.messageId && p.status === 'accepted'));
   assert.equal(existsSync(f.marker), false, 'The answer never starts a competing CLI writer');
+});
+
+test('a document answer is observed as the original native question reply and clears its card across controllers', async t => {
+  const f = await questionFixture(t);
+  const document = { name: 'native-evidence.txt', mimeType: 'text/plain', data: Buffer.from('Synthetic document').toString('base64') };
+  await handleCodexQuestionReply(f.client, { type: 'user.message', requestId: f.event.requestId,
+    sessionId: f.session.sessionId, messageId: 'native-observed-attachment', createdAt: Date.now(),
+    text: 'Inspect the evidence', attachments: [document], questionReplyFormat: 'attachments-v1' }, async () => {}, 'phone');
+  const nativeText = f.requests.find(r => r.method === 'thread-follower-start-turn')?.params.turnStart.request.input[0].text;
+  assert.equal(typeof nativeText, 'string');
+  appendFileSync(join(f.root, 'question.jsonl'), JSON.stringify({ timestamp: new Date().toISOString(),
+    type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: nativeText }] } }) + '\n');
+  f.sent.length = 0;
+  await publishCodexQuestions(f.client, [f.session], { replay: true, peerPublicKey: 'other-phone' });
+  const resolved = f.sent.find(p => p.type === 'approval.resolved');
+  assert.equal(resolved?.type === 'approval.resolved' && resolved.nativeUiCleared, true);
+  assert.equal(f.sent.filter(p => p.type === 'agent.event').length, 0);
+  assert.equal(f.requests.filter(r => r.method === 'thread-follower-start-turn').length, 1);
 });
