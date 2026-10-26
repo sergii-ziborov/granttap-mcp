@@ -32,6 +32,13 @@ the one-time URL from structured tool output when a host omits MCP metadata.
 The separate coding-app OAuth page can also use passkey to authorize that MCP
 client. The Codex-owned plugin management page is not this card.
 
+The Automatic updates switch calls `set_runtime_auto_update` with an explicit
+boolean and displays the confirmed persisted result from the server. The setting
+is computer-wide for the GrantTap runtime; marketplace plugin updates stay under
+the coding app's control. A service environment override locks it off. Failed
+saves do not optimistically change the switch. Pairing and capability policy are
+stored separately and preserved.
+
 Tests in `tests/` exercise isolated keys, a loopback encrypted phone connection,
 expiry, non-mutating status, and actual DOM button/host-message behavior.
 

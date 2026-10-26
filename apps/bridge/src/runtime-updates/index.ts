@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { configDir } from '../config/runtime/paths';
 import { latestRelease, trustedRelease, installRelease, verifyRelease, type Release } from './registry';
 import { newerVersion, readState, runtimeVersion, saveState, validRuntime, versionRoot } from './selection.mjs';
+import { automaticUpdatesAllowed } from './preferences/storage.mjs';
+export { runtimeUpdateSettings, setRuntimeAutoUpdate } from './preferences';
 
 type Options={root:string;stateDirectory:string;now?:()=>number;latest?:()=>Promise<unknown>;
   idle:()=>boolean;install?:(release:Release,directory:string)=>Promise<void>;
@@ -11,11 +13,13 @@ type Options={root:string;stateDirectory:string;now?:()=>number;latest?:()=>Prom
 
 /** Stage verified releases independently; activation waits until no request or decision is pending. */
 export async function checkForRuntimeUpdate(options:Options):Promise<string|undefined> {
+  if(!automaticUpdatesAllowed(options.stateDirectory))return;
   mkdirSync(options.stateDirectory,{recursive:true,mode:0o700});
   const lock=join(options.stateDirectory,'install.lock');let fd:number;
   try {fd=openSync(lock,'wx',0o600);} catch {return undefined;}
   try {
     const release=await (options.latest??latestRelease)();
+    if(!automaticUpdatesAllowed(options.stateDirectory))return;
     const state=readState(options.stateDirectory);
     if(!trustedRelease(release) || !newerVersion(release.version,runtimeVersion(options.root))
       || state.rejectedVersion===release.version || (state.version && !newerVersion(release.version,state.version)))return;
@@ -23,9 +27,10 @@ export async function checkForRuntimeUpdate(options:Options):Promise<string|unde
     if(!validRuntime(candidate,options.stateDirectory,release.version)) {
       await (options.install??installRelease)(release,options.stateDirectory);
     }
+    if(!automaticUpdatesAllowed(options.stateDirectory))return;
     await (options.verify??verifyRelease)(candidate);
     if(!validRuntime(candidate,options.stateDirectory,release.version))throw Error('Runtime verification failed');
-    if(!options.idle())return;
+    if(!options.idle() || !automaticUpdatesAllowed(options.stateDirectory))return;
     saveState(options.stateDirectory,{root:candidate,version:release.version,
       previous:state.root?{root:state.root,version:state.version}:undefined});
     options.activate?.(candidate);return candidate;
@@ -42,6 +47,7 @@ export function runtimeUpdateLoop(options:LoopOptions):()=>void {
   const tick=async()=>{
     if(stopped)return;
     try {
+      if(!automaticUpdatesAllowed(options.directory)){lastCheck=0;return;}
       const lock=join(options.directory,'install.lock');
       try {if(now()-statSync(lock).mtimeMs>10*60_000)unlinkSync(lock);} catch { /* no stale lock */ }
       if(now()-lastCheck>=4*60*60_000) {

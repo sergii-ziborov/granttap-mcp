@@ -70,11 +70,11 @@ async function call(name, args = {}) {
     const result = legacyBridge
       ? await legacyCall(name, args)
       : await request("tools/call", { name, arguments: args });
-    if (result?.isError) message("Could not complete the request. Refresh status and check the relay before retrying.");
+    if (result?.isError) message("Could not complete the request. Refresh status before retrying.");
     else { render(result); message("Status updated."); }
     return result;
   } catch {
-    message("No successful response. Refresh status before retrying; pairing may already have changed.");
+    message("No successful response. Refresh status before retrying.");
   } finally {
     setBusy(false);
   }

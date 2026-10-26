@@ -239,3 +239,28 @@ test("pending pairing refreshes while visible and host notifications update the 
   notify("ui/notifications/tool-cancelled");
   assert.match(ui.el("message").textContent || "", /Request cancelled/);
 });
+
+test("automatic updates switch sends an explicit preference and displays only confirmed state", async t => {
+  const ui = await fixture(t);
+  ui.set({ status: "paired", providers: [], runtimeUpdates: { enabled: true, lockedByEnvironment: false } });
+  ui.button("refresh").click(); await ui.settle();
+  assert.equal(ui.el("automatic-updates").getAttribute("aria-checked"), "true");
+  ui.set({ status: "paired", providers: [], runtimeUpdates: { enabled: false, lockedByEnvironment: false } });
+  ui.button("automatic-updates").click(); await ui.settle();
+  assert.equal(ui.calls.at(-1)?.name, "set_runtime_auto_update");
+  assert.deepEqual(JSON.parse(JSON.stringify(ui.calls.at(-1)?.arguments)), { enabled: false });
+  assert.equal(ui.el("automatic-updates").getAttribute("aria-checked"), "false");
+  ui.fail(); ui.button("automatic-updates").click(); await ui.settle();
+  assert.equal(ui.el("automatic-updates").getAttribute("aria-checked"), "false");
+});
+
+test("service-disabled updates remain disabled after refresh restores the other controls", async t => {
+  const ui = await fixture(t);
+  ui.set({ status: "paired", providers: [], runtimeUpdates: { enabled: false, lockedByEnvironment: true } });
+  ui.button("refresh").click(); await ui.settle();
+  assert.equal(ui.el("automatic-updates").hasAttribute("disabled"), true);
+  assert.match(ui.el("updates-detail").textContent || "", /Disabled by service configuration/);
+  const before = ui.calls.length; ui.button("automatic-updates").click(); await ui.settle();
+  assert.equal(ui.calls.length, before);
+  assert.equal(ui.el("refresh").hasAttribute("disabled"), false);
+});

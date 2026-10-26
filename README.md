@@ -862,3 +862,10 @@ Installed GrantTap background services check for stable MCP updates automaticall
 Verified updates are staged separately and applied after active requests and pending
 decisions finish. Startup failures restore the previous version. Pairing and task
 policies are retained; source checkouts and running provider processes stay in place.
+
+In the plugin's GrantTap connection card, use **Automatic updates: On / Off**.
+The choice is saved for this computer and takes effect without restarting the
+service. Off prevents further update checks and activation; an already running
+download may finish staging, and the current runtime keeps running. Turn it on to
+resume automatic checks. `GRANTTAP_DISABLE_AUTO_UPDATE=1` on the service overrides
+the card and keeps the switch disabled.

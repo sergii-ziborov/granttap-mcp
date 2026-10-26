@@ -7,6 +7,7 @@ import { packageVersion } from "../status/package-version";
 import { connectionRuntimeStatus } from "../mcp-tools/connect/relay";
 import { beginEnrollment, cancelEnrollment, enrollmentIsOpen } from "./enrollment";
 import { loadAccountLink } from "../../../bridge/src/account-recovery/link";
+import { runtimeUpdateSettings } from "../../../bridge/src/runtime-updates";
 
 export const connectionOutput = {
   status: z.enum(["disconnected", "paired", "pairing", "expired", "connected"]),
@@ -25,6 +26,7 @@ export const connectionOutput = {
   providers: z.array(z.object({ id: z.string(), status: z.string(), detail: z.string() })),
   roomPrefix: z.string(),
   accountLinkSaved: z.boolean(),
+  runtimeUpdates: z.object({ enabled: z.boolean(), lockedByEnvironment: z.boolean() }),
   passkeyUrl: z.string().url().optional(),
 };
 
@@ -80,6 +82,7 @@ export class ConnectionState {
         providers: inspectProviderStatusSnapshot().providers.map(({ id, status, detail }) => ({ id, status, detail })),
         roomPrefix: config?.room ? config.room.slice(0, 8) : "",
         accountLinkSaved: loadAccountLink() !== null,
+        runtimeUpdates: runtimeUpdateSettings(),
       },
       _meta: { granttap: code ? { pairingUri: code.pairingUri, qrDataUrl: code.qrDataUrl } : {} },
     };

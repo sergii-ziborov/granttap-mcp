@@ -15,7 +15,7 @@ connected.
 Install the durable local GrantTap helper on each Mac or Windows computer you connect:
 
 ```bash
-npm install --global granttap-mcp@0.8.45
+npm install --global granttap-mcp
 granttap setup
 ```
 
@@ -66,7 +66,7 @@ status, and confirmed Reconnect controls.
 Install the same local helper first, then install the plugin:
 
 ```bash
-npm install --global granttap-mcp@0.8.45
+npm install --global granttap-mcp
 granttap setup
 claude plugin marketplace add sergii-ziborov/granttap-mcp
 claude plugin install granttap@granttap
@@ -87,7 +87,7 @@ Cloud Agents start that process. They cannot fetch `http://127.0.0.1`.
 ### Grok Build
 
 ```bash
-npm install --global granttap-mcp@0.8.45
+npm install --global granttap-mcp
 granttap setup
 grok plugin marketplace add sergii-ziborov/granttap-mcp
 grok plugin install granttap --trust
@@ -103,6 +103,7 @@ healthy pairing merely to display a new QR.
 ## Included tools
 
 - `connection_status` opens read-only connection controls and diagnostics.
+- `set_runtime_auto_update` saves this computer's automatic runtime update setting.
 - `connect` pairs the computer or reuses its current pairing.
 - `reconnect` creates a fresh pairing only after explicit confirmation.
 - `connect_with_passkey` starts a one-time browser passkey request to link this Mac to an account.
@@ -114,6 +115,12 @@ Codex, Claude Code, Cursor, and Grok Build use the persistent local HTTP
 service installed by `granttap setup`. See
 [granttap.com](https://granttap.com) for the iPhone and Apple Watch app,
 privacy policy, and terms.
+
+The connection card has an **Automatic updates: On / Off** switch. The saved
+choice applies to this computer's GrantTap runtime and is read by the running
+service without a restart. Off keeps the current version and stops future checks
+and activation. Service configuration can lock updates off. This switch controls
+the GrantTap runtime; marketplace plugin updates remain managed by the coding app.
 
 The plugin and local MCP runtime are distributed under the [GrantTap Commercial Source License](LICENSE).
 The GrantTap iPhone and Apple Watch app and hosted service have separate terms.

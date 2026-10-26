@@ -8,6 +8,7 @@ import { ConnectionState, connectionOutput } from "../../connection-center/state
 import { CONNECTION_WIDGET_URI } from "./widget";
 import { resetRelay, relay } from "./relay";
 import { startPasskeyAccountLink } from "../../connection-center/passkey";
+import { registerRuntimeUpdateControl } from "../../connection-center/update-controls";
 
 const widgetMeta = {
   ui: { resourceUri: CONNECTION_WIDGET_URI, visibility: ["model", "app"] },
@@ -26,6 +27,7 @@ const changes = {
 
 export function registerConnectTool(server: McpServer): void {
   const state = new ConnectionState();
+  registerRuntimeUpdateControl(server, () => connectionResult(state), widgetMeta);
   let pendingCall: Promise<CallToolResult> | null = null;
   const perform = (options: { issue?: boolean; replace?: boolean; addController?: boolean } = {}) => {
     if (pendingCall) return pendingCall;
@@ -126,7 +128,7 @@ async function connect(
 
 function connectionResult(state: ConnectionState): CallToolResult {
   const snapshot = state.snapshot();
-  const { status, computer, relay, version, relayStatus } = snapshot.structuredContent;
+  const { status, computer, relay, version, relayStatus, runtimeUpdates } = snapshot.structuredContent;
   const instructions = status === "pairing"
     ? "Use the GrantTap card: tap Add a device if needed, then scan the QR on the card."
     : status === "disconnected" ? "Use the GrantTap card and tap Add a device. The QR stays on the card."
@@ -135,7 +137,7 @@ function connectionResult(state: ConnectionState): CallToolResult {
   return {
     ...snapshot,
     content: [{ type: "text", text:
-      `GrantTap: ${status}. Computer: ${computer}. MCP ${version}. Relay: ${relay || "not configured"} (${relayStatus}).\n${instructions}`,
+      `GrantTap: ${status}. Computer: ${computer}. MCP ${version}. Relay: ${relay || "not configured"} (${relayStatus}). Automatic runtime updates: ${runtimeUpdates.enabled ? "on" : "off"}.\n${instructions}`,
     }],
   };
 }

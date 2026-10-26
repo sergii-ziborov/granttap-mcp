@@ -7,6 +7,16 @@ function message(text) { $("message").textContent = text; }
 function setBusy(value) {
   busy = value;
   document.querySelectorAll("button").forEach(button => { button.disabled = value; });
+  renderUpdateSetting();
+}
+function renderUpdateSetting() {
+  const setting = current.runtimeUpdates;
+  $("automatic-updates").textContent = "Automatic updates: " + (setting ? setting.enabled ? "On" : "Off" : "Unknown");
+  $("automatic-updates").setAttribute("aria-checked", String(setting?.enabled === true));
+  $("automatic-updates").disabled = busy || !setting || setting.lockedByEnvironment;
+  $("updates-detail").textContent = setting?.lockedByEnvironment
+    ? "Disabled by service configuration."
+    : "Checks for stable GrantTap runtime updates every 4 hours. Off keeps this computer’s current version.";
 }
 function clearCode() {
   pairingUri = "";
@@ -19,6 +29,7 @@ function render(value) {
   const state = result?.structuredContent ?? result?.structured_content;
   if (!state?.status || result.isError) return;
   current = state;
+  renderUpdateSetting();
   clearCode();
   const meta = result._meta?.granttap ?? {};
   const candidate = state.passkeyUrl || meta.passkeyUrl;
@@ -102,6 +113,7 @@ $("connect").addEventListener("click", () => {
   call("connect");
 });
 $("refresh").addEventListener("click", () => call("connection_status"));
+$("automatic-updates").addEventListener("click", () => call("set_runtime_auto_update", { enabled: !current.runtimeUpdates.enabled }));
 $("passkey").addEventListener("click", () => call("connect_with_passkey"));
 $("reconnect").addEventListener("click", () => {
   pendingMode = "reconnect";

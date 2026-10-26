@@ -1,7 +1,8 @@
 # MCP tools
 
 The Personal MCP surface is an exact allowlist: `connection_status`, `connect`,
-`reconnect`, `notify`, `ask_yes_no`, and `ask`. Context compilation belongs
+`connect_with_passkey`, `reconnect`, `set_runtime_auto_update`, `notify`,
+`ask_yes_no`, `ask`, and `offload_task`. Context compilation belongs
 inside Project Mesh, not as extra tools. `relay.ts` owns one shared encrypted relay connection
 and the durable question lifecycle. Machine setup, custom relay selection, and
 pairing reset remains an explicit CLI operation. The narrower `reconnect` MCP
@@ -32,3 +33,7 @@ The connection center lives in `../connection-center`. Status requests are
 read-only. Saved pairing, a connected relay socket, and recent encrypted phone
 activity are separate observations. Only explicit connect/reconnect requests
 create codes; transfer material is carried in UI metadata and a user-facing QR.
+
+`set_runtime_auto_update` saves the user’s computer-wide runtime update choice
+from the connection card. It preserves pairing and capability policy, and cannot
+override a service-level disable. Status exposes the confirmed setting.

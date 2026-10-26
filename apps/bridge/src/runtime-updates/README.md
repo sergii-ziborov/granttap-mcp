@@ -14,7 +14,13 @@ failed version is quarantined until a newer release appears.
 
 Pairing, account credentials, task history, capability policy, and provider
 installations are not modified by runtime updates. Offline checks retry later.
-Source checkouts and test processes do not update themselves. Administrators may
+Source checkouts and test processes do not update themselves. The plugin's
+connection card offers a persistent **Automatic updates: On / Off** switch for
+this computer. The running monitor reads it before registry checks and activation;
+the launcher checks it again before handing off an owned service. Off keeps the
+current selected runtime and rollback protection. An in-progress download may
+finish staging but cannot activate while off. Re-enabling is observed on the next
+minute tick without restarting services. Administrators may
 set `GRANTTAP_DISABLE_AUTO_UPDATE=1` on their service to retain their installed
 version. Private staging consumes space; old versions are retained for rollback.
 
