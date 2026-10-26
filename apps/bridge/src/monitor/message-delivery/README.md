@@ -22,6 +22,11 @@ message again. Only the original authenticated controller, room, and session
 may read it. Older unscoped records are not exposed through this query.
 Receipts to a known controller use its device encryption directly, so a missed
 task-key grant cannot hide a provider rejection or processing acknowledgement.
+For existing chats, refusals before provider dispatch (missing task, disabled provider, or rejected
+task capability) also persist a scoped rejected receipt before the relay box is
+consumed. The original controller can recover that specific refusal after a
+restart or lost response. Missing attachment recovery retains its existing
+transport behavior; an admission refusal is never reported as agent activity.
 
 A correlated `agentActivityAt` receipt is emitted only after provider stream output
 confirms activity. It is retained under the original controller, room and session

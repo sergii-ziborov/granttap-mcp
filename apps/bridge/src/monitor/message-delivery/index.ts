@@ -1,7 +1,8 @@
 import type { Payload } from "../../../../../packages/protocol/schema";
 import type { RelayClient } from "../../../../../packages/core/relay-client";
 import { abandonDelivery, beginDelivery, completeDelivery,
-  acknowledgeProcessingDelivery, processingDeliveryAcknowledged, completedDeliveryFailure, deliveryReceiptStatus } from "../../delivery";
+  acknowledgeProcessingDelivery, processingDeliveryAcknowledged, completedDeliveryFailure, deliveryReceiptStatus,
+  rejectCompletedDelivery } from "../../delivery";
 import { sendDeliveryReceipt } from "../handlers/receipts";
 import { handleUserMessage } from "../handlers/user-message";
 
@@ -34,9 +35,15 @@ export async function handleInboundUserMessage(
       if (!payload.messageId) return;
       acknowledgeProcessingDelivery(payload.messageId);
       await sendDeliveryReceipt(client, payload.messageId, "accepted", undefined, payload.sessionId, peerPublicKey);
-    }, peerPublicKey, native);
+    }, peerPublicKey, native, async error => {
+      if (!payload.messageId) return;
+      rejectCompletedDelivery(payload.messageId, error);
+      await sendDeliveryReceipt(client, payload.messageId, 'rejected', error, payload.sessionId, peerPublicKey);
+    });
     if (payload.messageId && deliveryStarted) {
-      if (outcome === "rejected") abandonDelivery(payload.messageId);
+      if (outcome === "rejected") {
+        if (!completedDeliveryFailure(payload.messageId)) abandonDelivery(payload.messageId);
+      }
       else {
         completeDelivery(payload.messageId);
         await sendDeliveryReceipt(client, payload.messageId, "accepted", undefined, payload.sessionId, peerPublicKey);

@@ -121,6 +121,7 @@ export async function handleUserMessage(
   onProcessing?: () => Promise<void>,
   peerPublicKey?: string,
   native?: { messageId: string; nativeOnly: true },
+  onRefusal?: (error: string) => Promise<void>,
 ): Promise<"accepted" | "rejected"> {
   const say = (text: string, sessionId?: string, wake = false, kind: "status" | "response" = "response") => {
     const payload = agentEventForUserMessage(message, text, sessionId, kind);
@@ -128,6 +129,11 @@ export async function handleUserMessage(
     return (sessionId
       ? sendSessionPayload(client, payload, sessionId, "phone", options)
       : client.send(payload, "phone", options)).catch(() => {});
+  };
+  const refuse = async (error: string, wake = false): Promise<"rejected"> => {
+    await onRefusal?.(error);
+    await say(error, message.sessionId, wake);
+    return "rejected";
   };
   if (!message.sessionId) {
     const origin = message.taskOriginId && peerPublicKey ? {
@@ -150,23 +156,16 @@ export async function handleUserMessage(
   // so it runs only for a chat newer than that catalog.
   const target = publishedSession(client, message.sessionId)
     ?? scanSessions().sessions.find((session) => session.sessionId === message.sessionId);
-  if (!target) {
-    await say("This task is no longer available on the computer.", message.sessionId);
-    return "rejected";
-  }
+  if (!target) return refuse("This task is no longer available on the computer.");
 
   const settings = loadRuntimeConfig().providerSettings;
   if (target.agent in settings
     && settings[target.agent as keyof typeof settings] === false) {
-    await say("This agent is disabled in GrantTap Settings.", message.sessionId, true);
-    return "rejected";
+    return refuse("This agent is disabled in GrantTap Settings.", true);
   }
 
   const routingError = deliveryRoutingError(target, message);
-  if (routingError) {
-    await say(routingError, target.sessionId);
-    return "rejected";
-  }
+  if (routingError) return refuse(routingError);
 
   // No "sent, waiting" line from a middleman: the delivery receipt already
   // marks the person's bubble, and the next words in the chat are the answer.
