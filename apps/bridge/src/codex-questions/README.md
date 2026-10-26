@@ -25,3 +25,10 @@ Tests under `tests/` cover publication, reconnect replay, native acknowledgement
 scope rejection, expiry and delivery through an isolated native IPC fixture.
 
 License: GrantTap Commercial Source License in the repository-root `LICENSE`.
+
+Attachment-capable controllers opt in using the advertised
+`questionReplyFormat: attachments-v1`. The original question item owns the
+answer, image and file payload together; ordinary encrypted attachment transport,
+Task policy, native-owner admission and stable question idempotency still apply.
+Legacy text-only replies keep their existing contract. Files remain available
+for the admitted native turn; another phone cannot start a second answer.

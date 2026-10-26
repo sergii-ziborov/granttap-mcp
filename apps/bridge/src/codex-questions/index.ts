@@ -40,6 +40,7 @@ export async function publishCodexQuestions(client: RelayClient, sessions: Sessi
       } else if (!record.announced || options.replay) {
         const text = [record.question, ...record.options.map(value => '• ' + value)].join('\n');
         await client.send({ type: 'agent.event', kind: 'question', requestId: record.requestId,
+          questionReplyFormat: 'attachments-v1',
           sessionId: session.sessionId, agent: 'codex', projectId: session.projectId,
           taskId: session.taskId, computerId: session.computerId, text, createdAt: record.createdAt },
         'phone', { ttlMs: Math.max(1, record.createdAt + RETENTION_MS - Date.now()),
@@ -73,8 +74,9 @@ export async function handleCodexQuestionReply(client: RelayClient, message: Use
     await resolveQuestion(client, record, peerPublicKey, !record.answered);
     return true;
   }
-  if (!message.text.trim() || message.text.length > 4_000 || message.attachments?.length
-    || message.attachmentRefs?.length) return false;
+  const hasAttachments = !!(message.attachments?.length || message.attachmentRefs?.length);
+  if (!message.text.trim() || message.text.length > 4_000
+    || (hasAttachments && message.questionReplyFormat !== 'attachments-v1')) return false;
   return deliver(client, { ...message, requestId: undefined,
     messageId: message.messageId ?? 'codex-answer-' + record.requestId,
     text: nativeAnswerEnvelope(record, message.text) }, publish, peerPublicKey,

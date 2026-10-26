@@ -49,6 +49,8 @@ export const UserMessage = z.object({
   agent: CodingAgent.optional(),
   cwd: z.string().max(4_096).optional(),
   requestId: z.string().optional(),
+  /** Explicit compatible opt-in for native question file/image replies. */
+  questionReplyFormat: z.literal("attachments-v1").optional(),
   sessionId: z.string().optional(),
   attachments: z.array(UserAttachment).max(MAX_USER_ATTACHMENTS).optional(),
   /** Attachments that came ahead of this message, by id. */
@@ -122,6 +124,8 @@ export const AgentEvent = z.object({
   type: z.literal("agent.event"),
   text: z.string(),
   requestId: z.string().optional(),
+  /** Explicit compatible opt-in for native question file/image replies. */
+  questionReplyFormat: z.literal("attachments-v1").optional(),
   kind: z.enum(["question", "status", "response"]).optional(),
   sessionId: z.string().optional(),
   agent: CodingAgent.optional(),
