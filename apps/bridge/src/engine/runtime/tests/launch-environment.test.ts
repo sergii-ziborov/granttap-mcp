@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { join } from "node:path";
 import { engineLaunchEnvironment } from "../engine-launch-environment";
 
 const minimum = 32 * 1024 * 1024;
@@ -24,5 +25,5 @@ test("larger explicit stacks survive and malformed or smaller values cannot redu
 test("the Windows Engine keeps its private state directory alongside the parser reserve", () => {
   const child = engineLaunchEnvironment({}, "/tmp/e.sock", "win32");
   assert.equal(child.RUST_MIN_STACK, String(minimum));
-  assert.ok(child.GRANTTAP_ENGINE_STATE_DIR?.endsWith("engine/state"));
+  assert.ok(child.GRANTTAP_ENGINE_STATE_DIR?.endsWith(join("engine", "state")));
 });
