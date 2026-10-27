@@ -5,8 +5,8 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { EngineSupervisor } from "../engine-supervisor";
-import { EngineClient } from "../engine-client";
+import { EngineSupervisor } from "../../engine-supervisor";
+import { EngineClient } from "../../engine-client";
 
 const binary = process.env.GRANTTAP_ENGINE_TEST_BINARY;
 test("supervised native Engine analyzes a long Rust expression without losing Graph or policy IPC", {

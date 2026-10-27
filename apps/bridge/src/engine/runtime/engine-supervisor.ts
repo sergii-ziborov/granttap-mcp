@@ -8,7 +8,7 @@ import { configDir } from "../../config/runtime/paths";
 import { EngineClient } from "./engine-client";
 import { engineHealth, type EngineHealth } from "./engine-health";
 import { EngineProtocolError } from "../protocol/engine-protocol";
-import { engineLaunchEnvironment } from "./engine-launch-environment";
+import { engineLaunchEnvironment } from "./launch";
 
 export type VerifiedEngineBinary = { path: string; sha256: string };
 

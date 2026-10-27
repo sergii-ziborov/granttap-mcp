@@ -1,6 +1,6 @@
 import { join } from "node:path";
-import { configDir } from "../../config/runtime/paths";
-import { engineSocketEndpoint } from "../startup";
+import { configDir } from "../../../config/runtime/paths";
+import { engineSocketEndpoint } from "../../startup";
 
 const MINIMUM_PARSER_STACK_BYTES = 32 * 1_024 * 1_024;
 

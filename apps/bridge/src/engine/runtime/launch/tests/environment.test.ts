@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { join } from "node:path";
-import { engineLaunchEnvironment } from "../engine-launch-environment";
+import { engineLaunchEnvironment } from "..";
 
 const minimum = 32 * 1024 * 1024;
 test("only the Engine child receives its parser stack reserve", () => {
