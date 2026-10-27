@@ -1,7 +1,7 @@
 # Project coding guidance
 
 `projectGuidancePrompt(projectId, text)` is the public prompt boundary. It loads
-only the acknowledged local restriction set for the named Project, adds its
+only the accepted local restriction set for the named Project, adds its
 advisory principles, architecture preference, design targets and exact Markdown,
 then preserves the original request. Empty guidance is a no-op. It never edits
 provider configuration or raises tool permissions.
@@ -23,3 +23,5 @@ The explicit repository check reports guidance as advisory and never claims to
 machine-check Clean Code, architecture, class or parameter targets. Existing
 write checks own numeric enforcement; Ruby/Python function forms outside the
 brace scanner request parser review.
+
+License: GrantTap Commercial Source License, in the repository-root `LICENSE`.
