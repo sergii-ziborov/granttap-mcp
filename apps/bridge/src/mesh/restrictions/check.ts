@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import type { ProjectRestrictionSet } from "../../../../../packages/protocol/schema";
+import { hasGuidance } from "./guidance";
 import { evaluateContent, type RestrictionViolation } from "./evaluate";
 
 const SKIP_DIR = new Set([
@@ -62,12 +63,12 @@ function isTextish(name: string): boolean {
 }
 
 export function restrictionSummary(restrictions: ProjectRestrictionSet | undefined): string {
-  if (!restrictions || restrictions.rules.length === 0) return "No restrictions";
+  if (!restrictions || (restrictions.rules.length === 0 && !hasGuidance(restrictions.guidance))) return "No restrictions";
   const count = restrictions.rules.length;
   const scope = restrictions.scope === "sync_from_repo"
     ? "from the repository"
     : restrictions.scope === "project_and_repo"
       ? "Project and repository"
       : "this Project";
-  return `${count} rule${count === 1 ? "" : "s"} · ${scope}`;
+  return `${count} rule${count === 1 ? "" : "s"}${hasGuidance(restrictions.guidance) ? " + agent guidance" : ""} · ${scope}`;
 }

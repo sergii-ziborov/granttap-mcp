@@ -38,7 +38,7 @@ export function functionLineCounts(source: string): number[] {
 
 function unparsedFunctionForm(filePath: string, content: string): boolean {
   const extension = filePath.split(".").at(-1)?.toLowerCase();
-  if (extension === "py") return /^\s*(?:async\s+)?def\s+\w+/m.test(content);
+  if (["py", "rb"].includes(extension ?? "")) return /^\s*(?:async\s+)?def\s+\w+/m.test(content);
   if (!["ts", "tsx", "js", "jsx", "mjs", "cjs"].includes(extension ?? "")) return false;
   if (/=>/.test(content)) return true;
   return /^\s*(?:async\s+)?(?!(?:if|while|for|switch|catch)\b)[A-Za-z_$][\w$]*\s*\([^;\n]*\)\s*\{/m

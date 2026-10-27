@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { ProjectRestrictionSet } from "./restrictions";
+export * from "./restrictions";
 import { Identifier, Label, MeshProvider } from "./mesh/endpoint";
 
 export const ProjectCapabilityKind = z.enum([
@@ -88,45 +90,6 @@ export const ProjectExecutionPolicy = z.object({
   }
 });
 export type ProjectExecutionPolicy = z.infer<typeof ProjectExecutionPolicy>;
-
-/** Quality gates a Project can share with CI and its repository. */
-export const ProjectRestrictionKind = z.enum([
-  "max_file_lines", "max_function_lines", "max_file_bytes", "custom",
-]);
-export type ProjectRestrictionKind = z.infer<typeof ProjectRestrictionKind>;
-export const ProjectRestrictionScope = z.enum([
-  "project", "project_and_repo", "sync_from_repo",
-]);
-export type ProjectRestrictionScope = z.infer<typeof ProjectRestrictionScope>;
-export const ProjectRestrictionRule = z.object({
-  ruleId: Identifier,
-  kind: ProjectRestrictionKind,
-  limit: z.number().int().positive().max(1_000_000).optional(),
-  name: Label.optional(),
-  paths: z.array(z.string().trim().min(1).max(256)).max(16).optional(),
-  effect: z.enum(["ask", "deny"]).default("deny"),
-}).strict().superRefine((value, ctx) => {
-  if (value.kind !== "custom" && value.limit == null) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom, path: ["limit"], message: "limit required",
-    });
-  }
-  if (value.kind === "custom" && !value.name) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom, path: ["name"], message: "custom needs a name",
-    });
-  }
-});
-export type ProjectRestrictionRule = z.infer<typeof ProjectRestrictionRule>;
-export const ProjectRestrictionSet = z.object({
-  projectId: Identifier,
-  revision: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  scope: ProjectRestrictionScope,
-  repositoryId: z.string().trim().min(1).max(512).optional(),
-  rules: z.array(ProjectRestrictionRule).max(32),
-  source: z.enum(["phone", "repo"]).default("phone"),
-}).strict();
-export type ProjectRestrictionSet = z.infer<typeof ProjectRestrictionSet>;
 
 /** Shared Project environment. Secret values travel under the Project key only. */
 export const ProjectEnvVar = z.object({

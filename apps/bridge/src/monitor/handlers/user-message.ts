@@ -1,3 +1,4 @@
+import { projectGuidancePrompt } from "../../mesh/restrictions/guidance";
 import type { UserMessage } from "../../../../../packages/protocol/schema";
 import { ATTACHMENT_MISSING_ERROR } from "../../../../../packages/protocol/schema";
 import type { RelayClient } from "../../../../../packages/core/relay-client";
@@ -42,6 +43,7 @@ async function startNewAgentTask(input: {
     return "rejected";
   }
   const requestedCwd = message.cwd?.trim();
+  let admittedProjectId: string | undefined;
   if (requestedCwd) {
     const admitted = evaluateCreateTask({
       cwd: requestedCwd, agent, model: message.model,
@@ -52,6 +54,7 @@ async function startNewAgentTask(input: {
       await say(admitted.detail, undefined, true);
       return "rejected";
     }
+    admittedProjectId = admitted.projectId;
     if ("queued" in admitted && admitted.queued) {
       // The phone's durable outbox retries after reconnect. This monitor has
       // no worker for its separate pinned-task queue, so do not launch here.
@@ -87,7 +90,7 @@ async function startNewAgentTask(input: {
   }[agent];
   let run: Promise<ReplyResult>;
   try {
-    run = create(message.text, requestedCwd, PHONE_RUN_LIMIT_MS, resolved.attachments,
+    run = create(projectGuidancePrompt(admittedProjectId, message.text), requestedCwd, PHONE_RUN_LIMIT_MS, resolved.attachments,
       message.model, undefined, message.effort).catch(() => {
       input.origin?.registry.complete(input.origin.scope, { ok: true });
       return { ok: false, error: 'The provider task stopped unexpectedly.' } as ReplyResult;

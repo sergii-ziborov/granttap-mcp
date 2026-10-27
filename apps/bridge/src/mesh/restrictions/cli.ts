@@ -1,3 +1,4 @@
+import { hasGuidance } from "./guidance";
 import { inspectRepository } from "../catalog";
 import { computerId } from "../identity/computer";
 import { localMeshStore } from "../local-remote/local";
@@ -19,7 +20,10 @@ export function runRestrictionsCheck(root: string): RestrictionsCheckResult {
   const restrictions = readRepoRestrictions(root, projectId ?? "ci")
     ?? (projectId ? loadRestrictions(projectId) : undefined);
 
+  const advisory = hasGuidance(restrictions?.guidance)
+    ? "Agent guidance is advisory and not machine-checked by this command.\n" : "";
   if (!restrictions || restrictions.rules.length === 0) {
+    if (advisory) return { exitCode: 0, stdout: advisory, stderr: "" };
     return { exitCode: 0, stdout: "GrantTap restrictions: none configured.\n", stderr: "" };
   }
 
@@ -27,7 +31,7 @@ export function runRestrictionsCheck(root: string): RestrictionsCheckResult {
   if (violations.length === 0) {
     return {
       exitCode: 0,
-      stdout: `GrantTap restrictions: ${restrictions.rules.length} rule(s) clean.\n`,
+      stdout: `GrantTap restrictions: ${restrictions.rules.length} rule(s) clean.\n${advisory}`,
       stderr: "",
     };
   }
@@ -36,5 +40,5 @@ export function runRestrictionsCheck(root: string): RestrictionsCheckResult {
     .map((item) => `${item.effect.toUpperCase()} ${item.reason}\n`)
     .join("");
   const denied = violations.some((item) => item.effect === "deny");
-  return { exitCode: denied ? 1 : 0, stdout: "", stderr };
+  return { exitCode: denied ? 1 : 0, stdout: advisory, stderr };
 }

@@ -1,3 +1,4 @@
+import { projectGuidancePrompt } from "../../mesh/restrictions/guidance";
 import type { SessionInfo } from "../../../../../packages/protocol/schema";
 import type { DeliveryOptions } from "./types";
 
@@ -14,5 +15,6 @@ export function routingPrompt(
     const invocation = session.agent === "claude" ? `/${options.skill}` : `$${options.skill}`;
     instructions.push(`Use the project skill ${invocation} for this request.`);
   }
-  return instructions.length === 0 ? text : `${instructions.join("\n")}\n\n${text}`;
+  const routed = instructions.length === 0 ? text : `${instructions.join("\n")}\n\n${text}`;
+  return projectGuidancePrompt(session.projectId, routed);
 }

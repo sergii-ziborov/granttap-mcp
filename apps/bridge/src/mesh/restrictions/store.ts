@@ -68,6 +68,7 @@ export function readRepoRestrictions(
       scope?: unknown;
       repositoryId?: unknown;
       rules?: unknown;
+      guidance?: unknown;
     };
     const parsed = RestrictionSchema.safeParse({
       projectId,
@@ -75,6 +76,7 @@ export function readRepoRestrictions(
       scope: raw.scope,
       repositoryId: raw.repositoryId,
       rules: raw.rules,
+      guidance: raw.guidance,
       source: "repo",
     });
     return parsed.success ? parsed.data : undefined;
@@ -93,6 +95,7 @@ export function writeRepoRestrictions(root: string, restrictions: ProjectRestric
     scope: restrictions.scope,
     repositoryId: restrictions.repositoryId,
     rules: restrictions.rules,
+    guidance: restrictions.guidance,
     source: restrictions.source,
   }, null, 2)}\n`, { mode: 0o644 });
 }

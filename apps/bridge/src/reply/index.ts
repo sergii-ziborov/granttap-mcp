@@ -1,3 +1,4 @@
+import { projectGuidancePrompt } from "../mesh/restrictions/guidance";
 /** Deliver phone messages into existing sessions or start a new Codex task. */
 import { localTaskTransfers, localTransferContinuations } from "../task-transfer";
 import { localRoutingRequests } from '../task-routing/requests';
@@ -66,13 +67,13 @@ export function deliverToSession(
     return queued(session.sessionId, async () => (await localTaskTransfers().deliver(
       session.sessionId, text, attachments, options, {
         start: request => request.provider === "grok"
-          ? createGrokSession(request.text, request.cwd, timeoutMs, request.attachments,
+          ? createGrokSession(projectGuidancePrompt(session.projectId, request.text), request.cwd, timeoutMs, request.attachments,
             request.model, request.operationKey, request.effort, nativeId => {
               request.onNativeSession(nativeId);
               options.onAgentActivity?.(nativeId);
             })
           : ({ claude: createClaudeSession, codex: createCodexSession,
-            cursor: createCursorSession }[request.provider])(request.text, request.cwd,
+            cursor: createCursorSession }[request.provider])(projectGuidancePrompt(session.projectId, request.text), request.cwd,
             timeoutMs, request.attachments, request.model, request.operationKey, request.effort),
         resume: (native, body, images, settings) => withAttachments(images, body, prepared => runDelivery(native,
           native.agent === "codex" ? prepared.prompt : prepared.claudePrompt, timeoutMs, prepared.images, settings)),
