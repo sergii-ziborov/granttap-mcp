@@ -8,7 +8,7 @@ import { configDir } from "../../config/runtime/paths";
 import { EngineClient } from "./engine-client";
 import { engineHealth, type EngineHealth } from "./engine-health";
 import { EngineProtocolError } from "../protocol/engine-protocol";
-import { engineSocketEndpoint } from "../startup";
+import { engineLaunchEnvironment } from "./engine-launch-environment";
 
 export type VerifiedEngineBinary = { path: string; sha256: string };
 
@@ -133,8 +133,7 @@ function configuredBinary(env: NodeJS.ProcessEnv): VerifiedEngineBinary | undefi
 
 function launchEngine(path: string, socketPath: string, env: NodeJS.ProcessEnv): ChildProcess {
   const child = spawn(path, [], {
-    env: { ...env, GRANTTAP_ENGINE_SOCKET: engineSocketEndpoint(socketPath),
-      ...(process.platform === "win32" ? { GRANTTAP_ENGINE_STATE_DIR: join(configDir(), "engine", "state") } : {}) },
+    env: engineLaunchEnvironment(env, socketPath),
     stdio: "ignore",
     shell: false,
   });

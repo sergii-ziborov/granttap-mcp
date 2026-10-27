@@ -62,7 +62,7 @@ on macOS, Linux and Windows rather than relying on a LaunchAgent environment.
 Explicit disablement and a complete explicit executable/checksum pair win over
 the saved declaration. Partial environment overrides are never mixed with a
 different file's checksum. The supervisor still verifies the executable's bytes
-before launch. Windows clients derive a local named pipe from the normalized
+before launch. Its child process receives a minimum 32 MiB Rust worker stack: the default stack aborts the native parser on long, valid Rust syntax trees. Larger explicit reserves are retained. The parent process environment, Engine enablement and project policy settings are unchanged. This is a worker stack reserve, not a scan timeout or a guarantee that arbitrary inputs cannot exhaust resources. Windows clients derive a local named pipe from the normalized
 configuration path; remote shares never become Engine endpoints.
 The paired monitor installs the pinned managed Engine in the background when
 needed. Catalog delivery does not await that download. Failed preparation retries
