@@ -14,3 +14,5 @@ an exact verified native binary to run the native case.
 
 This is a fixed worker reserve, not a guarantee against arbitrary resource
 exhaustion. [Engine bridge](../../README.md) owns the public runtime boundary.
+
+License: GrantTap Commercial Source License; see the repository-root `LICENSE`.
