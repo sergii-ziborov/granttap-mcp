@@ -2,9 +2,11 @@
 
 `effective-action.ts` is the public implementation entry point for combining
 the private engine's Project decision with the existing provider/session flow.
-It resolves only already-known local Project state, uses one shared 50 ms IPC
-deadline, and falls back to the established GrantTap behavior when rollout is
-disabled or the engine cannot answer.
+It resolves only already-known local Project state and uses the shared bounded
+Engine policy IPC deadline (currently 2,000 ms). When Engine cannot answer for
+a previously governed Project, policy asks rather than silently allowing the
+action. A never-governed Project preserves the established GrantTap behavior.
+This policy timeout is not a phone message delivery timer.
 
 `capability-fingerprint.ts` turns provider tool metadata into a bounded
 capability fingerprint. It never copies raw tool arguments, commands, secrets,
