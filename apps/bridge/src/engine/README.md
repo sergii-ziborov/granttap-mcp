@@ -29,7 +29,7 @@ Explicit Graph builds also invoke the Engine's `graph.analyze_project` for two
 to eight admitted local repositories. The projection labels these shared static
 contracts and keeps their runtime destination unverified. They do not become
 verified Backbone dependencies or merge Project grants. The Apple Silicon
-artifact pins Engine 0.1.3 with Weavatrix 2.17.5; unsupported Engine operations
+artifact pins Engine 0.1.4 with Weavatrix 2.17.5 and injective package import identities; unsupported Engine operations
 leave this analysis unavailable. See `runtime/project-relationships/README.md`.
 
 Claude, Codex, and Cursor hooks can evaluate the engine's local Project
