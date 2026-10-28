@@ -18,4 +18,5 @@ claimed file changes. This reader never executes tools, repairs global hooks,
 changes provider policy, sends prompts or invents nested agents.
 
 Behavior tests live in `../../sessions/scan/tests/grok-native-tools.test.ts` and
-the local `tests/` directory. The repository-root commercial license applies.
+the local `tests/` directory. The GrantTap Commercial Source License in the
+repository-root `LICENSE` applies.
