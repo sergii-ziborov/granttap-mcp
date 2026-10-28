@@ -48,11 +48,16 @@ export class NativeTaskQueueSender {
 
   async cancel(scope: NativeQueueScope, id: string): Promise<TaskJobReceipt> {
     this.store.header(id, scope);
-    if (!this.store.uploaded(id)) await this.upload(id);
-    const current = await this.status(scope, id);
-    if (['accepted', 'completed', 'cancelled', 'expired'].includes(current.state)) return current;
+    if (!this.store.uploaded(id)) {
+      const uploaded = await this.upload(id);
+      if (['accepted', 'completed', 'cancelled', 'expired'].includes(uploaded.state)) return uploaded;
+    }
+    // Cancellation is atomic on the relay. A slow preflight GET must not hold
+    // an explicit Delete or manual release behind a metadata timeout.
     const receipt = await requestTaskJob(this.options.config, { id, method: 'DELETE' }, this.options.request);
-    if (!receipt) throw new Error('Relay has not confirmed cancellation.');
+    // A receiver can claim after the caller's observation. Read that race
+    // outcome without creating another native operation.
+    if (!receipt) return this.status(scope, id);
     this.retireIfTerminal(receipt);
     return receipt;
   }

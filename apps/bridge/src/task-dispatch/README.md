@@ -14,6 +14,12 @@ until expiry plus seven days. Restarting after an ambiguous submission requires 
 of blindly replaying the prompt. Queued server cancellation wins over a stale
 local offer. Scheduling does not imply that the controller phone is online.
 
+The native sender cancels an uploaded operation with DELETE directly, without
+waiting for a metadata GET. A claim conflict is reconciled by a subsequent read.
+An ambiguous upload is still reconciled using the same encrypted reservation;
+neither a missing response nor a receiver claim admits a second operation.
+Regression cases live in `sender/tests/cancellation.test.ts`.
+
 Tests live in `tests/` and `worker/tests/` and use synthetic operations and private
 temporary directories. This module does not grant provider or project access.
 
