@@ -9,6 +9,7 @@ test('mutation requests require a concrete computer, provider and a scoped autho
   assert.equal(Payload.safeParse({ ...base, action: 'status' }).success, true);
   for (const value of [{ ...base, action: 'runtime-restart' },
     { ...base, computerId: 'mac', action: 'provider-login' },
+    { ...base, computerId: 'mac', action: 'provider-update' },
     { ...base, computerId: 'mac', action: 'provider-login-code', agent: 'claude', code: 'secret' },
     { ...base, computerId: 'mac', action: 'clear-cache', code: 'unexpected' },
     { ...base, computerId: 'mac', action: 'clear-cache', path: '/user/project' }]) {
@@ -16,6 +17,9 @@ test('mutation requests require a concrete computer, provider and a scoped autho
   }
   assert.equal(DeviceManagementRequest.safeParse({ ...base, computerId: 'mac', action: 'provider-login-code',
     agent: 'claude', operationId: 'owned', code: 'once' }).success, true);
+  for (const agent of ['claude', 'codex', 'grok', 'cursor']) {
+    assert.equal(DeviceManagementRequest.safeParse({ ...base, computerId: 'mac', action: 'provider-update', agent }).success, true);
+  }
 });
 
 test('a native login failure is returned immediately without pretending the agent accepted the prompt', async () => {

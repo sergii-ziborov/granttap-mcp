@@ -1,6 +1,6 @@
 # Computer controls from GrantTap
 
-MCP 0.8.110 adds the paired-controller `device.manage` protocol. The iOS client
+MCP 0.8.109 adds the paired-controller `device.manage` protocol. The iOS client
 must also support these controls. A computer without an installed, connected
 MCP cannot execute remote commands; install and pair MCP on that computer first.
 
@@ -47,3 +47,5 @@ streams, launchd Node PATH recovery and preservation during cache cleanup.
 The latest sign-in state is replayed privately when its controller refreshes status.
 This restores completion after a phone returns from the browser without starting
 another login, resending a prompt, or retaining terminal authorization codes.
+
+MCP 0.8.111 adds provider-update controls for Claude Code, Codex CLI, Grok CLI and Cursor CLI. Each runs its own fixed updater (or its owning npm/Homebrew installer) on the selected computer; desktop Claude can install the latest native CLI. An explicit update probes versions before and after, caches the observed version, and refuses active GrantTap requests for that provider or an active sign-in. Background recovery asks for the original operation ID; it returns the saved private result without running the update again. Older clients can ignore the optional updateSupported capability.

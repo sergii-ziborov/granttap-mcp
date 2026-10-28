@@ -4,7 +4,7 @@ import { CodingAgent } from '../primitives';
 const identifier = z.string().trim().min(1).max(160);
 export const DeviceManagementAction = z.enum([
   'status', 'clear-cache', 'runtime-update', 'runtime-install', 'runtime-restart',
-  'provider-login', 'provider-login-code', 'provider-login-cancel', 'provider-restart',
+  'provider-login', 'provider-login-code', 'provider-login-cancel', 'provider-restart', 'provider-update',
 ]);
 export const DeviceManagementRequest = z.object({
   type: z.literal('device.manage'),
@@ -41,6 +41,7 @@ export const DeviceProviderState = z.object({
   agent: CodingAgent, installed: z.boolean(), version: z.string().max(80).optional(),
   authentication: z.enum(['signed-in', 'signed-out', 'unknown', 'not-installed']),
   loginSupported: z.boolean(), restartSupported: z.boolean(),
+  updateSupported: z.boolean().optional(),
   activeRequests: z.number().int().nonnegative(),
 });
 export const DeviceManagementSnapshot = z.object({

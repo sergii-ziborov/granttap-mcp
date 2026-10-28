@@ -52,7 +52,7 @@ export function passiveVersion(resolvedPath: string): string | undefined {
 }
 
 export function parseVersionOutput(output: string): string | undefined {
-  return SEMVER.exec(output)?.[0];
+  return /\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?/.exec(output)?.[0];
 }
 
 export function stripAnsi(text: string): string {
@@ -91,9 +91,10 @@ export function binaryVersion(path: string, probe?: VersionProbe): string | unde
     return undefined;
   }
   const stated = passiveVersion(resolved);
-  if (stated || !probe) return stated;
+  if (stated) return stated;
   const hit = cache.get(resolved);
   if (hit && hit.key === key) return hit.version;
+  if (!probe) return undefined;
   const version = probe(resolved);
   cache.set(resolved, { key, version });
   return version;

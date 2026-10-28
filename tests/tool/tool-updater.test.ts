@@ -26,13 +26,13 @@ function tool(path: string, version: string, updateTo?: string, exitCode = 0): v
   const manifest = packageManifest(path);
   if (manifest) writeFileSync(manifest, JSON.stringify({ version }));
   const bump = updateTo
-    ? `printf '${updateTo}' > '${sidecar}'; touch "$0"; ${manifest ? `printf '{"version":"${updateTo}"}' > '${manifest}';` : ""}`
+    ? `printf '${updateTo}' > '${sidecar}'; /usr/bin/touch "$0"; ${manifest ? `printf '{"version":"${updateTo}"}' > '${manifest}';` : ""}`
     : "";
   writeFileSync(path, [
     "#!/bin/sh",
     'case "$1" in',
-    `  --version) echo "tool $(cat '${sidecar}') (build)";;`,
-    `  update) echo "updating..."; ${bump} exit ${exitCode};;`,
+    `  --version) echo "tool $(/bin/cat '${sidecar}') (build)";;`,
+    `  update|install) echo "updating..."; ${bump} exit ${exitCode};;`,
     "esac",
   ].join("\n"));
   chmodSync(path, 0o755);
@@ -74,9 +74,10 @@ test("an install method is read from the path, and only a stated layout carries 
   assert.equal(versionFromPackage("/usr/local/bin/codex"), undefined);
   assert.equal(parseVersionOutput(stripAnsi(`${ESC}[1mgrok 1.0.0${ESC}[0m (3cd0d0c)`)), "1.0.0");
   assert.equal(parseVersionOutput("no digits here"), undefined);
+  assert.equal(parseVersionOutput("codex-cli 0.165.0-alpha.1.2"), "0.165.0-alpha.1.2");
 });
 
-test("each tool gets its own updater, and a script-installed Codex is left to a trusted terminal", async () => {
+test("each tool gets its own updater, including native Codex and desktop Claude installers", async () => {
   const { home, bin, env } = await mac();
   tool(join(home, ".local", "share", "claude", "versions", "2.1.201"), "2.1.201");
   symlinkSync(join(home, ".local", "share", "claude", "versions", "2.1.201"), join(bin, "claude"));
@@ -114,8 +115,8 @@ test("each tool gets its own updater, and a script-installed Codex is left to a 
   tool(join(bin, "brew"), "4.0.0");
   assert.deepEqual(updateArgv("codex", "/opt/homebrew/bin/codex", { method: "brew" }, { PATH: bin }), [join(bin, "brew"), "upgrade", "--cask", "codex"]);
   assert.deepEqual(updateArgv("claude", "/opt/homebrew/bin/claude", { method: "brew" }, { PATH: bin }), [join(bin, "brew"), "upgrade", "--cask", "claude-code"]);
-  assert.equal(updateArgv("claude", "/x/claude", { method: "desktop" }, env), undefined);
-  assert.equal(updateArgv("codex", "/usr/local/bin/codex", { method: "unknown" }, env), undefined);
+  assert.deepEqual(updateArgv("claude", "/x/claude", { method: "desktop" }, env), ["/x/claude", "install", "latest"]);
+  assert.deepEqual(updateArgv("codex", "/usr/local/bin/codex", { method: "unknown" }, env), ["/usr/local/bin/codex", "update"]);
   assert.equal(updateArgv("claude", "/x/claude", { method: "npm", npmPrefix: join(home, "nowhere") }, { PATH: join(home, "empty") }), undefined, "no npm anywhere");
   assert.match(manualHint("codex", { agent: "codex", path: "/usr/local/bin/codex", method: "unknown" }), /trusted terminal.*install\.sh/);
   assert.match(manualHint("claude", { agent: "claude", path: "/x", method: "desktop" }), /keeps it current/);
@@ -164,7 +165,7 @@ test("an update runs the tool's own updater once, reports before and after, and 
   const failed = await updateTool("cursor", { ...env, GRANTTAP_CURSOR_AGENT_BIN: join(bin, "cursor-agent") }, home);
   assert.equal(failed.ok, false);
   assert.match(failed.message, /exited with code 3/);
-  assert.equal(failed.before, undefined, "nothing stated a version, and nothing was run to find one");
+  assert.equal(failed.before, "1.0.0", "an explicit update probes the version before changing it");
   assert.equal(failed.after, "1.0.0", "asked only once its own updater had already run it");
 
   // Nothing to run: the reason comes back instead of a command.
@@ -194,7 +195,7 @@ test("a version is asked once and again only after the binary changes", async ()
   assert.equal(asked, 3);
   forgetVersion(join(bin, "missing"));
   assert.equal(binaryVersion(join(bin, "missing"), probe), undefined);
-  assert.equal(binaryVersion(join(bin, "grok")), undefined, "without a probe nothing is run");
+  assert.equal(binaryVersion(join(bin, "grok")), "9.9.9", "passive status reuses the previously observed version without launching a process");
   assert.equal(askVersion(join(bin, "grok")), "1.0.0", "asking reads --version");
   assert.equal(askVersion(join(bin, "nothing-here")), undefined);
 });
@@ -215,4 +216,33 @@ test("the phone's request is answered with what the updater did", async () => {
   assert.equal(result.requestId, "r1");
   assert.equal(result.after, "2.1.260");
   assert.equal(result.ok, true);
+});
+
+test("all four native tools update with a stripped PATH and leave a cached observed version", async () => {
+  for (const agent of ["claude", "codex", "cursor", "grok"] as const) {
+    const { home, env } = await mac();
+    const path = join(home, "native", agent);
+    tool(path, "1.0.0", "1.1.0");
+    const override = agent === "cursor" ? "GRANTTAP_CURSOR_AGENT_BIN" : `GRANTTAP_${agent.toUpperCase()}_BIN`;
+    const isolated = { ...env, [override]: path };
+    assert.equal(inspectTool(agent, isolated, home).version, undefined);
+    const outcome = await updateTool(agent, isolated, home);
+    assert.equal(outcome.ok, true, `${agent}: ${outcome.message}`);
+    assert.equal(outcome.before, "1.0.0");
+    assert.equal(outcome.after, "1.1.0");
+    assert.equal(inspectTool(agent, isolated, home).version, "1.1.0");
+  }
+});
+
+test("launchd discovers native Grok and Claude outside PATH and supplies Node to the updater", async () => {
+  const { home, env } = await mac();
+  const grok = join(home, ".grok/bin/grok"), claude = join(home, ".local/bin/claude");
+  tool(grok, "1.0.0"); tool(claude, "2.0.0");
+  assert.equal(inspectTool("grok", env, home).path, grok);
+  assert.equal(inspectTool("claude", env, home).path, claude);
+  await updateTool("grok", env, home, async (argv, childEnv) => {
+    assert.deepEqual(argv, [grok, "update"]);
+    assert.equal(childEnv.PATH?.split(":")[0], join(process.execPath, ".."));
+    return { code: 0, output: "current" };
+  });
 });

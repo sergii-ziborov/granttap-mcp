@@ -17,6 +17,7 @@ import { computerCache } from './cache';
 import { providerLogins } from './login';
 import { ownedProviderProcesses, signalOwnedProcess } from '../reply/process';
 import { approvalsStatus } from '../approvals/state';
+import { inspectTool, updateTool } from '../tools/updater';
 
 export const runtimeRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 const runtimeEpoch = randomUUID();
@@ -39,15 +40,17 @@ export function maintenanceIdle(): boolean {
 }
 
 export async function managementSnapshot(): Promise<DeviceManagementSnapshot> {
+  const observedAt = Date.now();
   const directory = join(configDir(), 'runtime-updates');
   const selected = readState(directory);
   const providers = await Promise.all(agents.map(async agent => {
     const command = providerCommand(agent), installed = installedProvider(command);
     return { agent, installed, version: binaryVersion(command), authentication: await providerAuthentication(agent, command),
       loginSupported: installed, restartSupported: installed,
+      updateSupported: installed && inspectTool(agent, providerEnvironment()).update != null,
       activeRequests: ownedProviderProcesses(command).length };
   }));
-  return { computerId: observedComputerId(), computerName: hostname(), observedAt: Date.now(),
+  return { computerId: observedComputerId(), computerName: hostname(), observedAt,
     runtimeVersion: runtimeVersion(runtimeRoot), runtimeEpoch, selectedRuntimeVersion: selected.version,
     automaticUpdatesEnabled: automaticUpdatesAllowed(directory),
     runtimeUpdateSupported: runtimeRoot.includes('/node_modules/'), runtimeRestartSupported: runtimeRestartSupported(),
@@ -88,4 +91,12 @@ export async function restartProvider(agent: CodingAgent, interrupt = false): Pr
   })));
   await promisify(execFile)(command, ['--version'], { env: providerEnvironment(), timeout: 15_000, maxBuffer: 16_384 });
   return 'A fresh provider CLI started successfully. The next message starts a new GrantTap connection to it.';
+}
+
+export async function updateProvider(agent: CodingAgent): Promise<string> {
+  if (providerLogins.active()) throw Error('Finish provider sign-in before updating coding tools.');
+  if (ownedProviderProcesses(providerCommand(agent)).length) throw Error('Finish this provider’s active GrantTap requests before updating it.');
+  const outcome = await updateTool(agent, providerEnvironment());
+  if (!outcome.ok) throw Error(outcome.message);
+  return outcome.message;
 }

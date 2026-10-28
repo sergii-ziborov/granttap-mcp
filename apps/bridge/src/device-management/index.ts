@@ -5,7 +5,7 @@ import { loadConfig, machineConfigPath } from '../config';
 import { observedComputerId } from '../mesh/identity/computer';
 import { clearComputerCache } from './cache';
 import { providerLogins } from './login';
-import { managementSnapshot, maintenanceIdle, restartProvider, restartRuntime, runtimeRoot, updateRuntime } from './maintenance';
+import { managementSnapshot, maintenanceIdle, restartProvider, restartRuntime, runtimeRoot, updateRuntime, updateProvider } from './maintenance';
 
 type Send = (result: DeviceManagementResult) => Promise<void>;
 type Entry = { fingerprint: string; result?: DeviceManagementResult; pending?: Promise<void>; at: number; ttl: number };
@@ -35,6 +35,10 @@ export async function handleDeviceManagement(client: RelayClient, request: Devic
     return true;
   }
   if (requests.size >= 128) return false;
+  if (request.action === 'status' && request.operationId) {
+    const old = requests.get(client.room + ':' + peer + ':' + request.operationId)?.result;
+    if (old && old.action !== 'status' && !old.action.startsWith('provider-login')) await send(old);
+  }
   const entry: Entry = { fingerprint, at: Date.now(), ttl: request.action === 'status' ? 60_000 : 15 * 60_000 };
   requests.set(key, entry);
   const report: Send = async result => { entry.result = result; await send(result); };
@@ -76,6 +80,8 @@ async function execute(request: DeviceManagementRequest, scope: string, computer
       message = await updateRuntime();
     } else if (request.action === 'provider-restart') {
       message = await restartProvider(request.agent!, request.interruptActiveTasks);
+    } else if (request.action === 'provider-update') {
+      message = await updateProvider(request.agent!);
     } else if (request.action === 'runtime-restart') {
       // The phone waits for a different runtimeEpoch, rather than treating this acknowledgement as a restart.
       if (!maintenanceIdle()) throw Error('Finish active requests and sign-in before restarting MCP.');

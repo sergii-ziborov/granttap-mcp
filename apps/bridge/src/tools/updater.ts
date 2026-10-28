@@ -12,12 +12,13 @@
 import { spawn } from "node:child_process";
 import { accessSync, constants, realpathSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { basename, delimiter, dirname, join } from "node:path";
 import type { CodingAgent } from "../../../../packages/protocol/schema";
 import { compareVersions, executableOnPath, resolveClaudeBinary } from "../providers/claude-bin";
 import { resolveCodexBinary } from "../providers/codex-bin";
 import { resolveCursorAgentBin } from "../reply/process/cursor-agent-bin";
 import { askVersion, binaryVersion, forgetVersion, stripAnsi } from "./version";
+import { resolveGrokBinary } from '../providers/grok-bin';
 
 export const TOOL_NAMES: Record<CodingAgent, string> = {
   claude: "Claude Code", codex: "Codex CLI", cursor: "Cursor CLI", grok: "Grok CLI",
@@ -110,12 +111,12 @@ export function updateArgv(
     case "claude":
       if (install.method === "npm") return npmArgv(install, "@anthropic-ai/claude-code", env);
       if (install.method === "brew") return brewArgv("claude-code", env);
-      if (install.method === "desktop") return undefined;
+      if (install.method === "desktop") return path ? [path, "install", "latest"] : undefined;
       return path ? [path, "update"] : undefined;
     case "codex":
       if (install.method === "npm") return npmArgv(install, "@openai/codex", env);
       if (install.method === "brew") return brewArgv("codex", env);
-      return undefined;
+      return path ? [path, "update"] : undefined;
     case "cursor":
     case "grok":
       return path ? [path, "update"] : undefined;
@@ -124,7 +125,11 @@ export function updateArgv(
 
 function locate(agent: CodingAgent, env: NodeJS.ProcessEnv, home: string): string | undefined {
   switch (agent) {
-    case "claude": return env.GRANTTAP_CLAUDE_BIN ?? env.NODVOX_CLAUDE_BIN ?? executableOnPath("claude", env);
+    case "claude": {
+      const path = env.GRANTTAP_CLAUDE_BIN ?? env.NODVOX_CLAUDE_BIN ?? executableOnPath("claude", env)
+        ?? (executable(join(home, '.local/bin/claude')) ? join(home, '.local/bin/claude') : resolveClaudeBinary(home, env).path);
+      return executable(path) ? path : undefined;
+    }
     case "codex": {
       const path = resolveCodexBinary(home, env);
       return path.includes("/") ? (executable(path) ? path : undefined) : executableOnPath(path, env);
@@ -133,7 +138,10 @@ function locate(agent: CodingAgent, env: NodeJS.ProcessEnv, home: string): strin
       const bin = resolveCursorAgentBin(env);
       return bin.includes("/") ? (executable(bin) ? bin : undefined) : executableOnPath(bin, env);
     }
-    case "grok": return env.GRANTTAP_GROK_BIN ?? executableOnPath("grok", env);
+    case "grok": {
+      const path = resolveGrokBinary(env, home);
+      return path.includes('/') ? (executable(path) ? path : undefined) : executableOnPath(path, env);
+    }
   }
 }
 
@@ -246,12 +254,14 @@ export function updateTool(
   const argv = status.update;
   const command = describeCommand(argv);
   const task = (async (): Promise<ToolUpdateOutcome> => {
-    const before = status.version;
-    const result = await runner(argv, env, home, timeoutMs);
+    const before = status.version ?? (status.path ? binaryVersion(status.path, askVersion) : undefined);
+    const nodeDirectory = dirname(process.execPath);
+    const updaterEnv = { ...env, PATH: [nodeDirectory, env.PATH ?? ''].join(delimiter) };
+    const result = await runner(argv, updaterEnv, home, timeoutMs);
     forgetVersion();
     // The updater just ran the tool; asking it its version now adds nothing new.
     const updated = inspectTool(agent, env, home);
-    const after = updated.version ?? (updated.path ? askVersion(updated.path) : undefined);
+    const after = updated.version ?? (updated.path ? binaryVersion(updated.path, askVersion) : undefined);
     const output = stripAnsi(result.output).trim().slice(-MAX_OUTPUT) || undefined;
     if (result.error || result.code !== 0) {
       const why = result.error ?? `exited with code ${result.code}`;
@@ -261,7 +271,8 @@ export function updateTool(
       ? `${name} updated from ${before} to ${after}.`
       : !before && after
         ? `${name} is now ${after}.`
-        : `${name} is up to date${after ? ` (${after})` : ""}.`;
+        : after ? `${name} is up to date (${after}).`
+          : `${name} updater completed. The installed version could not be verified.`;
     return { ok: true, before, after, command, output, message };
   })().finally(() => running.delete(agent));
   running.set(agent, task);
