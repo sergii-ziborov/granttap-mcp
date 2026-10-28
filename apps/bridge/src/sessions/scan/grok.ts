@@ -20,6 +20,7 @@ import type { CapabilityObservation } from "../telemetry";
 import { grokNativeActivity } from '../../providers/grok-activity';
 import { grokTimeline } from '../../providers/grok-timeline';
 import { grokToolCalls, grokToolCompletions, grokToolSummary, grokRecordedChanges } from '../../providers/grok-tools';
+import { readGrokConversation } from '../../providers/grok-conversation';
 
 type Summary = {
   info?: { id?: unknown; cwd?: unknown };
@@ -85,9 +86,7 @@ function visibleRole(row: Record<string, unknown>, message: Record<string, unkno
 
 function parseLog(path: string, sessionId: string, fallbackTime: number, fullText = false): ParsedLog {
   let lines: string[];
-  try { lines = readFileSync(path, "utf8").split("\n"); } catch {
-    return { entries: [], usage: [], tokens: 0, lastTurn: 0 };
-  }
+  try { lines = readFileSync(path, "utf8").split("\n"); } catch { lines = []; }
   const entries: ActivityEntry[] = [];
   const usage: CapabilityObservation[] = [];
   const seen = new Set<string>();
@@ -163,7 +162,13 @@ function parseLog(path: string, sessionId: string, fallbackTime: number, fullTex
     last.kind = 'final'; last.createdAt = timeline.completedAt;
     lastMessageAt = Math.max(lastMessageAt, timeline.completedAt);
   }
-  return { entries, usage, firstUser, lastMessageAt: lastMessageAt || undefined, tokens, lastTurn };
+  const visible = readGrokConversation(dirname(path), sessionId, fullText) ?? entries;
+  for (const entry of visible) {
+    if (entry.kind === 'user') firstUser ??= entry.text;
+    if (['user', 'message', 'final'].includes(entry.kind)) lastMessageAt = Math.max(lastMessageAt, entry.createdAt);
+  }
+  return { entries: visible,
+    usage, firstUser, lastMessageAt: lastMessageAt || undefined, tokens, lastTurn };
 }
 
 function parseSummary(path: string): Summary | null {

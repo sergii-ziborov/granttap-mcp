@@ -11,6 +11,8 @@ import { relayTaskJobRemote } from './remote';
 import { NativeTaskQueueSender } from '../sender';
 import { queuedCatalogRefreshDue, taskDispatchReady } from './readiness';
 import { localTaskOrigins, resolveTaskOriginJob } from '../../task-origins';
+import { grokResumeActivity } from '../../providers/grok-activity';
+import { localTaskTransfers } from '../../task-transfer';
 
 /** Only the persistent monitor advertises durable submission capability. */
 export function startTaskDispatchMonitor(input: {
@@ -43,7 +45,10 @@ export function startTaskDispatchMonitor(input: {
       const catalog = publishedCatalog(input.client);
       const session = [...(catalog?.sessions ?? []), ...(catalog?.history ?? [])]
         .find(item => item.sessionId === job.sessionId);
+      const nativeState = session?.agent === 'grok'
+        ? grokResumeActivity(localTaskTransfers().nativeSession(session))?.state : undefined;
       const observation = { session, generatedAt: catalog?.generatedAt,
+        nativeState,
         inFlight: isDeliveryInFlight(job.sessionId ?? `__new_${job.operation.agent ?? 'codex'}_task__`),
         paused: !!job.sessionId && isSessionPaused(job.sessionId) };
       const ready = taskDispatchReady(job, observation);

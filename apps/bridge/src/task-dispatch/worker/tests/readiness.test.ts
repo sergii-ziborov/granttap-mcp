@@ -22,6 +22,24 @@ test('Send now preserves pause and in-flight protection', () => {
   assert.equal(taskDispatchReady(immediate, { ...observation, inFlight: true }, now), false);
 });
 
+test('Send now keeps a busy native Grok message queued and releases it after its actual turn ends', () => {
+  const immediate = { ...job, deliveryMode: 'immediate' as const };
+  const grok = { ...observation, session: { ...session, agent: 'grok' as const } };
+  assert.equal(taskDispatchReady(immediate, grok, now), false,
+    'Manual priority must not turn a temporary native turn into a rejected message');
+  assert.equal(taskDispatchReady(immediate, { ...grok, session: { ...grok.session, state: 'waiting' } }, now), false);
+  assert.equal(taskDispatchReady(immediate, { ...grok, session: { ...grok.session, state: 'idle' } }, now), true);
+});
+
+test('fresh native Grok activity overrides a catalog that still reports idle', () => {
+  const immediate = { ...job, deliveryMode: 'immediate' as const };
+  const grok = { ...observation, session: { ...session, agent: 'grok' as const, state: 'idle' as const },
+    nativeState: 'working' as const };
+  assert.equal(taskDispatchReady(immediate, grok, now), false);
+  assert.equal(taskDispatchReady(job, grok, now), false);
+  assert.equal(taskDispatchReady(immediate, { ...grok, nativeState: 'idle' as const }, now), true);
+});
+
 test('automatic queue release requires a fresh idle catalog rather than another full native scan', () => {
   const idle = { ...observation, session: { ...session, state: 'idle' as const } };
   assert.equal(taskDispatchReady(job, idle, now), true);

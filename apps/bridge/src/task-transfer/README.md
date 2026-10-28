@@ -25,3 +25,8 @@ Licensed under the GrantTap Commercial Source License. See LICENSE and NOTICE.
 The first Grok turn binds its confirmed native session before the final answer,
 so the transferred Task can publish live native history while the turn runs.
 The durable launch remains in progress and cannot start another execution.
+
+Repeated Grok and Cursor transfers resolve the admitted native execution and
+carry every inherited context page before the current visible native history.
+Grok capture reads the persisted restore transcript, preserving history across
+model-context compaction; incomplete native input refuses a partial transfer.

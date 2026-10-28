@@ -26,3 +26,13 @@ for every pending message on each receiver tick.
 ## License
 
 Licensed under the GrantTap Commercial Source License. See LICENSE and NOTICE.
+# Busy native Grok turns
+
+Manual release retains priority over queued follow-ups but preserves Grok's
+native admission boundary. Both normal and manually released messages stay in
+the durable inbox while the native execution is working or waiting for
+permission. The worker checks that exact native execution before claiming the
+job, refreshes its catalog while held, and starts automatically once it is idle.
+This does not turn a temporary native busy state into a failed delivery or ask
+the person to resend. It does not claim provider-native mid-turn Steer support.
+

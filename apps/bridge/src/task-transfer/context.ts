@@ -6,15 +6,23 @@ import { grokActivity } from '../sessions/scan/grok';
 import { captureContextImages } from './context/images';
 import { TransferArchive } from './context/archive';
 import { MAX_TRANSFER_CONTEXT_BYTES, transferDigest } from './persistence';
+import { localTaskTransfers } from './runtime/local';
+import { transferHistory } from './projection';
 
 type ContextReaders = { page: (session: SessionInfo, cursor?: string) => SessionActivity | undefined;
   image?: typeof nativeTranscriptImage };
 
 function visiblePage(session: SessionInfo, cursor?: string): SessionActivity | undefined {
+  if (cursor?.startsWith('transfer-context:')) return transferHistory(session, cursor);
   if (session.agent === 'cursor' || session.agent === 'grok') {
-    const entries = session.agent === 'cursor' ? cursorActivity(session, true) : grokActivity(session, true);
-    return entries.length ? { type: 'session.activity', sessionId: session.sessionId, agent: session.agent,
-      state: session.state, generatedAt: Date.now(), entries } : undefined;
+    const native = localTaskTransfers().nativeSession(session);
+    const entries = session.agent === 'cursor' ? cursorActivity(native, true) : grokActivity(native, true);
+    const inherited = native.sessionId !== session.sessionId ? transferHistory(session) : undefined;
+    if (!entries.length) return inherited;
+    const until = inherited ? inherited.entries.length + Number(inherited.history?.cursor?.split(':')[1] ?? 0) : 0;
+    return { type: 'session.activity', sessionId: session.sessionId, agent: session.agent,
+      state: session.state, generatedAt: Date.now(), entries,
+      ...(until ? { history: { hasMore: true, cursor: `transfer-context:${until}` } } : {}) };
   }
   return readTranscriptHistory(session, cursor);
 }
