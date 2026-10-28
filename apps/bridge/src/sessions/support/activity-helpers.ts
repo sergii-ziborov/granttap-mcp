@@ -225,6 +225,7 @@ type EntryExtras = Partial<
       | "linesAdded"
       | "linesRemoved"
       | "diffPreview"
+      | "fileChanges"
       | "summary"
     >
   >;

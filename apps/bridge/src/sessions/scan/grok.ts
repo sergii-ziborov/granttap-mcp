@@ -5,7 +5,6 @@ import {
   classifyTool,
   estimateTokens,
   pushEntry,
-  toolSummary,
 } from "../support/activity-helpers";
 import {
   grokSessionsRoot,
@@ -20,6 +19,7 @@ import {
 import type { CapabilityObservation } from "../telemetry";
 import { grokNativeActivity } from '../../providers/grok-activity';
 import { grokTimeline } from '../../providers/grok-timeline';
+import { grokToolCalls, grokToolCompletions, grokToolSummary, grokRecordedChanges } from '../../providers/grok-tools';
 
 type Summary = {
   info?: { id?: unknown; cwd?: unknown };
@@ -96,6 +96,7 @@ function parseLog(path: string, sessionId: string, fallbackTime: number, fullTex
   let tokens = 0;
   let lastTurn = 0;
   const timeline = grokTimeline(dirname(path));
+  const completions = grokToolCompletions(dirname(path));
   let prompt: { at: number; row: number } | undefined;
   lines.forEach((line, index) => {
     const row = safeParse(line);
@@ -135,16 +136,17 @@ function parseLog(path: string, sessionId: string, fallbackTime: number, fullTex
     if (texts.some((text) => !!text.trim()) && (messageAt || prompt)) {
       lastMessageAt = Math.max(lastMessageAt, createdAt);
     }
-    const blocks = Array.isArray(message.content) ? message.content : [];
-    blocks.forEach((block: Record<string, unknown>, blockIndex: number) => {
-      if (block?.type !== "tool_use") return;
-      const name = block.name;
-      const input = block.input;
+    grokToolCalls(message).forEach((call) => {
+      const name = call.name;
+      const input = call.input;
       const identity = classifyTool(name, input);
-      const sourceId = String(block.id ?? `${sessionId}:${index}:${blockIndex}`);
-      pushEntry({ fullText, out: entries, seen, sessionId, kind: "tool", text: toolSummary(name, input),
-        createdAt, ordinal: index * 100 + blockIndex, extras: identity,
-        idOverride: `${sessionId}:${legacyTime}:${index * 100 + blockIndex}` });
+      const sourceId = call.id ?? `${sessionId}:${index}:${call.ordinal}`;
+      const fileChanges = grokRecordedChanges(call, call.id ? completions.get(call.id) : undefined);
+      const idOverride = call.typed ? `${sessionId}:tool:${sourceId}`
+        : `${sessionId}:${legacyTime}:${index * 100 + call.ordinal}`;
+      pushEntry({ fullText, out: entries, seen, sessionId, kind: "tool", text: grokToolSummary(call),
+        createdAt, ordinal: index * 100 + call.ordinal,
+        extras: { ...identity, ...(fileChanges.length ? { fileChanges } : {}) }, idOverride });
       usage.push({
         sourceId, sessionId, toolName: identity.toolName, createdAt,
         mcpServer: identity.mcpServer, skill: identity.skill,
