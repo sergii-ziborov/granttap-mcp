@@ -1,4 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { delimiter, dirname } from 'node:path';
+import { realpathSync } from 'node:fs';
+import { providerSignInFailure } from './auth-failure';
 import { computerId } from "../../mesh/identity/computer";
 import { inspectRepository } from "../../mesh/catalog";
 import { localMeshStore } from "../../mesh/local-remote/local";
@@ -19,7 +22,11 @@ function projectEnvForCwd(cwd?: string): NodeJS.ProcessEnv {
 }
 
 export function providerProcessEnvironment(cwd?: string): NodeJS.ProcessEnv {
-  return { ...process.env, GRANTTAP_DELIVERY: "1", ...projectEnvForCwd(cwd) };
+  const env: NodeJS.ProcessEnv = { ...process.env, GRANTTAP_DELIVERY: "1", ...projectEnvForCwd(cwd) };
+  const nodeDirectory = dirname(process.execPath);
+  env.PATH = [nodeDirectory, ...(env.PATH ?? '').split(delimiter)
+    .filter(part => part && part !== nodeDirectory)].join(delimiter);
+  return env;
 }
 
 /**
@@ -27,6 +34,14 @@ export function providerProcessEnvironment(cwd?: string): NodeJS.ProcessEnv {
  * phone can stop the one in flight instead of letting it finish unseen.
  */
 const running = new Map<string, Set<ChildProcess>>();
+
+/** Only children actually launched by this GrantTap process, never other desktop tasks. */
+export function ownedProviderProcesses(command: string): ChildProcess[] {
+  const real = (path: string) => { try { return realpathSync(path); } catch { return path; } };
+  const expected = real(command);
+  return [...new Set([...running.values()].flatMap(set => [...set]))]
+    .filter(child => child.exitCode == null && real(child.spawnfile) === expected);
+}
 
 export const STOPPED_ERROR = "Stopped: the chat was paused from the phone.";
 
@@ -127,6 +142,8 @@ export function runProcess(
       signalOwnedProcess(child, "SIGKILL");
       finish({ ok: false, error: admission.timeoutMessage });
     }, admission.withinMs) : undefined;
+    child.stdout?.setEncoding('utf8');
+    child.stderr?.setEncoding('utf8');
     child.stdout?.on("data", (chunk) => {
       stdout += chunk;
       if (done || admissionReported || !admission?.confirmed(stdout)) return;
@@ -138,7 +155,12 @@ export function runProcess(
         finish({ ok: false, error: "Provider activity could not be recorded safely.", delivery: "native" });
       }
     });
-    child.stderr?.on("data", (chunk) => { stderr += chunk; });
+    child.stderr?.on("data", (chunk) => {
+      stderr += chunk;
+      if (done || (admission && admission.confirmed(stdout))) return;
+      const error = providerSignInFailure(command, stderr);
+      if (error) { signalOwnedProcess(child, 'SIGKILL'); finish({ ok: false, error }); }
+    });
     child.on("error", (error) => {
       finish({ ok: false, error: `${command}: ${error.message}` });
     });

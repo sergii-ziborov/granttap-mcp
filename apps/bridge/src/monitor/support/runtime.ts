@@ -1,4 +1,6 @@
 import { runtimeWorkTracker } from "../../runtime-updates/readiness";
+import { providerLogins } from '../../device-management/login';
+import { deviceManagementWorkActive } from '../../device-management';
 import { refreshCodexHooks } from "../../codex-hook-trust";
 import { computerDisplayName } from "../../../../../packages/core/computer-name";
 import { RelayClient } from "../../../../../packages/core/relay-client";
@@ -170,7 +172,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
   let historyRead: Promise<SessionsStatus["sessions"]> | undefined;
   let lastHistoryPublishedAt = 0;
   let closed = false;
-  const work = runtimeWorkTracker(() => approvalsStatus().pending.length > 0);
+  const work = runtimeWorkTracker(() => approvalsStatus().pending.length > 0 || providerLogins.active() || deviceManagementWorkActive());
   const loadLoop = monitorLoadLoop(client, leadership);
 
   const history = (force = false): Promise<SessionsStatus["sessions"]> => {

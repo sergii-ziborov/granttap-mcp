@@ -1,4 +1,5 @@
 import { handleTaskTransferCommand } from "../../task-transfer/runtime";
+import { handleDeviceManagement } from '../../device-management';
 import { handleProjectTransportConfiguration } from '../../task-network/runtime';
 import { handleHookTrust } from "../../codex-hook-trust";
 import { handleConfigurationCommand } from "../../configuration-delivery";
@@ -156,6 +157,7 @@ function handlePhoneUserMessage(client: RelayClient, payload: Extract<Payload, {
 
 function handlePeerConfiguration(client: RelayClient, payload: Payload, peerPublicKey: string | undefined,
   publish: (forceHistory?: boolean) => Promise<void>): Promise<boolean> | undefined {
+  if (payload.type === 'device.manage') return handleDeviceManagement(client, payload, peerPublicKey);
   if (payload.type === 'project.transport.set') {
     return handleProjectTransportConfiguration(client, payload, peerPublicKey);
   }

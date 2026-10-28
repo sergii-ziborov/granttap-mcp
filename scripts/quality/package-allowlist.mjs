@@ -12,7 +12,7 @@ const PUBLIC_FILES = new Set([
   "package.json",
 ]);
 const PUBLIC_PREFIXES = ["apps/", "bin/", "cursor-plugin/", "packages/"];
-const PUBLIC_DOCS = /^(?:docs\/cursor-authorize\.md|docs\/images\/[^/]+)$/;
+const PUBLIC_DOCS = /^(?:docs\/(?:cursor-authorize|device-management)\.md|docs\/images\/[^/]+)$/;
 const INTERNAL_SEGMENT = /(?:^|\/)(?:tests?|scripts?|superpowers|plans?|roadmaps?|audits?|research)(?:\/|$)/i;
 const INTERNAL_GUIDE = /(?:^|\/)(?:AGENTS|CODEX|CLAUDE)\.md$/i;
 const TEST_EVIDENCE = /(?:^|\/)(?:coverage|test[-_ ]?evidence|test[-_ ]?results?)(?:\/|$)/i;

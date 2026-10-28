@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { checkForRuntimeUpdate } from '../index';
 import { selectedRuntime, rollbackRuntime } from '../selection.mjs';
+import { saveAutomaticUpdateSetting, automaticUpdatesAllowed } from '../preferences/storage.mjs';
 
 function fixture() {
   const directory = mkdtempSync(join(tmpdir(), 'granttap-runtime-update-'));
@@ -25,6 +26,12 @@ test('a qualified stable release becomes the selected runtime without changing p
   assert.equal(await checkForRuntimeUpdate(f.options),f.candidate);
   assert.equal(selectedRuntime(f.bundled,f.state),f.candidate);
   assert.equal(readFileSync(pairing,'utf8'),'unchanged');
+});
+test('an explicit phone update can install while automatic updates remain disabled', async()=>{
+  const f=fixture();saveAutomaticUpdateSetting(f.state,false);
+  assert.equal(await checkForRuntimeUpdate(f.options),undefined);
+  assert.equal(await checkForRuntimeUpdate({...f.options,manual:true}),f.candidate);
+  assert.equal(automaticUpdatesAllowed(f.state),false,'A manual request does not change the saved preference');
 });
 test('pending human decisions defer activation and the next idle check can apply the same release',async()=>{
   const f=fixture();let idle=false;let installs=0;const install=f.options.install;
