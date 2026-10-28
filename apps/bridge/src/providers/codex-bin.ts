@@ -23,6 +23,8 @@ export function resolveCodexBinary(
   if (override) return override;
   const onPath = executableOnPath("codex", env);
   if (onPath) return onPath;
+  const native = join(home, '.local', 'bin', 'codex');
+  if (executable(native)) return native;
   for (const app of ["ChatGPT.app", "Codex.app"]) {
     for (const root of [applicationsRoot, join(home, "Applications")]) {
       for (const relative of [

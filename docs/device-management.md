@@ -49,3 +49,11 @@ This restores completion after a phone returns from the browser without starting
 another login, resending a prompt, or retaining terminal authorization codes.
 
 MCP 0.8.111 adds provider-update controls for Claude Code, Codex CLI, Grok CLI and Cursor CLI. Each runs its own fixed updater (or its owning npm/Homebrew installer) on the selected computer; desktop Claude can install the latest native CLI. An explicit update probes versions before and after, caches the observed version, and refuses active GrantTap requests for that provider or an active sign-in. Background recovery asks for the original operation ID; it returns the saved private result without running the update again. Older clients can ignore the optional updateSupported capability.
+
+A Codex copy bundled with the desktop app is preserved. Its update action uses
+the [official standalone installer](https://learn.chatgpt.com/docs/cli) with
+noninteractive input and then resolves the native `~/.local/bin/codex` copy,
+including under launchd's stripped PATH. An explicit binary override keeps
+priority. Version output retains prerelease suffixes so an alpha is not shown
+as a stable release. Regression tests simulate installer output and verify the
+original app binary remains unchanged.

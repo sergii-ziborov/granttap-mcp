@@ -36,3 +36,14 @@ test("a Codex CLI on PATH keeps priority over the desktop bundle", async () => {
 
   assert.equal(resolveCodexBinary(root, { PATH: dirname(onPath) }, join(root, "Applications")), onPath);
 });
+
+test("the standalone installer copy is used after an update even without a shell PATH", async () => {
+  const root = await mkdtemp(join(tmpdir(), 'granttap-codex-native-'));
+  const native = join(root, '.local/bin/codex');
+  const bundled = join(root, 'Applications/ChatGPT.app/Contents/Resources/codex');
+  for (const path of [native, bundled]) {
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  }
+  assert.equal(resolveCodexBinary(root, { PATH: '/usr/bin:/bin' }, join(root, 'Applications')), native);
+});

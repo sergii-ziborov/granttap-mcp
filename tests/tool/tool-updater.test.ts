@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, realpathSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, realpathSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -245,4 +245,25 @@ test("launchd discovers native Grok and Claude outside PATH and supplies Node to
     assert.equal(childEnv.PATH?.split(":")[0], join(process.execPath, ".."));
     return { code: 0, output: "current" };
   });
+});
+
+test("a bundled Codex installs a standalone CLI that the next message uses, preserving the signed app", async () => {
+  const { home, env } = await mac();
+  const bundled = join(home, 'Applications/ChatGPT.app/Contents/Resources/codex');
+  const native = join(home, '.local/bin/codex');
+  tool(bundled, '0.165.0-alpha.1.2');
+  const original = readFileSync(bundled);
+  const outcome = await updateTool('codex', env, home, async argv => {
+    assert.equal(argv[0], '/bin/sh');
+    assert.match(argv[2]!, /https:\/\/chatgpt\.com\/codex\/install\.sh/);
+    assert.match(argv[2]!, /CODEX_NON_INTERACTIVE=1/);
+    tool(native, '0.165.0');
+    return { code: 0, output: 'Installed standalone Codex CLI' };
+  });
+  assert.equal(outcome.ok, true);
+  assert.equal(outcome.before, '0.165.0-alpha.1.2');
+  assert.equal(outcome.after, '0.165.0');
+  assert.equal(outcome.command, 'Codex CLI installer');
+  assert.equal(inspectTool('codex', env, home).path, native);
+  assert.deepEqual(readFileSync(bundled), original);
 });

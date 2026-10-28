@@ -52,6 +52,9 @@ export type ToolUpdateOutcome = {
 
 const UPDATE_TIMEOUT_MS = 10 * 60_000;
 const MAX_OUTPUT = 4_000;
+// The desktop bundle has no self-update channel. Use the provider's standalone
+// installer without modifying the signed app; its CLI is resolved after install.
+const CODEX_INSTALL = 'installer="$(/usr/bin/curl -fsSL https://chatgpt.com/codex/install.sh)" && CODEX_NON_INTERACTIVE=1 /bin/sh -c "$installer"';
 
 function executable(path: string): boolean {
   try {
@@ -116,6 +119,7 @@ export function updateArgv(
     case "codex":
       if (install.method === "npm") return npmArgv(install, "@openai/codex", env);
       if (install.method === "brew") return brewArgv("codex", env);
+      if (path?.includes('.app/Contents/')) return ['/bin/sh', '-c', CODEX_INSTALL];
       return path ? [path, "update"] : undefined;
     case "cursor":
     case "grok":
@@ -174,6 +178,7 @@ export function inspectTools(env: NodeJS.ProcessEnv = process.env, home = homedi
 
 /** The command as the phone shows it: the binary by name, the arguments as run. */
 export function describeCommand(argv: string[]): string {
+  if (argv[2] === CODEX_INSTALL) return 'Codex CLI installer';
   return [basename(argv[0] ?? ""), ...argv.slice(1)].join(" ");
 }
 
