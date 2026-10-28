@@ -17,7 +17,9 @@ export class DesktopConnection {
   private readonly deadline: number;
 
   constructor(path: string, timeoutMs: number) {
-    this.deadline = Date.now() + Math.min(5_000, timeoutMs);
+    // The native router allows ten seconds for owner discovery. Keep time
+    // for initialization, discovery and its routed response within the turn.
+    this.deadline = Date.now() + Math.min(30_000, timeoutMs);
     this.socket = connect(path);
     this.socket.on('error', () => this.close());
     this.socket.on('close', () => this.close());

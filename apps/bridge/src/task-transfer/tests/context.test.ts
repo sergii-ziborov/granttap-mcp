@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
 import { captureTransferContext, PreparedTaskTransfers } from '../index';
@@ -33,9 +33,10 @@ test('transfer context carries every visible page and image, and materializes re
     const transfers = new PreparedTaskTransfers(root);
     const row = transfers.prepare({ eventId: 'fixture-transfer', projectId: 'project', sourceSessionId: 'fixture',
       title: 'Original', capsule, context: captured.context, workspace: '/fixture/worktree', branch: 'granttap/fixture', acceptedAt: 1 });
-    const readable = readFileSync(transfers.providerContextPath(row.sessionId), 'utf8');
+    const readablePath = transfers.providerContextPath(row.sessionId);
+    const readable = readFileSync(readablePath, 'utf8');
     assert.ok(readable.includes('Original request')); assert.ok(readable.includes('Visible answer'));
-    const file = join(root, `${row.sessionId}.images`, '0.png');
+    const file = join(dirname(readablePath), `${row.sessionId}.images`, '0.png');
     assert.deepEqual(readFileSync(file), Buffer.from([1, 2, 3]));
     assert.ok(readable.includes(file)); assert.ok(!readable.includes('AQID'));
   } finally { rmSync(root, { recursive: true, force: true }); }

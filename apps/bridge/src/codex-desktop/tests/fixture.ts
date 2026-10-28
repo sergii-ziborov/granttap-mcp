@@ -26,7 +26,8 @@ export function refuse(socket: Socket, request: Request, error: string): void {
     resultType: 'error', error }));
 }
 
-export async function fixture(t: TestContext, owner?: Owner, options: { ownerFound?: boolean } = {}) {
+export async function fixture(t: TestContext, owner?: Owner,
+  options: { ownerFound?: boolean; ownerDelayMs?: number } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'granttap-native-'));
   const home = join(root, 'codex');
   await mkdir(join(home, 'ipc'), { recursive: true, mode: 0o700 });
@@ -47,8 +48,10 @@ export async function fixture(t: TestContext, owner?: Owner, options: { ownerFou
         requests.push(request);
         if (request.method === 'initialize') respond(socket, request, { clientId: randomUUID() });
         else if (request.method === 'thread-owner-discovery') {
-          if (options.ownerFound === false) refuse(socket, request, 'no-client-found');
-          else respond(socket, request, { supportsUntrustedAppInput: true });
+          const reply = () => options.ownerFound === false ? refuse(socket, request, 'no-client-found')
+            : respond(socket, request, { supportsUntrustedAppInput: true });
+          if (options.ownerDelayMs) setTimeout(reply, options.ownerDelayMs).unref();
+          else reply();
         }
         else if (owner) owner(request, socket);
         else respond(socket, request, { result: { turn: { id: 'native-turn', status: 'inProgress' } } });

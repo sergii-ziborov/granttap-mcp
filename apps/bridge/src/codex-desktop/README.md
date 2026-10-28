@@ -34,3 +34,8 @@ Document staging for a native-only question keeps the file note inside its
 original answer envelope. The host's native question and all paired controllers
 therefore observe the same question item as answered; document paths remain
 available to the admitted turn. Ordinary chat text is unchanged.
+
+The bounded native admission deadline leaves time for the installed router’s
+ten-second owner discovery window. A five-second client cap otherwise reports
+healthy CLI conversations unavailable before discovery can finish. Missing-owner
+confirmation preserves CLI continuation; uncertain dispatch remains unreplayed.

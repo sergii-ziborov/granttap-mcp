@@ -5,6 +5,7 @@ import { PreparedTaskTransfers } from '../index';
 let current: { root: string; store: PreparedTaskTransfers } | undefined;
 export function localTaskTransfers(): PreparedTaskTransfers {
   const root = join(configDir(), 'task-transfers');
-  if (current?.root !== root) current = { root, store: new PreparedTaskTransfers(root) };
+  if (current?.root !== root) current = { root,
+    store: new PreparedTaskTransfers(root, join(configDir(), 'workspaces', 'task-context')) };
   return current.store;
 }

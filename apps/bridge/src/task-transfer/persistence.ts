@@ -12,7 +12,8 @@ export const MAX_TRANSFER_CONTEXT_BYTES = 16_000_000;
 
 export class TransferPersistence {
   private recordCache?: { modified: number; changed: number; rows: PreparedTransfer[] };
-  constructor(protected readonly directory = join(configDir(), 'task-transfers')) {
+  constructor(protected readonly directory = join(configDir(), 'task-transfers'),
+    private readonly providerDirectory = join(directory, 'provider-context')) {
     mkdirSync(directory, { recursive: true, mode: 0o700 });
   }
 
@@ -72,7 +73,7 @@ export class TransferPersistence {
   providerContextPath(id: string): string {
     const record = this.load(id);
     if (!record) throw new Error('The transfer context is unavailable.');
-    return materializeTransferContext(this.readContext(record), this.directory, id);
+    return materializeTransferContext(this.readContext(record), this.providerDirectory, id);
   }
 
   protected readContext(record: PreparedTransfer): string {

@@ -46,3 +46,7 @@ Before enrichment, both the phone publisher and Mac reader verify local checkout
 identity. Historical local aliases or changed origins receive an explicit
 identity error, rather than a second architecture report for the same checkout.
 This changes diagnostics without rebinding a Task or merging access scopes.
+
+Task activity worker output is decoded incrementally as UTF-8 before parsing
+JSON lines. Split Cyrillic and emoji bytes remain intact across stream chunks;
+`tests/activity-stream.test.ts` exercises the real subprocess boundary.

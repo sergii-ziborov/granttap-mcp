@@ -2,6 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { StringDecoder } from "node:string_decoder";
 
 const requireFromHere = createRequire(import.meta.url);
 const workerPath = fileURLToPath(new URL("./task-activity-worker.ts", import.meta.url));
@@ -19,9 +20,10 @@ export class DesktopTaskActivityRunner {
   private pending?: Pending;
   private queue: Pending[] = [];
   private buffer = "";
+  private decoder = new StringDecoder("utf8");
   private usageInFlight?: Promise<unknown>;
 
-  constructor() { this.start(); }
+  constructor(private readonly worker?: () => ChildProcessWithoutNullStreams) { this.start(); }
 
   read(query: unknown, storePath?: string): Promise<unknown> {
     if (this.closed || this.queue.length + (this.pending ? 1 : 0) >= 8) {
@@ -100,7 +102,8 @@ export class DesktopTaskActivityRunner {
     if (this.closed) return;
     this.ready = false;
     this.buffer = "";
-    const child = spawn(process.execPath, [
+    this.decoder = new StringDecoder("utf8");
+    const child = this.worker?.() ?? spawn(process.execPath, [
       "--require", requireFromHere.resolve("tsx/preflight"),
       "--import", pathToFileURL(requireFromHere.resolve("tsx")).href,
       workerPath,
@@ -108,7 +111,7 @@ export class DesktopTaskActivityRunner {
     this.child = child;
     child.stderr.resume();
     child.stdout.on("data", (chunk: Buffer) => {
-      this.buffer += chunk.toString("utf8");
+      this.buffer += this.decoder.write(chunk);
       if (this.buffer.length > 480 * 1_024) { child.kill("SIGKILL"); return; }
       for (;;) {
         const end = this.buffer.indexOf("\n");

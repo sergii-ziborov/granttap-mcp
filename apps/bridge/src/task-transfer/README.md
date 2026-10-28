@@ -30,3 +30,9 @@ Repeated Grok and Cursor transfers resolve the admitted native execution and
 carry every inherited context page before the current visible native history.
 Grok capture reads the persisted restore transcript, preserving history across
 model-context compaction; incomplete native input refuses a partial transfer.
+
+Provider-readable text and images are regenerated from the checksummed archive
+inside `workspaces/task-context`, outside the source checkout and trust-state
+directory. Existing workspace tool policy applies; pairing keys, policy and the
+authoritative archive remain protected. `tests/provider-context.test.ts` covers
+read access, mixed protected paths and regeneration after provider-side edits.
