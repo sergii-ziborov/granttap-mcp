@@ -23,7 +23,7 @@ export async function handleDeviceManagement(client: RelayClient, request: Devic
   const computerId = observedComputerId();
   if (request.computerId != null && request.computerId !== computerId) return false;
   // Sign-in material is deliberately non-durable and addressed only to the requesting paired controller.
-  const send: Send = value => client.sendToPeer(value, peer, { reliable: false, ttlMs: 60_000 });
+  const send: Send = value => client.sendToPeer(value, peer, { reliable: false, urgent: true, ttlMs: 60_000 });
   const key = client.room + ':' + peer + ':' + request.requestId;
   const fingerprint = createHash('sha256').update(JSON.stringify(request)).digest('hex');
   for (const [k, value] of requests) if (Date.now() - value.at > value.ttl && !value.pending) requests.delete(k);
@@ -66,6 +66,7 @@ async function execute(request: DeviceManagementRequest, scope: string, computer
       await send({ ...result('waiting', login.message), login }); return;
     }
     await send(result('running', request.action === 'status' ? 'Reading this computer…' : 'Working on this computer…'));
+    if (request.action === 'status') providerLogins.replay(scope);
     let message = 'Computer status refreshed.';
     if (request.action === 'clear-cache') {
       if (!maintenanceIdle()) throw Error('Finish active requests and sign-in before clearing computer caches.');

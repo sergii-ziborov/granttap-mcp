@@ -88,3 +88,32 @@ test('real Codex multiline and Grok prefilled device challenges preserve their c
   assert.equal(f.events.at(-1).userCode, 'ABCD-EFGH');
   f.logins.cancel('a:p', 'grok', grok.operationId);
 });
+
+test('returning from a browser recovers the final sign-in even when the original event was lost', () => {
+  const f = fixture(); let online = false; const received: any[] = [];
+  f.logins.start('room:phone', 'codex', value => { if (online) received.push(value); });
+  f.children[0].stdout.write('https://auth.openai.com/device\nCode: ABCD-1234\n');
+  f.children[0].emit('close', 0);
+  assert.equal(received.length, 0);
+  online = true;
+  f.logins.replay('room:other-phone'); assert.equal(received.length, 0);
+  f.logins.replay('room:phone');
+  assert.equal(received.at(-1).phase, 'signed-in');
+  assert.equal(received.at(-1).verificationURL, undefined);
+  assert.equal(received.at(-1).userCode, undefined);
+  f.logins.replay('room:phone');
+  assert.equal(f.children.length, 1, 'Status refresh must never launch another login');
+});
+
+test('reconnect replays only the latest flow for each provider and retains other providers completed state', () => {
+  const f = fixture(), codex = f.logins.start('room:phone', 'codex', f.emit);
+  f.children[0].emit('close', 0);
+  const first = f.logins.start('room:phone', 'grok', f.emit);
+  f.logins.cancel('room:phone', 'grok', first.operationId);
+  const next = f.logins.start('room:phone', 'grok', f.emit);
+  f.events.length = 0; f.logins.replay('room:phone');
+  assert.deepEqual(f.events.map(e => e.operationId), [codex.operationId, next.operationId]);
+  assert.equal(f.events[0].phase, 'signed-in');
+  assert.equal(f.events[1].phase, 'starting');
+  f.logins.cancel('room:phone', 'grok', next.operationId);
+});

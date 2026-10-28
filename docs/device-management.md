@@ -1,6 +1,6 @@
 # Computer controls from GrantTap
 
-MCP 0.8.109 adds the paired-controller `device.manage` protocol. The iOS client
+MCP 0.8.110 adds the paired-controller `device.manage` protocol. The iOS client
 must also support these controls. A computer without an installed, connected
 MCP cannot execute remote commands; install and pair MCP on that computer first.
 
@@ -43,3 +43,7 @@ without durable mailbox storage.
 Regression tests cover controller/room/computer isolation, request idempotency,
 native login challenge formats, code ownership/cancellation/expiry, UTF-8
 streams, launchd Node PATH recovery and preservation during cache cleanup.
+
+The latest sign-in state is replayed privately when its controller refreshes status.
+This restores completion after a phone returns from the browser without starting
+another login, resending a prompt, or retaining terminal authorization codes.

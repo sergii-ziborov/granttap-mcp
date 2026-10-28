@@ -16,6 +16,13 @@ export class ProviderLogins {
 
   active(): boolean { return [...this.flows.values()].some(f => !terminal.has(f.progress.phase)); }
 
+  /** A phone can leave for Safari while its final event is dropped. Status refresh replays only its latest flows. */
+  replay(scope: string): void {
+    const latest = new Map<CodingAgent, Flow>();
+    for (const flow of this.flows.values()) if (flow.scope === scope) latest.set(flow.progress.agent, flow);
+    for (const flow of latest.values()) flow.emit(flow.progress);
+  }
+
   start(scope: string, agent: CodingAgent, emit: Flow['emit']): ProviderLoginProgress {
     const existing = [...this.flows.values()].find(f => f.scope === scope && f.progress.agent === agent
       && !terminal.has(f.progress.phase));
@@ -104,7 +111,9 @@ export class ProviderLogins {
   }
 
   private prune(): void {
-    for (const [id, f] of this.flows) if (terminal.has(f.progress.phase)) this.flows.delete(id);
+    for (const [id, f] of this.flows) {
+      if (terminal.has(f.progress.phase) && this.now() >= f.progress.expiresAt) this.flows.delete(id);
+    }
   }
 }
 export const providerLogins = new ProviderLogins();

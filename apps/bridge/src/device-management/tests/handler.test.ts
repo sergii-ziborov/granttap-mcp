@@ -30,8 +30,8 @@ test('only the paired controller on the concrete computer route can manage it; r
     assert.equal(await handleDeviceManagement(client, request, 'phone'), true);
     await done;
     assert.equal(sent.at(-1).value.snapshot.computerId, 'qa-mac');
-    assert.equal(sent.at(-1).value.snapshot.runtimeVersion, '0.8.109');
-    assert.equal(sent.every(x => x.peer === 'phone' && x.options.reliable === false && x.options.ttlMs === 60_000), true);
+    assert.equal(sent.at(-1).value.snapshot.runtimeVersion, '0.8.110');
+    assert.equal(sent.every(x => x.peer === 'phone' && x.options.reliable === false && x.options.urgent === true && x.options.ttlMs === 60_000), true);
     const count = sent.length;
     assert.equal(await handleDeviceManagement(client, request, 'phone'), true);
     assert.equal(sent.length, count + 1, 'A retry returns the saved result rather than repeating the command');
