@@ -36,3 +36,6 @@ inside `workspaces/task-context`, outside the source checkout and trust-state
 directory. Existing workspace tool policy applies; pairing keys, policy and the
 authoritative archive remain protected. `tests/provider-context.test.ts` covers
 read access, mixed protected paths and regeneration after provider-side edits.
+
+Cursor also binds the confirmed native session before its first prompt, so a
+prepared transfer can expose that execution while a tool or question is active.

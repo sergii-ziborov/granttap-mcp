@@ -80,9 +80,11 @@ test("a new Cursor task remains stoppable through its pending delivery identity"
 
 
 test("a new ACP chat is readable during its question and after reopening through the catalog", async t => {
-  const f = fixture(t); let waiting: SessionInfo | undefined;
+  const f = fixture(t); let waiting: SessionInfo | undefined; let confirmed: string | undefined;
   const result = await runCursorConversation({ cwd: f.root, text: "Keep my visible request", timeoutMs: 10_000,
+    onNativeSession: (id: string) => { confirmed = id; },
     ask: async request => {
+      assert.equal(confirmed, request.sessionId, "Native ownership must precede the first permission/question");
       waiting ??= scanCursor().sessions.find(row => row.sessionId === request.sessionId);
       return { type: "approval.decision", requestId: request.requestId, sessionId: request.sessionId,
         decision: "allow", decidedAt: Date.now(), note: request.kind === "question" ? '{"Which action?":"Run tests"}' : undefined };

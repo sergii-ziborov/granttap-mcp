@@ -72,8 +72,12 @@ export function deliverToSession(
               request.onNativeSession(nativeId);
               options.onAgentActivity?.(nativeId);
             })
-          : ({ claude: createClaudeSession, codex: createCodexSession,
-            cursor: createCursorSession }[request.provider])(projectGuidancePrompt(session.projectId, request.text), request.cwd,
+          : request.provider === 'cursor'
+            ? createCursorSession(projectGuidancePrompt(session.projectId, request.text), request.cwd, timeoutMs,
+              request.attachments, request.model, request.operationKey, request.effort, nativeId => {
+                request.onNativeSession(nativeId);
+              })
+          : ({ claude: createClaudeSession, codex: createCodexSession }[request.provider])(projectGuidancePrompt(session.projectId, request.text), request.cwd,
             timeoutMs, request.attachments, request.model, request.operationKey, request.effort),
         resume: (native, body, images, settings) => withAttachments(images, body, prepared => runDelivery(native,
           native.agent === "codex" ? prepared.prompt : prepared.claudePrompt, timeoutMs, prepared.images, settings)),
@@ -131,10 +135,11 @@ export function createCursorSession(
   model?: string,
   operationKey?: string,
   effort?: string,
+  onNativeSession?: (sessionId: string) => void,
 ): Promise<ReplyResult> {
   const workspace = resolveAgentWorkspace(cwd, "cursor");
   return queued("__new_cursor_task__", () => withAttachments(attachments, text, (prepared) =>
-    runCursorNew(prepared.claudePrompt, workspace, timeoutMs, model, operationKey, effort),
+    runCursorNew(prepared.claudePrompt, workspace, timeoutMs, model, operationKey, effort, onNativeSession),
   ));
 }
 

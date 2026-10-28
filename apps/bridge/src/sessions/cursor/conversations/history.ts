@@ -17,8 +17,11 @@ export function cursorConversationHistory(session: SessionInfo, cursor?: string)
       try { const parsed = ActivityEntry.safeParse(JSON.parse(line.text));
         if (parsed.success) entries.push({ entry: parsed.data, offset: line.offset }); } catch { /* Incomplete row. */ }
     }
-    const picked: ActivityEntry[] = []; let bytes = 0, offset = window.end;
-    for (const item of entries.reverse().slice(0, 80)) {
+    const picked: ActivityEntry[] = [], seen = new Set<string>(); let bytes = 0, offset = window.end;
+    for (const item of entries.reverse()) {
+      if (seen.has(item.entry.id)) continue;
+      if (picked.length >= 80) break;
+      seen.add(item.entry.id);
       const size = Buffer.byteLength(JSON.stringify(item.entry));
       if (bytes + size > 384 * 1024 && picked.length) break;
       picked.unshift(item.entry); offset = item.offset; bytes += size;

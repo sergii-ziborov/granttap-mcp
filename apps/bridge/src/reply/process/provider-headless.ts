@@ -15,8 +15,9 @@ function grokBin(): string {
 
 export function runCursorNew(
   text: string, cwd: string, timeoutMs: number, model?: string, operationKey?: string, effort?: string,
+  onNativeSession?: (sessionId: string) => void,
 ): Promise<ReplyResult> {
-  return runCursorConversation({ text, cwd, timeoutMs, model, operationKey });
+  return runCursorConversation({ text, cwd, timeoutMs, model, operationKey, onNativeSession });
 }
 
 export async function runCursorResume(

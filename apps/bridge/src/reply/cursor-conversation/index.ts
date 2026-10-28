@@ -13,7 +13,7 @@ import { CursorCallContext } from "./call-context";
 /** Interactive Cursor turns keep native permission/question RPCs alive until the person answers. */
 export async function runCursorConversation(options: { session?: SessionInfo; cwd: string; text: string;
   timeoutMs: number; model?: string; mode?: "agent" | "plan" | "ask";
-  operationKey?: string; ask?: AskCursorInteraction }): Promise<ReplyResult> {
+  operationKey?: string; ask?: AskCursorInteraction; onNativeSession?: (id: string) => void }): Promise<ReplyResult> {
   let sessionId = options.session?.sessionId ?? "";
   let nativeSessionId = sessionId;
   let response = "";
@@ -33,7 +33,13 @@ export async function runCursorConversation(options: { session?: SessionInfo; cw
       calls.remember(raw, nativeSessionId);
       if (!raw || typeof raw !== "object") return;
       const value = raw as { sessionId?: string; update?: { sessionUpdate?: string; content?: { type?: string; text?: string } } };
-      if (value.sessionId !== nativeSessionId || value.update?.sessionUpdate !== "agent_message_chunk") return;
+      if (value.sessionId !== nativeSessionId) return;
+      if (['tool_call', 'tool_call_update'].includes(value.update?.sessionUpdate ?? '')) {
+        conversation?.tool(value.update);
+        if (value.update?.sessionUpdate === 'tool_call') response = '';
+        return;
+      }
+      if (value.update?.sessionUpdate !== "agent_message_chunk") return;
       if (value.update.content?.type === "text" && typeof value.update.content.text === "string") {
         response = (response + value.update.content.text).slice(-32_000);
         conversation?.update(response);
@@ -65,6 +71,7 @@ export async function runCursorConversation(options: { session?: SessionInfo; cw
       const created = await rpc.request("session/new", { cwd: options.cwd, mcpServers: [] }) as { sessionId?: string };
       if (!created?.sessionId || created.sessionId.length > 256) throw new Error("Cursor did not create a scoped session");
       sessionId = nativeSessionId = created.sessionId; rpc.track(sessionId);
+      options.onNativeSession?.(sessionId);
     }
     if (options.mode) await rpc.request("session/set_mode", { sessionId: nativeSessionId, modeId: options.mode });
     response = ""; // Loading history never becomes a new answer to the current message.

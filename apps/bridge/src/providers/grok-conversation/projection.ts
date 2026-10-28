@@ -1,7 +1,7 @@
 import type { ActivityEntry } from '../../../../../packages/protocol/schema';
 import { classifyTool, pushEntry, stripTranscriptMarkup, visibleUserText } from '../../sessions/support/activity-helpers';
 import { grokRecordedChanges, grokToolCalls, grokToolSummary } from '../grok-tools';
-import { confirmedUpdateChanges } from './changes';
+import { confirmedUpdateChanges } from '../acp-file-changes';
 
 export type ConversationProjection = {
   sessionId: string;

@@ -19,3 +19,8 @@ phone forms. Loading native history never becomes a new assistant response.
 Protocol: https://cursor.com/docs/cli/acp
 
 License: GrantTap Commercial Source License, in the repository-root `LICENSE`.
+
+A new native session is bound to its prepared Task before the first prompt or
+question. Session creation is not an agent-admission receipt. Visible tool
+updates flow into the bounded conversation archive; thinking and raw arguments
+remain excluded. Reply text contains the final segment after the last tool.
