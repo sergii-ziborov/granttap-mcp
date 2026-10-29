@@ -9,3 +9,14 @@ export function providerSignInFailure(command: string, stderr: string): string |
     : executable.includes('codex') ? 'Codex' : executable.includes('cursor') ? 'Cursor' : 'the coding agent';
   return `Sign-in required for ${provider}. Open Devices, choose this computer, then Sign in for ${provider}. This message has not been submitted to the agent.`;
 }
+
+/** Match the provider's explicit diagnostic, not an arbitrary HTTP 402 from a tool. */
+export function providerUsageFailure(stderr: string): string | undefined {
+  if (!/\bGrok Build usage balance exhausted\b/i.test(stderr)) return;
+  return 'Grok usage limit reached: Grok Build usage balance exhausted. Check your Grok usage before retrying.';
+}
+
+export function providerExitFailure(command: string, stderr: string, stdout: string, code: number | null): string {
+  return providerUsageFailure(stderr)
+    ?? `${command} exited with code ${code}: ${(stderr.trim() || stdout.trim()).slice(0, 300)}`;
+}

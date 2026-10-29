@@ -1,5 +1,10 @@
 # Task delivery
 
+An explicit Grok Build usage-balance refusal is returned as a usage error rather
+than a startup timeout or a successful answer. Both stderr exits and streaming
+error events use the same explanation. Earlier confirmed response activity stays
+recorded if a turn later fails; an error alone never creates admission evidence.
+
 This module prepares phone attachments, routes selected MCP/skill intent, and runs local agent commands. The public `reply.ts` entry point owns session queueing and agent-specific command selection.
 
 `provider-headless.ts` owns the provider-neutral headless start used when a Mesh

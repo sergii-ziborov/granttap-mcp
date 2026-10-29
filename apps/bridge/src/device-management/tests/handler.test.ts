@@ -31,7 +31,8 @@ test('only the paired controller on the concrete computer route can manage it; r
     assert.equal(await handleDeviceManagement(client, request, 'phone'), true);
     await done;
     assert.equal(sent.at(-1).value.snapshot.computerId, 'qa-mac');
-    assert.equal(sent.at(-1).value.snapshot.runtimeVersion, '0.8.111');
+    assert.equal(sent.at(-1).value.snapshot.runtimeVersion,
+      JSON.parse(readFileSync(new URL('../../../../../package.json', import.meta.url), 'utf8')).version);
     assert.equal(sent.every(x => x.peer === 'phone' && x.options.reliable === false && x.options.urgent === true && x.options.ttlMs === 60_000), true);
     const count = sent.length;
     assert.equal(await handleDeviceManagement(client, request, 'phone'), true);

@@ -1,5 +1,6 @@
 import type { ReplyResult } from '../payload/types';
 import type { ProviderAdmission } from '../process';
+import { providerUsageFailure } from '../process/auth-failure';
 
 function events(stdout: string): Record<string, unknown>[] {
   return stdout.split('\n').flatMap(line => {
@@ -40,7 +41,7 @@ export function parseGrok(stdout: string, fallback: string): ReplyResult {
     if (typeof event.session_id === 'string') sessionId = event.session_id;
     const error = typeof event.message === 'string' ? event.message : event.error;
     if (event.type === 'error' && typeof error === 'string') {
-      return { ok: false, error: error.slice(0, 500) };
+      return { ok: false, error: providerUsageFailure(error) ?? error.slice(0, 500) };
     }
   }
   return text.trim() ? { ok: true, text: text.trim().slice(0, 4_000), sessionId }

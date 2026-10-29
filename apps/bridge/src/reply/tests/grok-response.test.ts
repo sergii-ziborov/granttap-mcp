@@ -45,6 +45,12 @@ test('Grok native error message is preserved as a failure, not JSON answer text'
   assert.deepEqual(result, { ok: false, error: 'Synthetic provider refusal' });
 });
 
+test('a streamed Grok usage refusal stays an actionable failure without admission', async () => {
+  const result = await response([{ type: 'error', message: 'Grok Build usage balance exhausted' }]);
+  assert.deepEqual(result, { ok: false,
+    error: 'Grok usage limit reached: Grok Build usage balance exhausted. Check your Grok usage before retrying.' });
+});
+
 test('Grok streaming text still yields the real answer and session', async () => {
   const result = await response([{ type: 'text', data: 'Synthetic ' },
     { type: 'text', data: 'answer' }, { type: 'end', sessionId: 'fixture' }]);

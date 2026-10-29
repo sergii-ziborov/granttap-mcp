@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { delimiter, dirname } from 'node:path';
 import { realpathSync } from 'node:fs';
-import { providerSignInFailure } from './auth-failure';
+import { providerSignInFailure, providerExitFailure } from './auth-failure';
 import { computerId } from "../../mesh/identity/computer";
 import { inspectRepository } from "../../mesh/catalog";
 import { localMeshStore } from "../../mesh/local-remote/local";
@@ -172,7 +172,7 @@ export function runProcess(
       if (code !== 0) {
         finish({
           ok: false,
-          error: `${command} exited with code ${code}: ${(stderr.trim() || stdout.trim()).slice(0, 300)}`,
+          error: providerExitFailure(command, stderr, stdout, code),
         });
         return;
       }
