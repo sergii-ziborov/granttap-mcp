@@ -3,6 +3,10 @@ import type { RelayClient } from "../../../../../packages/core/relay-client";
 import type { SessionInfo, SessionsStatus } from "../../../../../packages/protocol/schema";
 import { scanRecordedCapabilityUsage, scopeCapabilityUsageToRoom } from "../../sessions";
 
+import { createSharedCapabilityReader } from './shared-reader';
+
+const readUsage = createSharedCapabilityReader(scanRecordedCapabilityUsage);
+
 type Publication = { running: boolean; closed: boolean; lastPublishedAt: number };
 const publications = new WeakMap<RelayClient, Publication>();
 
@@ -17,7 +21,7 @@ export function publishMonitorCapabilities(client: RelayClient, status: Sessions
     await setImmediate();
     if (state.closed || !client.isConnected) return;
     const publish = async (sessions: SessionInfo[]) => {
-      const usage = await scanRecordedCapabilityUsage(sessions);
+      const usage = await readUsage(sessions);
       if (state.closed || !client.isConnected) return;
       await client.send(scopeCapabilityUsageToRoom(usage, client.room), "phone",
         { ttlMs: 90_000, reliable: false });
@@ -36,3 +40,5 @@ export function stopMonitorCapabilities(client: RelayClient): void {
   if (state) state.closed = true;
   publications.delete(client);
 }
+
+export { createSharedCapabilityReader } from './shared-reader';

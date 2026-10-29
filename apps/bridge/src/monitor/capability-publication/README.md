@@ -11,3 +11,13 @@ history cache's lifetime begins when that read completes.
 
 Behavior tests live in `tests/`.
 Licensed under the GrantTap Commercial Source License in the repository root.
+
+Identical full session snapshots share one in-flight capability scan across relay
+clients. A completed observation is reused for one second, retaining its original
+`generatedAt`; changed session metadata gets an independent read immediately.
+Inputs are snapshotted before asynchronous work, rejected reads are retryable,
+and the cache holds at most 16 scopes. Room attribution is still applied per
+recipient after reading. Foreground usage requests retain their existing direct
+reader. This removes repeated parsing without changing totals or unknown-use
+semantics. `tests/shared-reader.test.ts` covers sharing, scope separation,
+concurrent input changes, expiration, retry and bounded retention.
