@@ -60,3 +60,16 @@ test('an older in-flight observation cannot overwrite a forced refresh', async (
   assert.equal((await prepare(['/project'])).repository('/project').revision, 'new');
   assert.equal(reads, 2);
 });
+
+test('nested chat directories share one fresh worktree reading and its canonical root projection', async () => {
+  let statusReads = 0;
+  const prepare = createMonitorInspection({ now: () => 1_000,
+    repository: async () => ({ root: '/repository', canonicalRepositoryId: 'repo', worktree: '/repository', revision: 'HEAD' }),
+    workingTree: async root => { statusReads++; assert.equal(root, '/repository'); return true; } });
+  const snapshot = await prepare(['/repository/one', '/repository/two']);
+  assert.equal(snapshot.workingTree('/repository/one'), true);
+  assert.equal(snapshot.workingTree('/repository/two'), true);
+  assert.equal(snapshot.workingTree('/repository'), true);
+  assert.equal(snapshot.repository('/repository').revision, 'HEAD');
+  assert.equal(statusReads, 1);
+});

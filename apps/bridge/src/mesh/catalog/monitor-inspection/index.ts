@@ -32,10 +32,14 @@ export function createMonitorInspection(readers: Readers = {
   return async (directories: string[], force = false): Promise<CatalogInspection> => {
     admitted = new Set(directories);
     for (const cwd of metadata.keys()) if (!admitted.has(cwd)) metadata.delete(cwd);
-    const values = new Map(await Promise.all([...admitted].map(async cwd => {
-      const [facts, workingTree] = await Promise.all([repository(cwd, force), readers.workingTree(cwd)]);
-      return [cwd, { repository: facts, workingTree }] as const;
-    })));
+    const facts = new Map(await Promise.all([...admitted].map(async cwd => [cwd, await repository(cwd, force)] as const)));
+    const roots = new Set([...facts.values()].flatMap(value => value.worktree ? [value.worktree] : []));
+    const workingTrees = new Map(await Promise.all([...roots].map(async root => [root, await readers.workingTree(root)] as const)));
+    const values = new Map([...facts].map(([cwd, value]) => [cwd, { repository: value,
+      workingTree: value.worktree ? workingTrees.get(value.worktree) : undefined }] as const));
+    for (const value of [...values.values()]) {
+      if (value.repository.worktree && !values.has(value.repository.worktree)) values.set(value.repository.worktree, value);
+    }
     return { repository: cwd => values.get(cwd)?.repository ?? inspectRepository(cwd),
       workingTree: cwd => values.has(cwd) ? values.get(cwd)!.workingTree : hasUncommittedWork(cwd) };
   };
