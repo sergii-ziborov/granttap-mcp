@@ -47,7 +47,7 @@ import { handleControllerPairRequest, handleInboundKnowledgeWrite } from "../con
 import { acceptPhoneAccountLink } from "../../account-recovery/phone-link";
 import { approvalsStatus } from '../../approvals/state';
 import { handleDeliveryReceiptQuery } from '../message-delivery/status-query';
-import { handleCodexQuestionReply, publishCodexQuestions } from '../../codex-questions';
+import { handleCodexQuestionReply, publishCodexQuestions, replayCodexQuestion } from '../../codex-questions';
 import { publishedCatalog } from '../../session-catalog';
 
 export async function handleMonitorMessage(
@@ -205,6 +205,10 @@ async function handleInboundRefresh(
   // Notification actions must not wait behind provider scans or graph analysis.
   await client.send(approvalsStatus(), 'phone', { peerPublicKey, reliable: false, ttlMs: 90_000 })
     .catch(() => {});
+  if (payload.notificationRequestId) {
+    await replayCodexQuestion(client, payload.notificationRequestId, peerPublicKey).catch(() => false);
+    return true;
+  }
   const known = publishedCatalog(client);
   if (known) await publishCodexQuestions(client, [...known.sessions, ...(known.history ?? [])],
     { replay: true, peerPublicKey }).catch(() => {});

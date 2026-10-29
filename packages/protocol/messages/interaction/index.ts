@@ -161,5 +161,6 @@ export const SessionsRefresh = z.object({
   createdAt: z.number(),
   graphProjectId: z.string().min(1).max(128).optional(),
   graphAnalysisRequestId: z.string().min(1).max(128).optional(),
+  notificationRequestId: z.string().min(1).max(256).optional(),
 });
 export type SessionsRefresh = z.infer<typeof SessionsRefresh>;

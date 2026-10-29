@@ -1,6 +1,6 @@
 import type { RelayClient } from '../../../../packages/core/relay-client';
 import type { SessionInfo, UserMessage } from '../../../../packages/protocol/schema';
-import { nativeTranscriptSource } from '../sessions';
+import { nativeTranscriptSource, restoreNativeTranscriptSource } from '../sessions';
 import { handleInboundUserMessage } from '../monitor/message-delivery';
 import { sendDeliveryReceipt } from '../monitor/handlers/receipts';
 import { nativeAnswerEnvelope } from './observations';
@@ -12,7 +12,7 @@ const RETENTION_MS = 24 * 60 * 60_000;
 
 /** Phone questions travel as device-encrypted control events, independently of task-key grants. */
 export async function publishCodexQuestions(client: RelayClient, sessions: SessionInfo[],
-  options: { replay?: boolean; peerPublicKey?: string } = {}): Promise<void> {
+  options: { replay?: boolean; peerPublicKey?: string; requestId?: string } = {}): Promise<void> {
   for (const session of sessions.filter(s => s.agent === 'codex')) {
     const path = nativeTranscriptSource(session);
     if (!path) continue;
@@ -22,9 +22,11 @@ export async function publishCodexQuestions(client: RelayClient, sessions: Sessi
     for (const question of observed.questions) {
       if (Date.now() - question.createdAt > RETENTION_MS) continue;
       const existing = readQuestion(question.requestId);
-      if (!existing) saveQuestion({ ...question, room: client.room });
+      if (!existing) saveQuestion({ ...question, room: client.room, sourcePath: path });
+      else if (existing.room === client.room && existing.sourcePath !== path) saveQuestion({ ...existing, sourcePath: path });
     }
-    const records = storedQuestions().filter(q => q.room === client.room && q.sessionId === session.sessionId)
+    const records = storedQuestions().filter(q => q.room === client.room && q.sessionId === session.sessionId
+      && (!options.requestId || q.requestId === options.requestId))
       .sort((a, b) => a.createdAt - b.createdAt || a.index - b.index);
     for (const record of records) {
       const expired = Date.now() - record.createdAt > RETENTION_MS;
@@ -44,12 +46,26 @@ export async function publishCodexQuestions(client: RelayClient, sessions: Sessi
           sessionId: session.sessionId, agent: 'codex', projectId: session.projectId,
           taskId: session.taskId, computerId: session.computerId, text, createdAt: record.createdAt },
         'phone', { ttlMs: Math.max(1, record.createdAt + RETENTION_MS - Date.now()),
-          wake: !record.announced, peerPublicKey: options.peerPublicKey,
+          wake: !record.announced, urgent: true, peerPublicKey: options.peerPublicKey,
           deliveryId: 'native-question-' + record.requestId });
         saveQuestion({ ...record, announced: true });
       }
     }
   }
+}
+
+/** Restore one notification from private owned records; catalog discovery is not a prerequisite. */
+export async function replayCodexQuestion(client: RelayClient, requestId: string, peerPublicKey?: string): Promise<boolean> {
+  if (!peerPublicKey) return false;
+  const record = readQuestion(requestId);
+  if (!record || record.room !== client.room) return false;
+  const identity = { sessionId: record.sessionId, agent: 'codex' as const };
+  if (!nativeTranscriptSource(identity)
+    && (!record.sourcePath || !restoreNativeTranscriptSource(identity, record.sourcePath))) return false;
+  const session: SessionInfo = { ...identity, state: 'idle', startedAt: record.createdAt,
+    lastActivityAt: record.createdAt, tokensSession: 0, tokensLastTurn: 0 };
+  await publishCodexQuestions(client, [session], { replay: true, peerPublicKey, requestId });
+  return true;
 }
 
 /** Reuse ordinary scoped delivery, policy and receipts; only the human's explicit answer is wrapped. */

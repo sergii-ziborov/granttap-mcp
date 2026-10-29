@@ -17,7 +17,7 @@ export function nativeTranscriptSource(session: Pick<SessionInfo, 'agent' | 'ses
 }
 
 /** Restore an owned native source without walking every provider's logs. */
-export function restoreNativeTranscriptSource(session: SessionInfo, path: string): boolean {
+export function restoreNativeTranscriptSource(session: Pick<SessionInfo, 'agent' | 'sessionId'>, path: string): boolean {
   if (!["claude", "codex"].includes(session.agent)
     || !/^[a-zA-Z0-9-]{1,128}$/.test(session.sessionId)) return false;
   const name = basename(path);

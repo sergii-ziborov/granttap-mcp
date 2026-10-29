@@ -32,3 +32,9 @@ answer, image and file payload together; ordinary encrypted attachment transport
 Task policy, native-owner admission and stable question idempotency still apply.
 Legacy text-only replies keep their existing contract. Files remain available
 for the admitted native turn; another phone cannot start a second answer.
+
+Notification refresh can name one request through `sessions.refresh.notificationRequestId`.
+Recovery checks the private request's owning room, restores a discovered source only
+inside the native Codex sessions root, and sends that exact question or its terminal
+state through the priority device channel. It does not require an admitted catalog,
+start a provider turn, send another wake notification, or schedule a full scan.

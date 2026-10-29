@@ -7,6 +7,7 @@ import { questionId } from './observations';
 const Record = z.object({ requestId: z.string(), sessionId: z.string(), callId: z.string(),
   index: z.number().int().min(0).max(3), question: z.string().max(2_000),
   options: z.array(z.string().max(512)).max(8), createdAt: z.number(), room: z.string(),
+  sourcePath: z.string().min(1).max(4096).optional(),
   announced: z.boolean().optional(), answered: z.boolean().optional(), resolvedSent: z.boolean().optional() });
 export type QuestionRecord = z.infer<typeof Record>;
 const directory = () => join(configDir(), 'codex-question-records');
