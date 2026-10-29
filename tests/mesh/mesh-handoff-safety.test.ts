@@ -212,7 +212,7 @@ test("readiness names one blocking reason at a time", async () => {
 
   const missing = handoffReadiness({ targetProviderEnabled: true, conflicts: [] });
   assert.equal(missing.ready, false);
-  assert.match(missing.blockedReason ?? "", /No git repository/);
+  assert.match(missing.blockedReason ?? "", /No transferable workspace/);
 
   const disabled = handoffReadiness({
     capsule: { dirtyDiffHash: undefined, workingTree: "clean", latestCommit: "abc1234",

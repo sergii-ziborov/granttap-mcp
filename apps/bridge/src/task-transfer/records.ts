@@ -5,7 +5,7 @@ export const PreparedTransfer = z.object({
   version: z.literal(1), eventId: z.string().min(1).max(128), sessionId: z.string(),
   projectId: z.string().min(1).max(128), sourceSessionId: z.string().min(1).max(128),
   title: z.string().min(1).max(160), capsule: TaskCapsule,
-  workspace: z.string().min(1).max(1_024), branch: z.string().min(1).max(512),
+  workspace: z.string().min(1).max(1_024), branch: z.string().min(1).max(512).optional(),
   contextHash: z.string().regex(/^[a-f0-9]{64}$/), acceptedAt: z.number().nonnegative(),
   phase: z.enum(['prepared', 'starting', 'active', 'uncertain']),
   ownerPid: z.number().int().positive().optional(),

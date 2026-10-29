@@ -20,6 +20,7 @@ const DAY = 24 * 60 * 60_000;
 function publishedRevision(deps: MeshRuntimeDependencies, request: MeshHandoffPrepare, cwd: string,
   capsule: TaskCapsule): string | undefined {
   const revision = capsule.latestCommit ?? capsule.baseSha;
+  if (!revision) return "A cloud runner requires a Git commit.";
   if (request.push) {
     const pushed = deps.push(cwd, capsule.branch);
     return pushed.ok ? undefined : pushed.error;

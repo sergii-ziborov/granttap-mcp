@@ -11,6 +11,8 @@ import { observeRoutingComputer } from './observation';
 export function automaticTransferAdmissionReason(operation: PeerTaskTransfer, report: TaskResourceReport,
   configuration: ProjectTransportSet, now = Date.now()): string | undefined {
   const needs = operation.routing, capsule = operation.event.payload.capsule!;
+  const revision = capsule.latestCommit ?? capsule.baseSha;
+  if (!revision || capsule.workspaceMode) return "repository_revision";
   if (!operation.automatic || !needs || !capsule.targetModel || capsule.targetProvider === 'grok_bot') return 'routing_scope';
   if (configuration.projectId !== operation.projectId || configuration.revision !== operation.policyRevision
     || report.projectId !== operation.projectId || report.endpointId !== configuration.targetEndpointId
@@ -18,7 +20,7 @@ export function automaticTransferAdmissionReason(operation: PeerTaskTransfer, re
   if (report.expiresAt <= now || configuration.expiresAt <= now) return 'computer_unavailable';
   const candidate = candidatesFromReport(report, now, capsule.targetProvider, capsule.targetModel, needs.requiredTools)[0]!;
   return routingAdmissionReason(candidate, { ...needs, projectId: operation.projectId, repositoryId: capsule.repository,
-    revision: capsule.latestCommit ?? capsule.baseSha, sourceEndpointId: operation.sourceExecution.computerId,
+    revision, sourceEndpointId: operation.sourceExecution.computerId,
     provider: capsule.targetProvider, modelId: capsule.targetModel, effort: operation.forward?.effort,
     sourceOS: needs.sourceOS, sourceArchitecture: needs.sourceArchitecture, reason: 'required_hardware' },
   { enabled: configuration.enabled && configuration.routingEnabled, revision: configuration.revision,

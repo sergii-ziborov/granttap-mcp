@@ -28,8 +28,7 @@ app-server picker metadata takes precedence over its disk cache. Cursor's native
 `models` and Grok's native `models` commands supply exact account model IDs;
 listing runs without a prompt, and failed/signed-out catalogs advertise nothing.
 The wire allows up to 256 models so Cursor's parameter variants are not silently
-cut to 64. Claude's supported CLI aliases remain aliases rather than a frozen
-list of version numbers. Client model choices use the existing resume flags.
+cut to 64. Claude's picker metadata is read from its native initialization response. Client model choices use the existing resume flags.
 
 Account percentages travel separately as optional `accountUsage` observations.
 See [provider account status](../provider-account-status/README.md).
@@ -48,6 +47,12 @@ them in the provider's order. The Grok binary is resolved like its turns
 (`GRANTTAP_GROK_BIN`, then `PATH`, then `~/.grok/bin/grok`), so a launchd PATH
 without Grok's installer directory no longer hides it.
 
-Claude Code has no listing command. Its picker keeps the CLI's documented aliases
-(`opus`, `sonnet`, `haiku`, `fable`); `--model` also accepts full names, which
-the phone does not invent. Tests: [`tests/grok-catalog.test.ts`](tests/grok-catalog.test.ts).
+Claude Code exposes its picker metadata in the `initialize` control response
+([official API reference](https://code.claude.com/docs/en/agent-sdk/typescript#sdkcontrolinitializeresponse)).
+`claude-models.ts` requests that metadata without a user message, tools, hooks,
+MCP servers or saved conversation. It preserves exact CLI values, versioned labels,
+order and supported effort levels. The Default row is represented by Automatic in
+the client. Account identity is discarded. A missing, failed or oversized response
+advertises no models. The shared cache refreshes successful metadata every ten
+minutes, failures after two, expires after fifteen, and never blocks catalog polling.
+Tests: [`tests/claude-models.test.ts`](tests/claude-models.test.ts).

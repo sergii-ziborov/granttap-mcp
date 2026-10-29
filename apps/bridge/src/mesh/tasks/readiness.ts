@@ -49,6 +49,7 @@ function workingTree(capsule?: TaskCapsule): "clean" | "dirty" | "unknown" {
 }
 
 function workingTreeWarning(capsule?: TaskCapsule): string | undefined {
+  if (capsule?.workspaceMode) return undefined;
   switch (workingTree(capsule)) {
     case "clean": return undefined;
     case "dirty": return UNCOMMITTED_WORK_WARNING;
@@ -65,10 +66,11 @@ export function handoffReadiness(input: HandoffReadinessInput): HandoffReadiness
       "repository",
       Boolean(capsule),
       capsule
-        ? `Commit ${capsule.latestCommit ?? capsule.baseSha} in ${capsule.repository}`
-        : "No git repository, task, or commit was found for this execution.",
+        ? capsule.workspaceMode ? "Continue in the same working folder on this computer."
+          : `Commit ${capsule.latestCommit ?? capsule.baseSha} in ${capsule.repository}`
+        : "No transferable workspace was found. A folder without Git can continue on this computer without checkpoint or push.",
     ),
-    check("workingTree", Boolean(capsule), workingTreeWarning(capsule) ?? "Clean"),
+    check("workingTree", Boolean(capsule), workingTreeWarning(capsule) ?? (capsule?.workspaceMode ? "Shared working folder" : "Clean")),
     check(
       "claims",
       !conflict,

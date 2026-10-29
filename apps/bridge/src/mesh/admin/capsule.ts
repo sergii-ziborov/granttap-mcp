@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { realpathSync } from "node:fs";
+import { realpathSync, statSync } from "node:fs";
 import {
   TaskCapsule,
   type MeshHandoffPrepare,
@@ -77,12 +77,15 @@ export function buildTaskCapsule(
   const project = snapshot?.project;
   if (!cwd || !task || !project || session.taskId !== request.taskId) return undefined;
   const head = git(cwd, ["rev-parse", "HEAD"]);
-  if (!head) return undefined;
+  const folder = !head;
+  if (folder && (!request.prepareOnly || request.cloud || request.targetComputer !== computerId
+    || request.checkpoint || request.push || !directoryAvailable(cwd))) return undefined;
   const tree = workingTreeState(cwd);
   const files = changedFiles(cwd);
   const sourceBinding = snapshot.bindings?.find(binding => binding.endpointId === computerId
     && binding.available && sameCheckout(binding.localPathHint, cwd)
     && (!request.sourceBindingId || binding.bindingId === request.sourceBindingId));
+  if (folder && (!sourceBinding || sourceBinding.revision)) return undefined;
   const capsule = {
     taskId: request.taskId,
     goal: task.goal,
@@ -96,7 +99,8 @@ export function buildTaskCapsule(
     userComment: request.userComment,
     repository: sourceBinding?.repositoryId ?? project.canonicalRepositoryId,
     baseSha: head,
-    branch: session.branch ?? git(cwd, ["branch", "--show-current"]),
+    workspaceMode: folder ? "local_directory" as const : undefined,
+    branch: folder ? undefined : session.branch ?? git(cwd, ["branch", "--show-current"]),
     latestCommit: head,
     dirtyDiffHash: dirtyDiffHash(cwd),
     workingTree: tree,
@@ -106,7 +110,8 @@ export function buildTaskCapsule(
     resourceClaims: snapshot.claims
       .filter((item) => item.taskId === request.taskId).map((item) => item.resource).slice(0, 64),
     remainingWork: [
-      "Continue the task from the current committed state.",
+      folder ? "Continue in the same working folder on this computer; its files are shared with the source chat."
+        : "Continue the task from the current committed state.",
       ...(tree === "dirty" ? [leftBehindWork(files, computerId)] : []),
     ],
     importantDecisions: [],
@@ -124,7 +129,7 @@ export function buildTaskCapsule(
       branch: checkpoint.branch,
       dirtyDiffHash: undefined,
       workingTree: "clean" as const,
-      filesChanged: changedFilesBetween(cwd, head, checkpoint.sha),
+      filesChanged: changedFilesBetween(cwd, head!, checkpoint.sha),
       remainingWork: [
         `Continue from checkpoint ${checkpoint.sha.slice(0, 12)} on ${checkpoint.branch}.`,
         `Push ${checkpoint.branch} from ${computerId} if the destination does not have it.`,
@@ -163,4 +168,8 @@ function checkpointDecisions(checkpoint: Checkpoint): string[] {
 function changedFilesBetween(cwd: string, from: string, to: string): string[] {
   const listed = git(cwd, ["diff", "--name-only", `${from}..${to}`]) ?? "";
   return [...new Set(listed.split("\n").map((line) => line.trim()).filter(Boolean))].slice(0, 64);
+}
+
+function directoryAvailable(path: string): boolean {
+  try { return statSync(path).isDirectory(); } catch { return false; }
 }

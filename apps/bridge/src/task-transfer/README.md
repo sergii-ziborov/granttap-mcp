@@ -39,3 +39,10 @@ read access, mixed protected paths and regeneration after provider-side edits.
 
 Cursor also binds the confirmed native session before its first prompt, so a
 prepared transfer can expose that execution while a tool or question is active.
+
+Local folders without Git can transfer to another enabled provider on the same
+computer. `workspaceMode: local_directory` carries no invented commit or branch.
+The destination reuses the exact admitted folder and tells the provider its files
+are shared with the source chat. Checkpoint, push, cloud and cross-computer file
+transfer require Git and are refused for this mode. Preparation still persists
+complete context and waits for the first user message.

@@ -24,7 +24,8 @@ export const TaskCapsule = z.object({
   targetModel: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,159}$/).optional(),
   userComment: Detail.optional(),
   repository: z.string().trim().min(1).max(1_024),
-  baseSha: GitSha,
+  baseSha: GitSha.optional(),
+  workspaceMode: z.literal("local_directory").optional(),
   branch: z.string().trim().min(1).max(512).optional(),
   latestCommit: GitSha.optional(),
   dirtyDiffHash: z.string().regex(/^[0-9a-f]{64}$/i).optional(),
@@ -50,6 +51,13 @@ export const TaskCapsule = z.object({
   }).strict().optional(),
   createdAt: z.number().nonnegative(),
 }).strict().superRefine((value, ctx) => {
+  if (value.workspaceMode === "local_directory") {
+    if (value.sourceComputer !== value.targetComputer || value.baseSha || value.latestCommit || value.branch || value.checkpoint) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["workspaceMode"], message: "local folder transfer cannot carry Git facts or cross computers" });
+    }
+  } else if (!value.baseSha) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["baseSha"], message: "Git commit required" });
+  }
   if ((value.sourceProvider === "grok_bot") !== (value.sourceActorId != null)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["sourceActorId"], message: "actor required" });
   }

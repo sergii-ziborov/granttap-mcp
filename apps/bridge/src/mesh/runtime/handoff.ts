@@ -5,6 +5,7 @@
  * owns what happens to a Task when execution moves, and the runtime module owns
  * catalog, snapshots, and inbound routing.
  */
+import { realpathSync, statSync } from "node:fs";
 import type { RelayClient } from "../../../../../packages/core/relay-client";
 import type { MeshEvent, MeshHandoffPrepare, TaskCapsule, SessionInfo } from "../../../../../packages/protocol/schema";
 import { handoffReceipt, capsuleHash } from "../handoff";
@@ -123,8 +124,13 @@ async function acceptHandoff(
   if (conflict) {
     return rejectHandoff(deps, client, event, `${conflict.ownerSessionId} currently claims ${conflict.resource}.`);
   }
+  const folder = capsule.workspaceMode === "local_directory";
+  if (folder && (capsule.sourceComputer !== deps.computer() || capsule.launch !== "on_message"
+    || !authorizedFolder(deps, event, repository))) {
+    return rejectHandoff(deps, client, event, "The original working folder is not available on this computer.");
+  }
   const revision = capsule.latestCommit ?? capsule.baseSha;
-  if (!deps.hasCommit(repository, revision) && !deps.fetch(repository, revision, capsule.branch)) {
+  if (!folder && (!revision || !deps.hasCommit(repository, revision) && !deps.fetch(repository, revision, capsule.branch))) {
     return rejectHandoff(
       deps,
       client,
@@ -145,8 +151,9 @@ async function acceptHandoff(
     return rejectHandoff(deps, client, event, "The complete transfer context could not be confirmed.");
   }
   const worktree = previous ? { path: previous.workspace, branch: previous.branch }
-    : transfers ? deps.worktree(repository, event.taskId, capsule.targetProvider, revision, event.eventId)
-      : deps.worktree(repository, event.taskId, capsule.targetProvider, revision);
+    : folder ? { path: repository, branch: undefined }
+      : transfers ? deps.worktree(repository, event.taskId, capsule.targetProvider, revision!, event.eventId)
+      : deps.worktree(repository, event.taskId, capsule.targetProvider, revision!);
   if (!worktree) return rejectHandoff(deps, client, event, "A separate handoff worktree could not be created.");
   let targetSessionId: string;
   if (transfers) {
@@ -173,7 +180,7 @@ async function acceptHandoff(
     computerId: deps.computer(),
     workspace: worktree.path,
     branch: worktree.branch,
-    worktree: worktree.path,
+    worktree: folder ? undefined : worktree.path,
     startedAt: deps.now(),
   });
   const receipt = handoffReceipt(capsule, event.sourceSessionId, targetSessionId, previous?.acceptedAt ?? deps.now());
@@ -232,4 +239,16 @@ export function createHandoffFlow(deps: MeshRuntimeDependencies) {
     answerAgentQuestion: (client: RelayClient, event: MeshEvent) =>
       answerAgentQuestion(deps, client, event),
   };
+}
+
+function authorizedFolder(deps: MeshRuntimeDependencies, event: MeshEvent, path: string): boolean {
+  try {
+    const source = deps.sessions().find(row => row.sessionId === event.sourceSessionId);
+    if (!source || source.state === "working"
+      || realpathSync(source.worktree ?? source.cwd ?? "") !== realpathSync(path)) return false;
+    return statSync(path).isDirectory() && deps.store().snapshot(event.projectId)?.bindings?.some(row =>
+      row.available && !row.revision && row.endpointId === deps.computer()
+      && row.repositoryId === event.payload.capsule?.repository && row.localPathHint != null
+      && realpathSync(row.localPathHint) === realpathSync(path)) === true;
+  } catch { return false; }
 }

@@ -15,6 +15,8 @@ export function resolveHandoffSource(store: MeshStore, session: SessionInfo,
       if (native.worktree && native.revision) {
         return { ...session, worktree: native.root, branch: session.branch ?? native.branch };
       }
+      if (snapshot?.bindings?.some(row => row.endpointId === computer && row.available && !row.revision
+        && samePath(row.localPathHint, cwd))) return { ...session, worktree: undefined, branch: undefined };
     }
   }
   const binding = request.sourceBindingId
