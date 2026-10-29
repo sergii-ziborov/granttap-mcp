@@ -48,8 +48,12 @@ explicitly unavailable.
 
 `invocation-ingest.ts` reads bounded complete transcript lines and exact-call
 hook denial metadata without forwarding tool arguments, output, or reason text.
-Cursor decisions without a native call ID stay unattributed. Events are replayed
-with stable IDs after an IPC failure. `invocation-query.ts` returns bounded
+Cursor decisions without a native call ID stay unattributed. Unconfirmed events retain their exact IDs and timestamps across IPC retries;
+confirmed prefixes are not resent. Transient failures back off up to one minute,
+while journal-capacity refusals wait five minutes. Source cursors advance only
+after the retained batch is confirmed; pending sources are bounded and deferred
+source files remain unread. This neither clears history nor increases the Engine
+journal limit. `invocation-query.ts` returns bounded
 Engine history to the phone under the Project key, while
 `invocation-scope.ts` exposes one Task slice through the caller's existing
 opaque Mesh capability. The Engine, not this bridge or Usage telemetry, owns

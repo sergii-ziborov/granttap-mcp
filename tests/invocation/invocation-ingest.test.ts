@@ -7,7 +7,7 @@ import type { SessionInfo } from "../../packages/protocol/schema";
 import { createInvocationIngestor } from "../../apps/bridge/src/engine/invocation/ingest";
 import type { EngineOperation, EngineResult } from "../../apps/bridge/src/engine/protocol/engine-protocol";
 
-test("a failed Engine write replays the same evidence without sending tool content", async () => {
+test("a failed Engine write retries only uncertain evidence without sending tool content", async () => {
   const path = join(mkdtempSync(join(tmpdir(), "granttap-ingest-")), "session.jsonl");
   writeFileSync(path, [
     JSON.stringify({ timestamp: "2026-09-14T10:00:00Z", message: { content: [
@@ -19,6 +19,7 @@ test("a failed Engine write replays the same evidence without sending tool conte
   ].join("\n"));
   const recorded: EngineOperation[] = [];
   let failOnce = true;
+  let now = 1_000;
   const client = { request: async (operation: EngineOperation): Promise<EngineResult> => {
     if (operation.operation === "engine.ping") return { operation: "engine.pong", engine_version: "test" };
     if (operation.operation === "invocation.observe") {
@@ -31,16 +32,18 @@ test("a failed Engine write replays the same evidence without sending tool conte
   const ingestor = createInvocationIngestor({
     client, enabled: () => true, computer: () => "mac",
     paths: () => [path], inspect: () => ({ root: "/repo", canonicalRepositoryId: "frontend", worktree: "/repo" }),
+    now: () => now,
   });
   const session = { sessionId: "session", agent: "claude", projectId: "project", taskId: "task",
     cwd: "/repo" } as SessionInfo;
   await ingestor.ingest([session]);
+  now += 1_001;
   await ingestor.ingest([session]);
   const facts = recorded.filter((row) => row.operation === "invocation.observe");
-  assert.deepEqual(facts.map((row) => row.input.phase), ["requested", "reported_failure", "requested", "reported_failure"]);
+  assert.deepEqual(facts.map((row) => row.input.phase), ["requested", "reported_failure", "reported_failure"]);
   assert.equal((facts[0] as { input: { resource: string } }).input.resource, "src/index.ts");
   assert.equal(JSON.stringify(facts).includes("secret"), false);
-  assert.equal((facts[0] as { input: { event_id: string } }).input.event_id,
+  assert.equal((facts[1] as { input: { event_id: string } }).input.event_id,
     (facts[2] as { input: { event_id: string } }).input.event_id);
 });
 

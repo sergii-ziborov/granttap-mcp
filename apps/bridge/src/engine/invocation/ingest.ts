@@ -17,6 +17,7 @@ import {
 } from "./parse";
 import type { InvocationEvent } from "../protocol/engine-invocation-protocol";
 import { parseInvocationDecision } from "./decision-parse";
+import { InvocationDelivery, type InvocationBatch } from './delivery';
 
 type Provider = "claude" | "codex" | "cursor";
 type SourceState = { cursor: InvocationLogCursor; parse: InvocationParseState };
@@ -29,6 +30,7 @@ export type InvocationIngestOptions = {
   paths: (session: SessionInfo) => string[];
   inspect: (cwd: string) => RepositoryFacts;
   decisionPath?: (session: SessionInfo) => string;
+  now?: () => number;
 };
 
 function transcriptPaths(session: SessionInfo): string[] {
@@ -41,9 +43,10 @@ function transcriptPaths(session: SessionInfo): string[] {
 export function createInvocationIngestor(options: InvocationIngestOptions) {
   const states = new Map<string, SourceState>();
   const decisionStates = new Map<string, InvocationLogCursor>();
+  const delivery = new InvocationDelivery(options.client, options.now);
   return {
     async ingest(sessions: readonly SessionInfo[]): Promise<number> {
-      if (!options.enabled()) return 0;
+      if (!options.enabled() || !delivery.ready()) return 0;
       const candidates = sessions.filter((session) => session.projectId && session.taskId
         && ["claude", "codex", "cursor"].includes(session.agent));
       if (candidates.length === 0) return 0;
@@ -54,73 +57,63 @@ export function createInvocationIngestor(options: InvocationIngestOptions) {
         const provider = session.agent as Provider;
         const facts = session.cwd ? options.inspect(session.cwd) : undefined;
         for (const path of options.paths(session)) {
-          const key = `${provider}\0${session.sessionId}\0${path}`;
+          const key = `transcript\0${provider}\0${session.sessionId}\0${path}`;
           const known = states.get(key);
-          let batch;
-          try { batch = readInvocationBatch(path, known?.cursor); }
-          catch { continue; }
-          const parse: InvocationParseState = {
-            pending: new Map(known?.parse.pending ?? []),
-          };
-          const records = [
-            ...batch.gaps.map((offset) => ({ offset, gap: true as const })),
-            ...batch.lines.map((row) => ({ ...row, gap: false as const })),
-          ].sort((a, b) => a.offset - b.offset || Number(b.gap) - Number(a.gap));
           const thread = hash([path]);
-          const events: InvocationEvent[] = [];
-          for (const record of records) {
-            if (record.gap) parse.pending.clear();
-            const observed = record.gap
-              ? [sourceGapFact(record.offset)]
-              : parseInvocationLine(provider, record.line, parse, record.offset);
-            for (const fact of observed) {
-              events.push(eventFor({
-                session, provider, computer: options.computer(), thread,
-                offset: record.offset, fact, repository: facts,
-              }));
-            }
-          }
-          try {
-            for (const event of events) {
-              await options.client.request({ operation: "invocation.observe", input: event });
-              accepted += 1;
-            }
-          } catch {
-            // No cursor advance: the next pass replays this batch under stable
-            // event IDs. Engine deduplicates already committed evidence.
-            return accepted;
-          }
-          states.set(key, { cursor: batch.next, parse });
+          const result = await delivery.advance(key, () => transcriptBatch(path, known, provider,
+            (fact, offset) => eventFor({ session, provider, computer: options.computer(), thread,
+              offset, fact, repository: facts })));
+          if (!result) continue;
+          accepted += result.accepted;
+          if (!result.complete) return accepted;
+          states.set(key, { cursor: result.batch.next, parse: result.batch.parse! });
         }
         const decisionPath = options.decisionPath?.(session);
         if (decisionPath) {
-          const key = `${provider}\0${session.sessionId}\0${decisionPath}`;
-          let batch;
-          try { batch = readInvocationBatch(decisionPath, decisionStates.get(key)); }
-          catch { continue; }
+          const key = `decision\0${provider}\0${session.sessionId}\0${decisionPath}`;
           const thread = hash([decisionPath]);
-          const events = [
-            ...batch.gaps.map((offset) => ({ offset, gap: true as const })),
-            ...batch.lines.map((row) => ({ ...row, gap: false as const })),
-          ].sort((a, b) => a.offset - b.offset).flatMap((record) =>
-            (record.gap ? [sourceGapFact(record.offset)]
-              : parseInvocationDecision(record.line, provider, record.offset))
-              .map((fact) => eventFor({
-                session, provider, computer: options.computer(), thread,
-                offset: record.offset, fact, repository: facts,
-              })));
-          try {
-            for (const event of events) {
-              await options.client.request({ operation: "invocation.observe", input: event });
-              accepted += 1;
-            }
-          } catch { return accepted; }
-          decisionStates.set(key, batch.next);
+          const result = await delivery.advance(key, () => decisionBatch(decisionPath, decisionStates.get(key), provider,
+            (fact, offset) => eventFor({ session, provider, computer: options.computer(), thread,
+              offset, fact, repository: facts })));
+          if (!result) continue;
+          accepted += result.accepted;
+          if (!result.complete) return accepted;
+          decisionStates.set(key, result.batch.next);
         }
       }
       return accepted;
     },
   };
+}
+
+type EventBuilder = (fact: InvocationFact, offset: number) => InvocationEvent;
+
+function transcriptBatch(path: string, known: SourceState | undefined, provider: Provider, event: EventBuilder): InvocationBatch {
+  const batch = readInvocationBatch(path, known?.cursor);
+  const parse: InvocationParseState = { pending: new Map(known?.parse.pending ?? []) };
+  const records = [
+    ...batch.gaps.map(offset => ({ offset, gap: true as const })),
+    ...batch.lines.map(row => ({ ...row, gap: false as const })),
+  ].sort((a, b) => a.offset - b.offset || Number(b.gap) - Number(a.gap));
+  const events: InvocationEvent[] = [];
+  for (const record of records) {
+    if (record.gap) parse.pending.clear();
+    const observed = record.gap ? [sourceGapFact(record.offset)]
+      : parseInvocationLine(provider, record.line, parse, record.offset);
+    for (const fact of observed) events.push(event(fact, record.offset));
+  }
+  return { events, nextEvent: 0, next: batch.next, parse };
+}
+
+function decisionBatch(path: string, cursor: InvocationLogCursor | undefined, provider: Provider, event: EventBuilder): InvocationBatch {
+  const batch = readInvocationBatch(path, cursor);
+  const records = [
+    ...batch.gaps.map(offset => ({ offset, gap: true as const })),
+    ...batch.lines.map(row => ({ ...row, gap: false as const })),
+  ].sort((a, b) => a.offset - b.offset);
+  const events = records.flatMap(record => (record.gap ? [sourceGapFact(record.offset)]
+    : parseInvocationDecision(record.line, provider, record.offset)).map(fact => event(fact, record.offset)));
+  return { events, nextEvent: 0, next: batch.next };
 }
 
 function eventFor(input: {
