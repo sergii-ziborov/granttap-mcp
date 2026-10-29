@@ -1,7 +1,7 @@
 /**
  * What version a command-line tool is, without asking it twice.
  *
- * Two installers write the version into the path itself and are trusted as
+ * Known installers write the version into the path itself and are trusted as
  * such; anything else is asked `--version` once, and asked again only when
  * the binary on disk changes. A path that merely contains something
  * version-shaped — every nvm install lives under `node/v22.13.1/` — is never
@@ -25,6 +25,8 @@ export function versionFromLayout(resolvedPath: string): string | undefined {
   if (claude) return claude[1] ?? claude[2];
   const cursor = /\/cursor-agent\/versions\/([^/]+)\//.exec(resolvedPath);
   if (cursor) return cursor[1];
+  const grok = /\/\.grok\/downloads\/grok-(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)-(?:macos|linux|windows)-(?:aarch64|x86_64)(?:\.exe)?$/.exec(resolvedPath);
+  if (grok) return grok[1];
   const brew = /\/(?:Cellar|Caskroom)\/[^/]+\/([^/]+)\//.exec(resolvedPath);
   return brew?.[1];
 }
@@ -46,9 +48,21 @@ export function versionFromPackage(resolvedPath: string): string | undefined {
   }
 }
 
+/** The bundled CLI's own manifest, rather than its containing desktop app version. */
+function versionFromCodexBundle(resolvedPath: string): string | undefined {
+  const layout = /^(.*\/codex-cli)\/CodexCLI\.app\/Contents\/MacOS\/codex$/.exec(resolvedPath);
+  if (!layout) return undefined;
+  try {
+    const manifest = JSON.parse(readFileSync(join(layout[1]!, 'codex-package.json'), 'utf8'));
+    return manifest.layoutVersion === 1 && manifest.variant === 'codex'
+      && typeof manifest.version === 'string' && parseVersionOutput(manifest.version) === manifest.version
+      ? manifest.version : undefined;
+  } catch { return undefined; }
+}
+
 /** Everything a version can be read from without running the tool. */
 export function passiveVersion(resolvedPath: string): string | undefined {
-  return versionFromLayout(resolvedPath) ?? versionFromPackage(resolvedPath);
+  return versionFromLayout(resolvedPath) ?? versionFromPackage(resolvedPath) ?? versionFromCodexBundle(resolvedPath);
 }
 
 export function parseVersionOutput(output: string): string | undefined {

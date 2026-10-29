@@ -57,3 +57,7 @@ including under launchd's stripped PATH. An explicit binary override keeps
 priority. Version output retains prerelease suffixes so an alpha is not shown
 as a stable release. Regression tests simulate installer output and verify the
 original app binary remains unchanged.
+
+MCP 0.8.113 reads installed Grok download versions and the bundled Codex CLI’s
+own package manifest without launching either provider. Codex prerelease suffixes
+are retained; missing or unsupported manifests remain unknown.
