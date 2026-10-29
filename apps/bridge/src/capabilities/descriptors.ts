@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -63,6 +63,28 @@ function codexMcpDescriptors(): McpDescriptor[] {
         : undefined,
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+let codexRefresh: Promise<void> | undefined;
+
+/** Warm native configuration asynchronously before a catalog consumes the synchronous projection. */
+export function refreshCodexMcpDescriptors(): Promise<void> {
+  if (codexCache && Date.now() - codexCache.at < CACHE_MS) return Promise.resolve();
+  if (codexRefresh) return codexRefresh;
+  codexRefresh = new Promise<void>(resolve => {
+    const finish = (error: Error | null, output = '') => {
+      let rows = codexCache?.rows ?? [];
+      if (!error) {
+        try { const parsed = JSON.parse(output); if (Array.isArray(parsed)) rows = parsed; } catch { /* Keep last known rows. */ }
+      }
+      codexCache = { at: Date.now(), rows };
+      resolve();
+    };
+    try { execFile(resolveCodexBinary(), ['mcp', 'list', '--json'],
+      { encoding: 'utf8', timeout: 15_000, maxBuffer: 4 * 1024 * 1024 }, finish); }
+    catch { finish(new Error('Native configuration is unavailable.')); }
+  }).finally(() => { codexRefresh = undefined; });
+  return codexRefresh;
 }
 
 function codexMcpRows(): CodexMcpRow[] {

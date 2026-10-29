@@ -21,7 +21,7 @@ import {
 } from "../../reply";
 import { isProviderEnabled } from "../../config/runtime";
 import { sendMeshPayload } from "../../host/session-keys";
-import { linkSessionsToProjects } from "../catalog";
+import { linkSessionsToProjects, type CatalogInspection } from "../catalog";
 import { catalogFromEndpoint } from "../catalog/models";
 import { saveProjectCapabilityRequest } from "../catalog/project/requests";
 import { computerId } from "../identity/computer";
@@ -84,8 +84,8 @@ const defaultDependencies: MeshRuntimeDependencies = {
 export function createMeshRuntime(deps: MeshRuntimeDependencies) {
   const flow = createHandoffFlow(deps);
   const { capsulePrompt, acceptHandoff, answerAgentQuestion } = flow;
-  const catalog = (sessions: SessionInfo[]) =>
-    linkSessionsToProjects(deps.store(), sessions, deps.computer());
+  const catalog = (sessions: SessionInfo[], inspection?: CatalogInspection) =>
+    linkSessionsToProjects(deps.store(), sessions, deps.computer(), inspection);
 
 
   return {
@@ -165,8 +165,8 @@ export function createLocalMeshRuntime(overrides: Partial<MeshRuntimeDependencie
 
 const defaultRuntime = createLocalMeshRuntime();
 
-export function meshCatalog(sessions: SessionInfo[]): SessionInfo[] {
-  return defaultRuntime.catalog(sessions);
+export function meshCatalog(sessions: SessionInfo[], inspection?: CatalogInspection): SessionInfo[] {
+  return defaultRuntime.catalog(sessions, inspection);
 }
 
 export function meshSnapshots(): MeshSnapshot[] {

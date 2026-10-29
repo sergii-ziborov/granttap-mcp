@@ -41,3 +41,5 @@ function mcpServersFromDescriptors(
     return metadata ? { ...base, ...metadata } : base;
   });
 }
+
+export { refreshCodexMcpDescriptors } from "./descriptors";

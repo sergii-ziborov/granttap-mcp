@@ -7,18 +7,18 @@ const waiting: Array<() => void> = [];
 const pending = new Map<string, Promise<RepositoryFacts>>();
 
 /** Native read-only Git work stays bounded without blocking relay callbacks. */
-function git(cwd: string, args: string[]): Promise<string | undefined> {
+function git(cwd: string, args: string[], status = false): Promise<string | undefined> {
   return new Promise(resolve => {
     const run = () => {
       running++;
       const done = (error: Error | null, stdout = "") => {
         running--;
         waiting.shift()?.();
-        resolve(error ? undefined : stdout.trim() || undefined);
+        resolve(error ? undefined : status ? stdout : stdout.trim() || undefined);
       };
       try {
         execFile("git", ["-C", cwd, ...args], {
-          encoding: "utf8", timeout: 2_000, maxBuffer: 1024 * 1024, windowsHide: true,
+          encoding: "utf8", timeout: status ? 5_000 : 2_000, maxBuffer: (status ? 4 : 1) * 1024 * 1024, windowsHide: true,
         }, done);
       } catch { done(new Error("Repository command could not start")); }
     };
@@ -46,4 +46,10 @@ export function inspectRepositoryAsync(cwd: string): Promise<RepositoryFacts> {
   const next = inspect(cwd).finally(() => { pending.delete(cwd); });
   pending.set(cwd, next);
   return next;
+}
+
+/** A fresh working-tree observation shares the bounded, nonblocking Git command pool. */
+export async function inspectWorkingTreeAsync(cwd: string): Promise<boolean | undefined> {
+  const output = await git(cwd, ['status', '--porcelain=v1', '--untracked-files=normal', '-z'], true);
+  return output === undefined ? undefined : output.length > 0;
 }

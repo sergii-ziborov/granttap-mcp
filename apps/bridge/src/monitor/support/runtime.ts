@@ -7,7 +7,8 @@ import { RelayClient } from "../../../../../packages/core/relay-client";
 import type { Payload, SessionInfo, SessionsStatus } from "../../../../../packages/protocol/schema";
 import { loadRuntimeConfig, autoAcceptLevelFor } from "../../config";
 import { monitorLeadership } from "./leadership";
-import { mcpServersForSession, workspaceSkills } from "../../capabilities";
+import { mcpServersForSession, workspaceSkills, refreshCodexMcpDescriptors } from "../../capabilities";
+import { prepareMonitorInspection, type CatalogInspection } from "../../mesh/catalog";
 import { inspectAgentIntegrations } from "../../install";
 import { withCloudRunners } from "../../cloud-runners";
 import { currentConfigRevision } from "../../config/commands";
@@ -48,12 +49,13 @@ export type SessionMonitor = {
 function decorateSessions(
   sessions: SessionsStatus["sessions"],
   subscriptions: Set<string>,
+  inspection?: CatalogInspection,
 ): SessionsStatus["sessions"] {
   const runtime = loadRuntimeConfig();
   const visible = sessions.filter((session) =>
     runtime.providerSettings[session.agent as keyof typeof runtime.providerSettings] !== false
   );
-  const coordinated = runtime.meshEnabled ? meshCatalog(visible) : visible;
+  const coordinated = runtime.meshEnabled ? meshCatalog(visible, inspection) : visible;
   return coordinated.map((session) => {
     const base: SessionInfo = {
       ...session,
@@ -88,13 +90,17 @@ async function monitorSnapshot(input: {
   if (loadRuntimeConfig().meshEnabled) localMeshStore().flush();
   const { sessions, tokensRecent } = await scanSessionsCooperatively();
   const runtime = loadRuntimeConfig();
+  const historical = includeHistory ? boundedCatalogHistory(await history(forceHistory), subscriptions) : undefined;
+  const all = [...sessions, ...(historical ?? [])].filter(session =>
+    runtime.providerSettings[session.agent as keyof typeof runtime.providerSettings] !== false);
+  if (all.some(session => session.agent === 'codex')) await refreshCodexMcpDescriptors();
+  const directories = all.flatMap(session => [session.worktree, session.cwd].filter((path): path is string => !!path));
+  const inspection = runtime.meshEnabled ? await prepareMonitorInspection(directories, forceHistory) : undefined;
   return {
     type: "sessions.status",
     machine: computerDisplayName(),
-    sessions: decorateSessions(sessions, subscriptions),
-    history: includeHistory
-      ? decorateSessions(boundedCatalogHistory(await history(forceHistory), subscriptions), subscriptions)
-      : undefined,
+    sessions: decorateSessions(sessions, subscriptions, inspection),
+    history: historical ? decorateSessions(historical, subscriptions, inspection) : undefined,
     tokensRecent,
     tokenWindowHours: TOKEN_WINDOW_HOURS,
     tokensAllTime: tokensRecent,

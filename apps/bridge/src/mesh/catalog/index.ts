@@ -20,7 +20,10 @@ import type { MeshStore } from "../store";
 import { queueProjectBindingSync } from "../../engine/runtime/engine-projects";
 import { isCursorTaskCloneId } from "../../sessions/cursor/catalog";
 import { localTaskTransfers } from '../../task-transfer';
-export { inspectRepositoryAsync } from "./repository-inspection";
+export { inspectRepositoryAsync, inspectWorkingTreeAsync } from "./repository-inspection";
+export { prepareMonitorInspection } from "./monitor-inspection";
+import type { CatalogInspection } from "./monitor-inspection";
+export type { CatalogInspection } from "./monitor-inspection";
 
 export type RepositoryFacts = {
   root: string;
@@ -120,7 +123,7 @@ export function linkSessionsToProjects(
   store: MeshStore,
   sessions: SessionInfo[],
   computerId: string,
-  inspect: (cwd: string) => RepositoryFacts = inspectRepository,
+  inspect: ((cwd: string) => RepositoryFacts) | CatalogInspection = inspectRepository,
   formerNames: string[] = formerComputerNames(),
 ): SessionInfo[] {
   localTaskTransfers().reconcileCatalogOwnership(store, computerId);
@@ -143,13 +146,14 @@ export function linkSessionsToProjects(
   const repositories = new Map<string, RepositoryFacts>();
   const workingTrees = new Map<string, boolean | undefined>();
   const inspectWorkingTree = (cwd: string): boolean | undefined => {
-    if (!workingTrees.has(cwd)) workingTrees.set(cwd, hasUncommittedWork(cwd));
+    if (!workingTrees.has(cwd)) workingTrees.set(cwd, typeof inspect === "function"
+      ? hasUncommittedWork(cwd) : inspect.workingTree(cwd));
     return workingTrees.get(cwd);
   };
   const inspectOnce = (cwd: string): RepositoryFacts => {
     let facts = repositories.get(cwd);
     if (!facts) {
-      facts = inspect(cwd);
+      facts = typeof inspect === "function" ? inspect(cwd) : inspect.repository(cwd);
       repositories.set(cwd, facts);
     }
     return facts;

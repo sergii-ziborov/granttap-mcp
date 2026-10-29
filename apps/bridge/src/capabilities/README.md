@@ -18,3 +18,7 @@ do not borrow an implementation's description or icon. These are display data,
 not instructions or evidence that a capability was used.
 
 License: this module is distributed under the GrantTap Commercial Source License in the repository-root `LICENSE` file.
+
+Catalog publication warms native Codex MCP configuration asynchronously through
+`refreshCodexMcpDescriptors`, preserving its existing retry window and last known
+rows while allowing request-delivery callbacks to run during a slow native query.
