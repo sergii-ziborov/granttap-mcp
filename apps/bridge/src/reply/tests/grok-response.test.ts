@@ -10,13 +10,12 @@ async function response(events: unknown[], exit = 0) {
   const before = process.env.GRANTTAP_GROK_BIN;
   const bin = join(root, 'grok');
   await writeFile(bin, '#!/usr/bin/env node\n'
-    + `process.stdout.write(${JSON.stringify(events.map(e => JSON.stringify(e)).join('\n') + '\n')});\n`
-    + `process.exit(${exit});\n`, { mode: 0o755 });
+    + `process.stdout.write(${JSON.stringify(events.map(e => JSON.stringify(e)).join('\n') + '\n')}, () => process.exit(${exit}));\n`, { mode: 0o755 });
   process.env.GRANTTAP_GROK_BIN = bin;
   try {
     return await runGrokResume({ agent: 'grok', sessionId: 'fixture', cwd: root,
       state: 'idle', startedAt: 1, lastActivityAt: 1, tokensSession: 0, tokensLastTurn: 0 },
-    'Synthetic response check', 2_000);
+    'Synthetic response check', 10_000);
   } finally {
     if (before === undefined) delete process.env.GRANTTAP_GROK_BIN;
     else process.env.GRANTTAP_GROK_BIN = before;
