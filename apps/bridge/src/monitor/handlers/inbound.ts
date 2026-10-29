@@ -1,5 +1,6 @@
 import { handleTaskTransferCommand } from "../../task-transfer/runtime";
 import { handleDeviceManagement } from '../../device-management';
+import { handleTaskSchedules } from '../../task-schedules/relay';
 import { handleProjectTransportConfiguration } from '../../task-network/runtime';
 import { handleHookTrust } from "../../codex-hook-trust";
 import { handleConfigurationCommand } from "../../configuration-delivery";
@@ -69,6 +70,7 @@ export async function handleMonitorMessage(
     if (!leadership.acquire()) return false;
     const configuration = handlePeerConfiguration(client, payload, input.peerPublicKey, publish);
     if (configuration) return configuration;
+    if (payload.type === 'task.schedules') return handleTaskSchedules(client, payload, input.peerPublicKey);
     if (payload.type === "knowledge.write") {
       return handleInboundKnowledgeWrite(client, payload, input.peerPublicKey, publish);
     }

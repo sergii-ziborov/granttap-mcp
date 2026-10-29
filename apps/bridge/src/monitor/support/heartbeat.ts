@@ -20,7 +20,8 @@ export const HEARTBEAT_INTERVAL_MS = Number(
  */
 export async function publishHeartbeat(client: RelayClient): Promise<void> {
   await client.send(
-    { type: "machine.heartbeat", machine: computerDisplayName(), createdAt: Date.now(), taskQueueImmediate: true },
+    { type: "machine.heartbeat", machine: computerDisplayName(), createdAt: Date.now(), taskQueueImmediate: true,
+      taskScheduleControls: true },
     "phone",
     { ttlMs: HEARTBEAT_INTERVAL_MS * 3, reliable: false },
   );
@@ -38,7 +39,8 @@ export const HELD_HEARTBEAT_TTL_MS = 60_000;
 
 export async function publishHeldHeartbeat(client: RelayClient): Promise<void> {
   await client.send(
-    { type: "machine.heartbeat", machine: computerDisplayName(), createdAt: Date.now(), taskQueueImmediate: true },
+    { type: "machine.heartbeat", machine: computerDisplayName(), createdAt: Date.now(), taskQueueImmediate: true,
+      taskScheduleControls: true },
     "phone",
     { ttlMs: HELD_HEARTBEAT_TTL_MS, reliable: true },
   );

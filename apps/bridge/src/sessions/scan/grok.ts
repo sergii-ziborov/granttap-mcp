@@ -21,6 +21,7 @@ import { grokNativeActivity } from '../../providers/grok-activity';
 import { grokTimeline } from '../../providers/grok-timeline';
 import { grokToolCalls, grokToolCompletions, grokToolSummary, grokRecordedChanges } from '../../providers/grok-tools';
 import { readGrokConversation } from '../../providers/grok-conversation';
+import { GrokCatalogCache, type GrokParsedContext } from '../../providers/grok-catalog-cache';
 
 type Summary = {
   info?: { id?: unknown; cwd?: unknown };
@@ -31,15 +32,7 @@ type Summary = {
   current_model_id?: unknown;
 };
 
-type ParsedLog = {
-  entries: ActivityEntry[];
-  usage: CapabilityObservation[];
-  firstUser?: string;
-  lastMessageAt?: number;
-  tokens: number;
-  lastTurn: number;
-};
-
+const catalogCache = new GrokCatalogCache();
 let activityBySession = new Map<string, ActivityEntry[]>();
 let logPaths = new Map<string, string>();
 let usageBySession = new Map<string, CapabilityObservation[]>();
@@ -84,9 +77,14 @@ function visibleRole(row: Record<string, unknown>, message: Record<string, unkno
   return typeof type === "string" ? type : "";
 }
 
-function parseLog(path: string, sessionId: string, fallbackTime: number, fullText = false): ParsedLog {
+function parseLog(path: string, sessionId: string, fallbackTime: number, fullText = false): GrokParsedContext {
   let lines: string[];
-  try { lines = readFileSync(path, "utf8").split("\n"); } catch { lines = []; }
+  let cacheable = true;
+  try { lines = readFileSync(path, "utf8").split("\n"); }
+  catch (error) {
+    if (fullText && (error as NodeJS.ErrnoException).code !== 'ENOENT') throw Error('The complete Grok conversation could not be read.');
+    lines = []; cacheable = (error as NodeJS.ErrnoException).code === 'ENOENT';
+  }
   const entries: ActivityEntry[] = [];
   const usage: CapabilityObservation[] = [];
   const seen = new Set<string>();
@@ -99,7 +97,10 @@ function parseLog(path: string, sessionId: string, fallbackTime: number, fullTex
   let prompt: { at: number; row: number } | undefined;
   lines.forEach((line, index) => {
     const row = safeParse(line);
-    if (!row) return;
+    if (!row) {
+      if (fullText && line.trim()) throw Error('The full native Grok conversation is incomplete or still being written.');
+      return;
+    }
     const message = row.message && typeof row.message === "object" ? row.message : row;
     const role = visibleRole(row, message);
     if (role === "reasoning" || role === "system") return;
@@ -118,7 +119,7 @@ function parseLog(path: string, sessionId: string, fallbackTime: number, fullTex
       const text = texts.join("\n").trim();
       if (text) {
         if (messageAt || prompt) lastMessageAt = Math.max(lastMessageAt, createdAt);
-        firstUser ??= text;
+        firstUser ??= text.slice(0, 120);
         pushEntry({ fullText, out: entries, seen, sessionId, kind: "user", text, createdAt, ordinal: index,
           idOverride: `${sessionId}:${legacyTime}:${index}` });
         tokens += estimateTokens(text);
@@ -162,13 +163,7 @@ function parseLog(path: string, sessionId: string, fallbackTime: number, fullTex
     last.kind = 'final'; last.createdAt = timeline.completedAt;
     lastMessageAt = Math.max(lastMessageAt, timeline.completedAt);
   }
-  const visible = readGrokConversation(dirname(path), sessionId, fullText) ?? entries;
-  for (const entry of visible) {
-    if (entry.kind === 'user') firstUser ??= entry.text;
-    if (['user', 'message', 'final'].includes(entry.kind)) lastMessageAt = Math.max(lastMessageAt, entry.createdAt);
-  }
-  return { entries: visible,
-    usage, firstUser, lastMessageAt: lastMessageAt || undefined, tokens, lastTurn };
+  return { entries, usage, firstUser, lastMessageAt: lastMessageAt || undefined, tokens, lastTurn, cacheable };
 }
 
 function parseSummary(path: string): Summary | null {
@@ -181,6 +176,10 @@ export function scanGrok(maxFiles = MAX_FILES): Scan {
   const usages = new Map<string, CapabilityObservation[]>();
   let tokensRecent = 0;
   const listed = recentSummaries(grokSessionsRoot(), maxFiles + 1);
+  logPaths = new Map();
+  const selected = new Set(listed.slice(0, maxFiles).map(path => dirname(path)));
+  catalogCache.retain(selected);
+  const admitted = new Set<string>();
   for (const path of listed.slice(0, maxFiles)) {
     const summary = parseSummary(path);
     if (!summary) continue;
@@ -188,13 +187,17 @@ export function scanGrok(maxFiles = MAX_FILES): Scan {
     const sessionId = typeof summary.info?.id === "string"
       ? summary.info.id : basename(directory);
     if (!sessionId || sessionId.length > 256) continue;
+    admitted.add(directory);
     let stat;
     try { stat = statSync(join(directory, "chat_history.jsonl")); } catch {
       try { stat = statSync(path); } catch { continue; }
     }
     const updatedAt = ts(summary.updated_at) || stat.mtimeMs;
     const startedAt = ts(summary.created_at) || stat.birthtimeMs || updatedAt;
-    const parsed = parseLog(join(directory, "chat_history.jsonl"), sessionId, startedAt);
+    const parsed = catalogCache.read({ directory, sessionId, fallbackTime: startedAt }, {
+      context: () => parseLog(join(directory, 'chat_history.jsonl'), sessionId, startedAt),
+      visible: () => readGrokConversation(directory, sessionId),
+    });
     const title = [summary.generated_title, summary.session_summary, parsed.firstUser]
       .find((value): value is string => typeof value === "string" && value.trim().length > 0);
     const cwd = typeof summary.info?.cwd === "string" ? summary.info.cwd : undefined;
@@ -213,6 +216,7 @@ export function scanGrok(maxFiles = MAX_FILES): Scan {
     if (Date.now() - updatedAt <= TOKEN_WINDOW_MS) tokensRecent += parsed.tokens;
   }
   activityBySession = activities;
+  catalogCache.retain(admitted);
   usageBySession = usages;
   return { sessions, tokensRecent, sourceLimited: listed.length > maxFiles };
 }
@@ -220,7 +224,11 @@ export function scanGrok(maxFiles = MAX_FILES): Scan {
 export function grokActivity(session: SessionInfo, fullText = false): ActivityEntry[] {
   if (!activityBySession.has(session.sessionId)) scanGrok();
   const path = logPaths.get(session.sessionId);
-  if (fullText && path) return parseLog(path, session.sessionId, session.startedAt, true).entries;
+  if (fullText && path) {
+    const native = readGrokConversation(dirname(path), session.sessionId, true);
+    if (native !== undefined) return structuredClone(native);
+    return parseLog(path, session.sessionId, session.startedAt, true).entries;
+  }
   return activityBySession.get(session.sessionId) ?? [];
 }
 

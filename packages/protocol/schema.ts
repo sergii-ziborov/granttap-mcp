@@ -2,6 +2,8 @@
 import { z } from "zod";
 import { DeviceManagementRequest, DeviceManagementResult } from './messages/device/management';
 export * from './messages/device/management';
+import { TaskSchedulesRequest, TaskSchedulesResult } from './task-schedules';
+export * from './task-schedules';
 import { ProjectTransportSet, ProjectTransportAck } from './task-network';
 export * from './task-network';
 import { TaskTransferContinue, TaskTransferContinueResult } from "./task-transfer";
@@ -117,6 +119,7 @@ export const MachineHeartbeat = z.object({
   machine: z.string().catch("machine"),
   createdAt: z.number().catch(() => Date.now()),
   taskQueueImmediate: z.boolean().optional(),
+  taskScheduleControls: z.boolean().optional(),
 });
 export type MachineHeartbeat = z.infer<typeof MachineHeartbeat>;
 
@@ -124,6 +127,8 @@ export type MachineHeartbeat = z.infer<typeof MachineHeartbeat>;
 // ZodEffects rather than plain objects. A regular union preserves those checks
 // while keeping the same strict `type` discriminator on every member.
 export const Payload = z.union([
+  TaskSchedulesRequest,
+  TaskSchedulesResult,
   DeviceManagementRequest,
   DeviceManagementResult,
   ApprovalRequest,
