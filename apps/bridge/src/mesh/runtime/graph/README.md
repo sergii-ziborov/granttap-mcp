@@ -30,6 +30,10 @@ Behavior tests: `tests/`, root `tests/graph/graph-binding-sync.test.ts`, and
 `engine-selection-live.test.ts` uses `GRANTTAP_ENGINE_TEST_BINARY` to verify the
 actual native scanner respects `.git/info/exclude` and retains untracked source.
 
+Background publication prepares checkout facts asynchronously once and reuses
+that observation for admission and Graph selection. The selector never needs a
+second synchronous Git read in the monitor's relay event loop.
+
 ## License
 
 GrantTap Commercial Source License. See [LICENSE](../../../../../../LICENSE).

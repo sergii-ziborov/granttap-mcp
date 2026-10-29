@@ -20,7 +20,7 @@ import type { MeshStore } from "../store";
 import { queueProjectBindingSync } from "../../engine/runtime/engine-projects";
 import { isCursorTaskCloneId } from "../../sessions/cursor/catalog";
 import { localTaskTransfers } from '../../task-transfer';
-export { inspectRepositoryAsync, inspectWorkingTreeAsync } from "./repository-inspection";
+export { inspectRepositoryAsync, inspectWorkingTreeAsync, readRepositoryGit } from "./repository-inspection";
 export { prepareMonitorInspection } from "./monitor-inspection";
 import type { CatalogInspection } from "./monitor-inspection";
 export type { CatalogInspection } from "./monitor-inspection";

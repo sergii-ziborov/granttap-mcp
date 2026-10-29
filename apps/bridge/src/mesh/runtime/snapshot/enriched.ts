@@ -1,9 +1,9 @@
 import { projectRelationshipPeers, mergeRelationshipPeers } from "../../../engine/runtime/project-relationships";
 import { refreshLocalGraphBindings } from "../graph/binding-sync";
-import { graphAnalysisBindings } from "../graph/checkout-identity";
+import { graphAnalysisBindings, prepareGraphInspection } from "../graph/checkout-identity";
 import type { MeshSnapshot } from "../../../../../../packages/protocol/schema";
 import {
-  projectBackbone, projectRepositoryGraphs, waitForProjectBindingSync,
+  projectBackbone, projectRepositoryGraphs, waitForProjectBindingSync, queueProjectBindingSync,
 } from "../../../engine/runtime/engine-projects";
 import { projectCortexIntegration } from "../../../cortex/integration";
 import { projectKnowledge, queueProjectKnowledgeSync } from "../../../engine/runtime/engine-memory";
@@ -16,10 +16,14 @@ import { computerId } from "../../identity/computer";
 export async function enrichMeshSnapshot(
   snapshot: MeshSnapshot, options: { refreshGraph?: boolean } = {},
 ): Promise<MeshSnapshot> {
-  const identityFailures = await refreshLocalGraphBindings(snapshot);
+  const endpoint = computerId();
+  const inspect = await prepareGraphInspection(snapshot.bindings ?? [], endpoint);
+  const identityFailures = await refreshLocalGraphBindings(snapshot, {
+    endpoint: () => endpoint, inspect, sync: queueProjectBindingSync,
+  });
   const excludedRepositories = new Set(identityFailures.map((report) => report.repositoryId));
   const bindings = graphAnalysisBindings((snapshot.bindings ?? [])
-    .filter((binding) => !excludedRepositories.has(binding.repositoryId)), computerId());
+    .filter((binding) => !excludedRepositories.has(binding.repositoryId)), endpoint, inspect);
   await waitForProjectBindingSync(snapshot.projectId);
   queueProjectKnowledgeSync({
     projectId: snapshot.projectId,
@@ -32,7 +36,7 @@ export async function enrichMeshSnapshot(
       priority: snapshot.tasks.reduce((latest, task) => Math.max(latest, task.updatedAt), 0),
     }),
     projectKnowledge(snapshot.projectId),
-    repositoryDetails(snapshot, computerId()),
+    repositoryDetails(snapshot, endpoint, { background: options.refreshGraph !== true, inspect }),
   ]);
   const relationships = await projectRelationshipPeers(snapshot.projectId, bindings, {
     background: options.refreshGraph !== true,

@@ -1,7 +1,24 @@
 import { realpathSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import type { ProjectBindingSummary } from "../../../../../../packages/protocol/schema";
-import { inspectRepository, type RepositoryFacts } from "../../catalog";
+import { inspectRepository, inspectRepositoryAsync, type RepositoryFacts } from "../../catalog";
+
+/** One nonblocking native observation shared by admission, graph selection and Git details. */
+export async function prepareGraphInspection(bindings: ProjectBindingSummary[], endpointId: string) {
+  const paths = new Set(bindings.filter(binding => binding.endpointId === endpointId
+    && binding.available && binding.localPathHint).flatMap(binding => {
+      try { return [realpathSync(binding.localPathHint!)]; } catch { return []; }
+    }));
+  const observations = new Map(await Promise.all([...paths].map(async path => {
+    try { return [path, await inspectRepositoryAsync(path)] as const; }
+    catch { return [path, undefined] as const; }
+  })));
+  return (path: string): RepositoryFacts => {
+    const facts = observations.get(realpathSync(path));
+    if (!facts) throw new Error("The checkout was not observed for this publication");
+    return { ...facts };
+  };
+}
 
 /** Local identities name an exact directory, even after that directory gains an origin. */
 export function matchesLocalCheckout(repositoryId: string, root: string): boolean {
@@ -13,7 +30,8 @@ export function matchesLocalCheckout(repositoryId: string, root: string): boolea
 }
 
 /** Once admitted, one checkout contributes one graph to this Mesh. */
-export function graphAnalysisBindings(bindings: ProjectBindingSummary[], endpointId?: string): ProjectBindingSummary[] {
+export function graphAnalysisBindings(bindings: ProjectBindingSummary[], endpointId?: string,
+  inspect: (path: string) => RepositoryFacts = inspectRepository): ProjectBindingSummary[] {
   const selected = new Map<string, ProjectBindingSummary>();
   const observations = new Map<string, RepositoryFacts | undefined>();
   const nonRepositories = new Set<string>();
@@ -27,7 +45,7 @@ export function graphAnalysisBindings(bindings: ProjectBindingSummary[], endpoin
     if (path && !observations.has(path)) {
       let facts: RepositoryFacts | undefined;
       try {
-        const observed = inspectRepository(path);
+        const observed = inspect(path);
         if (observed.worktree && realpathSync(observed.root) === path) facts = observed;
         else nonRepositories.add(path);
       } catch { /* Unavailable roots retain their own identity. */ }

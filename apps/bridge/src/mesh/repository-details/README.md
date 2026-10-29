@@ -20,6 +20,15 @@ session's initial workspace. Titles and chat prose never select repositories.
 The Apple client uses this evidence for placement, preserving durable Task
 identity and access scope.
 
+Background Mesh publication shares one asynchronous checkout observation across
+admission, Graph selection and repository details. It reads working-tree status
+on every publication. Bounded history for an unchanged commit can be reused for
+up to 30 seconds in the background; explicit observations bypass that cache.
+History commands name the observed commit so a concurrent commit cannot silently
+substitute another revision. At most 128 history observations remain in memory.
+History, status and checkout metadata share a maximum of two native Git
+subprocesses, keeping background publication off the relay's event loop.
+
 Behavior tests live in `tests/`. See the [runtime README](../../../../../README.md).
 
 Licensed under the [GrantTap Commercial Source License](../../../../../LICENSE).
