@@ -9,6 +9,7 @@ export class RepositoryGraphCache {
     read(key: string): {
         value: ProjectRepositoryGraph;
         savedAt: number;
+        sourceFingerprint?: string;
     } | undefined {
         try {
             const path = this.path(key);
@@ -19,18 +20,22 @@ export class RepositoryGraphCache {
             if (record.key !== key || !Number.isFinite(record.savedAt) || !graph.success
                 || !['COMPLETE', 'INCOMPLETE'].includes(graph.data.analysisStatus ?? ''))
                 return undefined;
-            return { value: graph.data, savedAt: record.savedAt };
+            const sourceFingerprint = typeof record.sourceFingerprint === 'string'
+                && /^[a-f0-9]{64}$/.test(record.sourceFingerprint) ? record.sourceFingerprint : undefined;
+            return { value: graph.data, savedAt: record.savedAt,
+                ...(sourceFingerprint ? { sourceFingerprint } : {}) };
         }
         catch {
             return undefined;
         }
     }
-    write(key: string, value: ProjectRepositoryGraph): void {
+    write(key: string, value: ProjectRepositoryGraph, sourceFingerprint?: string): void {
         if (!['COMPLETE', 'INCOMPLETE'].includes(value.analysisStatus ?? ''))
             return;
         const bounded = fitRepositoryGraph(value, 192 * 1024);
         if (!bounded) return;
-        const json = JSON.stringify({ key, value: bounded, savedAt: this.now() });
+        const json = JSON.stringify({ key, value: bounded, savedAt: this.now(),
+            ...(sourceFingerprint && /^[a-f0-9]{64}$/.test(sourceFingerprint) ? { sourceFingerprint } : {}) });
         if (Buffer.byteLength(json) > 256 * 1024)
             return;
         try {

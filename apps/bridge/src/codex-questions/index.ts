@@ -13,7 +13,12 @@ const RETENTION_MS = 24 * 60 * 60_000;
 /** Phone questions travel as device-encrypted control events, independently of task-key grants. */
 export async function publishCodexQuestions(client: RelayClient, sessions: SessionInfo[],
   options: { replay?: boolean; peerPublicKey?: string; requestId?: string } = {}): Promise<void> {
-  for (const session of sessions.filter(s => s.agent === 'codex')) {
+  const nativeSessions = sessions.filter(s => s.agent === 'codex');
+  if (!nativeSessions.length) return;
+  const initial = options.requestId ? [readQuestion(options.requestId)].filter((record): record is QuestionRecord => !!record)
+    : storedQuestions();
+  const batch = new Map(initial.map(record => [record.requestId, record]));
+  for (const session of nativeSessions) {
     const path = nativeTranscriptSource(session);
     if (!path) continue;
     let observed;
@@ -22,13 +27,20 @@ export async function publishCodexQuestions(client: RelayClient, sessions: Sessi
     for (const question of observed.questions) {
       if (Date.now() - question.createdAt > RETENTION_MS) continue;
       const existing = readQuestion(question.requestId);
-      if (!existing) saveQuestion({ ...question, room: client.room, sourcePath: path });
-      else if (existing.room === client.room && existing.sourcePath !== path) saveQuestion({ ...existing, sourcePath: path });
+      if (!existing) {
+        const record = { ...question, room: client.room, sourcePath: path };
+        saveQuestion(record); batch.set(record.requestId, record);
+      } else {
+        if (existing.room === client.room && existing.sourcePath !== path) saveQuestion({ ...existing, sourcePath: path });
+        batch.set(existing.requestId, existing);
+      }
     }
-    const records = storedQuestions().filter(q => q.room === client.room && q.sessionId === session.sessionId
+    const records = [...batch.values()].filter(q => q.room === client.room && q.sessionId === session.sessionId
       && (!options.requestId || q.requestId === options.requestId))
       .sort((a, b) => a.createdAt - b.createdAt || a.index - b.index);
-    for (const record of records) {
+    for (const candidate of records) {
+      const record = readQuestion(candidate.requestId);
+      if (!record || record.room !== client.room || record.sessionId !== session.sessionId) continue;
       const expired = Date.now() - record.createdAt > RETENTION_MS;
       if (observed.answered.has(record.requestId) && !record.answered) {
         record.answered = true;

@@ -38,3 +38,8 @@ Recovery checks the private request's owning room, restores a discovered source 
 inside the native Codex sessions root, and sends that exact question or its terminal
 state through the priority device channel. It does not require an admitted catalog,
 start a provider turn, send another wake notification, or schedule a full scan.
+
+Question publication reads the private record collection once per batch, then
+validates each matching question freshly before sending. Targeted notification
+replay reads the requested identity directly. This keeps multiple chats from
+repeatedly parsing the same collection.

@@ -18,6 +18,7 @@ import { RepositoryGraphJobs } from "./repository-graph-jobs";
 import { fitRepositoryGraph } from "./repository-graph/fit";
 import { RepositoryGraphCache } from "./repository-graph/cache";
 import { repositorySourceMap } from "./repository-graph/source-map";
+import { repositorySourceFingerprint } from "./repository-graph/source-state";
 
 export type LocalProjectBinding = {
   summary: ProjectBindingSummary;
@@ -193,15 +194,23 @@ export async function projectRepositoryGraphs(
   if (!engineFeatureEnabled(options.env ?? process.env)) return [];
   const client = options.client;
   const repositories = [...new Map(bindings.map((item) => [item.repositoryId, item])).values()].slice(0, 64);
+  const observations = await Promise.all(repositories.map(async binding => {
+    const fingerprint = binding.localPathHint
+      ? await repositorySourceFingerprint(binding.localPathHint, binding.revision, { fresh: !options.background })
+      : undefined;
+    return fingerprint ? { fingerprint, reusable: (graph: ProjectRepositoryGraph) =>
+      ['COMPLETE', 'INCOMPLETE'].includes(graph.analysisStatus ?? '') } : undefined;
+  }));
   const graphs = options.background
-    ? repositories.map((binding) => repositoryGraphJobs.read(
+    ? repositories.map((binding, index) => repositoryGraphJobs.read(
       JSON.stringify([projectId, binding.repositoryId, binding.revision]),
       () => analyzeRepositoryGraph(client, projectId, binding.repositoryId, 120_000, binding.revision),
-      options.priority ?? 0,
+      options.priority ?? 0, false, observations[index],
     ))
-    : await Promise.all(repositories.map((binding) => repositoryGraphJobs.refresh(
+    : await Promise.all(repositories.map((binding, index) => repositoryGraphJobs.refresh(
       JSON.stringify([projectId, binding.repositoryId, binding.revision]),
       () => analyzeRepositoryGraph(client, projectId, binding.repositoryId, 120_000, binding.revision),
+      Number.MAX_SAFE_INTEGER, observations[index],
     )));
   return boundRepositoryGraphs(graphs.filter((item): item is ProjectRepositoryGraph => item != null));
 }

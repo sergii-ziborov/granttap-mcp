@@ -18,3 +18,9 @@ under the repository's `tests/engine` harness.
 
 License: this module is distributed under the GrantTap Commercial Source License
 in the repository-root `LICENSE` file.
+
+Successful background reports retain an internal observation of Git-visible
+source state. Unchanged state reuses the report across time and MCP restart;
+changed state retains the existing analysis cooldown. Explicit refresh forces
+analysis, and temporary failures keep their retry behavior. Source observation
+is implemented by `source-state/`; its tests cover dirty edits and path changes.
