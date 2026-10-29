@@ -18,3 +18,7 @@ legacy reports retain normal retry behavior. No provider policy, grants,
 repository files or user projects are changed.
 
 Behavior tests live in `tests/` and `../tests/unchanged-source.test.ts`.
+
+## License
+
+GrantTap Commercial Source License. See [LICENSE](../../../../../../../LICENSE).
