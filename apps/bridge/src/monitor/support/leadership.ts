@@ -90,6 +90,7 @@ function tryAcquireLock(input: {
 export function monitorLeadership(
   now: () => number = Date.now,
   report: (message: string) => void = (message) => process.stderr.write(message),
+  connected: () => boolean = () => true,
 ): MonitorLeadership {
   const path = join(configDir(), "monitor.lock");
   const primary = process.env.GRANTTAP_MONITOR_PRIMARY === "1";
@@ -130,11 +131,14 @@ export function monitorLeadership(
     );
   };
 
-  const acquire = (): boolean => tryAcquireLock({
-    path, token, primary, read, write, expired, ownerIsPrimary, reportRefusal,
-    getLeader: () => leader,
-    setLeader: (value) => { leader = value; },
-  });
+  const acquire = (): boolean => {
+    if (!connected()) { release(); return false; }
+    return tryAcquireLock({
+      path, token, primary, read, write, expired, ownerIsPrimary, reportRefusal,
+      getLeader: () => leader,
+      setLeader: (value) => { leader = value; },
+    });
+  };
 
   const release = (): void => {
     if (!leader || read() !== token) return;

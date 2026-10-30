@@ -172,7 +172,7 @@ async function publishMonitorTick(input: {
  */
 export function startSessionMonitor(client: RelayClient): SessionMonitor {
   const subscriptions = new Set<string>();
-  const leadership = monitorLeadership();
+  const leadership = monitorLeadership(Date.now, undefined, () => client.isConnected);
   restoreMonitorState(client);
   let historyCache: { generatedAt: number; sessions: SessionsStatus["sessions"] } | undefined;
   let historyRead: Promise<SessionsStatus["sessions"]> | undefined;

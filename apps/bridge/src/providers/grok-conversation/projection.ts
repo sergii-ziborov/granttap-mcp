@@ -2,6 +2,7 @@ import type { ActivityEntry } from '../../../../../packages/protocol/schema';
 import { classifyTool, pushEntry, stripTranscriptMarkup, visibleUserText } from '../../sessions/support/activity-helpers';
 import { grokRecordedChanges, grokToolCalls, grokToolSummary } from '../grok-tools';
 import { confirmedUpdateChanges } from '../acp-file-changes';
+import { conversationImage, type ConversationImage } from './images';
 
 export type ConversationProjection = {
   sessionId: string;
@@ -13,10 +14,18 @@ export type ConversationProjection = {
   text?: { entry: ActivityEntry; raw: string };
   sizes: Map<ActivityEntry, number>;
   bytes: number;
+  textLimit: number;
+  entryLimit: number;
+  byteLimit: number;
+  toolIds: Set<string>;
+  images?: Map<string, ConversationImage>;
 };
 
-export function newProjection(sessionId: string): ConversationProjection {
-  return { sessionId, entries: [], calls: new Map(), bounded: false, sizes: new Map(), bytes: 0 };
+export function newProjection(sessionId: string, complete = false): ConversationProjection {
+  return { sessionId, entries: [], calls: new Map(), bounded: false, sizes: new Map(), bytes: 0,
+    textLimit: complete ? 16_000_000 : 65_536, entryLimit: complete ? 50_000 : 4096,
+    byteLimit: complete ? 16_000_000 : 8 * 1024 * 1024, toolIds: new Set(),
+    ...(complete ? { images: new Map() } : {}) };
 }
 
 const object = (value: unknown): Record<string, unknown> | undefined =>
@@ -34,11 +43,18 @@ export function projectConversationUpdate(state: ConversationProjection, value: 
   let changed: ActivityEntry | undefined;
   if (kind === 'user_message_chunk' || kind === 'agent_message_chunk') {
     const content = object(update.content), meta = object(update._meta);
+    if (meta?.syntheticReason != null || meta?.synthetic_reason != null) return;
+    if (kind === 'user_message_chunk' && content?.type === 'image' && state.images) {
+      const captured = conversationImage(content, state.sessionId, offset, at);
+      if (!captured) { state.bounded = true; return; }
+      state.entries.push(captured.entry); state.images.set(captured.entry.id, captured.image);
+      state.bytes += captured.encodedBytes; state.speaking = undefined; state.userKey = undefined; state.text = undefined;
+      boundProjection(state, captured.entry); return;
+    }
     if (content?.type !== 'text' || typeof content.text !== 'string' || !content.text) {
       if (kind === 'user_message_chunk' && content?.type === 'image') state.bounded = true;
       return;
     }
-    if (meta?.syntheticReason != null || meta?.synthetic_reason != null) return;
     const user = kind === 'user_message_chunk';
     const promptIndex = meta?.promptIndex;
     const key = user && Number.isSafeInteger(promptIndex) && Number(promptIndex) >= 0
@@ -46,22 +62,22 @@ export function projectConversationUpdate(state: ConversationProjection, value: 
     const previous = state.entries.at(-1);
     if (previous && (user && previous.kind === 'user' && state.userKey === key || !user && state.speaking === previous)) {
       const raw = (state.text?.entry === previous ? state.text.raw : previous.text) + content.text;
-      state.text = { entry: previous, raw: raw.slice(0, 65_536) };
+      state.text = { entry: previous, raw: raw.slice(0, state.textLimit) };
       previous.text = user ? visibleUserText(state.text.raw) : stripTranscriptMarkup(state.text.raw);
-      if (raw.length > 65_536) state.bounded = true;
+      if (raw.length > state.textLimit) state.bounded = true;
       boundProjection(state, previous);
       return;
     }
     const count = state.entries.length;
     pushEntry({ out: state.entries, seen: new Set(), sessionId: state.sessionId, kind: user ? 'user' : 'message',
-      text: content.text.slice(0, 65_536), createdAt: at, ordinal: offset, idOverride: key, fullText: true });
+      text: content.text.slice(0, state.textLimit), createdAt: at, ordinal: offset, idOverride: key, fullText: true });
     if (state.entries.length > count) {
       changed = state.entries.at(-1);
-      state.text = { entry: changed!, raw: content.text.slice(0, 65_536) };
+      state.text = { entry: changed!, raw: content.text.slice(0, state.textLimit) };
       if (user) { state.userKey = key; state.speaking = undefined; }
       else state.speaking = state.entries.at(-1);
     }
-    if (content.text.length > 65_536) state.bounded = true;
+    if (content.text.length > state.textLimit) state.bounded = true;
   } else if (kind === 'tool_call') {
     changed = projectTool(state, update, at, offset);
   } else if (kind === 'tool_call_update') {
@@ -90,7 +106,8 @@ export function projectConversationUpdate(state: ConversationProjection, value: 
 function projectTool(state: ConversationProjection, update: Record<string, unknown>, at: number, offset: number): ActivityEntry | undefined {
   const native = object(object(update._meta)?.['x.ai/tool']);
   const call = grokToolCalls({ tool_calls: [{ id: update.toolCallId, name: native?.name, arguments: update.rawInput }] })[0];
-  if (!call?.id || state.entries.some(entry => entry.id === `${state.sessionId}:tool:${call.id}`)) return;
+  if (!call?.id || state.toolIds.has(call.id)) return;
+  state.toolIds.add(call.id);
   state.speaking = undefined;
   const identity = classifyTool(call.name, call.input);
   pushEntry({ out: state.entries, seen: new Set(), sessionId: state.sessionId, kind: 'tool',
@@ -107,14 +124,15 @@ function boundProjection(state: ConversationProjection, changed?: ActivityEntry)
     const bytes = Buffer.byteLength(JSON.stringify(changed));
     state.bytes += bytes - (state.sizes.get(changed) ?? 0); state.sizes.set(changed, bytes);
   }
-  while (state.entries.length > 4096 || state.bytes > 8 * 1024 * 1024) {
+  while (state.entries.length > state.entryLimit || state.bytes > state.byteLimit) {
     const removed = state.entries.shift();
     if (!removed) break;
     state.bytes -= state.sizes.get(removed) ?? 0; state.sizes.delete(removed);
+    if (removed.kind === 'tool') state.toolIds.delete(removed.id.slice(`${state.sessionId}:tool:`.length));
     for (const [id, call] of state.calls) if (call.entry === removed) state.calls.delete(id);
     state.bounded = true;
   }
-  if (state.calls.size > 256) {
+  if (state.calls.size > (state.images ? 50_000 : 256)) {
     state.calls.delete(state.calls.keys().next().value!); state.bounded = true;
   }
 }

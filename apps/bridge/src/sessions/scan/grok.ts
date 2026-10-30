@@ -20,7 +20,7 @@ import type { CapabilityObservation } from "../telemetry";
 import { grokNativeActivity } from '../../providers/grok-activity';
 import { grokTimeline } from '../../providers/grok-timeline';
 import { grokToolCalls, grokToolCompletions, grokToolSummary, grokRecordedChanges } from '../../providers/grok-tools';
-import { readGrokConversation } from '../../providers/grok-conversation';
+import { captureGrokConversation, readGrokConversation } from '../../providers/grok-conversation';
 import { GrokCatalogCache, type GrokParsedContext } from '../../providers/grok-catalog-cache';
 
 type Summary = {
@@ -230,6 +230,12 @@ export function grokActivity(session: SessionInfo, fullText = false): ActivityEn
     return parseLog(path, session.sessionId, session.startedAt, true).entries;
   }
   return activityBySession.get(session.sessionId) ?? [];
+}
+
+export async function grokConversationForTransfer(session: SessionInfo) {
+  if (!logPaths.has(session.sessionId)) scanGrok();
+  const path = logPaths.get(session.sessionId);
+  return path ? captureGrokConversation(dirname(path), session.sessionId) : undefined;
 }
 
 export function grokCapabilityUsage(session: SessionInfo): CapabilityObservation[] {

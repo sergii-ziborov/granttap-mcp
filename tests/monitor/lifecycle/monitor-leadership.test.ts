@@ -108,3 +108,41 @@ test("the lease expires within a few publish ticks, not minutes", () => {
   // The phone waits out this window with no sessions and no load.
   assert.ok(LEADERSHIP_TTL_MS <= 120_000, `lease TTL is ${LEADERSHIP_TTL_MS}ms`);
 });
+
+test("an offline primary cannot evict the connected handler", async t => {
+  const root = await configured(t);
+  const lock = join(root, "monitor.lock");
+  const connectedPeer = monitorLeadership();
+  const owner = await readFile(lock, "utf8");
+  process.env.GRANTTAP_MONITOR_PRIMARY = "1";
+  const offlinePrimary = monitorLeadership(Date.now, () => {}, () => false);
+  t.after(() => { offlinePrimary.release(); connectedPeer.release(); });
+
+  assert.equal(offlinePrimary.acquire(), false);
+  assert.equal(await readFile(lock, "utf8"), owner,
+    "periodic transfer polling must not renew an offline receiver's claim");
+  assert.equal(connectedPeer.acquire(), true);
+});
+
+test("disconnect releases routing immediately and reconnect restores primary ownership", async t => {
+  const root = await configured(t);
+  const lock = join(root, "monitor.lock");
+  let online = true;
+  process.env.GRANTTAP_MONITOR_PRIMARY = "1";
+  const primary = monitorLeadership(Date.now, () => {}, () => online);
+  delete process.env.GRANTTAP_MONITOR_PRIMARY;
+  const peer = monitorLeadership(Date.now, () => {});
+  t.after(() => { primary.release(); peer.release(); });
+  assert.equal(peer.acquire(), false);
+
+  online = false;
+  assert.equal(primary.acquire(), false);
+  assert.equal(peer.acquire(), true, "the phone must not wait for a ninety-second lease");
+  assert.match(await readFile(lock, "utf8"), /:peer$/);
+  assert.equal(primary.acquire(), false, "offline polling cannot reclaim the lease");
+
+  online = true;
+  assert.equal(primary.acquire(), true);
+  assert.equal(peer.acquire(), false);
+  assert.match(await readFile(lock, "utf8"), /:primary$/);
+});

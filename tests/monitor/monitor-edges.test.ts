@@ -15,7 +15,11 @@ class FakeRelay {
     this.listener = listener;
     return () => { this.listener = undefined; };
   }
-  emit(payload: Payload) { return this.listener?.(payload); }
+  emit(payload: Payload) {
+    this.isConnected = true;
+    try { return this.listener?.(payload); }
+    finally { this.isConnected = false; }
+  }
   setSessionKey() {}
   async send(payload: Payload) { this.sent.push(payload); }
   async sendSession(payload: Payload) { this.sessionSent.push(payload); }
@@ -127,5 +131,6 @@ test("monitor compaction, delivery dedupe, failures, and leadership remain bound
 
   await first.publish();
   await second.publish();
-  assert.equal(secondRelay.sent.length, 0, "only one monitor owns phone routing");
+  assert.equal(secondRelay.sent.filter(item => item.type !== 'machine.heartbeat').length, 0,
+    "only the connected leader publishes catalogs and delivery results");
 });

@@ -4,6 +4,11 @@
 Chat catalogs publish independently of background Mesh enrichment. The Mesh
 publisher reuses known native identities and yields between Projects.
 
+Routing leadership requires a connected relay socket. An offline primary
+releases its lease when polled, allowing an online peer to handle phone commands
+immediately. Reconnecting restores the primary's priority without restarting
+the coding providers or changing pending message identities.
+
 Architecture responses acknowledge their explicit request. Coalesced builds
 retain every controller's receipt; periodic cached reports remain ordinary Mesh
 snapshots. Repository analysis uses its own Engine socket to keep policy and

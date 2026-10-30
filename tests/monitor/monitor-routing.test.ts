@@ -17,7 +17,11 @@ class FakeRelay {
     this.listener = listener;
     return () => { this.listener = undefined; };
   }
-  emit(payload: Payload) { return this.listener?.(payload); }
+  emit(payload: Payload) {
+    this.isConnected = true;
+    try { return this.listener?.(payload); }
+    finally { this.isConnected = false; }
+  }
   async send(payload: Payload) { this.sent.push(payload); }
   setSessionKey(sessionId: string, key: string) { this.keys.set(sessionId, key); }
   async sendSession(payload: Payload) { this.sent.push(payload); }

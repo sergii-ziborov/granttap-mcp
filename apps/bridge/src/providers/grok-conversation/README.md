@@ -18,4 +18,13 @@ instead of calling a partial archive complete. Older CLIs without `updates.jsonl
 retain their previous reader. Tests live in
 `../../sessions/scan/tests/grok-persisted-updates.test.ts`.
 
+Transfers use `captureGrokConversation` in `capture.ts`, independently of the
+bounded display cache. It streams a stable snapshot from byte zero and yields
+between 64 KiB chunks. A native log may contain up to 512 MiB of restore events;
+only visible messages, tool summaries and recoverable images enter the existing
+16 MB transfer context. The projection permits up to 50,000 visible entries;
+each image remains limited to 8 MiB. Hidden reasoning and hook output stay out.
+Incomplete records, changed source files, invalid images and exceeded budgets
+refuse the transfer. No truncated display projection is called complete.
+
 Licensed under the repository-root GrantTap Commercial Source License.
