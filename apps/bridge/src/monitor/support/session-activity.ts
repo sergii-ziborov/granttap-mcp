@@ -28,10 +28,10 @@ function cacheKey(session: SessionInfo): string {
 export function sessionActivityCache(
   read: ActivityReader,
   capacity = 64,
-): (session: SessionInfo, forceScan?: boolean) => SessionActivity {
+): (session: SessionInfo, forceScan?: boolean, sourceRevision?: string) => SessionActivity {
   const cache = new Map<string, SessionActivity>();
-  return (session, forceScan = false) => {
-    const key = cacheKey(session);
+  return (session, forceScan = false, sourceRevision = "") => {
+    const key = `${cacheKey(session)}\0${sourceRevision}`;
     if (!forceScan) {
       const hit = cache.get(key);
       // Refresh recency so a chat the user keeps open is never the eviction

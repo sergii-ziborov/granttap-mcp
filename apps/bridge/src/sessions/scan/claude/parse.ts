@@ -4,6 +4,7 @@ import { basename } from "node:path";
 import type { ChildThreadInfo, SessionInfo } from "../../../../../../packages/protocol/schema";
 import { aggregateChildThreads, childTitle } from "../../support/child-threads";
 import { rememberCapabilityObservation } from "../../telemetry";
+import { observeClaudeTurn } from "./turn-state";
 import { safeParse, stateFor, ts } from "../../support/common";
 import { claudeCapabilityUsage } from "./activity";
 import { claudeRepositoryPaths } from "./repository-observation";
@@ -35,18 +36,8 @@ type ClaudeParseState = {
   turnEnded: boolean;
 };
 
-/** Stop reasons after which Claude Code waits for the person's next prompt. */
-const FINISHED_TURN = new Set(["end_turn", "stop_sequence", "max_tokens"]);
-
-/** Metadata, progress and subagent lines do not start or end the chat's own turn. */
-function noteTurnBoundary(d: any, state: ClaudeParseState): void {
-  if (d.isSidechain === true) return;
-  if (d.type === "user" || d.type === "queue-operation") state.turnEnded = false;
-  else if (d.type === "assistant") state.turnEnded = FINISHED_TURN.has(d.message?.stop_reason);
-}
-
 function applyClaudeLine(d: any, state: ClaudeParseState): void {
-  noteTurnBoundary(d, state);
+  observeClaudeTurn(d, state);
   if (d.isSidechain !== true) state.repositoryPaths.push(...claudeRepositoryPaths(d));
   state.repositoryPaths = state.repositoryPaths.slice(-64);
   if (d.sessionId && !state.sessionId) state.sessionId = String(d.sessionId);

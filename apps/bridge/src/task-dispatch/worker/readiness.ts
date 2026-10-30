@@ -1,4 +1,12 @@
 import type { SessionInfo, TaskDispatch } from '../../../../../packages/protocol/schema';
+import { observeSessionExecution } from '../../session-catalog/observed-state';
+
+/** A known native tail can release a queued turn before the next full discovery. */
+export function dispatchSessionObservation(session: SessionInfo | undefined, generatedAt?: number) {
+  const fresh = session && observeSessionExecution(session);
+  return { session: fresh?.session ?? session, generatedAt: fresh ? Date.now() : generatedAt,
+    nativeState: fresh?.session.state };
+}
 
 /** Manual release bypasses busy state only. Pause, native admission and policy still win. */
 export function taskDispatchReady(job: TaskDispatch, observation: {

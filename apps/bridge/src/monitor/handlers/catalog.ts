@@ -1,6 +1,7 @@
 import type { SessionInfo, SessionsStatus } from "../../../../../packages/protocol/schema";
 import type { RelayClient } from "../../../../../packages/core/relay-client";
 import { sendSessionPayload } from "../../host/session-keys";
+import { observeSessionExecution } from "../../session-catalog/observed-state";
 import { cachedSessionActivity } from "../support/session-activity";
 import { readTranscriptHistory } from "../../transcript-history";
 import { publishedSession } from "../../session-catalog";
@@ -84,11 +85,13 @@ async function sendTranscript(
   threadId?: string,
   history?: { history?: boolean; historyCursor?: string; peerPublicKey?: string },
 ): Promise<boolean> {
-  const session = resolveSession(client, sessionId, status);
-  if (!session) return false;
+  const known = resolveSession(client, sessionId, status);
+  if (!known) return false;
+  const observation = observeSessionExecution(known);
+  const session = observation?.session ?? known;
   const activity = threadId ? scanThreadActivity(session, threadId)
     : (history?.history ? readTranscriptHistory(session, history.historyCursor) : undefined)
-      ?? cachedSessionActivity(session);
+      ?? cachedSessionActivity(session, false, observation?.revision);
   await sendSessionPayload(client, activityWithImages(activity), sessionId, "phone", {
     ttlMs: INTERVAL_MS * 24,
     reliable: false,

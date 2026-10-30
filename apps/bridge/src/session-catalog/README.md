@@ -32,3 +32,10 @@ and metadata caches serve synchronous CLI readers and cooperative live-monitor
 readers. Checkout observations are scoped to one asynchronous scan, so unrelated
 requests cannot inherit an old directory result. Socket recovery immediately
 republishes the current catalog instead of waiting for the next periodic tick.
+
+Open and working chats follow a separate two-second loop of known native sources.
+Only changed source revisions send encrypted transcript heads; reads and sends
+remain single-flight and bounded to eight chats per pass. Claude end-turn and
+Codex turn events update execution state immediately after observation. The same
+native observation releases queued messages without waiting for full discovery.
+A fresh chat does not advance the observation clock of unrelated catalog rows.

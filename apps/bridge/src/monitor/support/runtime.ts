@@ -22,6 +22,7 @@ import { HEARTBEAT_INTERVAL_MS, publishHeartbeat } from "./heartbeat";
 import { confirmPendingController } from "../../pairing/controllers";
 import { recordControllerName } from "../../pairing/presence";
 import { startPublishLoop } from "./publish-loop";
+import { openChatUpdates, OPEN_CHAT_INTERVAL_MS } from "../../session-catalog/open-chat-updates";
 import { singleFlightPublisher } from "./single-flight";
 import { publishedCatalog, rememberPublishedCatalog, resumePublishedChats,
   publishCatalogHeads, stopCatalogHeads } from "../../session-catalog";
@@ -234,6 +235,15 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
     publish: () => publishHeartbeat(client).catch(() => {}),
   });
   const stopQuestions = startQuestionLoop(client, leadership, subscriptions);
+  const stopChats = startPublishLoop({
+    connected: () => client.isConnected,
+    intervalMs: OPEN_CHAT_INTERVAL_MS,
+    publish: openChatUpdates({
+      catalog: () => publishedCatalog(client), subscriptions,
+      active: () => !closed && client.isConnected && leadership.acquire(),
+      publish: (id, status) => publishSessionEvents(client, id, status),
+    }),
+  });
 
   return {
     publish: () => publish(false),
@@ -248,6 +258,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
       stopMonitorMeshes(client);
       stopHeartbeat();
       stopQuestions();
+      stopChats();
       loadLoop.stop();
       off();
       subscriptions.clear();
