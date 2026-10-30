@@ -37,6 +37,9 @@ const inFlight = new Map<string, Promise<ReplyResult | null>>();
 
 export function isDeliveryInFlight(sessionId: string): boolean { return inFlight.has(sessionId); }
 
+/** Acknowledging a message does not finish the provider turn or permit a runtime handoff. */
+export function hasPendingDeliveries(): boolean { return inFlight.size > 0; }
+
 /** Request a stop for owned processes; confirmation arrives only on process exit. */
 export function stopDeliveries(sessionId: string): number {
   try { localRoutingRequests().cancel(sessionId); } catch { /* The native stop still runs when storage is unavailable. */ }

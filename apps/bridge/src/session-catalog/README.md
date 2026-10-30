@@ -39,3 +39,7 @@ remain single-flight and bounded to eight chats per pass. Claude end-turn and
 Codex turn events update execution state immediately after observation. The same
 native observation releases queued messages without waiting for full discovery.
 A fresh chat does not advance the observation clock of unrelated catalog rows.
+Full discoveries recheck known native execution state immediately before sending
+their catalog, so a scan started during a turn cannot restore stale Working after
+an independently delivered completion. Runtime handoff also waits for owned
+provider turns to settle, including work already acknowledged to the phone.

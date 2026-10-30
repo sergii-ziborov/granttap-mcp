@@ -23,6 +23,8 @@ import { confirmPendingController } from "../../pairing/controllers";
 import { recordControllerName } from "../../pairing/presence";
 import { startPublishLoop } from "./publish-loop";
 import { openChatUpdates, OPEN_CHAT_INTERVAL_MS } from "../../session-catalog/open-chat-updates";
+import { refreshObservedCatalog } from "../../session-catalog/observed-state";
+import { hasPendingDeliveries } from "../../reply";
 import { singleFlightPublisher } from "./single-flight";
 import { publishedCatalog, rememberPublishedCatalog, resumePublishedChats,
   publishCatalogHeads, stopCatalogHeads } from "../../session-catalog";
@@ -151,7 +153,7 @@ async function publishMonitorTick(input: {
   const includeHistory = forceHistory || (!initial && Date.now() - lastHistoryPublishedAt >= HISTORY_INTERVAL_MS);
   const snapshot = await monitorSnapshot({ includeHistory, forceHistory, subscriptions, history });
   if (!input.active()) return { lastHistoryPublishedAt };
-  const status = decorateTaskOriginCatalog(snapshot, client.room);
+  const status = decorateTaskOriginCatalog(refreshObservedCatalog(snapshot), client.room);
   rememberPublishedCatalog(client, status);
   await client.send(status, "phone", { ttlMs: INTERVAL_MS * 24, reliable: false });
   // Provider review is independent of task visibility; a hung hook RPC must
@@ -179,7 +181,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
   let historyRead: Promise<SessionsStatus["sessions"]> | undefined;
   let lastHistoryPublishedAt = 0;
   let closed = false;
-  const work = runtimeWorkTracker(() => approvalsStatus().pending.length > 0 || providerLogins.active() || deviceManagementWorkActive());
+  const work = runtimeWorkTracker(() => hasPendingDeliveries() || approvalsStatus().pending.length > 0 || providerLogins.active() || deviceManagementWorkActive());
   const loadLoop = monitorLoadLoop(client, leadership);
 
   const history = (force = false): Promise<SessionsStatus["sessions"]> => {

@@ -1,7 +1,7 @@
 import {statSync} from 'node:fs';
 import {join} from 'node:path';
 import {homedir} from 'node:os';
-import type {SessionInfo} from '../../../../packages/protocol/schema';
+import type {SessionInfo, SessionsStatus} from '../../../../packages/protocol/schema';
 import {localTaskTransfers} from '../task-transfer';
 import {nativeTranscriptSource} from '../sessions/native-source';
 import {claudeLogPath} from '../sessions/scan/claude/shared';
@@ -15,6 +15,12 @@ import {cursorConversationSession} from '../sessions/cursor';
 type NativeClock={revision:string;lastActivityAt:number;claude:ClaudeTurnClock;codex:CodexTurnClock};
 const clocks=new Map<string,NativeClock>();
 export type SessionObservation={session:SessionInfo;revision:string};
+
+/** Discovery may have started before an open chat finished its turn. Recheck before publication. */
+export function refreshObservedCatalog(status: SessionsStatus): SessionsStatus {
+  const refresh = (session: SessionInfo) => observeSessionExecution(session)?.session ?? session;
+  return {...status, sessions: status.sessions.map(refresh), history: status.history?.map(refresh)};
+}
 
 /** A known chat uses one bounded native tail, never discovery across unrelated projects. */
 export function observeSessionExecution(input:SessionInfo):SessionObservation|undefined {

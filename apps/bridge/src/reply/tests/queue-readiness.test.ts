@@ -3,7 +3,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { deliverToSession, isDeliveryInFlight } from '../index';
+import { deliverToSession, hasPendingDeliveries, isDeliveryInFlight } from '../index';
+import { runtimeWorkTracker } from '../../runtime-updates/readiness';
 
 test('native submission readiness covers an owned turn and clears when it actually finishes', async t => {
   const root = mkdtempSync(join(tmpdir(), 'granttap-delivery-ready-'));
@@ -22,6 +23,10 @@ process.stdout.write(JSON.stringify({type:'end',sessionId:'synthetic-chat'})+'\\
   const pending = deliverToSession({ sessionId: 'synthetic-chat', agent: 'grok', cwd: root, state: 'idle',
     startedAt: 1, lastActivityAt: 2, tokensSession: 0, tokensLastTurn: 0 }, 'Synthetic follow-up', 5_000);
   assert.equal(isDeliveryInFlight('synthetic-chat'), true);
+  const monitorWork = runtimeWorkTracker(hasPendingDeliveries);
+  await monitorWork.run(async () => 'acknowledged');
+  assert.equal(monitorWork.idle(), false, 'a delivery acknowledgement cannot hand off a running provider');
   assert.equal((await pending).ok, true);
   assert.equal(isDeliveryInFlight('synthetic-chat'), false);
+  assert.equal(monitorWork.idle(), true);
 });

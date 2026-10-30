@@ -7,6 +7,7 @@ import {rememberPublishedCatalog} from '../..';
 import {publishSessionEvents} from '../../../monitor/handlers/catalog';
 import {restoreNativeTranscriptSource} from '../../../sessions';
 import {dispatchSessionObservation, taskDispatchReady} from '../../../task-dispatch/worker/readiness';
+import {refreshObservedCatalog} from '../../observed-state';
 import type {SessionInfo,SessionActivity} from '../../../../../../packages/protocol/schema';
 
 test('an open Claude chat reads completion and a following turn without a full catalog refresh',async t=>{
@@ -36,6 +37,11 @@ test('an open Claude chat reads completion and a following turn without a full c
   appendFileSync(file,line('assistant',1,'end_turn'));
   await publishSessionEvents(client as never,session.sessionId);
   assert.equal(pages.at(-1)?.state,'idle');
+  const lateCatalog = refreshObservedCatalog({type:'sessions.status',machine:'Fixture',
+    sessions:[session],history:[session],generatedAt:now+10_000,tokensRecent:0,tokenWindowHours:24});
+  assert.equal(lateCatalog.sessions[0]?.state,'idle',
+    'a scan that captured Working before completion cannot restore it when it publishes late');
+  assert.equal(lateCatalog.history?.[0]?.state,'idle');
   const job = {sessionId:session.sessionId, deliveryMode:'queued'};
   const old = {session, generatedAt:now-120_000, inFlight:false, paused:false};
   assert.equal(taskDispatchReady(job as never,old),false);
