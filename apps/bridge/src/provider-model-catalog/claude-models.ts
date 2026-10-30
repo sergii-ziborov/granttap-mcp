@@ -5,6 +5,7 @@ import { statSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AdvertisedModel } from '../../../../packages/protocol/schema';
 import { resolveClaudeBinary } from '../providers/claude-bin';
+import { claudeAccountScope } from './claude-account-scope';
 
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,159}$/;
 const EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
@@ -74,7 +75,8 @@ export function cachedClaudeModels(endpointId: string, env = process.env): Adver
   const config = env.GRANTTAP_CLAUDE_DIR ?? env.NODVOX_CLAUDE_DIR ?? env.CLAUDE_CONFIG_DIR;
   const root = config ?? join(homedir(), '.claude');
   const key = [endpointId, binary.path, binary.version, root,
-    modified(join(root, '.credentials.json')), modified(config ? join(root, '.claude.json') : join(homedir(), '.claude.json'))].join('\u001f');
+    modified(join(root, '.credentials.json')), claudeAccountScope(config ? join(root, '.claude.json') : join(homedir(), '.claude.json')),
+    modified(join(root, 'settings.json')), modified(join(root, 'settings.local.json'))].join('\u001f');
   if (key !== scope) { scope = key; report = []; checkedAt = 0; }
   if (binary && !pending && Date.now() - checkedAt > (report.length ? 10 : 2) * 60_000) {
     checkedAt = Date.now();

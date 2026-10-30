@@ -3,7 +3,7 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { readClaudeModels, projectClaudeModels } from '../claude-models';
+import { readClaudeModels, projectClaudeModels, cachedClaudeModels } from '../claude-models';
 
 test('Claude picker metadata comes from a no-prompt initialization with exact labels and effort levels', async t => {
   const root = mkdtempSync(join(tmpdir(), 'granttap-claude-models-'));
@@ -67,4 +67,45 @@ test('metadata subprocess timeout, error and oversized output return an empty ca
     writeFileSync(binary, '#!/usr/bin/env node\n'+body);chmodSync(binary,0o700);
     assert.deepEqual(await readClaudeModels(binary,'mac',{timeoutMs:300,cwd:root}),[]);
   }
+});
+
+test('native startup bookkeeping does not invalidate its own model reply, but an account change does', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'granttap-claude-scope-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const binary = join(root, 'claude'), config = join(root, '.claude.json'), probes = join(root, 'probes');
+  writeFileSync(config, JSON.stringify({ oauthAccount: { accountUuid: 'account-a', organizationUuid: 'organization' }, numStartups: 1 }));
+  writeFileSync(binary, `#!/usr/bin/env node
+const fs=require('node:fs'),path=require('node:path');
+if(process.argv.includes('--version')){console.log('2.1.296');process.exit(0);}
+const root=process.env.CLAUDE_CONFIG_DIR;
+const file=path.join(root,'.claude.json');
+const config=JSON.parse(fs.readFileSync(file,'utf8'));
+fs.writeFileSync(file,JSON.stringify({...config,numStartups:(config.numStartups||0)+1}));
+fs.appendFileSync(path.join(root,'probes'),'x');
+require('node:readline').createInterface({input:process.stdin}).on('line',line=>{
+ const request=JSON.parse(line);
+ console.log(JSON.stringify({type:'control_response',response:{subtype:'success',request_id:request.request_id,
+ response:{models:[{value:'claude-'+config.oauthAccount.accountUuid,displayName:'Native model'}]}}}));
+});`); chmodSync(binary, 0o700);
+  const env = { ...process.env, GRANTTAP_CLAUDE_BIN: binary, GRANTTAP_CLAUDE_DIR: root };
+  const waitFor = async (model: string) => {
+    const end = Date.now() + 4_000;
+    while (Date.now() < end) {
+      const rows = cachedClaudeModels('fixture-account-scope', env);
+      if (rows.some(row => row.modelId === model)) return rows;
+      await new Promise(resolve => setTimeout(resolve, 30));
+    }
+    assert.fail('A metadata process that updates startup bookkeeping must still publish its model reply');
+  };
+  const first = await waitFor('claude-account-a');
+  assert.equal(first[0]!.endpointId, 'fixture-account-scope');
+  assert.equal(readFileSync(probes, 'utf8').length, 1, 'One initialization must not become a respawn loop');
+  const saved = JSON.parse(readFileSync(config, 'utf8'));
+  writeFileSync(config, JSON.stringify({ ...saved, numStartups: saved.numStartups + 1, theme: 'changed' }));
+  assert.equal(cachedClaudeModels('fixture-account-scope', env)[0]?.modelId, 'claude-account-a');
+  assert.equal(readFileSync(probes, 'utf8').length, 1);
+  writeFileSync(config, JSON.stringify({ ...saved, oauthAccount: { ...saved.oauthAccount, accountUuid: 'account-b' } }));
+  assert.deepEqual(cachedClaudeModels('fixture-account-scope', env), [], 'A different account must not inherit old model metadata');
+  await waitFor('claude-account-b');
+  assert.equal(readFileSync(probes, 'utf8').length, 2);
 });

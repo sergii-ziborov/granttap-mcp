@@ -56,3 +56,15 @@ the client. Account identity is discarded. A missing, failed or oversized respon
 advertises no models. The shared cache refreshes successful metadata every ten
 minutes, failures after two, expires after fifteen, and never blocks catalog polling.
 Tests: [`tests/claude-models.test.ts`](tests/claude-models.test.ts).
+
+Claude account invalidation uses an opaque digest of account, organization and
+model-entitlement fields, rather than the modification time of `.claude.json`.
+CLI initialization updates startup counters and profile refresh dates in that
+file; those writes must not discard its own reply or repeatedly launch the CLI.
+Credential and settings-file changes still invalidate their own scope. The
+account reader is bounded to 4 MiB and 16 cached file signatures, retaining only
+digests. Raw account fields and API keys never enter the model report or cache key.
+Tests cover self-updating initialization, one metadata subprocess per unchanged
+account, actual account changes, private fields, malformed data and retention.
+
+Licensed under the GrantTap Commercial Source License. See LICENSE and NOTICE.
