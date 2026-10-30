@@ -43,3 +43,10 @@ Question publication reads the private record collection once per batch, then
 validates each matching question freshly before sending. Targeted notification
 replay reads the requested identity directly. This keeps multiple chats from
 repeatedly parsing the same collection.
+
+Question polling reuses at most 512 validated, unchanged private records. Inode,
+size and nanosecond modification/change times invalidate an observation;
+`saveQuestion` invalidates it immediately. Reads return detached copies, and
+invalid, replaced or deleted files cannot return an earlier cached question.
+`tests/record-observation.test.ts` covers durable updates, external replacement,
+caller mutation, malformed data, bounded retention and actual file-read counts.
