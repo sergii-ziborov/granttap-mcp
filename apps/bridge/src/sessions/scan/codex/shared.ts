@@ -3,6 +3,7 @@ import { diffPreviewFromInput, sensitivePath, statsFromInput } from "../../suppo
 import { redactSecrets } from "../../telemetry/command-preview";
 import { recordObservedWrite, writtenPaths } from "../../../mesh/observed/writes";
 import { ownCodexLines } from './lineage';
+import { createCodexRolloutIdentityLookup } from './rollout-identity';
 /**
  * Codex session logs:
  *   ~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl
@@ -198,22 +199,15 @@ export function codexLogLines(sessionId: string): string[] | undefined {
       codexLogPathBySession.delete(sessionId);
     }
   }
-  for (const file of recentLogs(codexSessionsRoot(), 5)) {
+  const file = findCodexRolloutIdentity(sessionId, recentLogs(codexSessionsRoot(), 5));
+  if (file) {
     try {
-      const candidate = readCodexLogWindow(
-        file, CODEX_ACTIVITY_HEAD_BYTES, CODEX_ACTIVITY_TAIL_BYTES,
-      );
-      if (candidate.some((line) => {
-        const row = safeParse(line);
-        return row?.type === "session_meta" &&
-          String(row.payload?.id ?? row.id ?? "") === sessionId;
-      })) {
-        codexLogPathBySession.set(sessionId, file);
-        return candidate;
-      }
-    } catch {
-      // Keep looking through the bounded recent-file set.
-    }
+      const lines = readCodexLogWindow(file, CODEX_ACTIVITY_HEAD_BYTES, CODEX_ACTIVITY_TAIL_BYTES);
+      codexLogPathBySession.set(sessionId, file);
+      return lines;
+    } catch { /* The matching rollout may have disappeared. */ }
   }
   return undefined;
 }
+
+const findCodexRolloutIdentity = createCodexRolloutIdentityLookup(file => readCodexLogWindow(file));

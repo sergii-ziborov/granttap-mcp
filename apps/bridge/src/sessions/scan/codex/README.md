@@ -20,3 +20,8 @@ nested conversations through the public catalog and activity readers.
 
 Tests live in [`tests/`](tests/). The selected-Page regression covers the public
 catalog, cached rescans, live activity, and paginated transcript history.
+
+Missing rollout lookups use the bounded [rollout identity index](rollout-identity/README.md).
+They do not read unrelated large activity tails. Unchanged file identities are
+reused; file changes invalidate them, and the selected chat keeps its existing
+activity window. `tests/rollout-lookup-cost.test.ts` measures the actual read budget.
