@@ -6,7 +6,7 @@ import { OutboundFrameQueue, sendEncryptedPayload, priorityControlPayload } from
 import { openRelayMessage, parseRelayControl, waitForRelayPayload } from "./relay-inbound";
 import { consumeTaskJobOffer, type TaskDispatchListener } from "./task-dispatch";
 import { Payload, type Role } from "../protocol/schema";
-import { peerPublicKeys } from "./crypto";
+import { clearSharedBoxKeys, peerPublicKeys } from "./crypto";
 import type { PeerConfig, RelayClientOptions, SendOptions } from "./relay-client-types";
 export type { PeerConfig, RelayClientOptions, SendOptions } from "./relay-client-types";
 import { RelayMessageAcceptance } from "./replay-store";
@@ -264,6 +264,7 @@ export class RelayClient {
   }
 
   close(): void {
+    clearSharedBoxKeys();
     this.frames?.cancel();
     this.socketHealth.stop();
     this.admissionLease.stop();

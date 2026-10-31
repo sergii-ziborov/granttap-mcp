@@ -11,6 +11,8 @@
  * QR code scanned by the phone). Nothing here ever leaves the device unsealed.
  */
 import nacl from "tweetnacl";
+import {sharedBoxKey} from './shared-box';
+export {clearSharedBoxKeys} from './shared-box';
 
 export type KeyPair = { publicKey: string; secretKey: string }; // base64
 
@@ -30,7 +32,7 @@ export function seal(
 ): { nonce: string; box: string } {
   const msg = new TextEncoder().encode(JSON.stringify(payload));
   const nonce = nacl.randomBytes(nacl.box.nonceLength);
-  const box = nacl.box(msg, nonce, ub64(theirPublicKey), ub64(mySecretKey));
+  const box = nacl.box.after(msg, nonce, sharedBoxKey(theirPublicKey, mySecretKey));
   return { nonce: b64(nonce), box: b64(box) };
 }
 
@@ -52,7 +54,7 @@ export function open(
 ): unknown | null {
   let opened: Uint8Array | null = null;
   try {
-    opened = nacl.box.open(ub64(box), ub64(nonce), ub64(theirPublicKey), ub64(mySecretKey));
+    opened = nacl.box.open.after(ub64(box), ub64(nonce), sharedBoxKey(theirPublicKey, mySecretKey));
   } catch {
     return null;
   }
