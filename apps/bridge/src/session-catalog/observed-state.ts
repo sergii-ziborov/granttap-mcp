@@ -11,10 +11,12 @@ import {observeCodexTurn,codexTurnState,type CodexTurnClock} from '../sessions/s
 import {ts} from '../sessions/support/common';
 import {grokResumeActivity} from '../providers/grok-activity';
 import {cursorConversationSession} from '../sessions/cursor';
+import {nativePromptDigest, type NativeCompletionProof} from '../reply/native-completion';
 
-type NativeClock={revision:string;lastActivityAt:number;claude:ClaudeTurnClock;codex:CodexTurnClock};
+type NativeClock={revision:string;identity:string;bytes:number;lastActivityAt:number;claude:ClaudeTurnClock;codex:CodexTurnClock;
+  promptAt:number;promptDigests:string[];completion?:NativeCompletionProof};
 const clocks=new Map<string,NativeClock>();
-export type SessionObservation={session:SessionInfo;revision:string};
+export type SessionObservation={session:SessionInfo;revision:string;completion?:NativeCompletionProof};
 
 /** Discovery may have started before an open chat finished its turn. Recheck before publication. */
 export function refreshObservedCatalog(status: SessionsStatus): SessionsStatus {
@@ -47,12 +49,22 @@ export function observeSessionExecution(input:SessionInfo):SessionObservation|un
     let clock=clocks.get(key);
     if(clock?.revision!==revision){
       const window=previousNativeLines(path,native.sessionId);if(!window)return;
-      clock={revision,lastActivityAt:0,claude:{},codex:{}};
+      const identity = `${stat.dev}:${stat.ino}`;
+      const append = clock?.identity === identity && stat.size > clock.bytes;
+      clock={revision,identity,bytes:stat.size,lastActivityAt:0,claude:append?{...clock!.claude}:{},codex:{},
+        promptAt:append?clock!.promptAt:0,promptDigests:append?clock!.promptDigests:[],completion:append?clock!.completion:undefined};
       for(const line of window.lines){
         let row;try{row=JSON.parse(line.text)}catch{continue}
         if(row.isSidechain===true||row.sessionId&&row.sessionId!==native.sessionId)continue;
         clock.lastActivityAt=Math.max(clock.lastActivityAt,ts(row.timestamp));
-        if(native.agent==='claude')observeClaudeTurn(row,clock.claude);else observeCodexTurn(row,clock.codex);
+        if(native.agent==='claude'){
+          observeClaudeTurn(row,clock.claude);
+          const content=row.message?.content;
+          const texts=typeof content==='string'?[content]:Array.isArray(content)?content.filter(b=>b?.type==='text'&&typeof b.text==='string').map(b=>b.text):[];
+          if(row.type==='user'&&texts.length){clock.promptAt=ts(row.timestamp);clock.promptDigests=[...texts,texts.join('\n')].map(nativePromptDigest)}
+          if(row.type==='assistant'&&clock.claude.turnEnded)clock.completion={nativeSessionId:native.sessionId,
+            promptAt:clock.promptAt,promptDigests:clock.promptDigests,completedAt:ts(row.timestamp),text:texts.join('\n')};
+        }else observeCodexTurn(row,clock.codex);
       }
       clocks.delete(key);clocks.set(key,clock);
       while(clocks.size>256)clocks.delete(clocks.keys().next().value!);
@@ -60,6 +72,7 @@ export function observeSessionExecution(input:SessionInfo):SessionObservation|un
     const at=Math.max(input.lastActivityAt,clock!.lastActivityAt);
     const state=native.agent==='claude'?claudeTurnState(clock!.claude,at,input.state)
       :clock!.codex.startedAt||clock!.codex.endedAt?codexTurnState(clock!.codex,at):input.state;
-    return {session:{...input,state,lastActivityAt:at},revision:`${revision}:${state}`};
+    return {session:{...input,state,lastActivityAt:at},revision:`${revision}:${state}`,
+      ...(native.agent==='claude'&&clock!.claude.turnEnded&&clock!.completion?{completion:clock!.completion}:{})};
   }catch{return;}
 }

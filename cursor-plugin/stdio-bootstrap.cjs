@@ -7,7 +7,7 @@ const { spawn } = require("node:child_process");
 const { existsSync } = require("node:fs");
 const { delimiter, dirname, join } = require("node:path");
 
-const PACKAGE = "granttap-mcp@0.8.129";
+const PACKAGE = "granttap-mcp@0.8.130";
 const dryRun = process.env.GRANTTAP_BOOTSTRAP_DRY_RUN === "1";
 const platform = dryRun && process.env.GRANTTAP_BOOTSTRAP_PLATFORM
   ? process.env.GRANTTAP_BOOTSTRAP_PLATFORM : process.platform;

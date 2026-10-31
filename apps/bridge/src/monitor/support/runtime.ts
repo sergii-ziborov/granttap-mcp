@@ -243,7 +243,7 @@ export function startSessionMonitor(client: RelayClient): SessionMonitor {
     publish: openChatUpdates({
       catalog: () => publishedCatalog(client), subscriptions,
       active: () => !closed && client.isConnected && leadership.acquire(),
-      publish: (id, status) => publishSessionEvents(client, id, status),
+      publish: (id, status) => publishSessionEvents(client, id, status, undefined, {history: true}),
     }),
   });
 

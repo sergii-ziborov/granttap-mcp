@@ -13,26 +13,19 @@ export function openChatUpdates(options: {
 }): () => Promise<void> {
   const revisions = new Map<string, string>();
   const observe = options.observe ?? observeSessionExecution;
-  let cursor = 0, openCursor = 0, running = false;
+  let cursor = 0, running = false;
   return async () => {
     if (running || !options.active()) return;
     const status = options.catalog();
     if (!status) return;
     const known = new Map([...status.sessions, ...(status.history ?? [])]
       .map(session => [session.sessionId, session]));
-    const ids = [...new Set([...options.subscriptions,
-      ...status.sessions.filter(session => session.state === 'working').map(session => session.sessionId)])]
-      .filter(id => known.has(id));
+    const ids = [...options.subscriptions].filter(id => known.has(id));
     const activeIds = new Set(ids);
     for (const id of revisions.keys()) if (!activeIds.has(id)) revisions.delete(id);
     if (!ids.length) return;
-    const opened = ids.filter(id => options.subscriptions.has(id));
-    const background = ids.filter(id => !options.subscriptions.has(id));
-    const selected = Array.from({length: Math.min(8, opened.length)}, (_, offset) => opened[(openCursor + offset) % opened.length]!);
-    openCursor = opened.length ? (openCursor + selected.length) % opened.length : 0;
-    const remaining = Math.min(8 - selected.length, background.length);
-    selected.push(...Array.from({length: remaining}, (_, offset) => background[(cursor + offset) % background.length]!));
-    cursor = background.length ? (cursor + remaining) % background.length : 0;
+    const selected = Array.from({length: Math.min(8, ids.length)}, (_, offset) => ids[(cursor + offset) % ids.length]!);
+    cursor = (cursor + selected.length) % ids.length;
     running = true;
     try {
       for (const id of selected) {

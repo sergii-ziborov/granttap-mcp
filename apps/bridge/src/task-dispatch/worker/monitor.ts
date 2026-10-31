@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import type { PeerConfig, RelayClient } from '../../../../../packages/core/relay-client';
 import { configDir, isSessionPaused } from '../../config';
-import { isDeliveryInFlight } from '../../reply';
+import { completeObservedNativeTurn, isDeliveryInFlight } from '../../reply';
 import { publishedCatalog } from '../../session-catalog';
 import { handleUserMessage } from '../../monitor/handlers/user-message';
 import { handleTaskCreate } from '../../monitor/handlers/task-create';
@@ -43,7 +43,9 @@ export function startTaskDispatchMonitor(input: {
       const catalog = publishedCatalog(input.client);
       const session = [...(catalog?.sessions ?? []), ...(catalog?.history ?? [])]
         .find(item => item.sessionId === job.sessionId);
-      const observation = { ...dispatchSessionObservation(session, catalog?.generatedAt),
+      const native = dispatchSessionObservation(session, catalog?.generatedAt);
+      if (job.sessionId && native.completion) completeObservedNativeTurn(job.sessionId, native.completion);
+      const observation = { ...native,
         inFlight: isDeliveryInFlight(job.sessionId ?? `__new_${job.operation.agent ?? 'codex'}_task__`),
         paused: !!job.sessionId && isSessionPaused(job.sessionId) };
       const ready = taskDispatchReady(job, observation);

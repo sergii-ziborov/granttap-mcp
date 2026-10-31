@@ -5,7 +5,7 @@ import { observeSessionExecution } from '../../session-catalog/observed-state';
 export function dispatchSessionObservation(session: SessionInfo | undefined, generatedAt?: number) {
   const fresh = session && observeSessionExecution(session);
   return { session: fresh?.session ?? session, generatedAt: fresh ? Date.now() : generatedAt,
-    nativeState: fresh?.session.state };
+    nativeState: fresh?.session.state, completion: fresh?.completion };
 }
 
 /** Manual release bypasses busy state only. Pause, native admission and policy still win. */

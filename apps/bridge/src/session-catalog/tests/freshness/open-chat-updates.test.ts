@@ -34,10 +34,10 @@ test('failed sends retry the same revision and overlapping ticks cannot duplicat
   await tick(); await tick(); await tick(); assert.equal(attempts, 3);
 });
 
-test('bounded round robin reaches every working chat and stops queued reads after close', async () => {
+test('bounded round robin reaches every subscribed chat and stops queued reads after close', async () => {
   const sent: string[] = [], sessions = Array.from({length: 20}, (_, i) => session(`chat-${i}`));
   let active = true;
-  const tick = openChatUpdates({catalog: () => catalog(sessions), subscriptions: new Set(), active: () => active,
+  const tick = openChatUpdates({catalog: () => catalog(sessions), subscriptions: new Set(sessions.map(s => s.sessionId)), active: () => active,
     observe: s => ({session: s, revision: '1'}), publish: async id => {sent.push(id); return true}});
   await tick(); assert.equal(sent.length, 8);
   await tick(); await tick(); assert.equal(new Set(sent).size, 20);
@@ -46,11 +46,12 @@ test('bounded round robin reaches every working chat and stops queued reads afte
 
 test('the open chat is checked on every pass even when many background chats are working', async () => {
   const sessions = Array.from({length: 40}, (_, i) => session(`chat-${i}`));
-  let openedReads = 0;
+  let openedReads = 0, totalReads = 0;
   const tick = openChatUpdates({catalog: () => catalog(sessions), subscriptions: new Set(['chat-39']), active: () => true,
-    observe: s => {if (s.sessionId === 'chat-39') openedReads++; return {session: s, revision: '1'}},
+    observe: s => {totalReads++; if (s.sessionId === 'chat-39') openedReads++; return {session: s, revision: '1'}},
     publish: async () => true});
   await tick(); await tick(); await tick(); assert.equal(openedReads, 3);
+  assert.equal(totalReads, 3, 'closed chats must not start repeated child-transcript scans');
 });
 
 test('an unknown source or removed subscription never starts discovery or retains an old revision', async () => {

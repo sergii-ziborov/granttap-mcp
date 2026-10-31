@@ -33,7 +33,7 @@ readers. Checkout observations are scoped to one asynchronous scan, so unrelated
 requests cannot inherit an old directory result. Socket recovery immediately
 republishes the current catalog instead of waiting for the next periodic tick.
 
-Open and working chats follow a separate two-second loop of known native sources.
+Open chats follow a separate two-second loop of known native sources.
 Only changed source revisions send encrypted transcript heads; reads and sends
 remain single-flight and bounded to eight chats per pass. Claude end-turn and
 Codex turn events update execution state immediately after observation. The same
@@ -43,3 +43,9 @@ Full discoveries recheck known native execution state immediately before sending
 their catalog, so a scan started during a turn cannot restore stale Working after
 an independently delivered completion. Runtime handoff also waits for owned
 provider turns to settle, including work already acknowledged to the phone.
+
+Fast open-chat heads use bounded native root pages. Closed chats and child
+conversations remain on their independent refresh/request paths. A Claude final
+can finish its matched logical turn while its physical CLI drains background
+work: native identity, exact routed prompt hash and prompt/final timestamps must
+all match. Physical processes remain tracked for Stop and runtime handoff.
