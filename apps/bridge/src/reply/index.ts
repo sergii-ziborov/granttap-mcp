@@ -15,7 +15,6 @@ import { abortProcesses, runProcess } from "./process";
 import { routingPrompt } from "./payload/routing";
 import type { DeliveryOptions, ReplyResult } from "./payload/types";
 import { deliveryIntent } from './payload/identity';
-import {NativeTurnCompletions, type NativeCompletionProof} from './native-completion';
 import {
   runCursorNew,
   runCursorResume,
@@ -35,14 +34,11 @@ export function resolveAgentWorkspace(cwd: string | undefined, agent: CodingAgen
 }
 
 const inFlight = new Map<string, Promise<ReplyResult | null>>();
-const physicalRuns = new Set<Promise<ReplyResult>>();
-const nativeCompletions = new NativeTurnCompletions();
 
 export function isDeliveryInFlight(sessionId: string): boolean { return inFlight.has(sessionId); }
 
 /** Acknowledging a message does not finish the provider turn or permit a runtime handoff. */
-export function hasPendingDeliveries(): boolean { return inFlight.size > 0 || physicalRuns.size > 0; }
-export const completeObservedNativeTurn = (key: string, proof: NativeCompletionProof) => nativeCompletions.complete(key, proof);
+export function hasPendingDeliveries(): boolean { return inFlight.size > 0; }
 
 /** Request a stop for owned processes; confirmation arrives only on process exit. */
 export function stopDeliveries(sessionId: string): number {
@@ -168,14 +164,7 @@ export function createGrokSession(
 
 function queued(key: string, run: () => Promise<ReplyResult>): Promise<ReplyResult> {
   const previous = inFlight.get(key) ?? Promise.resolve(null);
-  const next = previous.then(async () => {
-    const native = nativeCompletions.begin(key);
-    const physical = Promise.resolve().then(run);
-    physicalRuns.add(physical);
-    void physical.then(() => physicalRuns.delete(physical), () => physicalRuns.delete(physical));
-    try { return await Promise.race([physical, native.result]); }
-    finally { native.close(); }
-  });
+  const next = previous.then(run);
   const settled = next.finally(() => {
     if (inFlight.get(key) === tracked) inFlight.delete(key);
   });
@@ -205,8 +194,6 @@ function runClaude(
   timeoutMs: number,
   options: DeliveryOptions,
 ): Promise<ReplyResult> {
-  nativeCompletions.bind(session.sessionId, text, key => localTaskTransfers()
-    .nativeSession({...session, sessionId: key}).sessionId);
   const disabled = loadRuntimeConfig().sessionMcpDisabled[session.sessionId] ?? [];
   const mcpArgs = disabled.length === 0
     ? []

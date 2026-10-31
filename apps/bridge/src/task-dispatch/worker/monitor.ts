@@ -1,12 +1,12 @@
 import { join } from 'node:path';
 import type { PeerConfig, RelayClient } from '../../../../../packages/core/relay-client';
 import { configDir, isSessionPaused } from '../../config';
-import { completeObservedNativeTurn, isDeliveryInFlight } from '../../reply';
+import { isDeliveryInFlight } from '../../reply';
 import { publishedCatalog } from '../../session-catalog';
 import { handleUserMessage } from '../../monitor/handlers/user-message';
 import { handleTaskCreate } from '../../monitor/handlers/task-create';
 import { TaskDispatchInbox } from '../index';
-import { TaskDispatchWorker } from './index';
+import { TaskDispatchWorker, type TaskJobRemote, type WorkerOptions } from './index';
 import { relayTaskJobRemote } from './remote';
 import { NativeTaskQueueSender } from '../sender';
 import { dispatchSessionObservation, queuedCatalogRefreshDue, taskDispatchReady } from './readiness';
@@ -16,6 +16,7 @@ import { localTaskOrigins, resolveTaskOriginJob } from '../../task-origins';
 export function startTaskDispatchMonitor(input: {
   config: PeerConfig; client: RelayClient; isLeader: () => boolean;
   peerAllowed: (peer: string) => boolean; publish: () => Promise<void>;
+  remote?: TaskJobRemote; deliver?: WorkerOptions['deliver'];
 }): () => void {
   const inbox = new TaskDispatchInbox(join(configDir(), 'task-dispatch'), input.config.room);
   const origins = localTaskOrigins();
@@ -24,7 +25,7 @@ export function startTaskDispatchMonitor(input: {
   let stopped = false, reportedAt = 0, maintainedAt = 0, refreshedAt = 0;
   const sender = new NativeTaskQueueSender({ root: join(configDir(), 'native-task-queue'), config: input.config });
   const peerAllowed = (peer: string) => peer === input.config.myPublicKey || input.peerAllowed(peer);
-  const worker = new TaskDispatchWorker({ inbox, remote: relayTaskJobRemote(input.config),
+  const worker = new TaskDispatchWorker({ inbox, remote: input.remote ?? relayTaskJobRemote(input.config),
     connected: () => !stopped && input.client.isConnected && input.isLeader(),
     authorized: peerAllowed,
     onTerminal: job => sender.confirmReceiverOutcome(job),
@@ -43,9 +44,7 @@ export function startTaskDispatchMonitor(input: {
       const catalog = publishedCatalog(input.client);
       const session = [...(catalog?.sessions ?? []), ...(catalog?.history ?? [])]
         .find(item => item.sessionId === job.sessionId);
-      const native = dispatchSessionObservation(session, catalog?.generatedAt);
-      if (job.sessionId && native.completion) completeObservedNativeTurn(job.sessionId, native.completion);
-      const observation = { ...native,
+      const observation = { ...dispatchSessionObservation(session, catalog?.generatedAt),
         inFlight: isDeliveryInFlight(job.sessionId ?? `__new_${job.operation.agent ?? 'codex'}_task__`),
         paused: !!job.sessionId && isSessionPaused(job.sessionId) };
       const ready = taskDispatchReady(job, observation);
@@ -56,6 +55,7 @@ export function startTaskDispatchMonitor(input: {
       return ready;
     },
     deliver: async (original, beforeStart, peer) => {
+      if (input.deliver) return input.deliver(original, beforeStart, peer);
       const job = resolve(original, peer).job;
       if (!job || job.operation.type === 'user.message.continue') return 'rejected';
       const outcome = job.operation.type === 'user.message'

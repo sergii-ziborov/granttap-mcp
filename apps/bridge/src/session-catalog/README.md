@@ -45,7 +45,7 @@ an independently delivered completion. Runtime handoff also waits for owned
 provider turns to settle, including work already acknowledged to the phone.
 
 Fast open-chat heads use bounded native root pages. Closed chats and child
-conversations remain on their independent refresh/request paths. A Claude final
-can finish its matched logical turn while its physical CLI drains background
-work: native identity, exact routed prompt hash and prompt/final timestamps must
-all match. Physical processes remain tracked for Stop and runtime handoff.
+conversations remain on their independent refresh/request paths. A model
+end-turn record describes presentation; a CLI invocation may still own background
+work. Queue admission and runtime handoff keep the physical-invocation guard
+until that invocation returns its result.
