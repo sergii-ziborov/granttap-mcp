@@ -75,7 +75,9 @@ claude plugin install granttap@granttap
 The plugin starts GrantTap as a local stdio process, so `/mcp` needs no sign-in.
 Claude Desktop refuses a non-https sign-in page, which a loopback HTTP MCP at
 `http://127.0.0.1:17342/mcp` can only offer; remove such a leftover user entry
-with `claude mcp remove granttap -s user`. Then run
+with `claude mcp remove granttap -s user`. Claude Desktop's PATH omits version
+managers such as nvm, so `granttap setup` must have started the monitor, which
+keeps a link to its Node in `~/.granttap/bin`. Then run
 `/granttap:granttap-connect` or ask Claude for connection status.
 
 ### Cursor

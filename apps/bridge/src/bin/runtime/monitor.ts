@@ -15,6 +15,7 @@ import { controllerPeerGate } from "../../pairing/controllers";
 import { applyNetworkRoute } from "../../device-network/settings";
 import { startEndpointPublisher } from "../../device-network/directory";
 import { managedAdmissionOptions } from "../../managed-admission";
+import { publishStableNode } from "../../install/stable-node/index";
 
 import { startTaskDispatchMonitor } from "../../task-dispatch/worker/monitor";
 import { startTaskNetworkMonitor } from '../../task-network/runtime';
@@ -29,6 +30,8 @@ let stopTaskNetwork = () => {};
 let stopEngineRecovery = () => {};
 let stopRuntimeUpdates = () => {};
 let stopUpdateReadiness = () => {};
+
+publishStableNode();
 
 try {
   const cfg = applyNetworkRoute(loadConfig(machineConfigPath()));

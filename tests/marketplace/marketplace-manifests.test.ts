@@ -24,10 +24,15 @@ test("Grok marketplace indexes the GrantTap plugin", () => {
 test("Claude Code plugin is stdio because Claude Desktop refuses a non-https sign-in page", () => {
   const plugin = readJson("plugins/granttap/.claude-plugin/plugin.json");
   const marketplace = readJson(".claude-plugin/marketplace.json");
-  const servers = plugin.mcpServers as Record<string, { command?: string; args?: string[]; url?: string }>;
-  const cursor = readJson("cursor-plugin/mcp.json") as { mcpServers: Record<string, unknown> };
-  assert.deepEqual(servers, cursor.mcpServers, "one tested bootstrap serves both stdio plugins");
+  const servers = plugin.mcpServers as Record<string, {
+    command?: string; args?: string[]; url?: string; env?: Record<string, string>;
+  }>;
+  const cursor = readJson("cursor-plugin/mcp.json") as { mcpServers: { granttap: { command: string; args: string[] } } };
+  assert.equal(servers.granttap?.command, cursor.mcpServers.granttap.command);
+  assert.deepEqual(servers.granttap?.args, cursor.mcpServers.granttap.args, "one tested bootstrap serves both stdio plugins");
   assert.equal(servers.granttap?.url, undefined);
+  assert.deepEqual(servers.granttap?.env, { PATH: "${PATH}:${HOME:-}/.granttap/bin" },
+    "Claude Desktop's PATH omits version managers, so the monitor's Node link comes last");
   const listing = (marketplace.plugins as Array<{ name: string; version: string }>)[0];
   assert.equal(listing?.version, plugin.version, "the marketplace offers the version it ships");
 });
