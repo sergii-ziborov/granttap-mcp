@@ -127,8 +127,11 @@ export function resolveAutoAcceptLevel(opts: {
   const sid = opts.sessionId;
   const projectId = opts.projectId;
   if (projectId) {
-    const projectLevel = opts.byProject?.[projectId] ?? opts.defaultLevel ?? "ask";
+    const explicitProjectLevel = opts.byProject?.[projectId];
     const taskLevel = sid ? opts.bySession?.[sid] : undefined;
+    // A Project without its own rule sets no ceiling for a chat rule the person chose.
+    if (!explicitProjectLevel && taskLevel) return taskLevel;
+    const projectLevel = explicitProjectLevel ?? opts.defaultLevel ?? "ask";
     if (!taskLevel) return projectLevel;
     // A native-session override can narrow Project automation, never enlarge
     // it. More permissive exceptions require a separate governed operation.

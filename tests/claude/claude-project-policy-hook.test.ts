@@ -10,7 +10,7 @@ import {
   writeProjectHookRuntime,
 } from "../project-policy-hook-harness";
 
-test("Claude Project DENY and ASK precede bypass and auto-accept", async (t) => {
+test("Claude Project DENY precedes bypass, and only bypass passes a Project ASK", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "granttap-claude-project-policy-"));
   const engine = await startProjectPolicyEngine(root);
   t.after(async () => {
@@ -28,10 +28,16 @@ test("Claude Project DENY and ASK precede bypass and auto-accept", async (t) => 
 
   const ask = runProjectHook("claude", root, {
     session_id: "session", cwd: "/work/project", tool_name: "Bash",
-    tool_input: { command: "echo safe" }, permission_mode: "bypassPermissions",
+    tool_input: { command: "echo safe" },
   });
   assert.equal(ask.value?.hookSpecificOutput?.permissionDecision, "deny");
   assert.match(ask.stdout, /Project approval was required/);
+
+  const bypassedAsk = runProjectHook("claude", root, {
+    session_id: "session", cwd: "/work/project", tool_name: "Bash",
+    tool_input: { command: "echo safe" }, permission_mode: "bypassPermissions",
+  });
+  assert.equal(bypassedAsk.stdout, "", "a bypass chat never waits for a phone approval");
 
   const allow = runProjectHook("claude", root, {
     session_id: "session", cwd: "/work/project", tool_name: "Read",

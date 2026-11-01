@@ -8,9 +8,11 @@ disabled or the engine cannot answer.
 
 `capability-fingerprint.ts` turns provider tool metadata into a bounded
 capability fingerprint. It never copies raw tool arguments, commands, secrets,
-or absolute file paths into the fingerprint. Project `DENY` and `ASK` are parent
-boundaries; legacy bypass, paused gating, and auto-accept may run only after an
-`ALLOW` or `INHERIT` result.
+or absolute file paths into the fingerprint. Project `DENY` is a parent boundary
+for every chat. Claude `bypassPermissions` passes a Project `ASK` because the
+person gave that chat unconditional access; paused gating and auto-accept may run
+only after an `ALLOW` or `INHERIT` result. A chat's auto-accept rule can narrow an
+explicit Project level; a Project without its own level sets no ceiling for it.
 
 Codex `PreToolUse` never waits for a phone. A Project `ASK` creates an owner-only
 30-second marker bound to the exact session, `tool_use_id`, tool, and normalized

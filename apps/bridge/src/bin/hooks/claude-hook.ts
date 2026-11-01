@@ -100,9 +100,9 @@ async function handlePreToolUse(input: HookInput): Promise<void> {
   }
   const legacyFlow = legacyGrantTapFlowAllowed(projectDecision);
 
-  // Claude already granted this chat unconditional tool access. GrantTap's
-  // Project ASK/DENY is a parent boundary, so bypass mode cannot weaken it.
-  if (legacyFlow && input.permission_mode === "bypassPermissions" && input.tool_name !== "AskUserQuestion") return;
+  // The person gave this chat unconditional tool access, so nothing here waits
+  // for their phone. Project DENY returned above and stays binding.
+  if (input.permission_mode === "bypassPermissions" && input.tool_name !== "AskUserQuestion") return;
 
   // Gating paused, or this session is exempt → abstain (empty output = Claude
   // uses its normal permission flow, exactly as if GrantTap weren't installed).
