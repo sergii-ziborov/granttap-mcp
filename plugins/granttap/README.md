@@ -72,9 +72,11 @@ claude plugin marketplace add sergii-ziborov/granttap-mcp
 claude plugin install granttap@granttap
 ```
 
-Open `/mcp`, select GrantTap and authenticate. The browser uses the same
-`granttap.com/connect` flow. Then run `/granttap:granttap-connect` or ask
-Claude for connection status.
+The plugin starts GrantTap as a local stdio process, so `/mcp` needs no sign-in.
+Claude Desktop refuses a non-https sign-in page, which a loopback HTTP MCP at
+`http://127.0.0.1:17342/mcp` can only offer; remove such a leftover user entry
+with `claude mcp remove granttap -s user`. Then run
+`/granttap:granttap-connect` or ask Claude for connection status.
 
 ### Cursor
 

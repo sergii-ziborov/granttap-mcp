@@ -21,7 +21,18 @@ test("Grok marketplace indexes the GrantTap plugin", () => {
   assert.equal(existsSync(join(repositoryRoot, "plugins/granttap/.mcp.json")), true);
 });
 
-test("Codex, Claude Code, and Grok Build use the same OAuth HTTP service", () => {
+test("Claude Code plugin is stdio because Claude Desktop refuses a non-https sign-in page", () => {
+  const plugin = readJson("plugins/granttap/.claude-plugin/plugin.json");
+  const marketplace = readJson(".claude-plugin/marketplace.json");
+  const servers = plugin.mcpServers as Record<string, { command?: string; args?: string[]; url?: string }>;
+  const cursor = readJson("cursor-plugin/mcp.json") as { mcpServers: Record<string, unknown> };
+  assert.deepEqual(servers, cursor.mcpServers, "one tested bootstrap serves both stdio plugins");
+  assert.equal(servers.granttap?.url, undefined);
+  const listing = (marketplace.plugins as Array<{ name: string; version: string }>)[0];
+  assert.equal(listing?.version, plugin.version, "the marketplace offers the version it ships");
+});
+
+test("Codex and Grok Build use the same OAuth HTTP service", () => {
   const codex = readJson("plugins/granttap/.codex-plugin/plugin.json");
   const servers = codex.mcpServers as Record<string, { type: string; url: string }>;
   assert.deepEqual(servers, {
