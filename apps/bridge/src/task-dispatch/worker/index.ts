@@ -10,7 +10,7 @@ export interface TaskJobRemote {
 export type WorkerOptions = {
   inbox: TaskDispatchInbox; remote: TaskJobRemote;
   onTerminal?: (job: TaskDispatch) => void;
-  onError?: () => void;
+  onError?: (error: unknown) => void;
   connected: () => boolean; authorized: (peer: string) => boolean;
   conversationKey?: (job: TaskDispatch, peer: string) => string;
   validationCode?: (job: TaskDispatch, peer: string) => string | undefined;
@@ -37,7 +37,7 @@ export class TaskDispatchWorker {
         ?? record.job.sessionId ?? `new:${record.job.operation.agent ?? 'codex'}`;
       if (this.conversations.has(key)) continue;
       this.conversations.add(key);
-      const work = this.process(record).catch(() => { this.options.onError?.(); }).finally(() => {
+      const work = this.process(record).catch(error => { this.options.onError?.(error); }).finally(() => {
         this.active.delete(record.job.jobId); this.conversations.delete(key);
       });
       this.active.set(record.job.jobId, work); launched.push(work);

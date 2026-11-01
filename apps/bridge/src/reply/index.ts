@@ -37,6 +37,11 @@ const inFlight = new Map<string, Promise<ReplyResult | null>>();
 
 export function isDeliveryInFlight(sessionId: string): boolean { return inFlight.has(sessionId); }
 
+/** New tasks are separate conversations: one long run must not hold back the next. */
+export function newTaskDeliveryKey(agent: string, operationKey?: string): string {
+  return `__new_${agent}_task__${operationKey ? `:${operationKey}` : ''}`;
+}
+
 /** Acknowledging a message does not finish the provider turn or permit a runtime handoff. */
 export function hasPendingDeliveries(): boolean { return inFlight.size > 0; }
 
@@ -109,7 +114,7 @@ export function createCodexSession(
   effort?: string,
 ): Promise<ReplyResult> {
   const workspace = resolveAgentWorkspace(cwd, "codex");
-  return queued("__new_codex_task__", () => withAttachments(attachments, text, (prepared) =>
+  return queued(newTaskDeliveryKey("codex", operationKey), () => withAttachments(attachments, text, (prepared) =>
     runCodexNew(prepared.prompt, workspace, timeoutMs, prepared.images, model, operationKey, effort),
   ));
 }
@@ -125,7 +130,7 @@ export function createClaudeSession(
   effort?: string,
 ): Promise<ReplyResult> {
   const workspace = resolveAgentWorkspace(cwd, "claude");
-  return queued("__new_claude_task__", () => withAttachments(attachments, text, (prepared) =>
+  return queued(newTaskDeliveryKey("claude", operationKey), () => withAttachments(attachments, text, (prepared) =>
     runClaudeNew(prepared.claudePrompt, workspace, timeoutMs, model, operationKey, effort),
   ));
 }
@@ -141,7 +146,7 @@ export function createCursorSession(
   onNativeSession?: (sessionId: string) => void,
 ): Promise<ReplyResult> {
   const workspace = resolveAgentWorkspace(cwd, "cursor");
-  return queued("__new_cursor_task__", () => withAttachments(attachments, text, (prepared) =>
+  return queued(newTaskDeliveryKey("cursor", operationKey), () => withAttachments(attachments, text, (prepared) =>
     runCursorNew(prepared.claudePrompt, workspace, timeoutMs, model, operationKey, effort, onNativeSession),
   ));
 }
@@ -157,7 +162,7 @@ export function createGrokSession(
   onNativeSession?: (sessionId: string) => void,
 ): Promise<ReplyResult> {
   const workspace = resolveAgentWorkspace(cwd, "grok");
-  return queued("__new_grok_task__", () => withAttachments(attachments, text, (prepared) =>
+  return queued(newTaskDeliveryKey("grok", operationKey), () => withAttachments(attachments, text, (prepared) =>
     runGrokNew(prepared.claudePrompt, workspace, timeoutMs, model, operationKey, effort, onNativeSession),
   ));
 }

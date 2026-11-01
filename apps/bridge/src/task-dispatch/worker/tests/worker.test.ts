@@ -55,6 +55,16 @@ test('explicit Send now releases the selected job ahead of older waiting follow-
   assert.equal(f.inbox.status(f.job.jobId)?.phase, 'staged');
 });
 
+test('a failed queue step reports its cause to the monitor log', async t => {
+  const f = fixture(t), errors: unknown[] = [];
+  const worker = new TaskDispatchWorker({ ...f.options, onError: error => { errors.push(error); },
+    remote: { ...f.options.remote, get: async () => { throw new Error('Synthetic relay 503'); } } });
+  await worker.tick();
+  assert.equal(errors.length, 1);
+  assert.match(String(errors[0]), /Synthetic relay 503/);
+  assert.equal(f.starts(), 0);
+});
+
 test('a cancelled server job never starts from a stale local offer', async t => {
   const f = fixture(t); f.setState('cancelled');
   await new TaskDispatchWorker(f.options).tick();

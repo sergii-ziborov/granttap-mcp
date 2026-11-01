@@ -44,6 +44,36 @@ test("the wire keeps the permission mode and effort a turn was sent with", () =>
   assert.equal(parsed.projectId, "project-a");
 });
 
+test("a new task does not wait for another new task to finish its run", async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), "granttap-parallel-new-"));
+  const stub = join(dir, "claude-stub");
+  await writeFile(stub, [
+    "#!/usr/bin/env node",
+    "const argv = process.argv.slice(2).join(' ');",
+    "const reply = () => process.stdout.write(JSON.stringify({ result: argv, session_id: 'new' }));",
+    "setTimeout(reply, argv.includes('slow') ? 1500 : 0);",
+  ].join("\n"), { mode: 0o755 });
+  const previous = process.env.GRANTTAP_CLAUDE_BIN;
+  process.env.GRANTTAP_CLAUDE_BIN = stub;
+  t.after(() => {
+    if (previous == null) delete process.env.GRANTTAP_CLAUDE_BIN;
+    else process.env.GRANTTAP_CLAUDE_BIN = previous;
+  });
+  const { createClaudeSession, isDeliveryInFlight, newTaskDeliveryKey } = await import(
+    `../../apps/bridge/src/reply/index.ts?parallelNew=${process.pid}`
+  );
+
+  const slow = createClaudeSession("slow", dir, 5_000, [], undefined, "operation-slow");
+  assert.equal(isDeliveryInFlight(newTaskDeliveryKey("claude", "operation-slow")), true);
+  assert.equal(isDeliveryInFlight(newTaskDeliveryKey("claude", "operation-fast")), false,
+    "the dispatch worker may start the next new task");
+  const fast = createClaudeSession("fast", dir, 5_000, [], undefined, "operation-fast");
+
+  const first = await Promise.race([slow, fast]);
+  assert.match(first.text, /fast/);
+  await slow;
+});
+
 test("a turn carries its permission mode and effort to the Claude CLI", async (t) => {
   const dir = await argvReportingClaude(t);
   const { deliverToSession } = await import(

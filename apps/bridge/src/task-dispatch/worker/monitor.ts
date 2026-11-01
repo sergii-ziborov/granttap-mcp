@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import type { PeerConfig, RelayClient } from '../../../../../packages/core/relay-client';
 import { configDir, isSessionPaused } from '../../config';
-import { isDeliveryInFlight } from '../../reply';
+import { isDeliveryInFlight, newTaskDeliveryKey } from '../../reply';
 import { publishedCatalog } from '../../session-catalog';
 import { handleUserMessage } from '../../monitor/handlers/user-message';
 import { handleTaskCreate } from '../../monitor/handlers/task-create';
@@ -29,7 +29,7 @@ export function startTaskDispatchMonitor(input: {
     connected: () => !stopped && input.client.isConnected && input.isLeader(),
     authorized: peerAllowed,
     onTerminal: job => sender.confirmReceiverOutcome(job),
-    onError: () => reportFailure(),
+    onError: error => reportFailure(error),
     conversationKey: (job, peer) => resolve(job, peer).job?.sessionId
       ?? (job.operation.type === 'user.message.continue'
         ? JSON.stringify([peer, job.operation.originMessageId]) : `new:${job.operation.agent ?? 'codex'}`),
@@ -45,7 +45,8 @@ export function startTaskDispatchMonitor(input: {
       const session = [...(catalog?.sessions ?? []), ...(catalog?.history ?? [])]
         .find(item => item.sessionId === job.sessionId);
       const observation = { ...dispatchSessionObservation(session, catalog?.generatedAt),
-        inFlight: isDeliveryInFlight(job.sessionId ?? `__new_${job.operation.agent ?? 'codex'}_task__`),
+        inFlight: isDeliveryInFlight(job.sessionId ?? newTaskDeliveryKey(job.operation.agent ?? 'codex',
+          job.operation.type === 'project.task.create' ? job.operation.operationId : undefined)),
         paused: !!job.sessionId && isSessionPaused(job.sessionId) };
       const ready = taskDispatchReady(job, observation);
       if (!ready && queuedCatalogRefreshDue(job, observation, refreshedAt)) {
@@ -65,10 +66,12 @@ export function startTaskDispatchMonitor(input: {
       return outcome;
     },
   });
-  const reportFailure = () => {
+  const reportFailure = (error: unknown) => {
     if (Date.now() - reportedAt < 60_000) return;
     reportedAt = Date.now();
-    process.stderr.write('[monitor] Durable task queue needs storage or relay recovery. No prompt was replayed.\n');
+    // Storage and relay errors name a status or a path, never a prompt.
+    const cause = error instanceof Error ? `${error.name}: ${error.message}`.slice(0, 200) : 'unknown';
+    process.stderr.write(`[monitor] Durable task queue needs storage or relay recovery (${cause}). No prompt was replayed.\n`);
   };
   const tick = () => {
     if (Date.now() - maintainedAt > 3_600_000) {
@@ -80,7 +83,7 @@ export function startTaskDispatchMonitor(input: {
   const off = input.client.onTaskDispatch((job, peer) => {
     if (stopped || !input.isLeader() || !peerAllowed(peer)) return;
     try { if (inbox.stage(job, peer) !== 'conflict') tick(); }
-    catch { reportFailure(); }
+    catch (error) { reportFailure(error); }
   });
   const interval = setInterval(tick, 2_000); interval.unref();
   tick();
