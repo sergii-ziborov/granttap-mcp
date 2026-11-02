@@ -36,6 +36,7 @@ import { sweepAttachments } from "../handlers/receipts";
 import { handleMonitorMessage } from "../handlers/inbound";
 import { decorateTaskOriginCatalog } from '../../task-origins';
 import { publishCodexQuestions } from '../../codex-questions';
+import { publishClaudeOpenQuestions } from '../../claude-open-questions';
 
 const HISTORY_INTERVAL_MS = 60_000;
 const resumedHeads = new WeakSet<RelayClient>();
@@ -277,15 +278,22 @@ function startQuestionLoop(client: RelayClient, leadership: { acquire: () => boo
     publish: async () => {
       if (!leadership.acquire()) return;
       const known = publishedCatalog(client);
-      if (known) await publishCodexQuestions(client, [...known.sessions,
-        ...(known.history ?? []).filter(s => subscriptions.has(s.sessionId))]).catch(() => {});
+      if (!known) return;
+      const history = known.history ?? [];
+      await publishCodexQuestions(client, [...known.sessions,
+        ...history.filter(s => subscriptions.has(s.sessionId))]).catch(() => {});
+      // A Claude chat can wait on its question long after it leaves the live list.
+      await publishClaudeOpenQuestions(client, [...known.sessions, ...history]).catch(() => {});
     },
   });
 }
 
 async function replayNativeQuestions(client: RelayClient, peerPublicKey: string) {
   const known = publishedCatalog(client);
-  if (known) await publishCodexQuestions(client, known.sessions, { replay: true, peerPublicKey }).catch(() => {});
+  if (!known) return;
+  await publishCodexQuestions(client, known.sessions, { replay: true, peerPublicKey }).catch(() => {});
+  await publishClaudeOpenQuestions(client, [...known.sessions, ...(known.history ?? [])],
+    { replay: true, peerPublicKey }).catch(() => {});
 }
 
 function restoreMonitorState(client: RelayClient): void {

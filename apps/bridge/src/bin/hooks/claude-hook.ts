@@ -15,7 +15,7 @@
 import { recordProjectDecision } from "../../policy/decision-log";
 import { claudeToRequest, decisionToClaudeOutput, type HookInput } from "../../host/adapters";
 import { isUnanswered, requestApproval } from "../../approvals";
-import { questionRequest, claudeQuestionOutput } from "../../claude-questions";
+import { questionRequest, claudeQuestionOutput, deferredQuestionOutput } from "../../claude-questions";
 import { permitsProjectAskAutomation } from "../../task-automation";
 import {
   autoAcceptLevelFor,
@@ -166,9 +166,15 @@ async function answerNativeQuestion(input: HookInput, config: Parameters<typeof 
   if (!request) return; // Unsupported native shape keeps Claude's question UI.
   request.projectId = scope.projectId;
   request.policyRevision = scope.policy_revision;
+  // Claude stops this hook at its configured 120 s, so the phone window ends first.
   const decision = await requestApproval(config, request, {
-    timeoutMs: Math.min(180_000, Number(process.env.GRANTTAP_APPROVAL_TIMEOUT_MS ?? 120_000)),
+    timeoutMs: Math.min(100_000, Number(process.env.GRANTTAP_APPROVAL_TIMEOUT_MS ?? 100_000)),
   });
+  const deferred = deferredQuestionOutput(decision);
+  if (deferred) {
+    process.stdout.write(JSON.stringify(deferred));
+    return;
+  }
   if (isUnanswered(decision)) return;
   const output = claudeQuestionOutput(input, decision, request);
   if (output) process.stdout.write(JSON.stringify(output));

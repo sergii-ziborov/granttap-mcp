@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { ApprovalDecision, ApprovalRequest } from "../../../../packages/protocol/schema";
 import { ApprovalQuestions, questionAnswers } from "../../../../packages/protocol/messages/approval-questions";
 import { claudeToRequest, type HookInput } from "../host/adapters";
+import { DEFERRED_QUESTION_REASON } from "../claude-open-questions/observations";
 
 export function questionRequest(input: HookInput): ApprovalRequest | undefined {
   if (input.tool_name !== "AskUserQuestion") return undefined;
@@ -23,4 +24,15 @@ export function claudeQuestionOutput(input: HookInput, decision: ApprovalDecisio
   if (!answers) return undefined;
   return { hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "allow",
     updatedInput: { ...input.tool_input, questions: input.tool_input!.questions, answers } } };
+}
+
+/**
+ * The phone saw the question and the window passed: it stays open there, and the
+ * chat stops with it rather than block on a local prompt the phone cannot answer.
+ * An unreachable relay keeps Claude's own question UI.
+ */
+export function deferredQuestionOutput(decision: ApprovalDecision) {
+  if (decision.decision !== "deny" || decision.decidedBy !== "expired") return undefined;
+  return { hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny",
+    permissionDecisionReason: DEFERRED_QUESTION_REASON } };
 }
