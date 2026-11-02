@@ -49,3 +49,11 @@ conversations remain on their independent refresh/request paths. A model
 end-turn record describes presentation; a CLI invocation may still own background
 work. Queue admission and runtime handoff keep the physical-invocation guard
 until that invocation returns its result.
+
+A chat whose headless run this runtime started (`reply/in-flight.ts`, matched by
+the chat or its transferred native session) is published as Working for as long
+as that run executes. A long tool call can keep the transcript quiet for many
+minutes, so the transcript-age rule alone would show Idle. Only Idle is
+corrected: Waiting and the provider's own states stay as observed. Open chats
+use the same rule, and their observation revision changes when the run starts
+and ends. Tests: [`tests/freshness/owned-delivery.test.ts`](tests/freshness/owned-delivery.test.ts).

@@ -15,6 +15,7 @@ import { abortProcesses, runProcess } from "./process";
 import { routingPrompt } from "./payload/routing";
 import type { DeliveryOptions, ReplyResult } from "./payload/types";
 import { deliveryIntent } from './payload/identity';
+import { queued } from "./in-flight";
 import {
   runCursorNew,
   runCursorResume,
@@ -23,6 +24,7 @@ import {
 } from "./process/provider-headless";
 export type { DeliveryOptions, ReplyResult } from "./payload/types";
 export { prunePreparedAttachments } from './payload/attachments';
+export { hasPendingDeliveries, isDeliveryInFlight } from "./in-flight";
 
 export const GENERAL_WORKSPACE = "granttap:general";
 
@@ -33,17 +35,10 @@ export function resolveAgentWorkspace(cwd: string | undefined, agent: CodingAgen
   return path;
 }
 
-const inFlight = new Map<string, Promise<ReplyResult | null>>();
-
-export function isDeliveryInFlight(sessionId: string): boolean { return inFlight.has(sessionId); }
-
 /** New tasks are separate conversations: one long run must not hold back the next. */
 export function newTaskDeliveryKey(agent: string, operationKey?: string): string {
   return `__new_${agent}_task__${operationKey ? `:${operationKey}` : ''}`;
 }
-
-/** Acknowledging a message does not finish the provider turn or permit a runtime handoff. */
-export function hasPendingDeliveries(): boolean { return inFlight.size > 0; }
 
 /** Request a stop for owned processes; confirmation arrives only on process exit. */
 export function stopDeliveries(sessionId: string): number {
@@ -165,17 +160,6 @@ export function createGrokSession(
   return queued(newTaskDeliveryKey("grok", operationKey), () => withAttachments(attachments, text, (prepared) =>
     runGrokNew(prepared.claudePrompt, workspace, timeoutMs, model, operationKey, effort, onNativeSession),
   ));
-}
-
-function queued(key: string, run: () => Promise<ReplyResult>): Promise<ReplyResult> {
-  const previous = inFlight.get(key) ?? Promise.resolve(null);
-  const next = previous.then(run);
-  const settled = next.finally(() => {
-    if (inFlight.get(key) === tracked) inFlight.delete(key);
-  });
-  const tracked = settled.catch(() => null);
-  inFlight.set(key, tracked);
-  return settled;
 }
 
 function runDelivery(

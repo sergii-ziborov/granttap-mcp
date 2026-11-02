@@ -30,7 +30,8 @@ const timer=setInterval(()=>{if(!fs.existsSync(path.join(root,'release')))return
   const now=Date.now(),session:SessionInfo={sessionId:'native-test',agent:'claude',cwd:root,state:'working',startedAt:now,lastActivityAt:now,tokensSession:0,tokensLastTurn:0};
   const first=deliverToSession(session,'First exact synthetic prompt',10_000);
   const file=join(logs,'native-test.jsonl');await wait(()=>existsSync(file));assert.ok(restoreNativeTranscriptSource(session,file));
-  assert.equal(observeSessionExecution(session)?.session.state,'idle');assert.equal(isDeliveryInFlight(session.sessionId),true);
+  assert.equal(isDeliveryInFlight(session.sessionId),true);
+  assert.equal(observeSessionExecution(session)?.session.state,'working','the transcript ended its turn, but the invocation still runs');
   const own=generateKeyPair(),peer=generateKeyPair(),config={relayUrl:'ws://127.0.0.1:1',room:'background-owner-fixture',role:'machine' as const,deviceName:'Fixture',senderId:'fixture',myPublicKey:own.publicKey,mySecretKey:own.secretKey,peerPublicKey:peer.publicKey};
   let incoming!: (job:TaskDispatch,key:string)=>void,claims=0,completed=false;
   const client={room:config.room,isConnected:true,setSessionKey:()=>{},onTaskDispatch:(callback:typeof incoming)=>{incoming=callback;return()=>{}},send:async()=>{},sendSession:async()=>{}};
