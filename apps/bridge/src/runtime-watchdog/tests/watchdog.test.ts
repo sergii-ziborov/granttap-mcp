@@ -14,8 +14,11 @@ const directoryFor = (t: { after: (run: () => void) => void }) => {
   return root;
 };
 
+/** Nothing listens here, so a report stays pending instead of reaching the real site. */
+const UNREACHABLE = 'http://127.0.0.1:9/report';
+
 /** A real process whose loop stops: only the watchdog thread can still act. */
-function hang(directory: string, restartAllowed: boolean, hangMs: number, reportUrl?: string) {
+function hang(directory: string, restartAllowed: boolean, hangMs: number, reportUrl = UNREACHABLE) {
   const entry = join(directory, 'hanging.ts');
   const watchdog = pathToFileURL(join(import.meta.dirname, '..', 'index.ts')).href;
   writeFileSync(entry, `import { startRuntimeWatchdog } from ${JSON.stringify(watchdog)};
