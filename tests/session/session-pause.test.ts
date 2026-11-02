@@ -216,8 +216,16 @@ process.stdout.write(JSON.stringify({ type: "end", sessionId: "grok-held" }) + "
       type: "session.control", sessionId: "grok-held", action: "resume", continue: true, createdAt: Date.now(),
     }, resolve);
   });
+  await new Promise((resolve) => setImmediate(resolve));
+  // A second tap while the first continuation still runs asks for nothing more.
+  let repeatedDone = false;
+  await handleSessionControl(fake as never, {
+    type: "session.control", sessionId: "grok-held", action: "resume", continue: true, createdAt: Date.now(),
+  }, () => { repeatedDone = true; });
+  assert.match(results().at(-1)?.message ?? "", /already asked to continue/);
+  assert.equal(repeatedDone, true);
   await continued;
-  assert.match(results().at(-1)?.message ?? "", /asked to continue/);
+  assert.equal(results().filter((item) => /^Resumed and asked to continue\.$/.test(item.message)).length, 1);
   assert.equal(await readFile(promptFile, "utf8"), RESUME_PROMPT);
 
   await handleSessionControl(fake as never, {

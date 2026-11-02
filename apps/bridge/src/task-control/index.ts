@@ -7,6 +7,13 @@ import { interruptCodexDesktop } from '../codex-desktop';
 
 const DELIVERY_TIMEOUT_MS = 240_000;
 
+/**
+ * Chats already asked to continue. A slow answer makes the phone's Resume look
+ * ignored, so it is tapped again; the second tap must not queue a second
+ * "continue" behind the first.
+ */
+const continuing = new Set<string>();
+
 /** What the agent is told when the person lifts the hold and asks it to go on. */
 export const RESUME_PROMPT =
   "GrantTap: this chat was resumed in GrantTap. Continue the work you were doing before the pause; tool calls are allowed again.";
@@ -45,6 +52,11 @@ export async function controlTaskSession(
   if (!session) {
     return reply(true, "Resumed. This chat is not on this computer any more, so nothing was asked to continue.");
   }
+  if (continuing.has(sessionId)) {
+    afterContinue();
+    return reply(true, "Resumed. This chat was already asked to continue.");
+  }
+  continuing.add(sessionId);
   await reply(true, "Resumed and asked to continue.");
   void deliverToSession(session, RESUME_PROMPT, DELIVERY_TIMEOUT_MS, [], { ignorePause: true })
     .then((result) => {
@@ -53,7 +65,7 @@ export async function controlTaskSession(
       }
     })
     .catch(() => {})
-    .finally(afterContinue);
+    .finally(() => { continuing.delete(sessionId); afterContinue(); });
 }
 
 export async function compactTaskSession(sessionId: string,
