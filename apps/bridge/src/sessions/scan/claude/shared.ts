@@ -25,6 +25,7 @@ import {
 import {
   classifyTool,
   estimateTokens,
+  pastedImageLabel,
   pushEntry,
   toolDescription,
   toolSummary,
@@ -115,7 +116,7 @@ export function claudeChildSummary(
       else if (Array.isArray(content)) {
         title = childTitle(
           content
-            .filter((block: any) => block?.type === "text")
+            .filter((block: any) => block?.type === "text" && !pastedImageLabel(block, content))
             .map((block: any) => block.text)
             .join("\n"),
         );

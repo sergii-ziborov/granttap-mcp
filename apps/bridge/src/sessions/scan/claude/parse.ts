@@ -5,6 +5,7 @@ import type { ChildThreadInfo, SessionInfo } from "../../../../../../packages/pr
 import { aggregateChildThreads, childTitle } from "../../support/child-threads";
 import { rememberCapabilityObservation } from "../../telemetry";
 import { safeParse, stateFor, ts } from "../../support/common";
+import { pastedImageLabel } from "../../support/activity-helpers";
 import { claudeCapabilityUsage } from "./activity";
 import { claudeRepositoryPaths } from "./repository-observation";
 import { observedCheckoutRoot } from "../../support/repository-checkout";
@@ -61,7 +62,8 @@ function applyClaudeLine(d: any, state: ClaudeParseState): void {
         ? d.message.content
         : Array.isArray(d.message?.content)
           ? d.message.content
-              .filter((b: any) => b?.type === "text" && typeof b.text === "string")
+              .filter((b: any) => b?.type === "text" && typeof b.text === "string"
+                && !pastedImageLabel(b, d.message.content))
               .map((b: any) => b.text)
               .join("\n")
           : typeof d.content === "string"

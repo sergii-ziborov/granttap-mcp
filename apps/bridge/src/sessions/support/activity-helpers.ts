@@ -47,6 +47,20 @@ export function stripTranscriptMarkup(value: unknown): string {
   return text.replace(/^\s+|\s+$/g, "");
 }
 
+const IMAGE_LABEL = /^\[Image(?: #\d+|: source: .+|: original .+)\]$/;
+
+/**
+ * Claude Code names a pasted image in a text block beside it
+ * (`[Image: source: /private/tmp/…]`, `[Image #1]`). With the image itself in
+ * the same message, a block of only such labels is not something anyone typed.
+ */
+export function pastedImageLabel(block: any, content: readonly any[]): boolean {
+  if (block?.type !== "text" || typeof block.text !== "string") return false;
+  const lines = block.text.split("\n").map((line: string) => line.trim()).filter(Boolean);
+  return lines.length > 0 && lines.every((line: string) => IMAGE_LABEL.test(line))
+    && content.some((item) => item?.type === "image");
+}
+
 /** Remove host-injected transport context that is not a message the person typed. */
 /**
  * The note GrantTap itself appends when a phone message carries attachments,
