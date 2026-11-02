@@ -16,7 +16,30 @@ export function providerUsageFailure(stderr: string): string | undefined {
   return 'Grok usage limit reached: Grok Build usage balance exhausted. Check your Grok usage before retrying.';
 }
 
+/**
+ * A stream-json run ends with one `result` object. Its raw JSON, cut at 300
+ * characters, reached the phone as a broken message; say what it reports.
+ */
+export function providerResultFailure(stdout: string): string | undefined {
+  const lines = stdout.split('\n').map(line => line.trim()).filter(line => line.startsWith('{'));
+  for (const line of lines.reverse()) {
+    let row: Record<string, unknown>;
+    try { row = JSON.parse(line); } catch { continue; }
+    if (row.type !== 'result' && !('total_cost_usd' in row || 'stop_reason' in row)) continue;
+    const said = [row.result, ...(Array.isArray(row.errors) ? row.errors : [])]
+      .filter((value): value is string => typeof value === 'string' && value.trim() !== '')
+      .map(value => value.trim()).join(' ');
+    const kind = typeof row.subtype === 'string' && row.subtype !== 'success'
+      ? row.subtype.replace(/^error_/, '').replace(/_/g, ' ') : undefined;
+    const reason = said || kind || (typeof row.stop_reason === 'string' ? `stop reason ${row.stop_reason}` : 'no reason given');
+    return reason.slice(0, 300);
+  }
+  return undefined;
+}
+
 export function providerExitFailure(command: string, stderr: string, stdout: string, code: number | null): string {
+  const reported = stderr.trim() ? undefined : providerResultFailure(stdout);
   return providerUsageFailure(stderr)
-    ?? `${command} exited with code ${code}: ${(stderr.trim() || stdout.trim()).slice(0, 300)}`;
+    ?? (reported ? `${basename(command)} stopped with code ${code}: ${reported}`
+      : `${command} exited with code ${code}: ${(stderr.trim() || stdout.trim()).slice(0, 300)}`);
 }
