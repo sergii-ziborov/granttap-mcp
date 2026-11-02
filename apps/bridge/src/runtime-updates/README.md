@@ -6,7 +6,10 @@ version directory under `~/.granttap/runtime-updates`, with lifecycle scripts
 disabled, Node engine checks enabled, and registry integrity verified. A failed
 installation leaves the running version in place.
 
-The stable launcher selects the verified version for future invocations. Owned
+The stable launcher selects the verified version for future invocations.
+Provider hooks keep the launcher path they were written with: `cachedHookLauncher`
+treats an earlier cached launcher as current, so status stays ready and setup
+leaves the hook (and the trust Codex keeps per command) alone after an update. Owned
 background services switch only after their current requests finish and no
 approval is pending. Existing provider processes and active stdio MCP calls keep
 running. A new service that cannot start restores the previous version; that

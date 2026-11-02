@@ -43,6 +43,7 @@ import { monitorPlistLooksInstalled } from "./monitor-helper";
 import { inspectLinuxService } from "./linux-service";
 import { codexHooksExplicitlyDisabled } from "./hooks";
 import { cachedCodexHooks, codexHookSet } from "../codex-hook-trust";
+import { cachedHookLauncher, runtimeVersion } from "../runtime-updates/selection.mjs";
 import type { ProviderHook } from "../../../../packages/protocol/messages/provider-hooks";
 export { codexHookSet } from "../codex-hook-trust";
 
@@ -71,8 +72,14 @@ export function commandHasRoute(command: unknown, route: HookRoute): boolean {
   return new RegExp(`\\bhook\\s+${escaped}(?:\\s|[\"']|$)`).test(command);
 }
 
-function commandIsCurrentRoute(command: unknown, route: HookRoute): boolean {
-  return typeof command === "string" && command.trim() === hookCommand(route);
+/**
+ * This runtime's command, or an earlier runtime's launcher in the version cache,
+ * which hands off to this one. Keeping that command after an automatic update
+ * also keeps the trust Codex records for it.
+ */
+export function hookCommandIsCurrent(command: unknown, route: HookRoute): boolean {
+  return typeof command === "string" && (command.trim() === hookCommand(route)
+    || cachedHookLauncher(command, route, join(configDir(), "runtime-updates"), runtimeVersion(repoRoot)));
 }
 
 export type InstallResult = { status: "installed" | "already" | "manual"; detail: string };
@@ -146,7 +153,7 @@ function claudeHookConfigured(): boolean {
       claudeMatcherCoversPolicy(entry.matcher)
       && (entry.hooks ?? []).some((hook) =>
         (hook as { type?: unknown }).type === "command"
-          && commandIsCurrentRoute(hook.command, "claude"),
+          && hookCommandIsCurrent(hook.command, "claude"),
       ),
     );
   } catch {
@@ -186,7 +193,7 @@ export function inspectCursorIntegration(): CursorIntegrationStatus {
     const has = (event: string, route: HookRoute, timeout: number): boolean =>
       Array.isArray(parsed.hooks?.[event])
       && parsed.hooks![event]!.some((entry) =>
-        commandIsCurrentRoute(entry.command, route)
+        hookCommandIsCurrent(entry.command, route)
           && entry.failClosed === false
           && (entry as { timeout?: unknown }).timeout === timeout,
       );

@@ -3,7 +3,7 @@ import test from 'node:test';
 import { mkdtempSync,mkdirSync,writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { newerVersion,readState,runtimeVersion,saveState,selectedRuntime,rollbackRuntime,versionRoot,validRuntime } from '../selection.mjs';
+import { cachedHookLauncher,newerVersion,readState,runtimeVersion,saveState,selectedRuntime,rollbackRuntime,versionRoot,validRuntime } from '../selection.mjs';
 
 function fixture(){
  const dir=mkdtempSync(join(tmpdir(),'granttap-selection-')),bundled=join(dir,'bundled');mkdirSync(bundled);
@@ -25,4 +25,14 @@ test('rollback changes only the failed active version and restores an earlier ve
  assert.equal(rollbackRuntime(f.bundled,f.dir,'unrelated'),false);assert.equal(selectedRuntime(f.bundled,f.dir),bad);
  assert.equal(rollbackRuntime(f.bundled,f.dir,bad),true);assert.equal(selectedRuntime(f.bundled,f.dir),old);
  assert.equal(readState(f.dir).rejectedVersion,'0.8.103');
+});
+test('a hook keeps an earlier cached launcher, never a newer one or one outside the cache',()=>{
+ const f=fixture(),older=f.add('0.8.100'),newer=f.add('0.8.102'),hook=(root:string,route='claude')=>`node "${join(root,'bin','granttap-mcp.mjs')}" internal hook ${route}`;
+ assert.equal(cachedHookLauncher(hook(older),'claude',f.dir,'0.8.101'),true);
+ assert.equal(cachedHookLauncher(` ${hook(older,'codex-policy')} `,'codex-policy',f.dir,'0.8.101'),true);
+ assert.equal(cachedHookLauncher(hook(older),'codex',f.dir,'0.8.101'),false);
+ assert.equal(cachedHookLauncher(hook(newer),'claude',f.dir,'0.8.101'),false,'a rolled-back release is not current');
+ assert.equal(cachedHookLauncher(hook(f.bundled),'claude',f.dir,'0.8.101'),false);
+ assert.equal(cachedHookLauncher(`${hook(older)}; echo extra`,'claude',f.dir,'0.8.101'),false);
+ assert.equal(cachedHookLauncher(undefined,'claude',f.dir,'0.8.101'),false);
 });

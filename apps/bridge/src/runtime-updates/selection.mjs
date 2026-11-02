@@ -34,6 +34,17 @@ export function selectedRuntime(bundled, directory) {
   return validRuntime(state.root,directory,state.version) && newerVersion(state.version,runtimeVersion(bundled))
     ? state.root : bundled;
 }
+/**
+ * A provider hook written by an earlier runtime names that runtime's launcher in
+ * this cache. Each cached launcher hands off to the selection above, so the hook
+ * stays current after an update; one naming a newer, rolled-back release does not.
+ */
+export function cachedHookLauncher(command, route, directory, current) {
+  const match=typeof command==='string' && command.trim().match(/^node "(.+)[\\/]bin[\\/]granttap-mcp\.mjs" internal hook (\S+)$/);
+  if(!match || match[2]!==route) return false;
+  try { const version=runtimeVersion(match[1]);
+    return validRuntime(match[1],directory,version) && !newerVersion(version,current); } catch { return false; }
+}
 /** A new background service that exits during startup restores the last working selection. */
 export function rollbackRuntime(bundled, directory, failedRoot) {
   const state=readState(directory);

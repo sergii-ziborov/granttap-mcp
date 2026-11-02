@@ -13,6 +13,7 @@ import {
   CLAUDE_MATCHERS,
   commandHasRoute,
   hookCommand,
+  hookCommandIsCurrent,
   codexHookSet,
 } from "./inspect";
 
@@ -62,7 +63,9 @@ export function installClaudeHook(): InstallResult {
   // The prompt hook rides along with the approval hook: what the chat could
   // not know by itself — background runs in it, the Mesh around it — is added
   // to each prompt. It never blocks; anything wrong, and it adds nothing.
-  const promptHookChanged = [ensureClaudePromptHook(settings), ensureClaudeUsageStatusLine(settings, hookCommand("claude-statusline"))].some(Boolean);
+  const statusLine = hookCommandIsCurrent(settings.statusLine?.command, "claude-statusline")
+    ? settings.statusLine.command : hookCommand("claude-statusline");
+  const promptHookChanged = [ensureClaudePromptHook(settings), ensureClaudeUsageStatusLine(settings, statusLine)].some(Boolean);
   const entries: any[] = (((settings.hooks ??= {}).PreToolUse ??= []) as any[]);
   const currentCommand = hookCommand("claude");
   const presentEntry = entries.find((entry) =>
@@ -75,10 +78,10 @@ export function installClaudeHook(): InstallResult {
   );
   if (present && presentEntry) {
     const matcherChanged = repairClaudeMatcher(presentEntry);
-    const commandChanged = present.command !== currentCommand;
+    const commandChanged = !hookCommandIsCurrent(present.command, "claude");
     if (!matcherChanged && !commandChanged && !promptHookChanged) return { status: "already", detail: path };
     backupOnce(path);
-    present.command = currentCommand;
+    if (commandChanged) present.command = currentCommand;
     writeFileSync(path, JSON.stringify(settings, null, 2) + "\n");
     const detail = !matcherChanged && !commandChanged
       ? `${path}, GrantTap prompt hook added`
@@ -121,7 +124,7 @@ function ensureClaudePromptHook(settings: any): boolean {
     .flatMap((entry) => (Array.isArray(entry?.hooks) ? entry.hooks : []))
     .find((hook: any) => commandHasRoute(hook?.command, "claude-prompt"));
   if (present) {
-    if (present.command === command) return false;
+    if (hookCommandIsCurrent(present.command, "claude-prompt")) return false;
     present.command = command;
     return true;
   }
@@ -175,6 +178,7 @@ export function installCodexHook(): InstallResult {
     if (!match) return line;
     for (const route of ["codex", "codex-policy"] as const) {
       if (!commandHasRoute(match[3], route)) continue;
+      if (hookCommandIsCurrent(match[3], route)) return line;
       const replacement = `${match[1]}'${hookCommand(route)}'`;
       if (replacement !== line) changed = true;
       return replacement;
@@ -267,7 +271,7 @@ export function installCursorHook(): InstallResult {
   ) => {
     const entries = document.hooks![event] ?? [];
     const expected = hookCommand(route);
-    const current = entries.find((entry) => entry.command === expected);
+    const current = entries.find((entry) => hookCommandIsCurrent(entry.command, route));
     if (current) {
       if (current.timeout !== timeout) {
         current.timeout = timeout;

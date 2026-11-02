@@ -1,4 +1,4 @@
-import { ownedHookCommands } from "./projection";
+import { ownedHookCommand } from "./projection";
 
 export function codexHookSet(config: string): { permission: boolean; policy: boolean } {
   type Event = "PermissionRequest" | "PreToolUse";
@@ -14,12 +14,12 @@ export function codexHookSet(config: string): { permission: boolean; policy: boo
     if (!event || !matcherAll || !inCommandHook || !commandType) return;
     if (event === "PermissionRequest"
       && timeout === 120
-      && command === ownedHookCommands().permission) {
+      && ownedHookCommand(command, "permission")) {
       permission = true;
     }
     if (event === "PreToolUse"
       && timeout === 30
-      && command === ownedHookCommands().policy) {
+      && ownedHookCommand(command, "policy")) {
       policy = true;
     }
   };

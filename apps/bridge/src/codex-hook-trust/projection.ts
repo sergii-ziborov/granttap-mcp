@@ -1,16 +1,24 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ProviderHook, type ProviderHook as Hook } from "../../../../packages/protocol/messages/provider-hooks";
+import { configDir } from "../config/runtime/paths";
+import { cachedHookLauncher, runtimeVersion } from "../runtime-updates/selection.mjs";
+
+const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..");
 
 export function ownedHookCommands() {
-  const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..");
   const base = `node "${join(root, "bin", "granttap-mcp.mjs")}" internal hook`;
   return { policy: `${base} codex-policy`, permission: `${base} codex` };
 }
 
+/** This runtime's command, or an earlier runtime's cached launcher that hands off to it. */
+export function ownedHookCommand(command: unknown, kind: "policy" | "permission"): boolean {
+  return command === ownedHookCommands()[kind] || cachedHookLauncher(command,
+    kind === "policy" ? "codex-policy" : "codex", join(configDir(), "runtime-updates"), runtimeVersion(root));
+}
+
 /** Only the two exact user-config hooks installed by this runtime are reviewable. */
 export function projectCodexHooks(value: unknown): Hook[] {
-  const commands = ownedHookCommands();
   const report = value as { data?: Array<{ hooks?: any[]; errors?: unknown[] }> } | null;
   const data = Array.isArray(report?.data) ? report.data : [];
   return (["PreToolUse", "PermissionRequest"] as const).map((event) => {
@@ -21,7 +29,7 @@ export function projectCodexHooks(value: unknown): Hook[] {
     const rows = Array.isArray(data[0]?.hooks) ? data[0]!.hooks! : [];
     const candidates = rows.filter((row) => row?.eventName === (event === "PreToolUse" ? "preToolUse" : "permissionRequest")
       && row.handlerType === "command" && row.source === "user" && row.isManaged === false
-      && row.command === commands[event === "PreToolUse" ? "policy" : "permission"]
+      && ownedHookCommand(row.command, event === "PreToolUse" ? "policy" : "permission")
       && row.matcher === ".*" && row.timeoutSec === (event === "PreToolUse" ? 30 : 120));
     if (candidates.length !== 1) return missing;
     const row = candidates[0];

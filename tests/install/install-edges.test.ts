@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { versionRoot } from "../../apps/bridge/src/runtime-updates/selection.mjs";
+import { projectCodexHooks } from "../../apps/bridge/src/codex-hook-trust";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -86,6 +88,48 @@ test("fresh and legacy hooks are installed, repaired, and then idempotent", asyn
   cursorDocument.hooks.beforeShellExecution[0].failClosed = true;
   await writeFile(join(cursor, "hooks.json"), JSON.stringify(cursorDocument));
   assert.equal(installCursorHook().status, "installed");
+});
+
+test("hooks an earlier runtime wrote through the version cache survive an update and setup", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-cached-launcher-"));
+  const config = join(root, "config"), claude = join(root, "claude"), codex = join(root, "codex"), cursor = join(root, "cursor");
+  environment(t, { GRANTTAP_CONFIG_DIR: config, GRANTTAP_CLAUDE_DIR: claude, GRANTTAP_CODEX_DIR: codex,
+    GRANTTAP_CURSOR_DIR: cursor });
+  const launcher = async (version: string) => {
+    const dir = versionRoot(join(config, "runtime-updates"), version);
+    await mkdir(join(dir, "bin"), { recursive: true });
+    await writeFile(join(dir, "bin", "granttap-mcp.mjs"), "");
+    await writeFile(join(dir, "package.json"), JSON.stringify({ name: "granttap-mcp", version }));
+    return `node "${join(dir, "bin", "granttap-mcp.mjs")}" internal hook`;
+  };
+  const current = hookCommand("claude").replace(/ claude$/, ""), earlier = await launcher("0.0.1");
+  const files = [join(claude, "settings.json"), join(codex, "config.toml"), join(cursor, "hooks.json")];
+  const point = async (from: string, to: string) => {
+    for (const path of files) {
+      const [a, b] = path.endsWith(".toml") ? [from, to] : [from, to].map((text) => JSON.stringify(text).slice(1, -1));
+      await writeFile(path, (await readFile(path, "utf8")).replaceAll(a!, b!));
+    }
+  };
+  installClaudeHook(); installCodexHook(); installCursorHook();
+  await point(current, earlier);
+  const before = await Promise.all(files.map((path) => readFile(path, "utf8")));
+  assert.deepEqual([installClaudeHook().status, installCodexHook().status, installCursorHook().status],
+    ["already", "already", "already"], "Rewriting the path would also void Codex's per-command trust.");
+  assert.deepEqual(await Promise.all(files.map((path) => readFile(path, "utf8"))), before);
+  const status = inspectAgentIntegrations();
+  assert.equal(status.find((item) => item.agent === "claude")?.hookConfigured, true);
+  assert.equal(status.find((item) => item.agent === "codex")?.hookConfigured, true);
+  assert.equal(inspectCursorIntegration().hookConfigured, true);
+  const [policy] = projectCodexHooks({ data: [{ hooks: [{ key: "k", eventName: "preToolUse", command: `${earlier} codex-policy`,
+    handlerType: "command", source: "user", matcher: ".*", timeoutSec: 30, enabled: true, isManaged: false,
+    currentHash: "a".repeat(64), trustStatus: "trusted" }], errors: [] }] });
+  assert.equal(policy?.trustStatus, "trusted");
+
+  await point(earlier, await launcher("999.0.0"));
+  assert.equal(installClaudeHook().status, "installed", "A newer, rolled-back release is not left in charge.");
+  const settings = JSON.parse(await readFile(files[0]!, "utf8"));
+  assert.equal(settings.hooks.PreToolUse.flatMap((entry: { hooks: unknown[] }) => entry.hooks)
+    .find((hook: { command: string }) => hook.command.endsWith(" claude"))?.command, hookCommand("claude"));
 });
 
 test("agent inspection handles absolute executables and incomplete hook shapes", async (t) => {
