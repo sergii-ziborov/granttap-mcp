@@ -16,6 +16,6 @@ export { sweepAttachments, resolveMessageAttachments } from "./handlers/receipts
 export { handleUserMessage } from "./handlers/user-message";
 export type { SessionMonitor } from "./support/runtime";
 
-export function startSessionMonitor(client: RelayClient) {
-  return start(client);
+export function startSessionMonitor(client: RelayClient, options: { primary?: boolean } = {}) {
+  return start(client, options);
 }

@@ -87,13 +87,20 @@ function tryAcquireLock(input: {
   return false;
 }
 
+/**
+ * Only the installed monitor process may claim to be primary. The flag lives in
+ * its environment, and every chat it starts inherits that environment; an MCP
+ * server inside such a chat that trusted the variable would take the lease
+ * from the real monitor, publish only from its own corner, and leave the phone
+ * without the other chats' progress.
+ */
 export function monitorLeadership(
   now: () => number = Date.now,
   report: (message: string) => void = (message) => process.stderr.write(message),
   connected: () => boolean = () => true,
+  primary = false,
 ): MonitorLeadership {
   const path = join(configDir(), "monitor.lock");
-  const primary = process.env.GRANTTAP_MONITOR_PRIMARY === "1";
   const token = `${process.pid}:${randomUUID()}:${primary ? "primary" : "peer"}`;
   let leader = false;
   let reportedAt = 0;

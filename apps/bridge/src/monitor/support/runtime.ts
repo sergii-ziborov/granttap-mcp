@@ -173,9 +173,9 @@ async function publishMonitorTick(input: {
  * used by MCP tools. This keeps STDIO stdout clean and removes the old need for
  * a separate `granttap-mcp monitor` terminal process.
  */
-export function startSessionMonitor(client: RelayClient): SessionMonitor {
+export function startSessionMonitor(client: RelayClient, options: { primary?: boolean } = {}): SessionMonitor {
   const subscriptions = new Set<string>();
-  const leadership = monitorLeadership(Date.now, undefined, () => client.isConnected);
+  const leadership = monitorLeadership(Date.now, undefined, () => client.isConnected, options.primary === true);
   restoreMonitorState(client);
   let historyCache: { generatedAt: number; sessions: SessionsStatus["sessions"] } | undefined;
   let historyRead: Promise<SessionsStatus["sessions"]> | undefined;

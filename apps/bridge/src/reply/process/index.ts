@@ -21,8 +21,10 @@ function projectEnvForCwd(cwd?: string): NodeJS.ProcessEnv {
   }
 }
 
+/** A chat started from the phone is not the monitor, whatever the monitor's environment says. */
 export function providerProcessEnvironment(cwd?: string): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, GRANTTAP_DELIVERY: "1", ...projectEnvForCwd(cwd) };
+  const { GRANTTAP_MONITOR_PRIMARY: _monitorOnly, ...inherited } = process.env;
+  const env: NodeJS.ProcessEnv = { ...inherited, GRANTTAP_DELIVERY: "1", ...projectEnvForCwd(cwd) };
   const nodeDirectory = dirname(process.execPath);
   env.PATH = [nodeDirectory, ...(env.PATH ?? '').split(delimiter)
     .filter(part => part && part !== nodeDirectory)].join(delimiter);
