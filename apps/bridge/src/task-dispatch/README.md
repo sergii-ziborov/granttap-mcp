@@ -14,6 +14,10 @@ until expiry plus seven days. Restarting after an ambiguous submission requires 
 of blindly replaying the prompt. Queued server cancellation wins over a stale
 local offer. Scheduling does not imply that the controller phone is online.
 
+The first time a message reaches this computer, the phone gets a `delivery.arrival`,
+so it can say the message is here and waiting its turn instead of still on the relay.
+That is a type of its own: earlier apps read any other receipt status as a refusal.
+
 The native sender cancels an uploaded operation with DELETE directly, without
 waiting for a metadata GET. A claim conflict is reconciled by a subsequent read.
 An ambiguous upload is still reconciled using the same encrypted reservation;

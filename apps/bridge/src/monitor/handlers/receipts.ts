@@ -31,6 +31,16 @@ export async function sendDeliveryReceipt(
     : client.send(payload, "phone", options)).catch(() => {});
 }
 
+/** The message reached this computer. The relay repeats offers, so the caller sends this once. */
+export async function sendDeliveryArrival(client: RelayClient, messageId: string, sessionId: string | undefined,
+  peerPublicKey: string | undefined): Promise<void> {
+  const payload = { type: "delivery.arrival" as const, messageId, sessionId: sessionId?.trim() || undefined, receivedAt: Date.now() };
+  const options = { ttlMs: 24 * 60 * 60_000, peerPublicKey };
+  await (sessionId && !peerPublicKey
+    ? sendSessionPayload(client, payload, sessionId, "phone", options)
+    : client.send(payload, "phone", options)).catch(() => {});
+}
+
 export function agentEventForUserMessage(
   message: UserMessage,
   text: string,

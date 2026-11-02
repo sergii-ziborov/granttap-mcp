@@ -113,6 +113,18 @@ export const DeliveryReceipt = z.object({
 });
 export type DeliveryReceipt = z.infer<typeof DeliveryReceipt>;
 
+/**
+ * The computer holds a queued message durably, whatever its chat is doing. A type
+ * of its own: earlier apps read every receipt status except "accepted" as a refusal.
+ */
+export const DeliveryArrival = z.object({
+  type: z.literal("delivery.arrival"),
+  messageId: z.string().min(1).max(180),
+  sessionId: z.string().nullish(),
+  receivedAt: z.number(),
+});
+export type DeliveryArrival = z.infer<typeof DeliveryArrival>;
+
 /** Reads the original operation; it cannot submit or resume a provider turn. */
 export const DeliveryReceiptQuery = z.object({
   type: z.literal('delivery.receipt.query'), messageId: z.string().min(1).max(180),

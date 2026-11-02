@@ -110,8 +110,21 @@ export function monitorLeadership(
     writeFileSync(path, token, { mode: 0o600 });
   };
 
+  /** A monitor that is gone cannot renew; its successor need not wait out the lease. */
+  const holderGone = (): boolean => {
+    const holder = Number(read()?.split(":", 1)[0]);
+    if (!Number.isSafeInteger(holder) || holder < 1) return false;
+    try {
+      process.kill(holder, 0);
+      return false;
+    } catch (error) {
+      return (error as NodeJS.ErrnoException).code === "ESRCH";
+    }
+  };
+
   /** A lease nobody renewed is free, whatever process now owns that id. */
   const expired = (): boolean => {
+    if (holderGone()) return true;
     try {
       return now() - statSync(path).mtimeMs > LEADERSHIP_TTL_MS;
     } catch {

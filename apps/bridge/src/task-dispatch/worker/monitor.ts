@@ -5,11 +5,12 @@ import { isDeliveryInFlight, newTaskDeliveryKey } from '../../reply';
 import { publishedCatalog } from '../../session-catalog';
 import { handleUserMessage } from '../../monitor/handlers/user-message';
 import { handleTaskCreate } from '../../monitor/handlers/task-create';
+import { sendDeliveryArrival } from '../../monitor/handlers/receipts';
 import { TaskDispatchInbox } from '../index';
 import { TaskDispatchWorker, type TaskJobRemote, type WorkerOptions } from './index';
 import { relayTaskJobRemote } from './remote';
 import { NativeTaskQueueSender } from '../sender';
-import { dispatchSessionObservation, queuedCatalogRefreshDue, taskDispatchReady } from './readiness';
+import { dispatchSessionObservation, newTaskOperationKey, queuedCatalogRefreshDue, taskDispatchReady } from './readiness';
 import { localTaskOrigins, resolveTaskOriginJob } from '../../task-origins';
 
 /** Only the persistent monitor advertises durable submission capability. */
@@ -23,6 +24,7 @@ export function startTaskDispatchMonitor(input: {
   const resolve = (job: Parameters<typeof resolveTaskOriginJob>[1], peer: string) =>
     resolveTaskOriginJob(origins, job, input.config.room, peer);
   let stopped = false, reportedAt = 0, maintainedAt = 0, refreshedAt = 0;
+  const waitingSince = new Map<string, number>();
   const sender = new NativeTaskQueueSender({ root: join(configDir(), 'native-task-queue'), config: input.config });
   const peerAllowed = (peer: string) => peer === input.config.myPublicKey || input.peerAllowed(peer);
   const worker = new TaskDispatchWorker({ inbox, remote: input.remote ?? relayTaskJobRemote(input.config),
@@ -45,10 +47,18 @@ export function startTaskDispatchMonitor(input: {
       const session = [...(catalog?.sessions ?? []), ...(catalog?.history ?? [])]
         .find(item => item.sessionId === job.sessionId);
       const observation = { ...dispatchSessionObservation(session, catalog?.generatedAt),
-        inFlight: isDeliveryInFlight(job.sessionId ?? newTaskDeliveryKey(job.operation.agent ?? 'codex',
-          job.operation.type === 'project.task.create' ? job.operation.operationId : undefined)),
+        inFlight: isDeliveryInFlight(job.sessionId
+          ?? newTaskDeliveryKey(job.operation.agent ?? 'codex', newTaskOperationKey(job.operation))),
         paused: !!job.sessionId && isSessionPaused(job.sessionId) };
       const ready = taskDispatchReady(job, observation);
+      if (!ready) { if (!waitingSince.has(job.jobId)) waitingSince.set(job.jobId, Date.now()); }
+      else {
+        const waited = Date.now() - (waitingSince.get(job.jobId) ?? Date.now());
+        waitingSince.delete(job.jobId);
+        if (waited >= 30_000) {
+          process.stderr.write(`[monitor] A queued message waited ${Math.round(waited / 1000)} s for its chat to become free.\n`);
+        }
+      }
       if (!ready && queuedCatalogRefreshDue(job, observation, refreshedAt)) {
         refreshedAt = Date.now();
         void input.publish().catch(() => {});
@@ -70,7 +80,10 @@ export function startTaskDispatchMonitor(input: {
     if (Date.now() - reportedAt < 60_000) return;
     reportedAt = Date.now();
     // Storage and relay errors name a status or a path, never a prompt.
-    const cause = error instanceof Error ? `${error.name}: ${error.message}`.slice(0, 200) : 'unknown';
+    // A failed fetch keeps its reason (DNS, TLS, connect timeout) in `cause`.
+    const reason = error instanceof Error && error.cause instanceof Error
+      ? ` [${(error.cause as NodeJS.ErrnoException).code ?? error.cause.name}]` : '';
+    const cause = error instanceof Error ? `${error.name}: ${error.message}${reason}`.slice(0, 200) : 'unknown';
     process.stderr.write(`[monitor] Durable task queue needs storage or relay recovery (${cause}). No prompt was replayed.\n`);
   };
   const tick = () => {
@@ -82,7 +95,16 @@ export function startTaskDispatchMonitor(input: {
   };
   const off = input.client.onTaskDispatch((job, peer) => {
     if (stopped || !input.isLeader() || !peerAllowed(peer)) return;
-    try { if (inbox.stage(job, peer) !== 'conflict') tick(); }
+    try {
+      const staged = inbox.stage(job, peer);
+      if (staged === 'conflict') return;
+      // The relay repeats its offer until a claim. Only the first one is news.
+      if (staged !== 'existing' && job.operation.type === 'user.message' && job.operation.messageId) {
+        void sendDeliveryArrival(input.client, job.operation.messageId, job.operation.sessionId,
+          peer === input.config.myPublicKey ? undefined : peer);
+      }
+      tick();
+    }
     catch (error) { reportFailure(error); }
   });
   const interval = setInterval(tick, 2_000); interval.unref();

@@ -9,7 +9,8 @@ import type { CodingAgent, DeviceManagementSnapshot } from '../../../../packages
 import { configDir } from '../config/runtime/paths';
 import { observedComputerId } from '../mesh/identity/computer';
 import { automaticUpdatesAllowed } from '../runtime-updates/preferences/storage.mjs';
-import { readState, runtimeVersion } from '../runtime-updates/selection.mjs';
+import { newerVersion, readState, runtimeVersion } from '../runtime-updates/selection.mjs';
+import { latestRelease, trustedRelease } from '../runtime-updates/registry';
 import { checkForRuntimeUpdate } from '../runtime-updates';
 import { binaryVersion } from '../tools/version';
 import { providerCommand, providerAuthentication, installedProvider, providerEnvironment } from './provider-command';
@@ -39,6 +40,22 @@ export function maintenanceIdle(): boolean {
     && agents.every(agent => ownedProviderProcesses(providerCommand(agent)).length === 0);
 }
 
+const RELEASE_CHECK_MS = 60 * 60_000;
+let knownRelease: { at: number; version?: string } = { at: 0 };
+
+/** The phone offers an update from this answer; a registry problem only hides the offer. */
+async function availableRuntimeVersion(): Promise<string | undefined> {
+  if (Date.now() - knownRelease.at >= RELEASE_CHECK_MS) {
+    knownRelease = { at: Date.now(), version: knownRelease.version };
+    try {
+      const release = await latestRelease();
+      if (trustedRelease(release)) knownRelease.version = release.version;
+    } catch { /* Keep what was last known. */ }
+  }
+  const version = knownRelease.version;
+  return version && newerVersion(version, runtimeVersion(runtimeRoot)) ? version : undefined;
+}
+
 export async function managementSnapshot(): Promise<DeviceManagementSnapshot> {
   const observedAt = Date.now();
   const directory = join(configDir(), 'runtime-updates');
@@ -52,6 +69,7 @@ export async function managementSnapshot(): Promise<DeviceManagementSnapshot> {
   }));
   return { computerId: observedComputerId(), computerName: hostname(), observedAt,
     runtimeVersion: runtimeVersion(runtimeRoot), runtimeEpoch, selectedRuntimeVersion: selected.version,
+    availableRuntimeVersion: await availableRuntimeVersion(),
     automaticUpdatesEnabled: automaticUpdatesAllowed(directory),
     runtimeUpdateSupported: runtimeRoot.includes('/node_modules/'), runtimeRestartSupported: runtimeRestartSupported(),
     cache: (await computerCache(runtimeRoot)).map(({ paths: _paths, ...category }) => category), providers };

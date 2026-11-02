@@ -4,6 +4,8 @@ import { publicKeyIdentifier } from '../ciphertext-recipient';
 import { openRelayMessage } from '../relay-inbound';
 import type { PeerConfig } from '../relay-client-types';
 
+const CLOCK_SKEW_MS = 5 * 60_000;
+
 export type TaskDispatchListener = (job: TaskDispatch, peerPublicKey: string) => void | Promise<void>;
 const Offer = z.object({ type: z.literal('relay.task-job'), job: z.object({
   id: z.string(), state: z.literal('queued'), notBefore: z.number().int(),
@@ -30,7 +32,10 @@ export async function consumeTaskJobOffer(input: {
   const payload = opened.payload;
   if ((opened.peerPublicKey === localKey) !== (payload.origin === 'computer')) return;
   if (payload.jobId !== job.id || payload.notBefore !== job.notBefore
-    || payload.expiresAt !== job.expiresAt || payload.notBefore > Date.now()) return;
+    || payload.expiresAt !== job.expiresAt) return;
+  // A sender's clock can run ahead. The worker holds the job until it is due;
+  // only a schedule far ahead can have come from something other than skew.
+  if (payload.notBefore > Date.now() + CLOCK_SKEW_MS) return;
   await Promise.all(input.listeners.map(async listener => {
     try { await listener(payload, opened.peerPublicKey); } catch { /* durable receipt remains queued */ }
   }));
