@@ -15,6 +15,11 @@ Sidechain folders and tool observations cannot replace the root conversation's
 checkout. Catalog linking verifies the current Git root while preserving the
 existing Task and Project identities.
 
+A pasted Claude image appears as an attachment. The label Claude Code writes
+beside it (`[Image: source: …]`, `[Image #1]`) is dropped from the chat, title
+and child title when that block holds only labels and the message carries the
+image; any words the person typed with it stay.
+
 Claude child reads use only the requested owned log and its bounded recent
 window. Native `agentId` remains authoritative when it differs from the filename;
 the scanner records that mapping. Parent and sibling logs are not reparsed for

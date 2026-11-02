@@ -8,6 +8,7 @@ import { observeClaudeTurn } from "./turn-state";
 import { LIVE_MS, safeParse, stateFor, ts } from "../../support/common";
 import { finishScan } from "../../cooperative-scan";
 import { claudeCapabilityUsage, createClaudeCapabilityCollector } from "./activity";
+import { pastedImageLabel } from "../../support/activity-helpers";
 import { claudeRepositoryPaths } from "./repository-observation";
 import { observedCheckoutRoot } from "../../support/repository-checkout";
 import {
@@ -53,7 +54,8 @@ function applyClaudeLine(d: any, state: ClaudeParseState): void {
         ? d.message.content
         : Array.isArray(d.message?.content)
           ? d.message.content
-              .filter((b: any) => b?.type === "text" && typeof b.text === "string")
+              .filter((b: any) => b?.type === "text" && typeof b.text === "string"
+                && !pastedImageLabel(b, d.message.content))
               .map((b: any) => b.text)
               .join("\n")
           : typeof d.content === "string"

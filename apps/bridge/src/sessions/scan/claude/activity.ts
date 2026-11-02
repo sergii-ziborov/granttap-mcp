@@ -3,7 +3,7 @@ import { createClaudeUsageRecorder } from './recorded-usage';
 import { readFileSync, statSync } from "node:fs";
 import type { ActivityEntry, ChildThreadInfo, SessionInfo } from "../../../../../../packages/protocol/schema";
 import { safeParse, ts } from "../../support/common";
-import { classifyTool, estimateTokens, pushEntry as appendEntry, type PushEntryInput, toolDescription, toolSummary } from "../../support/activity-helpers";
+import { classifyTool, estimateTokens, pastedImageLabel, pushEntry as appendEntry, type PushEntryInput, toolDescription, toolSummary } from "../../support/activity-helpers";
 import { childEntryFields } from "../../support/child-threads";
 import { diffPreviewFromInput, patchStatsByToolUse, sensitivePath, statsFromInput } from "../../support/edit-stats";
 import { redactSecrets } from "../../telemetry/command-preview";
@@ -262,7 +262,7 @@ export function appendClaudeActivity(input: {
             pushEntry({ out, seen, sessionId: session.sessionId, kind: "user", text: attachment,
               createdAt, ordinal: index * 100 + blockIndex, extras: { ...childFields, attachments: [attachment] },
               idOverride: claudeMessageIdentity(sourceThreadId, d, line, blockIndex) });
-          } else if (block?.type === "text") {
+          } else if (block?.type === "text" && !pastedImageLabel(block, content)) {
             pushEntry({ out: out, seen: seen, sessionId: session.sessionId, kind: "user", text: block.text, createdAt: createdAt, ordinal: index * 100 + blockIndex, extras: childFields,
               idOverride: claudeMessageIdentity(sourceThreadId, d, line, blockIndex) });
           }
