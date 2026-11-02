@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AdvertisedModel, EndpointModelCatalog } from "../../../../packages/protocol/schema";
 
+import { cachedClaudeModels } from "./claude-models";
 import { cachedCLIModels } from "./cli-models";
 import { cachedNativeAccountUsage, cachedProviderAccount } from "../provider-account-status";
 
@@ -79,7 +80,7 @@ export function readCodexModelCatalog(
 /** A shared endpoint catalog for all four existing coding providers. */
 export function readProviderModelCatalog(endpointId: string): EndpointModelCatalog {
   const codex = readCodexModelCatalog(endpointId);
-  const cli = cachedCLIModels(endpointId);
+  const cli = [...cachedClaudeModels(endpointId), ...cachedCLIModels(endpointId)];
   return { ...codex, observedAt: Math.max(codex.observedAt, ...cli.map(row => row.observedAt)),
     accountUsage: [...(codex.accountUsage ?? []), ...cachedNativeAccountUsage()],
     stale: codex.stale === true && cli.length === 0, models: [...codex.models, ...cli].slice(0, 256) };

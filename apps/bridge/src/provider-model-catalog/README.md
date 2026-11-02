@@ -48,6 +48,9 @@ them in the provider's order. The Grok binary is resolved like its turns
 (`GRANTTAP_GROK_BIN`, then `PATH`, then `~/.grok/bin/grok`), so a launchd PATH
 without Grok's installer directory no longer hides it.
 
-Claude Code has no listing command. Its picker keeps the CLI's documented aliases
-(`opus`, `sonnet`, `haiku`, `fable`); `--model` also accepts full names, which
-the phone does not invent. Tests: [`tests/grok-catalog.test.ts`](tests/grok-catalog.test.ts).
+Claude Code has no listing command. When Claude Code is installed on this Mac
+(`GRANTTAP_CLAUDE_BIN`, `PATH`, the native installer or the Claude app's copy),
+the catalog advertises the CLI's documented aliases (`opus`, `sonnet`, `haiku`,
+`fable`) as `claude` rows ([`claude-models.ts`](claude-models.ts)), so the phone
+shows them for this computer. `--model` also accepts full names, which nobody
+invents here. Tests: [`tests/claude-models.test.ts`](tests/claude-models.test.ts). Tests: [`tests/grok-catalog.test.ts`](tests/grok-catalog.test.ts).
