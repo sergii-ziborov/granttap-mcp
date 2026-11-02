@@ -42,7 +42,9 @@ export function readCodexCapabilityHistory(
 function readWorker(database: string, bindings: [string, string][]): Promise<NativeCapabilityEvidence> {
   return new Promise(resolve => {
     const requested = new Set(bindings.map(([thread]) => thread));
-    const worker = new Worker(new URL('./reader.js', import.meta.url), { execArgv: [],
+    // Each read is a fresh worker; without the flag every one prints SQLite's experimental notice.
+    const worker = new Worker(new URL('./reader.js', import.meta.url), {
+      execArgv: ['--disable-warning=ExperimentalWarning'],
       workerData: { database, bindings, now: Date.now(),
         previous: (cursors.get(database) ?? []).filter(cursor => requested.has(cursor.threadId)) },
       resourceLimits: { maxOldGenerationSizeMb: 64 } });

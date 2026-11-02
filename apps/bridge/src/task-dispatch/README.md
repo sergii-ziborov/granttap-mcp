@@ -45,3 +45,8 @@ permission. The worker checks that exact native execution before claiming the
 job, refreshes its catalog while held, and starts automatically once it is idle.
 This does not turn a temporary native busy state into a failed delivery or ask
 the person to resend. It does not claim provider-native mid-turn Steer support.
+
+Relay queue errors are logged by `worker/failure-report.ts`. A dropped connection,
+a timeout or a relay 5xx is retried on the next two-second pass and is logged only
+after 30 seconds of continuing failures; storage faults are logged at once. Both
+are limited to one line a minute and never include a prompt.

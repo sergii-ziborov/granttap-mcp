@@ -12,6 +12,7 @@ import { relayTaskJobRemote } from './remote';
 import { NativeTaskQueueSender } from '../sender';
 import { dispatchSessionObservation, newTaskOperationKey, queuedCatalogRefreshDue, taskDispatchReady } from './readiness';
 import { localTaskOrigins, resolveTaskOriginJob } from '../../task-origins';
+import { queueFailureReporter } from './failure-report';
 
 /** Only the persistent monitor advertises durable submission capability. */
 export function startTaskDispatchMonitor(input: {
@@ -23,7 +24,7 @@ export function startTaskDispatchMonitor(input: {
   const origins = localTaskOrigins();
   const resolve = (job: Parameters<typeof resolveTaskOriginJob>[1], peer: string) =>
     resolveTaskOriginJob(origins, job, input.config.room, peer);
-  let stopped = false, reportedAt = 0, maintainedAt = 0, refreshedAt = 0;
+  let stopped = false, maintainedAt = 0, refreshedAt = 0;
   const waitingSince = new Map<string, number>();
   const sender = new NativeTaskQueueSender({ root: join(configDir(), 'native-task-queue'), config: input.config });
   const peerAllowed = (peer: string) => peer === input.config.myPublicKey || input.peerAllowed(peer);
@@ -76,16 +77,7 @@ export function startTaskDispatchMonitor(input: {
       return outcome;
     },
   });
-  const reportFailure = (error: unknown) => {
-    if (Date.now() - reportedAt < 60_000) return;
-    reportedAt = Date.now();
-    // Storage and relay errors name a status or a path, never a prompt.
-    // A failed fetch keeps its reason (DNS, TLS, connect timeout) in `cause`.
-    const reason = error instanceof Error && error.cause instanceof Error
-      ? ` [${(error.cause as NodeJS.ErrnoException).code ?? error.cause.name}]` : '';
-    const cause = error instanceof Error ? `${error.name}: ${error.message}${reason}`.slice(0, 200) : 'unknown';
-    process.stderr.write(`[monitor] Durable task queue needs storage or relay recovery (${cause}). No prompt was replayed.\n`);
-  };
+  const reportFailure = queueFailureReporter().report;
   const tick = () => {
     if (Date.now() - maintainedAt > 3_600_000) {
       maintainedAt = Date.now(); void inbox.maintain().catch(reportFailure);
