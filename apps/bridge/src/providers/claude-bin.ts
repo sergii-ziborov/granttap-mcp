@@ -87,6 +87,16 @@ export function installedClaudeBinaries(
   });
 }
 
+/** The explicit override, else the newest installed; none when this Mac has no Claude Code. */
+export function installedClaudeBinary(
+  home = homedir(),
+  env: NodeJS.ProcessEnv = process.env,
+): ClaudeBinary | undefined {
+  const override = env.GRANTTAP_CLAUDE_BIN ?? env.NODVOX_CLAUDE_BIN;
+  if (override) return versioned(override);
+  return installedClaudeBinaries(home, env)[0];
+}
+
 /**
  * The Claude Code to run: the explicit override, else the newest installed,
  * else plain `claude` for PATH to resolve.
@@ -95,9 +105,7 @@ export function resolveClaudeBinary(
   home = homedir(),
   env: NodeJS.ProcessEnv = process.env,
 ): ClaudeBinary {
-  const override = env.GRANTTAP_CLAUDE_BIN ?? env.NODVOX_CLAUDE_BIN;
-  if (override) return versioned(override);
-  return installedClaudeBinaries(home, env)[0] ?? { path: "claude" };
+  return installedClaudeBinary(home, env) ?? { path: "claude" };
 }
 
 /**

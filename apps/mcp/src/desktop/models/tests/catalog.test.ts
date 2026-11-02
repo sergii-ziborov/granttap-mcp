@@ -9,9 +9,12 @@ import { resetLocalMeshStore } from "../../../../../bridge/src/mesh/local-remote
 
 test("Mac list and selected Mesh carry fresh provider model metadata without a session scan", async () => {
   const directory = mkdtempSync(join(tmpdir(), "granttap-desktop-models-"));
-  const previous = { config: process.env.GRANTTAP_CONFIG_DIR, codex: process.env.GRANTTAP_CODEX_DIR };
+  const previous = { config: process.env.GRANTTAP_CONFIG_DIR, codex: process.env.GRANTTAP_CODEX_DIR,
+    path: process.env.PATH };
   process.env.GRANTTAP_CONFIG_DIR = directory;
   process.env.GRANTTAP_CODEX_DIR = directory;
+  // No Claude Code here, so the catalog holds only the Codex account's rows.
+  process.env.PATH = directory;
   resetLocalMeshStore();
   try {
     writeFileSync(join(directory, "project-mesh.json"), JSON.stringify({ version: 1,
@@ -47,7 +50,8 @@ test("Mac list and selected Mesh carry fresh provider model metadata without a s
     assert.deepEqual(expired?.models, []);
   } finally {
     resetLocalMeshStore();
-    for (const [key, value] of [["GRANTTAP_CONFIG_DIR", previous.config], ["GRANTTAP_CODEX_DIR", previous.codex]]) {
+    for (const [key, value] of [["GRANTTAP_CONFIG_DIR", previous.config], ["GRANTTAP_CODEX_DIR", previous.codex],
+      ["PATH", previous.path]]) {
       if (value === undefined) delete process.env[key!]; else process.env[key!] = value;
     }
     rmSync(directory, { recursive: true, force: true });
