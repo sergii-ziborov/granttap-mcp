@@ -6,6 +6,9 @@ import test from "node:test";
 import { Payload } from "../../packages/protocol/schema";
 import { applyConfigSet } from "../../apps/bridge/src/config/commands";
 import { evaluateCreateTask, resolveCreateTaskProject } from "../../apps/bridge/src/mesh/tasks/create-task";
+import { inspectRepository } from "../../apps/bridge/src/mesh/catalog";
+import { computerId } from "../../apps/bridge/src/mesh/identity/computer";
+import { localMeshStore, resetLocalMeshStore } from "../../apps/bridge/src/mesh/local-remote/local";
 import {
   currentInstanceEpoch, pairingKeysPresent, recoverInstanceAfterRestore, remintInstanceEpoch,
 } from "../../apps/bridge/src/host/instance-epoch";
@@ -214,6 +217,30 @@ test("create-task refuses an unpublished workspace instead of guessing a host", 
   const refused = evaluateCreateTask({ cwd: "/no/such/workspace", agent: "codex" });
   assert.equal(refused.ok, false);
   if (!refused.ok) assert.equal(refused.reason, "unknown_workspace");
+});
+
+test("create-task admits a folder this computer registered for the Project, whichever agent is chosen", () => {
+  isolate();
+  resetLocalMeshStore();
+  const folder = mkdtempSync(join(tmpdir(), "granttap-plan-folder-"));
+  const repository = inspectRepository(folder);
+  const store = localMeshStore();
+  const endpoint = computerId();
+  store.upsertProject({ projectId: "project-bound", name: "Bound", canonicalRepositoryId: repository.canonicalRepositoryId, createdAt: 1 });
+  store.upsertBinding({ bindingId: "binding-bound", projectId: "project-bound", endpointId: endpoint,
+    repositoryId: repository.canonicalRepositoryId, displayName: "Bound", localPathHint: folder, available: true });
+  const admitted = evaluateCreateTask({ cwd: folder, agent: "codex", projectId: "project-bound" });
+  assert.equal(admitted.ok, true);
+  if (admitted.ok) assert.equal(admitted.projectId, "project-bound");
+  for (const refused of [
+    evaluateCreateTask({ cwd: folder, agent: "codex", projectId: "project-other" }),
+    evaluateCreateTask({ cwd: folder, agent: "codex" }),
+    evaluateCreateTask({ cwd: "/no/such/workspace", agent: "codex", projectId: "project-bound" }),
+  ]) {
+    assert.equal(refused.ok, false);
+    if (!refused.ok) assert.equal(refused.reason, "unknown_workspace");
+  }
+  resetLocalMeshStore();
 });
 
 test("create-task with an explicit projectId uses only this host binding", () => {

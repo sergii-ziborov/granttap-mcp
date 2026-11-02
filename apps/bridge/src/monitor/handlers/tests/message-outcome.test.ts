@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { isDeliveryInFlight, newTaskDeliveryKey } from '../../../reply';
 import { rememberPublishedCatalog } from '../../../session-catalog';
 import { handleUserMessage } from '../user-message';
 
@@ -38,4 +39,30 @@ test('a message to a chat the published catalog knows does not wait for a full p
   assert.equal(outcome, 'rejected');
   assert.deepEqual(said, ['This agent is disabled in GrantTap Settings.'],
     'the catalog row was the target; a rescan would not have found this synthetic chat');
+});
+
+test('a long new task from the phone leaves the queue free for the next one', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'granttap-outcome-parallel-'));
+  const stub = join(root, 'claude-stub');
+  writeFileSync(stub, ['#!/usr/bin/env node',
+    "setTimeout(() => process.stdout.write(JSON.stringify({ result: 'done', session_id: 'new' })), 400);"].join('\n'),
+  { mode: 0o755 });
+  const prior = { config: process.env.GRANTTAP_CONFIG_DIR, claude: process.env.GRANTTAP_CLAUDE_BIN };
+  process.env.GRANTTAP_CONFIG_DIR = root;
+  process.env.GRANTTAP_CLAUDE_BIN = stub;
+  t.after(() => {
+    for (const [name, value] of [['GRANTTAP_CONFIG_DIR', prior.config], ['GRANTTAP_CLAUDE_BIN', prior.claude]] as const) {
+      if (value === undefined) delete process.env[name]; else process.env[name] = value;
+    }
+    rmSync(root, { recursive: true, force: true });
+  });
+  const client = { room: 'fixture-room', isConnected: true, send: async () => {},
+    sendSession: async () => {}, setSessionKey: () => {} };
+  const run = handleUserMessage(client as never, { type: 'user.message', agent: 'claude', messageId: 'message-slow',
+    text: 'Synthetic task', createdAt: Date.now() });
+  while (!isDeliveryInFlight(newTaskDeliveryKey('claude', 'message-slow'))) await new Promise(next => setTimeout(next, 5));
+  assert.equal(isDeliveryInFlight(newTaskDeliveryKey('claude')), false,
+    'the readiness check for the next phone task looks at its own operation');
+  assert.equal(isDeliveryInFlight(newTaskDeliveryKey('claude', 'message-next')), false);
+  assert.equal(await run, 'accepted');
 });

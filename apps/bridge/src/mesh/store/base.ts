@@ -227,6 +227,13 @@ export class MeshStoreBase {
     return bindingForEndpoint(this.state.bindings, repositoryId, endpointId);
   }
 
+  /** A folder this computer registered for a Project, whichever agent worked there. */
+  hasLocalBinding(projectId: string, localPath: string, endpointId: string): boolean {
+    this.sync();
+    return this.state.bindings.some((item) => item.projectId === projectId
+      && item.endpointId === endpointId && item.available && item.localPathHint === localPath);
+  }
+
   upsertTask(input: TaskValue): void {
     this.sync();
     const task = MeshTask.parse(input);

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { SessionInfo, TaskDispatch } from '../../../../../../packages/protocol/schema';
-import { QUEUED_CATALOG_REFRESH_MS, queuedCatalogRefreshDue, taskDispatchReady } from '../readiness';
+import { newTaskOperationKey, QUEUED_CATALOG_REFRESH_MS, queuedCatalogRefreshDue, taskDispatchReady } from '../readiness';
 
 const now = 1_000_000;
 const job: TaskDispatch = { type: 'task.dispatch', jobId: 'ready-job-01', token: 'a'.repeat(64),
@@ -10,6 +10,12 @@ const job: TaskDispatch = { type: 'task.dispatch', jobId: 'ready-job-01', token:
 const session: SessionInfo = { sessionId: 'chat', agent: 'claude', state: 'working',
   startedAt: now, lastActivityAt: now, tokensSession: 0, tokensLastTurn: 0 };
 const observation = { session, generatedAt: now, inFlight: false, paused: false };
+
+test('a new task from the phone and from a project are both tracked by their own operation', () => {
+  assert.equal(newTaskOperationKey(job.operation), 'message-01');
+  assert.equal(newTaskOperationKey({ type: 'project.task.create', operationId: 'operation-01', projectId: 'project',
+    text: 'Synthetic task', cwd: '/fixture', createdAt: now } as never), 'operation-01');
+});
 
 test('Send now can release working Claude while normal queued work waits', () => {
   assert.equal(taskDispatchReady(job, observation, now), false);

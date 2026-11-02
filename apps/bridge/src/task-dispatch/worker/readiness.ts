@@ -8,6 +8,12 @@ export function dispatchSessionObservation(session: SessionInfo | undefined, gen
     nativeState: fresh?.session.state };
 }
 
+/** Each new task runs under its own operation, so a long run cannot hold back the next one. */
+export function newTaskOperationKey(operation: TaskDispatch['operation']): string | undefined {
+  if (operation.type === 'project.task.create') return operation.operationId;
+  return operation.type === 'user.message' ? operation.messageId : undefined;
+}
+
 /** Manual release bypasses busy state only. Pause, native admission and policy still win. */
 export function taskDispatchReady(job: TaskDispatch, observation: {
   session?: SessionInfo; generatedAt?: number; inFlight: boolean; paused: boolean;

@@ -55,11 +55,15 @@ export function evaluateCreateTask(input: {
   now?: number;
 }): CreateTaskEvaluation {
   const endpoint = input.localEndpointId ?? computerId();
-  const known = [...scanSessions().sessions, ...scanSessionHistory()].some((session) =>
-    session.agent === input.agent && session.cwd === input.cwd);
+  const store = localMeshStore();
+  const requestedProjectId = input.projectId?.trim();
+  // The Mesh composer offers folders this computer registered for the Project.
+  // Its agent choice is free, so one that never ran there is not a stranger.
+  const known = (requestedProjectId && store.hasLocalBinding(requestedProjectId, input.cwd, endpoint))
+    || [...scanSessions().sessions, ...scanSessionHistory()].some((session) =>
+      session.agent === input.agent && session.cwd === input.cwd);
   if (!known) return { ok: false, reason: "unknown_workspace", detail: DETAILS.unknown_workspace };
   const repository = inspectRepository(input.cwd);
-  const store = localMeshStore();
   const resolved = resolveCreateTaskProject({
     requestedProjectId: input.projectId,
     endpointBinding: store.bindingForEndpoint(repository.canonicalRepositoryId, endpoint),

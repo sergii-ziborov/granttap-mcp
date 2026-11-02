@@ -91,7 +91,7 @@ async function startNewAgentTask(input: {
   let run: Promise<ReplyResult>;
   try {
     run = create(projectGuidancePrompt(admittedProjectId, message.text), requestedCwd, PHONE_RUN_LIMIT_MS, resolved.attachments,
-      message.model, undefined, message.effort).catch(() => {
+      message.model, message.messageId, message.effort).catch(() => {
       input.origin?.registry.complete(input.origin.scope, { ok: true });
       return { ok: false, error: 'The provider task stopped unexpectedly.' } as ReplyResult;
     });
