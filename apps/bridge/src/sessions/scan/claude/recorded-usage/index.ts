@@ -28,7 +28,8 @@ export function createClaudeUsageRecorder() {
       events.set(event.sourceId, event);
       while (events.size > 20000) events.delete(events.keys().next().value!);
     },
-    finish(observations: CapabilityObservation[]) {
+    /** `retain` keeps the events for a transcript that will continue to grow. */
+    finish(observations: CapabilityObservation[], retain = false) {
       const summaries = createExecutionSummaries(), totals = createCapabilityTotals();
       const now = Date.now();
       let nextExpiry = Infinity;
@@ -41,7 +42,7 @@ export function createClaudeUsageRecorder() {
         }
       }
       recorded.set(observations, { summaries: summaries.rows(), totals: totals.rows(), nextExpiry });
-      events.clear();
+      if (!retain) events.clear();
     },
   };
 }

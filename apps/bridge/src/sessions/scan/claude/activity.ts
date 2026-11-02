@@ -59,6 +59,19 @@ export function claudeCapabilityUsage(
     lines = claudeLogLines(session.sessionId);
   }
   if (!lines) return [];
+  const collector = createClaudeCapabilityCollector(() => session, sourceThreadId);
+  for (const line of lines) {
+    const row = safeParse(line);
+    if (row) collector.add(row);
+  }
+  return collector.snapshot();
+}
+
+type CapabilitySessionContext = Pick<SessionInfo, "sessionId" | "lastActivityAt" | "cwd">;
+
+/** Observes one transcript row at a time, so a growing log is never read twice. */
+export function createClaudeCapabilityCollector(session: () => CapabilitySessionContext,
+  sourceThreadId?: string) {
   const pending = new Map<string, PendingCapabilityTool>();
   const out: CapabilityObservation[] = [];
   const recorder = createClaudeUsageRecorder();
@@ -66,72 +79,78 @@ export function claudeCapabilityUsage(
     recorder.remember(observation);
     rememberCapabilityObservation(out, observation);
   };
-
   let commandOrdinal = 0;
-  for (const line of lines) {
-    const row = safeParse(line);
-    if (!row) continue;
-    const rowAt = ts(row.timestamp);
-    // A skill the person invoked as a slash command never becomes a tool call;
-    // the host writes it as a user turn. It is a skill used all the same.
-    const command = slashCommandSkill(row);
-    if (command) {
-      commandOrdinal += 1;
-      remember({
-        sourceId: `${sourceThreadId}:command:${typeof row.uuid === "string" ? row.uuid : commandOrdinal}`,
-        sessionId: session.sessionId,
-        toolName: `/${command}`,
-        skill: command,
-        createdAt: rowAt || session.lastActivityAt,
-        outcome: "success",
-      });
-      continue;
-    }
-    if (!Array.isArray(row.message?.content)) continue;
-    for (const block of row.message.content as any[]) {
-      if (
-        block?.type === "tool_use" &&
-        typeof block.id === "string" &&
-        typeof block.name === "string"
-      ) {
-        const item: PendingCapabilityTool = {
-          sourceId: `${sourceThreadId}:${block.id}`,
-          sessionId: session.sessionId,
-          toolName: block.name,
-          input: block.input,
-          createdAt: rowAt || session.lastActivityAt,
-          cwd: session.cwd ?? undefined,
-        };
-        for (const path of writtenPaths(item.toolName, item.input)) {
-          recordObservedWrite(session.sessionId, path, item.createdAt);
-        }
-        if (pendingCapabilityObservation(item)) {
-          rememberPendingCapabilityCall(pending, block.id, item);
-        }
-        continue;
+  return {
+    add(row: any): void {
+      const { sessionId, lastActivityAt, cwd } = session();
+      const source = sourceThreadId ?? sessionId;
+      const rowAt = ts(row.timestamp);
+      // A skill the person invoked as a slash command never becomes a tool call;
+      // the host writes it as a user turn. It is a skill used all the same.
+      const command = slashCommandSkill(row);
+      if (command) {
+        commandOrdinal += 1;
+        remember({
+          sourceId: `${source}:command:${typeof row.uuid === "string" ? row.uuid : commandOrdinal}`,
+          sessionId,
+          toolName: `/${command}`,
+          skill: command,
+          createdAt: rowAt || lastActivityAt,
+          outcome: "success",
+        });
+        return;
       }
-      if (block?.type !== "tool_result" || typeof block.tool_use_id !== "string") {
-        continue;
+      if (!Array.isArray(row.message?.content)) return;
+      for (const block of row.message.content as any[]) {
+        if (
+          block?.type === "tool_use" &&
+          typeof block.id === "string" &&
+          typeof block.name === "string"
+        ) {
+          const item: PendingCapabilityTool = {
+            sourceId: `${source}:${block.id}`,
+            sessionId,
+            toolName: block.name,
+            input: block.input,
+            createdAt: rowAt || lastActivityAt,
+            cwd: cwd ?? undefined,
+          };
+          for (const path of writtenPaths(item.toolName, item.input)) {
+            recordObservedWrite(sessionId, path, item.createdAt);
+          }
+          if (pendingCapabilityObservation(item)) {
+            rememberPendingCapabilityCall(pending, block.id, item);
+          }
+          continue;
+        }
+        if (block?.type !== "tool_result" || typeof block.tool_use_id !== "string") {
+          continue;
+        }
+        const item = pending.get(block.tool_use_id);
+        if (!item) continue;
+        const observation =
+          observeCapability(item, block.content, rowAt || item.createdAt, {
+            outcome: block.is_error === true ? "error" : "success",
+            errorClass: block.is_error === true ? "tool_result" : undefined,
+          }, "claude") ??
+          pendingCapabilityObservation(item);
+        if (observation) remember(observation);
+        pending.delete(block.tool_use_id);
       }
-      const item = pending.get(block.tool_use_id);
-      if (!item) continue;
-      const observation =
-        observeCapability(item, block.content, rowAt || item.createdAt, {
-          outcome: block.is_error === true ? "error" : "success",
-          errorClass: block.is_error === true ? "tool_result" : undefined,
-        }, "claude") ??
-        pendingCapabilityObservation(item);
-      if (observation) remember(observation);
-      pending.delete(block.tool_use_id);
-    }
-  }
-
-  for (const item of pending.values()) {
-    const observation = pendingCapabilityObservation(item);
-    if (observation) remember(observation);
-  }
-  recorder.finish(out);
-  return out;
+    },
+    /** Calls without a result yet are reported as pending; the collector keeps waiting for them. */
+    snapshot(): CapabilityObservation[] {
+      const result = [...out];
+      for (const item of pending.values()) {
+        const observation = pendingCapabilityObservation(item);
+        if (!observation) continue;
+        recorder.remember(observation);
+        rememberCapabilityObservation(result, observation);
+      }
+      recorder.finish(result, true);
+      return result;
+    },
+  };
 }
 
 /**
@@ -281,6 +300,26 @@ export function claudeActivity(session: SessionInfo): ActivityEntry[] {
   const out: ActivityEntry[] = [];
   const seen = new Set<string>();
   appendClaudeActivity({ out, seen, session, lines, observations });
+  appendClaudeChildActivity(session, out, seen, observations);
+  // V8 sort is stable: preserve transcript order when a provider stamps a
+  // whole batch with the same millisecond. Source ids are not chronological.
+  return out.sort((a, b) => a.createdAt - b.createdAt);
+}
+
+/**
+ * Nested threads only. A chat's own transcript can be 100 MB and has a bounded
+ * reader, so asking for its subagents must not read that transcript again.
+ */
+export function claudeChildActivity(session: SessionInfo): ActivityEntry[] {
+  const file = claudeLogPathBySession.get(session.sessionId);
+  const known = file ? claudeSummaryCache.get(file)?.observations ?? [] : [];
+  const out: ActivityEntry[] = [];
+  appendClaudeChildActivity(session, out, new Set<string>(), new Map(known.map((item) => [item.sourceId, item])));
+  return out.sort((a, b) => a.createdAt - b.createdAt);
+}
+
+function appendClaudeChildActivity(session: SessionInfo, out: ActivityEntry[], seen: Set<string>,
+  observations: Map<string, CapabilityObservation>): void {
   const childById = new Map(session.childThreads?.map((child) => [child.threadId, child]));
   for (const path of claudeChildLogPathsBySession.get(session.sessionId) ?? []) {
     const childLines = readLines(path);
@@ -289,7 +328,4 @@ export function claudeActivity(session: SessionInfo): ActivityEntry[] {
     const child = childById.get(inferred.threadId) ?? inferred;
     appendClaudeActivity({ out, seen, session, lines: childLines, observations, child });
   }
-  // V8 sort is stable: preserve transcript order when a provider stamps a
-  // whole batch with the same millisecond. Source ids are not chronological.
-  return out.sort((a, b) => a.createdAt - b.createdAt);
 }

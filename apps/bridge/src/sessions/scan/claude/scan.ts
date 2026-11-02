@@ -5,7 +5,7 @@ import {
   claudeLogPathBySession,
   claudeSummaryCache,
 } from "./shared";
-import { parseClaudeFile } from "./parse";
+import { parseClaudeFileSteps } from "./parse";
 import { recentLogs, claudeProjectsRoot, MAX_FILES, TOKEN_WINDOW_MS, type Scan } from "../../support/common";
 import type { SessionInfo } from "../../../../../../packages/protocol/schema";
 
@@ -29,7 +29,7 @@ function* scanClaudeCatalog(maxFiles: number): Generator<void, Scan> {
 
   for (const file of files) {
     yield;
-    const parsed = parseClaudeFile(file);
+    const parsed = yield* parseClaudeFileSteps(file);
     if (!parsed || seenSessionIds.has(parsed.session.sessionId)) continue;
     seenSessionIds.add(parsed.session.sessionId);
     sources.push({ sessionId: parsed.session.sessionId, file, childPaths: parsed.childPaths });

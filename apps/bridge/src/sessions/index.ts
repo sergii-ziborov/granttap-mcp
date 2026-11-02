@@ -31,6 +31,7 @@ import {
 } from "./cursor";
 import { grokCapabilityUsage } from "./scan/grok";
 import { activityForSession } from './session-activity';
+import { localTaskTransfers } from "../task-transfer";
 export { MAX_THREAD_ENTRIES, scanThreadActivity } from './session-activity';
 import {
   limitCapabilityUsageEvents,
@@ -40,7 +41,7 @@ import {
 import { createCapabilityTotals } from "./support/capability-totals";
 import { createExecutionSummaries, budgetExecutionSummaries } from './telemetry/execution-summaries';
 import { readCodexCapabilityHistory, type NativeCapabilityEvidence } from './native-capability-history';
-import { recordedClaudeUsage } from './scan/claude';
+import { claudeChildActivity, recordedClaudeUsage } from './scan/claude';
 
 export { MAX_ACTIVITY_ENTRIES, MAX_ACTIVITY_TEXT, TOKEN_WINDOW_HOURS };
 export { nativeTranscriptRoots, nativeTranscriptSource, restoreNativeTranscriptSource } from "./native-source";
@@ -76,6 +77,14 @@ export function pickActivityEntries(all: ActivityEntry[], limit: number): Activi
   const byId = new Map<string, ActivityEntry>();
   for (const entry of [...extras, ...childCrumbs, ...pickedRoot]) byId.set(entry.id, entry);
   return [...byId.values()].sort((a, b) => a.createdAt - b.createdAt);
+}
+
+/** Subagent rows of a chat whose own transcript already has a bounded reader. */
+export function scanChildActivity(input: SessionInfo): ActivityEntry[] {
+  const session = localTaskTransfers().nativeSession(input);
+  const entries = session.agent === "claude" ? claudeChildActivity(session)
+    : scanSessionActivity(input).entries;
+  return pickActivityEntries(entries.filter((entry) => entry.childThreadId), MAX_ACTIVITY_ENTRIES);
 }
 
 export function scanSessionActivity(session: SessionInfo): SessionActivity {
