@@ -16,6 +16,7 @@ import { applyNetworkRoute } from "../../device-network/settings";
 import { startEndpointPublisher } from "../../device-network/directory";
 import { managedAdmissionOptions } from "../../managed-admission";
 import { publishStableNode } from "../../install/stable-node/index";
+import { startRuntimeWatchdog } from "../../runtime-watchdog";
 
 import { startTaskDispatchMonitor } from "../../task-dispatch/worker/monitor";
 import { startTaskNetworkMonitor } from '../../task-network/runtime';
@@ -30,6 +31,7 @@ let stopTaskNetwork = () => {};
 let stopEngineRecovery = () => {};
 let stopRuntimeUpdates = () => {};
 let stopUpdateReadiness = () => {};
+const stopWatchdog = startRuntimeWatchdog();
 
 publishStableNode();
 
@@ -59,6 +61,7 @@ try {
 const stop = (): void => {
   if (stopping) return;
   stopping = true;
+  stopWatchdog();
   stopRuntimeUpdates();
   stopUpdateReadiness();
   stopEngineRecovery();

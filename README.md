@@ -856,6 +856,13 @@ The relay can retain recipient-encrypted catalogs, Mesh snapshots, capability us
 
 Tools & Skills matches recorded usage to the exact computer, provider and execution. Codex's native history projection supplies actual MCP invocation IDs, results and durations, including calls made through Code Mode. Claude Code uses observed tool-use, result and Skill records, aggregating MCP and skill calls before its recent-detail cache is trimmed. Execution summaries remain available when older call details fall outside the recent-event budget. Counts describe recorded evidence; installation and permission do not prove usage. Missing resource measurements remain unknown. See [native capability history](apps/bridge/src/sessions/native-capability-history/README.md).
 
+## Hang recovery
+
+If the background monitor stops responding for two minutes, it records the fault and
+restarts as a clean process, at most three times an hour. Past that it stays up and
+only reports, so a recurring hang cannot become a restart loop. Sleep does not count.
+See the [runtime watchdog](apps/bridge/src/runtime-watchdog/README.md).
+
 ## Automatic runtime updates
 
 Installed GrantTap background services check for stable MCP updates automatically.

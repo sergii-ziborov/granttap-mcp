@@ -20,6 +20,11 @@ credential used for authenticated WebSocket and APNs registration.
 Provider credentials remain in each provider's own local authentication flow.
 GrantTap does not send them to the relay.
 
+If the background monitor hangs, the [runtime watchdog](apps/bridge/src/runtime-watchdog/README.md)
+sends the site a fault report holding only the fault kind, duration, restart count,
+GrantTap and Node versions, platform and architecture. It never holds a prompt, path,
+room, key or computer name. `GRANTTAP_DISABLE_FAULT_REPORTS=1` turns sending off.
+
 Installed Claude Code, Codex, and Cursor hooks deny direct agent tool calls
 that name GrantTap's local pairing, key, or policy files, including calls that
 would otherwise be auto-accepted or run in provider bypass mode. The denial
