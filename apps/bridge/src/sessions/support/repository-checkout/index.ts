@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { execFileSync } from "node:child_process";
-import { realpathSync } from "node:fs";
-import { isAbsolute } from "node:path";
+import { existsSync, realpathSync } from "node:fs";
+import { dirname, isAbsolute, join } from "node:path";
 
 const checkoutScans = new AsyncLocalStorage<Map<string, string | undefined>>();
 
@@ -50,4 +50,25 @@ export function observedCheckoutRoot(cwd: string, paths: string[]): string | und
   if (choices.length !== 1) return undefined;
   const root = choices[0]![0];
   return root === gitRoot(cwd) ? undefined : root;
+}
+
+const walkedRoots = new Map<string, { root: string | undefined; at: number }>();
+
+/** The repository holding a path, by walking up for `.git`; cheap enough for every journal line. */
+export function repositoryRootOf(path: string): string | undefined {
+  if (!isAbsolute(path)) return undefined;
+  const now = Date.now();
+  const cached = walkedRoots.get(path);
+  if (cached && now - cached.at < 60_000) return cached.root;
+  let root: string | undefined;
+  for (let dir = path; ; dir = dirname(dir)) {
+    if (existsSync(join(dir, ".git"))) {
+      try { root = realpathSync(dir); } catch { root = dir; }
+      break;
+    }
+    if (dirname(dir) === dir) break;
+  }
+  if (walkedRoots.size >= 256) walkedRoots.clear();
+  walkedRoots.set(path, { root, at: now });
+  return root;
 }

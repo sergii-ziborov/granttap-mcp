@@ -7,8 +7,7 @@ import { rememberCapabilityObservation } from "../../telemetry";
 import { safeParse, stateFor, ts } from "../../support/common";
 import { pastedImageLabel } from "../../support/activity-helpers";
 import { claudeCapabilityUsage } from "./activity";
-import { claudeRepositoryPaths } from "./repository-observation";
-import { observedCheckoutRoot } from "../../support/repository-checkout";
+import { claudeChangedPaths, claudeCheckout, claudeRepositoryPaths } from "./repository-observation";
 import {
   childLogsFingerprint,
   claudeChildLogPaths,
@@ -22,6 +21,7 @@ import {
 type ClaudeParseState = {
   sessionId: string;
   cwd?: string;
+  launchCwd?: string;
   branch?: string;
   model?: string;
   title?: string;
@@ -33,6 +33,7 @@ type ClaudeParseState = {
   tokensLastTurn: number;
   contextTokensUsed?: number;
   repositoryPaths: string[];
+  changedPaths: string[];
   turnEnded: boolean;
 };
 
@@ -48,11 +49,18 @@ function noteTurnBoundary(d: any, state: ClaudeParseState): void {
 
 function applyClaudeLine(d: any, state: ClaudeParseState): void {
   noteTurnBoundary(d, state);
-  if (d.isSidechain !== true) state.repositoryPaths.push(...claudeRepositoryPaths(d));
+  if (d.isSidechain !== true) {
+    state.repositoryPaths.push(...claudeRepositoryPaths(d));
+    state.changedPaths.push(...claudeChangedPaths(d));
+  }
   state.repositoryPaths = state.repositoryPaths.slice(-64);
+  state.changedPaths = state.changedPaths.slice(-64);
   if (d.sessionId && !state.sessionId) state.sessionId = String(d.sessionId);
   if (d.isSidechain !== true) {
-    if (typeof d.cwd === "string" && d.cwd.trim()) state.cwd = d.cwd;
+    if (typeof d.cwd === "string" && d.cwd.trim()) {
+      state.cwd = d.cwd;
+      state.launchCwd ??= d.cwd;
+    }
     if (typeof d.gitBranch === "string" && d.gitBranch.trim()) state.branch = d.gitBranch;
   }
   if (d.type === "ai-title" && typeof d.content === "string" && !state.title) state.title = d.content;
@@ -154,7 +162,7 @@ export function parseClaudeFile(file: string): {
   const lines = text.split("\n");
   const state: ClaudeParseState = {
     sessionId: "", startedAt: 0, lastActivityAt: 0, lastMessageAt: 0,
-    tokensSession: 0, tokensLastTurn: 0, repositoryPaths: [], turnEnded: false,
+    tokensSession: 0, tokensLastTurn: 0, repositoryPaths: [], changedPaths: [], turnEnded: false,
   };
   for (const line of lines) {
     if (!line) continue;
@@ -167,7 +175,7 @@ export function parseClaudeFile(file: string): {
     agent: "claude",
     title: state.title,
     cwd: state.cwd,
-    worktree: state.cwd ? observedCheckoutRoot(state.cwd, state.repositoryPaths) : undefined,
+    worktree: state.cwd ? claudeCheckout({ ...state, cwd: state.cwd }) : undefined,
     branch: state.branch,
     model: state.model,
     summary: state.summary,

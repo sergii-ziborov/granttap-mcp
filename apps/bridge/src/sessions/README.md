@@ -11,9 +11,14 @@ replaces them; checkout verification caches belong to one scan across its yields
 
 Claude root records update the current working folder and branch as the native
 conversation moves. Its launch directory is not a permanent repository binding.
-Sidechain folders and tool observations cannot replace the root conversation's
-checkout. Catalog linking verifies the current Git root while preserving the
-existing Task and Project identities.
+Sidechain folders cannot replace the root conversation's checkout. When the
+launch folder is inside a repository, the current folder decides, unless
+sustained recent tool work shows another checkout. When it is a parent folder
+such as `~/dev`, the chat belongs to the repository it most recently changed
+(Write, Edit, MultiEdit, NotebookEdit, or `git -C <path> commit`), found by
+walking up for `.git` without running Git; the current folder decides only
+until such a change is known. Catalog linking verifies the chosen Git root while
+preserving the existing Task and Project identities.
 
 A pasted Claude image appears as an attachment. The label Claude Code writes
 beside it (`[Image: source: …]`, `[Image #1]`) is dropped from the chat, title
