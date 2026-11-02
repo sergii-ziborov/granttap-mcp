@@ -31,6 +31,7 @@ import { configDir } from "../../config";
 // meant five minutes of a silent phone.
 export const LEADERSHIP_TTL_MS = 90_000;
 const REPORT_INTERVAL_MS = 10 * 60_000;
+const INSTALLED = "installed-";
 
 export type MonitorLeadership = { acquire: () => boolean; release: () => void };
 
@@ -101,7 +102,11 @@ export function monitorLeadership(
   primary = false,
 ): MonitorLeadership {
   const path = join(configDir(), "monitor.lock");
-  const token = `${process.pid}:${randomUUID()}:${primary ? "primary" : "peer"}`;
+  // Chats started by an older monitor inherited its primary flag and still run
+  // that release, so ":primary" alone no longer proves the installed monitor.
+  // The marker sits mid-token: older releases keep reading the suffix and so
+  // never take the lease from the installed monitor.
+  const token = `${process.pid}:${primary ? INSTALLED : ""}${randomUUID()}:${primary ? "primary" : "peer"}`;
   let leader = false;
   let reportedAt = 0;
 
@@ -139,7 +144,10 @@ export function monitorLeadership(
     }
   };
 
-  const ownerIsPrimary = (): boolean => read()?.trim().endsWith(":primary") === true;
+  const ownerIsPrimary = (): boolean => {
+    const owner = read()?.trim() ?? "";
+    return owner.endsWith(":primary") && owner.includes(`:${INSTALLED}`);
+  };
 
   const reportRefusal = (): void => {
     if (now() - reportedAt < REPORT_INTERVAL_MS) return;

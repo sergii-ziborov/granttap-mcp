@@ -117,6 +117,22 @@ test("a chat that inherited the monitor's environment cannot take the primary's 
   monitor.release();
 });
 
+test("the installed monitor takes the lease from a chat that claimed primary on an older release", async (t) => {
+  const root = await configured(t);
+  const lock = join(root, "monitor.lock");
+  // An older release's MCP server, inherited the flag, alive and renewing.
+  await writeFile(lock, `${process.pid}:legacy-chat:primary`, { mode: 0o600 });
+  const monitor = monitorLeadership(undefined, undefined, undefined, true);
+  assert.equal(monitor.acquire(), true);
+  const owner = await readFile(lock, "utf8");
+  assert.match(owner, /:installed-.*:primary$/);
+  // That older release reads only the suffix, so it stays a follower.
+  assert.equal(owner.trim().endsWith(":primary"), true);
+  const second = monitorLeadership(undefined, undefined, undefined, true);
+  assert.equal(second.acquire(), false, "a second installed monitor waits for the first");
+  monitor.release();
+});
+
 test("the lease expires within a few publish ticks, not minutes", () => {
   // The phone waits out this window with no sessions and no load.
   assert.ok(LEADERSHIP_TTL_MS <= 120_000, `lease TTL is ${LEADERSHIP_TTL_MS}ms`);
