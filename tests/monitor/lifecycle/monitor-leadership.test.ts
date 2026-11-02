@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { LEADERSHIP_TTL_MS, monitorLeadership } from "../../../apps/bridge/src/monitor/support/leadership";
+import { providerProcessEnvironment } from "../../../apps/bridge/src/reply/process";
 
 async function configured(t: { after: (fn: () => void) => void }): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "granttap-leadership-"));
@@ -73,14 +74,11 @@ test("the persistent primary replaces a per-chat publisher without killing it", 
   assert.equal(peer.acquire(), true);
   assert.match(await readFile(lock, "utf8"), /:peer$/);
 
-  process.env.GRANTTAP_MONITOR_PRIMARY = "1";
-  const primary = monitorLeadership();
+  const primary = monitorLeadership(undefined, undefined, true);
   assert.equal(primary.acquire(), true);
   assert.match(await readFile(lock, "utf8"), /:primary$/);
 
-  delete process.env.GRANTTAP_MONITOR_PRIMARY;
   assert.equal(peer.acquire(), false, "the previous owner becomes a follower on its next tick");
-  process.env.GRANTTAP_MONITOR_PRIMARY = "1";
   assert.equal(primary.acquire(), true);
   primary.release();
 });
@@ -95,13 +93,28 @@ test("a departed primary does not silence the next one for a whole lease", async
   const unrenewed = new Date(Date.now() - LEADERSHIP_TTL_MS - 1_000);
   await utimes(lock, unrenewed, unrenewed);
 
-  process.env.GRANTTAP_MONITOR_PRIMARY = "1";
   const messages: string[] = [];
-  const primary = monitorLeadership(Date.now, (message) => messages.push(message));
+  const primary = monitorLeadership(Date.now, (message) => messages.push(message), true);
   assert.equal(primary.acquire(), true, "an unrenewed lease never silences the publisher");
   assert.match(await readFile(lock, "utf8"), /:primary$/);
   assert.deepEqual(messages, [], "taking over from a departed primary is normal");
   primary.release();
+});
+
+test("a chat that inherited the monitor's environment cannot take the primary's lease", async (t) => {
+  const root = await configured(t);
+  const lock = join(root, "monitor.lock");
+  const monitor = monitorLeadership(undefined, undefined, true);
+  assert.equal(monitor.acquire(), true);
+  // Chats started from the phone inherit the monitor's environment.
+  process.env.GRANTTAP_MONITOR_PRIMARY = "1";
+  const chatServer = monitorLeadership();
+  assert.equal(chatServer.acquire(), false, "the MCP server in a chat stays a follower");
+  assert.match(await readFile(lock, "utf8"), /:primary$/);
+  assert.equal(providerProcessEnvironment().GRANTTAP_MONITOR_PRIMARY, undefined,
+    "agents started from the phone do not receive the monitor-only flag");
+  assert.equal(monitor.acquire(), true);
+  monitor.release();
 });
 
 test("the lease expires within a few publish ticks, not minutes", () => {
