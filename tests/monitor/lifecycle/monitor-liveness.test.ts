@@ -155,6 +155,34 @@ describe("scan pressure", () => {
     stop();
   });
 
+  it("survives a publish that throws or rejects and keeps its schedule", async () => {
+    const { startPublishLoop } = await import("../../../apps/bridge/src/monitor/support/publish-loop");
+    const scheduled: Array<() => void> = [];
+    let runs = 0;
+    const stop = startPublishLoop({
+      connected: () => true,
+      intervalMs: 5_000,
+      immediate: true,
+      // The first run fails synchronously, like a lease write on a full disk.
+      publish: () => {
+        runs += 1;
+        if (runs === 1) throw Object.assign(new Error("no space left on device"), { code: "ENOSPC" });
+        return Promise.reject(new Error("relay closed"));
+      },
+      schedule: (callback) => {
+        scheduled.push(callback);
+        return { unref() {} } as NodeJS.Timeout;
+      },
+    });
+    for (const expected of [1, 2]) {
+      scheduled.shift()?.();
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(runs, expected);
+      assert.equal(scheduled.length, 1, "a failed publish must not end the loop");
+    }
+    stop();
+  });
+
   it("keeps expensive scans single-flight and preserves a forced refresh", async () => {
     const { singleFlightPublisher } = await import("../../../apps/bridge/src/monitor/support/single-flight");
     const releases: Array<() => void> = [];

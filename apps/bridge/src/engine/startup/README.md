@@ -3,7 +3,8 @@
 `index.ts` exposes saved-declaration activation and platform-specific endpoint
 selection. The launcher preloads `activation-entry.ts` after registering tsx and
 before importing a hook, service or monitor. It performs no network access or
-Engine installation. The runtime supervisor verifies the selected executable
+Engine installation. It first makes stderr errors non-fatal, so a full disk
+behind a desktop client's MCP log loses log lines instead of the server. The runtime supervisor verifies the selected executable
 before launch. Windows endpoints are local owner-scoped named pipes; Unix
 endpoints retain the configured socket path.
 

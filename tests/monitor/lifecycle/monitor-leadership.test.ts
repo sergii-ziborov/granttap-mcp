@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, stat, utimes, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -171,4 +171,16 @@ test("disconnect releases routing immediately and reconnect restores primary own
   assert.equal(primary.acquire(), true);
   assert.equal(peer.acquire(), false);
   assert.match(await readFile(lock, "utf8"), /:primary$/);
+});
+
+test("a leader whose lease renewal the disk refuses keeps publishing instead of crashing", async t => {
+  const root = await configured(t);
+  const lock = join(root, "monitor.lock");
+  const leadership = monitorLeadership(Date.now, () => {});
+  t.after(async () => { await chmod(lock, 0o600).catch(() => {}); leadership.release(); });
+  assert.equal(leadership.acquire(), true);
+  // A full disk refused exactly this rewrite and the throw ended the MCP server.
+  await chmod(lock, 0o400);
+  assert.doesNotThrow(() => leadership.acquire());
+  assert.equal(leadership.acquire(), true, "the lease still names this process");
 });

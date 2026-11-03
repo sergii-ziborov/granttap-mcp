@@ -49,11 +49,21 @@ function tryAcquireLock(input: {
 }): boolean {
   const { path, token, primary, read, write, expired, ownerIsPrimary, reportRefusal } = input;
   if (input.getLeader() && read() === token) {
-    write();
+    // A renewal the disk refuses still leaves this token in the lease, and the
+    // phone needs this computer's sessions most while its disk is full.
+    try {
+      write();
+    } catch {
+      // The lease ages out normally if the disk stays full.
+    }
     return true;
   }
   input.setLeader(false);
-  mkdirSync(configDir(), { recursive: true });
+  try {
+    mkdirSync(configDir(), { recursive: true });
+  } catch {
+    return false;
+  }
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       const fd = openSync(path, "wx", 0o600);

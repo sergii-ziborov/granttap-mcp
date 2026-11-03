@@ -20,7 +20,13 @@ export function startPublishLoop(options: PublishLoopOptions): () => void {
   let timer: NodeJS.Timeout | undefined;
   const tick = async (): Promise<void> => {
     if (stopped) return;
-    if (options.connected()) await options.publish();
+    // A failed publish must neither end the loop nor escape as an unhandled
+    // rejection: on a full disk one lease renewal once took the whole MCP server down.
+    try {
+      if (options.connected()) await options.publish();
+    } catch {
+      // The next tick retries.
+    }
     if (!stopped) timer = schedule(() => void tick(), options.intervalMs);
   };
   timer = schedule(() => void tick(), options.immediate ? 0 : options.intervalMs);
