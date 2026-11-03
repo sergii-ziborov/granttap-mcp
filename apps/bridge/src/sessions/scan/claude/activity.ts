@@ -3,7 +3,7 @@ import { createClaudeUsageRecorder } from './recorded-usage';
 import { readFileSync, statSync } from "node:fs";
 import type { ActivityEntry, ChildThreadInfo, SessionInfo } from "../../../../../../packages/protocol/schema";
 import { safeParse, ts } from "../../support/common";
-import { classifyTool, estimateTokens, pastedImageLabel, pushEntry as appendEntry, type PushEntryInput, toolDescription, toolSummary } from "../../support/activity-helpers";
+import { claudeTranscriptRecord, classifyTool, estimateTokens, pastedImageLabel, pushEntry as appendEntry, type PushEntryInput, toolDescription, toolSummary } from "../../support/activity-helpers";
 import { childEntryFields } from "../../support/child-threads";
 import { diffPreviewFromInput, patchStatsByToolUse, sensitivePath, statsFromInput } from "../../support/edit-stats";
 import { redactSecrets } from "../../telemetry/command-preview";
@@ -246,7 +246,7 @@ export function appendClaudeActivity(input: {
   const patches = patchStatsByToolUse(lines, safeParse, redactSecrets);
   lines.forEach((line, index) => {
     const d = safeParse(line);
-    if (!d) return;
+    if (!d || !claudeTranscriptRecord(d)) return;
     const createdAt = ts(d.timestamp) || session.lastActivityAt;
     const content = d.message?.content;
     if (d.type === "user" || d.message?.role === "user") {

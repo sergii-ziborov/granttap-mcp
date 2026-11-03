@@ -8,7 +8,7 @@ import { observeClaudeTurn } from "./turn-state";
 import { LIVE_MS, safeParse, stateFor, ts } from "../../support/common";
 import { finishScan } from "../../cooperative-scan";
 import { claudeCapabilityUsage, createClaudeCapabilityCollector } from "./activity";
-import { pastedImageLabel } from "../../support/activity-helpers";
+import { claudeTranscriptRecord, pastedImageLabel } from "../../support/activity-helpers";
 import { claudeChangedPaths, claudeCheckout, claudeRepositoryPaths } from "./repository-observation";
 import {
   childLogsFingerprint,
@@ -40,6 +40,7 @@ type ClaudeParseState = {
 };
 
 function applyClaudeLine(d: any, state: ClaudeParseState): void {
+  if (!claudeTranscriptRecord(d)) return;
   observeClaudeTurn(d, state);
   if (d.isSidechain !== true) {
     state.repositoryPaths.push(...claudeRepositoryPaths(d));

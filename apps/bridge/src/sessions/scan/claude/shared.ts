@@ -23,6 +23,7 @@ import {
   type Scan,
 } from "../../support/common";
 import {
+  claudeTranscriptRecord,
   classifyTool,
   estimateTokens,
   pastedImageLabel,
@@ -105,7 +106,7 @@ export function claudeChildSummary(
   let tokensLastTurn = 0;
   for (const line of lines) {
     const row = safeParse(line);
-    if (!row) continue;
+    if (!row || !claudeTranscriptRecord(row)) continue;
     if (typeof row.agentId === "string" && row.agentId) threadId = row.agentId;
     const at = ts(row.timestamp);
     if (at) {

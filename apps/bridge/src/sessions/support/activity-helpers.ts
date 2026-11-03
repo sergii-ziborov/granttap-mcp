@@ -55,6 +55,15 @@ const IMAGE_LABEL = /^\[Image(?: #\d+|: source: .+|: original .+)\]$/;
  * (`[Image: source: /private/tmp/…]`, `[Image #1]`). With the image itself in
  * the same message, a block of only such labels is not something anyone typed.
  */
+/**
+ * Claude Code also journals a copy of each API request (`api-request-blob`).
+ * Its user-role content repeats tool results and host notes such as
+ * "Tool loaded."; it is not a turn the person wrote or the agent took.
+ */
+export function claudeTranscriptRecord(d: any): boolean {
+  return d?.type !== "api-request-blob";
+}
+
 export function pastedImageLabel(block: any, content: readonly any[]): boolean {
   if (block?.type !== "text" || typeof block.text !== "string") return false;
   const lines = block.text.split("\n").map((line: string) => line.trim()).filter(Boolean);
