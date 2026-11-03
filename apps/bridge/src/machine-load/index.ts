@@ -137,22 +137,31 @@ export function createMachineLoadPublisher(dependencies: {
   const sampleDisk = dependencies.sampleDisk ?? createDiskUsageSampler().sample;
   const now = dependencies.now ?? Date.now;
   let loggedAt: number | undefined;
-  let active: Promise<MachineLoad> | undefined;
+  let active: Promise<MachineLoad | undefined> | undefined;
+  const logDue = (): boolean => {
+    if (!dependencies.log || (loggedAt !== undefined && now() - loggedAt < LOAD_LOG_INTERVAL_MS)) return false;
+    loggedAt = now();
+    return true;
+  };
   return (
     client: LoadRelay,
     status: SessionsStatus,
     intervalMs: number,
-  ): Promise<MachineLoad> => {
+  ): Promise<MachineLoad | undefined> => {
     if (active) return active;
     active = (async () => {
-      const processes = await sampleProcesses();
+      let processes: Record<string, AgentProcessLoad>;
+      try {
+        processes = await sampleProcesses();
+      } catch {
+        // The phone keeps the previous report until its TTL; zeros would read as every agent stopping.
+        if (logDue()) dependencies.log?.("[load] process listing unavailable; the previous report stands");
+        return undefined;
+      }
       recordAgentLoad(processes, now(), agentLanes(status.sessions));
       const disk = sampleDisk(Object.keys(processes));
       const load = buildMachineLoad({ status, processes, self: sampleSelf(), disk });
-      if (dependencies.log && (loggedAt === undefined || now() - loggedAt >= LOAD_LOG_INTERVAL_MS)) {
-        loggedAt = now();
-        dependencies.log(describeLoad(load));
-      }
+      if (logDue()) dependencies.log?.(describeLoad(load));
       await client.send(load, "phone", { ttlMs: intervalMs * 3, reliable: false });
       return load;
     })().finally(() => {

@@ -80,6 +80,10 @@ export function withCommandLines(rows: readonly ProcessRow[], commands: Readonly
  * Two listings: the executable path on its own, then the command line, joined
  * by pid — one listing cannot carry both once a path has a space in it.
  */
+/**
+ * A listing that fails or times out is unknown, not empty: under heavy load an
+ * empty answer told the phone that every agent had stopped.
+ */
 export async function sampleProcessRows(): Promise<ProcessRow[]> {
   try {
     const [{ stdout: executables }, { stdout: commands }] = await Promise.all([
@@ -88,6 +92,7 @@ export async function sampleProcessRows(): Promise<ProcessRow[]> {
     ]);
     return withCommandLines(parsePsOutput(String(executables)), parsePidListing(String(commands)));
   } catch {
-    return [];
+    // The execFile error carries every command line it read; none of them leaves here.
+    throw new Error("process listing unavailable");
   }
 }

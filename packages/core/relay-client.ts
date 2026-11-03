@@ -103,7 +103,8 @@ export class RelayClient {
         resolve();
         this.connections.connected();
       });
-      ws.on("message", (data: WebSocket.RawData) => void this.onRaw(data.toString()));
+      // One frame that fails to apply must not end the process; an unacknowledged one is redelivered.
+      ws.on("message", (data: WebSocket.RawData) => void this.onRaw(data.toString()).catch(() => {}));
       ws.on('unexpected-response', (_request, response) => {
         this.reconnect.defer(response.headers['retry-after']);
         response.resume(); ws.terminate();

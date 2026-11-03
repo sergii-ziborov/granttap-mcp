@@ -11,7 +11,10 @@ type Options={root:string;stateDirectory:string;manual?:boolean;now?:()=>number;
   idle:()=>boolean;install?:(release:Release,directory:string)=>Promise<void>;
   verify?:(root:string)=>Promise<void>;activate?:(root:string)=>void};
 
-/** Stage verified releases independently; activation waits until no request or decision is pending. */
+/**
+ * Stage releases independently; verification and activation wait until no request or decision is pending.
+ * A phone-started run can keep the monitor busy for hours, and each check would otherwise start two Node processes.
+ */
 export async function checkForRuntimeUpdate(options:Options):Promise<string|undefined> {
   const allowed=()=>options.manual===true || automaticUpdatesAllowed(options.stateDirectory);
   if(!allowed())return;
@@ -28,7 +31,7 @@ export async function checkForRuntimeUpdate(options:Options):Promise<string|unde
     if(!validRuntime(candidate,options.stateDirectory,release.version)) {
       await (options.install??installRelease)(release,options.stateDirectory);
     }
-    if(!allowed())return;
+    if(!options.idle() || !allowed())return;
     await (options.verify??verifyRelease)(candidate);
     if(!validRuntime(candidate,options.stateDirectory,release.version))throw Error('Runtime verification failed');
     if(!options.idle() || !allowed())return;

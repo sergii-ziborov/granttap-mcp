@@ -34,11 +34,13 @@ test('an explicit phone update can install while automatic updates remain disabl
   assert.equal(automaticUpdatesAllowed(f.state),false,'A manual request does not change the saved preference');
 });
 test('pending human decisions defer activation and the next idle check can apply the same release',async()=>{
-  const f=fixture();let idle=false;let installs=0;const install=f.options.install;
-  f.options.idle=()=>idle;f.options.install=async()=>{installs++;await install();};
+  const f=fixture();let idle=false;let installs=0,verifications=0;const install=f.options.install;
+  f.options.idle=()=>idle;f.options.install=async()=>{installs++;await install();};f.options.verify=async()=>{verifications++;};
+  assert.equal(await checkForRuntimeUpdate(f.options),undefined);
   assert.equal(await checkForRuntimeUpdate(f.options),undefined);
   assert.equal(selectedRuntime(f.bundled,f.state),f.bundled);
-  idle=true;assert.equal(await checkForRuntimeUpdate(f.options),f.candidate);assert.equal(installs,1);
+  assert.equal(verifications,0,'a busy monitor does not start the staged runtime every minute');
+  idle=true;assert.equal(await checkForRuntimeUpdate(f.options),f.candidate);assert.equal(installs,1);assert.equal(verifications,1);
 });
 test('a failed verification leaves the working runtime active',async()=>{
   const f=fixture();f.options.verify=async()=>{throw Error('smoke failed');};

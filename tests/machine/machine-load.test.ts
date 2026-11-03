@@ -160,10 +160,27 @@ describe("machine load assembly", () => {
       },
     };
     const load = await publish(relay, status, 30_000);
-    assert.equal(load.type, "machine.load");
+    assert.equal(load?.type, "machine.load");
     assert.equal(sent.length, 1);
     assert.equal(sent[0]?.ttlMs, 90_000);
     assert.equal(sent[0]?.reliable, false);
+  });
+
+  it("skips a report whose process listing timed out instead of telling the phone every agent stopped", async () => {
+    const { createMachineLoadPublisher } = await import("../../apps/bridge/src/machine-load");
+    const lines: string[] = [];
+    let sent = 0;
+    const publish = createMachineLoadPublisher({
+      sampleProcesses: async () => { throw new Error("process listing unavailable"); },
+      sampleSelf: () => ({ cpuPercent: 0, memoryBytes: 1 }),
+      log: (line) => lines.push(line),
+      now: () => 0,
+    });
+    const relay = { async send() { sent += 1; } };
+    assert.equal(await publish(relay, status, 30_000), undefined);
+    assert.equal(await publish(relay, status, 30_000), undefined);
+    assert.equal(sent, 0);
+    assert.deepEqual(lines, ["[load] process listing unavailable; the previous report stands"]);
   });
 
   it("keeps process sampling single-flight during rapid catalog updates", async () => {
@@ -263,7 +280,7 @@ describe("what the phone can open", () => {
     const client = { send: async () => {} };
     const status = { type: "sessions.status", sessions: [], generatedAt: 0 } as never;
     const first = await publish(client, status, 5_000);
-    assert.equal(first.agents[0]?.disk?.totalBytes, 1);
+    assert.equal(first?.agents[0]?.disk?.totalBytes, 1);
     clock = 1_000;
     await publish(client, status, 5_000);
     clock = 5 * 60_000;

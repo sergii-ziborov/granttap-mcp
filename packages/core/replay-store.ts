@@ -56,7 +56,12 @@ export class RelayMessageAcceptance {
       const oldest = this.seen.values().next().value;
       if (oldest) this.seen.delete(oldest);
     }
-    saveReplayFingerprints(this.path, this.seen);
+    try {
+      saveReplayFingerprints(this.path, this.seen);
+    } catch {
+      // On a full disk this once ended the monitor and the relay redelivered the
+      // message after the restart. The next save the disk accepts writes the whole set.
+    }
   }
 
   finish(fingerprint: string): void { this.processing.delete(fingerprint); }
