@@ -19,22 +19,23 @@ import { createHash } from "node:crypto";
 import { randomId } from "../../../../packages/core/crypto";
 import { approvalPresentation } from "./approval-presentation";
 
+const HIGH = [
+  /\brm\s+-rf?\b/,
+  /\bsudo\b/,
+  /\bgit\s+push\b.*--force/,
+  /\bgit\s+reset\s+--hard\b/,
+  /\bcurl\b[^|]*\|\s*(sh|bash)\b/,
+  /\bnpm\s+publish\b/,
+  /\bdd\s+if=/,
+  /\b(drop|truncate)\s+table\b/,
+  /:\s*>\s*\//, // truncate a file
+  /\bchmod\s+-r\b/,
+];
+const isHighRisk = (command: string): boolean => HIGH.some((re) => re.test(command.toLowerCase()));
+
 /** Heuristic risk tag so the watch can color/rank the request at a glance. */
 export function guessRisk(tool: string, command: string | undefined): Risk {
-  const c = (command ?? "").toLowerCase();
-  const HIGH = [
-    /\brm\s+-rf?\b/,
-    /\bsudo\b/,
-    /\bgit\s+push\b.*--force/,
-    /\bgit\s+reset\s+--hard\b/,
-    /\bcurl\b[^|]*\|\s*(sh|bash)\b/,
-    /\bnpm\s+publish\b/,
-    /\bdd\s+if=/,
-    /\b(drop|truncate)\s+table\b/,
-    /:\s*>\s*\//, // truncate a file
-    /\bchmod\s+-r\b/,
-  ];
-  if (HIGH.some((re) => re.test(c))) return "high";
+  if (isHighRisk(command ?? "")) return "high";
   const READONLY = ["Read", "Glob", "Grep", "NotebookRead", "WebFetch", "WebSearch"];
   if (READONLY.includes(tool)) return "low";
   return "medium";
@@ -170,10 +171,26 @@ export function decisionToCursorOutput(d: ApprovalDecision): unknown {
 
 // ------------------------------------------------------------------ helpers
 
+/**
+ * The risky step of a chained command when an earlier, harmless step would
+ * otherwise fill the title. Long paths keep only their last part here; the full
+ * command stays in the request.
+ */
+function riskyStep(command: string): string | undefined {
+  const steps = command.split(/&&|\|\||;|\n/).map((step) => step.replace(/\s+/g, " ").trim());
+  const index = steps.findIndex(isHighRisk);
+  if (index <= 0) return undefined;
+  return steps[index]!.split(" ").map((word) =>
+    word.length > 40 && word.includes("/") ? `…/${word.split("/").filter(Boolean).at(-1) ?? ""}` : word,
+  ).join(" ");
+}
+
 function shortTitle(tool: string, command: string): string {
   if (command) {
     const oneLine = command.replace(/\s+/g, " ").trim();
-    return oneLine.length > 80 ? oneLine.slice(0, 77) + "…" : oneLine;
+    const risky = riskyStep(command);
+    const title = risky ? `${risky} · ${oneLine}` : oneLine;
+    return title.length > 80 ? title.slice(0, 77) + "…" : title;
   }
   return tool;
 }
