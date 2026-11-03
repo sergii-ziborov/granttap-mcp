@@ -14,13 +14,13 @@ const beat = new BigInt64Array(buffer);
 const send = () => reportUrl ? sendPendingFaults(directory, reportUrl).catch(() => 0) : Promise.resolve(0);
 const within = (work, ms) => Promise.race([work, new Promise(resolve => setTimeout(resolve, ms))]);
 
-let lastCheck = Date.now(), graceUntil = 0, reported = false, busy = false;
+let lastCheck = Date.now(), graceUntil = 0, reported = false, busy = false, killed = false;
 const record = (kind, stalledMs, action, restartsInWindow) => {
   rememberFault(directory, faultReport({ id: randomUUID(), kind, at: Date.now(), stalledMs, action, restartsInWindow, version }));
 };
 
 async function check() {
-  if (busy) return;
+  if (busy || killed) return;
   busy = true;
   try {
     const now = Date.now(), last = Number(Atomics.load(beat, 0));
@@ -38,7 +38,12 @@ async function check() {
     record('event-loop-stall', now - last, budget.restart ? 'restart' : 'held', budget.restartsInWindow);
     reported = true;
     await within(send(), 5_000);
-    if (budget.restart) process.kill(process.pid, 'SIGKILL');
+    if (budget.restart) {
+      // macOS can let this thread run briefly after the kill; under load a second
+      // check spent another restart on the same hang.
+      killed = true;
+      process.kill(process.pid, 'SIGKILL');
+    }
   } catch { /* A watchdog fault must never become the monitor's fault. */ }
   finally { busy = false; }
 }
