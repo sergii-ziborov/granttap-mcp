@@ -126,7 +126,7 @@ test("a harmless first step cannot hide the risky step of a chained command", ()
   assert.equal(chained.risk, "high");
   assert.match(chained.title, /^rm -rf …\/target · du -sh /);
   assert.ok(chained.title.length <= 80);
-  assert.equal(chained.command.includes(`rm -rf ${target}`), true);
+  assert.equal(chained.command?.includes(`rm -rf ${target}`), true);
   assert.match(cursorToRequest({ command: "ls\nsudo reboot" }).title, /^sudo reboot · ls sudo reboot/);
   assert.equal(claudeToRequest({ tool_name: "Bash", tool_input: { command: "rm -rf build && ls" } }).title,
     "rm -rf build && ls");
