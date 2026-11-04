@@ -39,8 +39,8 @@ export class RepositoryGraphJobs<T> {
     if (!this.admit(priority)) return undefined;
     if (!previous && this.entries.size >= this.capacity * 2) {
       const oldest = [...this.entries].find(([, entry]) => !entry.pending)?.[0];
-      if (!oldest) return undefined;
-      this.entries.delete(oldest);
+      if (oldest) this.entries.delete(oldest);
+      else if (priority !== Number.MAX_SAFE_INTEGER) return undefined;
     }
     this.entries.set(key, { value: previous?.value, retryAt: 0, pending: true, listeners: [],
       sourceFingerprint: source?.fingerprint });
@@ -81,7 +81,9 @@ export class RepositoryGraphJobs<T> {
   }
 
   private admit(priority: number): boolean {
-    if (this.queue.length < this.capacity) return true;
+    // A person's build used to be refused once other builds filled the queue; its answer then
+    // came back empty and the phone read that as an unbound repository.
+    if (this.queue.length < this.capacity || priority === Number.MAX_SAFE_INTEGER) return true;
     const last = this.queue[this.queue.length - 1];
     if (!last || last.priority >= priority) return false;
     this.queue.pop();

@@ -1,5 +1,5 @@
-import { realpathSync } from "node:fs";
-import { isAbsolute } from "node:path";
+import { realpathSync, statSync } from "node:fs";
+import { isAbsolute, join } from "node:path";
 import type { ProjectBindingSummary } from "../../../../../../packages/protocol/schema";
 import { inspectRepository, inspectRepositoryAsync, type RepositoryFacts } from "../../catalog";
 
@@ -29,7 +29,16 @@ export function matchesLocalCheckout(repositoryId: string, root: string): boolea
   catch { return false; }
 }
 
-/** Once admitted, one checkout contributes one graph to this Mesh. */
+/** A linked worktree's `.git` is a file; the main checkout's is a directory. */
+function mainCheckout(root: string): boolean {
+  try { return statSync(join(root, ".git")).isDirectory(); } catch { return false; }
+}
+
+/**
+ * Once admitted, one checkout of each repository contributes one graph to this Mesh. Every worktree and
+ * release copy a chat visited used to be parsed in full, queued ahead of the repository a person asked
+ * about; the main checkout now stands for its copies, and a local folder that no longer exists is skipped.
+ */
 export function graphAnalysisBindings(bindings: ProjectBindingSummary[], endpointId?: string,
   inspect: (path: string) => RepositoryFacts = inspectRepository): ProjectBindingSummary[] {
   const selected = new Map<string, ProjectBindingSummary>();
@@ -42,6 +51,7 @@ export function graphAnalysisBindings(bindings: ProjectBindingSummary[], endpoin
     if (binding.available && binding.localPathHint) {
       try { path = realpathSync(binding.localPathHint); } catch { /* Keep an unavailable checkout distinct. */ }
     }
+    if (!path && binding.available && binding.localPathHint && binding.repositoryId.startsWith("local:")) continue;
     if (path && !observations.has(path)) {
       let facts: RepositoryFacts | undefined;
       try {
@@ -56,10 +66,11 @@ export function graphAnalysisBindings(bindings: ProjectBindingSummary[], endpoin
     const facts = path ? observations.get(path) : undefined;
     const canonical = facts?.canonicalRepositoryId === binding.repositoryId;
     const scoped = facts && matchesLocalCheckout(binding.repositoryId, facts.root);
-    const rank = canonical ? 3 : scoped ? 2 : binding.repositoryId.startsWith("local:") ? 0 : 1;
+    const identity = canonical ? 3 : scoped ? 2 : binding.repositoryId.startsWith("local:") ? 0 : 1;
+    const rank = identity * 2 + (facts && (canonical || scoped) && mainCheckout(facts.root) ? 1 : 0);
     const candidate = (canonical || scoped) && facts?.revision
       ? { ...binding, revision: facts.revision } : binding;
-    const key = JSON.stringify([binding.endpointId, path ?? binding.repositoryId]);
+    const key = JSON.stringify([binding.endpointId, facts ? facts.canonicalRepositoryId : path ?? binding.repositoryId]);
     const previous = selected.get(key);
     if (!previous || rank > (ranks.get(key) ?? 0)) {
       selected.set(key, candidate);

@@ -52,6 +52,20 @@ test("explicit Graph build refreshes one admitted Project and reports missing bi
     assert.equal(sent[0]?.repositoryGraphs?.[0]?.analysisStatus, "UNAVAILABLE");
     assert.ok((sent[0]?.generatedAt ?? 0) > snapshot.generatedAt);
 });
+test("a build whose analyses never came back says so instead of calling the repository unbound", async () => {
+    const binding = { bindingId: "b", projectId: "project", endpointId: "mac", repositoryId: "github.com/example/repo",
+        displayName: "repo", available: false };
+    const snapshot = { type: "mesh.snapshot", sessionId: "project", projectId: "project",
+        project: { projectId: "project", name: "Repository", canonicalRepositoryId: "repo", createdAt: 1 },
+        bindings: [binding], tasks: [], executions: [], claims: [], dependencies: [], events: [], generatedAt: 1 } as MeshSnapshot;
+    const sent: MeshSnapshot[] = [];
+    assert.equal(await analyzeProjectGraphNow({} as never, "project", {
+        snapshots: () => [snapshot], wait: async () => undefined, backbone: async () => undefined,
+        graphs: async () => [], endpoint: () => "mac", send: async (_client: unknown, value: MeshSnapshot) => { sent.push(value); },
+    }), true);
+    assert.deepEqual(sent[0]?.repositoryGraphs?.map(report => [report.repositoryId, report.analysisErrorCode]),
+        [["github.com/example/repo", "ANALYSIS_NOT_FINISHED"]]);
+});
 test("an explicit Graph request starts while the catalog publisher is still busy", async (t) => {
     const { mkdtempSync, mkdirSync, rmSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");

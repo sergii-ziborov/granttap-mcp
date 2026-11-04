@@ -68,12 +68,15 @@ export async function analyzeProjectGraphNow(
   const peers = relationships === undefined ? current.peers
     : mergeRelationshipPeers(current.peers, relationships);
   const observed = [...repositoryGraphs, ...failures];
-  const reports = observed.length > 0 ? observed : [{
-    projectId, repositoryId: current.project.canonicalRepositoryId,
-    revision: "unverified", weavatrixVersion: "unknown",
-    analysisStatus: "UNAVAILABLE" as const, analysisErrorCode: "REPOSITORY_NOT_BOUND",
+  const unavailable = (repositoryId: string, analysisErrorCode: string) => ({
+    projectId, repositoryId, revision: "unverified", weavatrixVersion: "unknown",
+    analysisStatus: "UNAVAILABLE" as const, analysisErrorCode,
     nodes: [], relations: [], totalNodes: 0, totalRelations: 0, truncated: false,
-  }];
+  });
+  // "Not bound" is true only without bindings here; checkouts whose analysis did not come back are named.
+  const reports = observed.length > 0 ? observed : bindings.length > 0
+    ? [...new Set(bindings.map(binding => binding.repositoryId))].map(id => unavailable(id, "ANALYSIS_NOT_FINISHED"))
+    : [unavailable(current.project.canonicalRepositoryId, "REPOSITORY_NOT_BOUND")];
   const receipts = requestIds?.size ? requestIds : new Set<string | undefined>([undefined]);
   for (const id of receipts) {
     await dependencies.send(client, {

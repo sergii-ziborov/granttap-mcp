@@ -55,3 +55,20 @@ test("graph checkout selection prefers its admitted canonical identity and retai
   assert.equal(matchesLocalCheckout("local:relative-directory", root), false);
   assert.equal(matchesLocalCheckout("github.com/example/project", root), false);
 });
+
+test("one checkout per repository is analyzed; linked worktrees and vanished local folders add no graphs", t => {
+  const base = mkdtempSync(join(tmpdir(), "granttap-graph-copies-"));
+  t.after(() => rmSync(base, { recursive: true, force: true }));
+  const main = join(base, "main"), linked = join(base, "linked");
+  execFileSync("git", ["init", "--quiet", main]);
+  execFileSync("git", ["-C", main, "remote", "add", "origin", "https://github.com/example/project.git"]);
+  writeFileSync(join(main, "entry.ts"), "export const graph = 1;\n");
+  execFileSync("git", ["-C", main, "add", "."]);
+  execFileSync("git", ["-C", main, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "--quiet", "-m", "init"]);
+  execFileSync("git", ["-C", main, "worktree", "add", "--quiet", linked]);
+  const binding = (id: string, path: string) => ({ bindingId: id, projectId: "mesh", endpointId: "mac",
+    repositoryId: `local:${path}`, localPathHint: path, displayName: id, available: true });
+  assert.deepEqual(graphAnalysisBindings([binding("linked", linked), binding("main", main),
+    binding("vanished", join(base, "deleted-scratchpad"))], "mac").map(b => b.bindingId), ["main"],
+    "Each copy used to be parsed in full and queued ahead of the repository the person asked about.");
+});

@@ -67,3 +67,14 @@ test('a successful source observation survives restart without another native pa
   await restarted.refresh('repo', scan, 1, source);
   assert.equal(scans, 2);
 });
+
+test('a person\'s build is admitted even while other requested builds fill the queue', async () => {
+  const jobs = new RepositoryGraphJobs<string>(() => 0, 100, 200, 1);
+  const release: Array<() => void> = [];
+  const slow = (value: string) => () => new Promise<string>(resolve => release.push(() => resolve(value)));
+  const first = jobs.refresh('first', slow('one'));
+  const second = jobs.refresh('second', slow('two'));
+  const third = jobs.refresh('third', async () => 'three');
+  while (release.length) { release.shift()!(); await new Promise(resolve => setImmediate(resolve)); }
+  assert.deepEqual(await Promise.all([first, second, third]), ['one', 'two', 'three']);
+});
