@@ -84,3 +84,23 @@ test("Cursor falls back to its native billing period when no weekly percentage i
   assert.equal(calls.length, 2);
   assert.equal(reader.current()[0]?.windows[0]?.usedPercent, 25);
 });
+
+test("a refused or unreadable account read is reported once per reason, never with its credential", async () => {
+  let now = at, status = 429;
+  const notes: string[] = [];
+  const reader = createNativeAccountUsageReader({ clock: () => now,
+    credential: async provider => provider === "claude" ? "private-claude" : undefined,
+    fetcher: async () => status === 200
+      ? Response.json({ five_hour: { utilization: 30, resets_at: end }, seven_day: { utilization: 10, resets_at: end } })
+      : new Response("slow down", { status }),
+    report: (provider, reason) => notes.push(`${provider}:${reason ?? "available"}`),
+  });
+  await reader.refresh();
+  now += 121_000; await reader.refresh();
+  assert.deepEqual(notes.filter(note => note.startsWith("claude")), ["claude:HTTP 429"], "A repeated 429 is not logged again.");
+  status = 200; now += 121_000; await reader.refresh();
+  assert.deepEqual(reader.current().map(x => x.provider), ["claude"]);
+  assert.deepEqual(notes.filter(note => note.startsWith("claude")), ["claude:HTTP 429", "claude:available"]);
+  assert.equal(notes.join(" ").includes("private"), false);
+  assert.deepEqual(notes.filter(note => note.startsWith("cursor")), [], "A provider that is not signed in is not a failure.");
+});

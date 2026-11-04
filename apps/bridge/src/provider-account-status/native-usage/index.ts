@@ -5,7 +5,11 @@ import { readNativeCredential } from "./credentials";
 import { createNativeAccountUsageReader } from "./reader";
 
 let scope = "";
-let reader = createNativeAccountUsageReader({ credential: readNativeCredential });
+const create = () => createNativeAccountUsageReader({ credential: readNativeCredential,
+  report: (provider, reason) => process.stderr.write(reason
+    ? `[granttap-mcp] ${provider} account limits unavailable: ${reason}\n`
+    : `[granttap-mcp] ${provider} account limits readable again\n`) });
+let reader = create();
 
 export function mergeNativeUsage(direct: ProviderAccountUsage[], statusLine: ProviderAccountUsage[],
   now = Date.now()): ProviderAccountUsage[] {
@@ -24,7 +28,7 @@ export function cachedNativeAccountUsage(): ProviderAccountUsage[] {
   const env = process.env;
   const current = [homedir(), env.GRANTTAP_CLAUDE_DIR, env.NODVOX_CLAUDE_DIR, env.CLAUDE_CONFIG_DIR,
     env.GRANTTAP_GROK_DIR, env.XDG_CONFIG_HOME, env.APPDATA].join("\u001f");
-  if (scope !== current) { scope = current; reader = createNativeAccountUsageReader({ credential: readNativeCredential }); }
+  if (scope !== current) { scope = current; reader = create(); }
   void reader.refresh();
   return mergeNativeUsage(reader.current(), readClaudeUsage());
 }

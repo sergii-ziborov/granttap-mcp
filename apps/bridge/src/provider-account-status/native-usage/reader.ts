@@ -5,6 +5,8 @@ type Options = {
   credential: (provider: NativeUsageProvider) => Promise<string | undefined>;
   fetcher?: (url: string, init: RequestInit) => Promise<Response>;
   clock?: () => number;
+  /** Told when a signed-in account's limits become unreadable or readable again; never given a credential. */
+  report?: (provider: NativeUsageProvider, reason: string | undefined) => void;
 };
 
 const requests = {
@@ -37,11 +39,18 @@ export function createNativeAccountUsageReader(options: Options) {
   const reports = new Map<NativeUsageProvider, ProviderAccountUsage>();
   let pending: Promise<void> | undefined;
   let attemptedAt = -Infinity;
+  // Missing limits used to leave no trace; one line per change of reason keeps the log readable.
+  const reasons = new Map<NativeUsageProvider, string | undefined>();
+  const note = (provider: NativeUsageProvider, reason: string | undefined) => {
+    if (reasons.has(provider) ? reasons.get(provider) === reason : reason === undefined) return;
+    reasons.set(provider, reason);
+    options.report?.(provider, reason);
+  };
 
   async function update(provider: NativeUsageProvider): Promise<void> {
     try {
       const token = await options.credential(provider);
-      if (!token) { reports.delete(provider); return; }
+      if (!token) { reports.delete(provider); reasons.delete(provider); return; }
       const request = requests[provider];
       const response = await fetcher(request.url, {
         method: request.method, redirect: "error", signal: AbortSignal.timeout(8_000),
@@ -62,7 +71,11 @@ export function createNativeAccountUsageReader(options: Options) {
       }
       if (report) reports.set(provider, report);
       else reports.delete(provider);
-    } catch { reports.delete(provider); }
+      note(provider, report ? undefined : response.ok ? "unrecognized response" : `HTTP ${response.status}`);
+    } catch (error) {
+      reports.delete(provider);
+      note(provider, error instanceof Error ? error.name : "request failed");
+    }
   }
 
   return {
