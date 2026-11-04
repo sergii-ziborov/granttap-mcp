@@ -16,7 +16,8 @@ import { binaryVersion } from '../tools/version';
 import { providerCommand, providerAuthentication, installedProvider, providerEnvironment } from './provider-command';
 import { computerCache } from './cache';
 import { providerLogins } from './login';
-import { ownedProviderProcesses, signalOwnedProcess } from '../reply/process';
+import { ownedProviderProcesses } from '../reply/process';
+import { prepareRuntimeRestart, stopOwnedChildren } from './runtime-restart';
 import { approvalsStatus } from '../approvals/state';
 import { inspectTool, updateTool } from '../tools/updater';
 
@@ -80,13 +81,20 @@ export async function updateRuntime(): Promise<string> {
   const candidate = await checkForRuntimeUpdate({ root: runtimeRoot, stateDirectory: join(configDir(), 'runtime-updates'),
     idle: maintenanceIdle, manual: true });
   return candidate ? 'MCP update verified and selected. Restart MCP to activate it.'
-    : 'No newer published MCP is available, or activation is waiting for active work. The current MCP is retained.';
+    : 'No newer published MCP is available, or another update is still installing. The current MCP is retained.';
+}
+
+const ownedRuns = () => agents.flatMap(agent => ownedProviderProcesses(providerCommand(agent)));
+
+/** Stops GrantTap's own runs only when the phone confirmed it; see `prepareRuntimeRestart`. */
+export function prepareRestart(interrupt: boolean): Promise<void> {
+  return prepareRuntimeRestart({ supported: runtimeRestartSupported, signingIn: () => providerLogins.active(),
+    pendingDecisions: () => approvalsStatus().pending.length, activeRuns: ownedRuns, stop: stopOwnedChildren }, interrupt);
 }
 
 /** A detached, fixed command survives the monitor exiting. No phone-supplied command or path is executed. */
 export function restartRuntime(): void {
   if (!runtimeRestartSupported()) throw Error('Managed MCP services are not installed on this computer.');
-  if (!maintenanceIdle()) throw Error('Finish active requests, decisions and sign-in before restarting MCP.');
   const domain = 'gui/' + process.getuid!();
   const script = `setTimeout(() => { const { spawnSync } = require('node:child_process');
     for (const label of ['com.granttap.mcp-http','com.granttap.monitor'])
@@ -101,12 +109,7 @@ export async function restartProvider(agent: CodingAgent, interrupt = false): Pr
   if (providerLogins.active()) throw Error('Finish sign-in before restarting a provider.');
   const children = ownedProviderProcesses(command);
   if (children.length && !interrupt) throw Error('This provider has active GrantTap requests. Confirm interruption before restarting.');
-  await Promise.all(children.map(child => new Promise<void>(resolve => {
-    const timer = setTimeout(() => { signalOwnedProcess(child, 'SIGKILL'); resolve(); }, 2_000);
-    child.once('close', () => { clearTimeout(timer); resolve(); });
-    (child as typeof child & { granttapStopped?: boolean }).granttapStopped = true;
-    signalOwnedProcess(child, 'SIGTERM');
-  })));
+  await stopOwnedChildren(children);
   await promisify(execFile)(command, ['--version'], { env: providerEnvironment(), timeout: 15_000, maxBuffer: 16_384 });
   return 'A fresh provider CLI started successfully. The next message starts a new GrantTap connection to it.';
 }

@@ -5,7 +5,7 @@ import { loadConfig, machineConfigPath } from '../config';
 import { observedComputerId } from '../mesh/identity/computer';
 import { clearComputerCache } from './cache';
 import { providerLogins } from './login';
-import { managementSnapshot, maintenanceIdle, restartProvider, restartRuntime, runtimeRoot, updateRuntime, updateProvider } from './maintenance';
+import { managementSnapshot, maintenanceIdle, prepareRestart, restartProvider, restartRuntime, runtimeRoot, updateRuntime, updateProvider } from './maintenance';
 
 type Send = (result: DeviceManagementResult) => Promise<void>;
 type Entry = { fingerprint: string; result?: DeviceManagementResult; pending?: Promise<void>; at: number; ttl: number };
@@ -84,7 +84,7 @@ async function execute(request: DeviceManagementRequest, scope: string, computer
       message = await updateProvider(request.agent!);
     } else if (request.action === 'runtime-restart') {
       // The phone waits for a different runtimeEpoch, rather than treating this acknowledgement as a restart.
-      if (!maintenanceIdle()) throw Error('Finish active requests and sign-in before restarting MCP.');
+      await prepareRestart(request.interruptActiveTasks === true);
       await send(result('waiting', 'Restart requested. Waiting for MCP to reconnect…'));
       restartRuntime(); return;
     }

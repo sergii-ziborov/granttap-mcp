@@ -11,15 +11,24 @@ type Options={root:string;stateDirectory:string;manual?:boolean;now?:()=>number;
   idle:()=>boolean;install?:(release:Release,directory:string)=>Promise<void>;
   verify?:(root:string)=>Promise<void>;activate?:(root:string)=>void};
 
+/** An install killed mid-way (a reboot, a full disk) leaves its lock behind; ten minutes covers a real install. */
+function removeStaleLock(lock:string,now:number):void {
+  try {if(now-statSync(lock).mtimeMs>10*60_000)unlinkSync(lock);} catch { /* no stale lock */ }
+}
+
 /**
- * Stage releases independently; verification and activation wait until no request or decision is pending.
- * A phone-started run can keep the monitor busy for hours, and each check would otherwise start two Node processes.
+ * Stage releases independently; automatic verification and activation wait until no request or decision is
+ * pending. A phone-started run can keep the monitor busy for hours, and each check would otherwise start two
+ * Node processes. A phone's explicit update is one check, and a hung run is exactly what it may be replacing,
+ * so it verifies and selects at once; the selected version starts with the next MCP restart.
  */
 export async function checkForRuntimeUpdate(options:Options):Promise<string|undefined> {
   const allowed=()=>options.manual===true || automaticUpdatesAllowed(options.stateDirectory);
+  const ready=()=>(options.manual===true || options.idle()) && allowed();
   if(!allowed())return;
   mkdirSync(options.stateDirectory,{recursive:true,mode:0o700});
   const lock=join(options.stateDirectory,'install.lock');let fd:number;
+  removeStaleLock(lock,(options.now??Date.now)());
   try {fd=openSync(lock,'wx',0o600);} catch {return undefined;}
   try {
     const release=await (options.latest??latestRelease)();
@@ -31,10 +40,10 @@ export async function checkForRuntimeUpdate(options:Options):Promise<string|unde
     if(!validRuntime(candidate,options.stateDirectory,release.version)) {
       await (options.install??installRelease)(release,options.stateDirectory);
     }
-    if(!options.idle() || !allowed())return;
+    if(!ready())return;
     await (options.verify??verifyRelease)(candidate);
     if(!validRuntime(candidate,options.stateDirectory,release.version))throw Error('Runtime verification failed');
-    if(!options.idle() || !allowed())return;
+    if(!ready())return;
     saveState(options.stateDirectory,{root:candidate,version:release.version,
       previous:state.root?{root:state.root,version:state.version}:undefined});
     options.activate?.(candidate);return candidate;
@@ -52,8 +61,7 @@ export function runtimeUpdateLoop(options:LoopOptions):()=>void {
     if(stopped)return;
     try {
       if(!automaticUpdatesAllowed(options.directory)){lastCheck=0;return;}
-      const lock=join(options.directory,'install.lock');
-      try {if(now()-statSync(lock).mtimeMs>10*60_000)unlinkSync(lock);} catch { /* no stale lock */ }
+      removeStaleLock(join(options.directory,'install.lock'),now());
       if(now()-lastCheck>=4*60*60_000) {
         await (options.check??checkForRuntimeUpdate)({root:options.root,stateDirectory:options.directory,idle:options.idle,
           activate:()=>options.activate?.()});

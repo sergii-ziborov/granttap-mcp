@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { checkForRuntimeUpdate } from '../index';
@@ -41,6 +41,18 @@ test('pending human decisions defer activation and the next idle check can apply
   assert.equal(selectedRuntime(f.bundled,f.state),f.bundled);
   assert.equal(verifications,0,'a busy monitor does not start the staged runtime every minute');
   idle=true;assert.equal(await checkForRuntimeUpdate(f.options),f.candidate);assert.equal(installs,1);assert.equal(verifications,1);
+});
+test('an explicit phone update verifies and selects a release while GrantTap runs are still busy',async()=>{
+  const f=fixture();let verifications=0;f.options.idle=()=>false;f.options.verify=async()=>{verifications++;};
+  assert.equal(await checkForRuntimeUpdate({...f.options,manual:true}),f.candidate);
+  assert.equal(verifications,1);
+  assert.equal(selectedRuntime(f.bundled,f.state),f.candidate,'The next MCP restart activates it');
+});
+test('a lock left behind by an interrupted install does not silence the next phone update',async()=>{
+  const f=fixture();mkdirSync(f.state,{recursive:true});const lock=join(f.state,'install.lock');writeFileSync(lock,'');
+  const old=new Date(Date.now()-11*60_000);utimesSync(lock,old,old);
+  assert.equal(await checkForRuntimeUpdate({...f.options,manual:true,now:Date.now}),f.candidate);
+  assert.equal(existsSync(lock),false);
 });
 test('a failed verification leaves the working runtime active',async()=>{
   const f=fixture();f.options.verify=async()=>{throw Error('smoke failed');};
