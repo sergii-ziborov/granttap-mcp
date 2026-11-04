@@ -31,9 +31,11 @@ test('a restart still waits for sign-in and needs the managed services', async (
 });
 
 test('stopping owned runs ends the provider process group even when it ignores SIGTERM', async () => {
-  const child = spawn(process.execPath, ['-e', "process.on('SIGTERM',()=>{});setInterval(()=>{},1000)"],
-    { detached: true, stdio: 'ignore' });
-  await new Promise(resolve => setTimeout(resolve, 200));
+  const child = spawn(process.execPath,
+    ['-e', "process.on('SIGTERM',()=>{});process.stdout.write('ready');setInterval(()=>{},1000)"],
+    { detached: true, stdio: ['ignore', 'pipe', 'ignore'] });
+  // A busy Mac can take longer than any fixed delay to install the handler; wait until it says so.
+  await once(child.stdout!, 'data');
   const exited = once(child, 'exit');
   await stopOwnedChildren([child], 300);
   const [code, signal] = await exited;
