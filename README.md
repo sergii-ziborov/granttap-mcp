@@ -162,9 +162,10 @@ GrantTap reports the depth each provider actually exposes. Visibility does not
 imply deterministic remote blocking or full mobile continuation.
 
 The Mac app checks this runtime's local health endpoint without account login
-or QR scanning. A Mac App Store sandbox build then asks for explicit local
-access using the runtime's bounded PKCE consent flow; development builds retain
-private Unix IPC. Mac Settings can configure encrypted address discovery or
+or QR scanning. Signed Mac builds, including local test builds, ask for explicit
+local access using the runtime's bounded PKCE consent flow and authenticated
+loopback desktop bridge. The MCP forwards bounded requests to its same-user
+runtime IPC. Mac Settings can configure encrypted address discovery or
 install/start/stop the pinned personal relay. Runtime code remains outside the
 Apple sandbox. Mac purchase terms, optional Personal subscriptions and required
 TLS/VPN reachability are documented in the Apple client repository.
@@ -521,6 +522,10 @@ searched, and `--engine <path>` points at one that lives elsewhere; the binary
 is checksummed here, because that checksum is the only thing verified before it
 is launched. Without an engine the rollout stays off and setup says so, rather
 than leaving "Governance not reported" on the phone as the only symptom.
+A paired monitor can prepare the pinned managed Engine in the background.
+Inspect current readiness and coverage rather than assuming every missing
+Engine requires a manual binary path; initial catalog delivery does not wait
+for background preparation.
 
 The normal CLI surface is intentionally small:
 
@@ -697,11 +702,13 @@ The user-facing approval modes map to the existing runtime policy:
 
 | Personal UI | Runtime |
 | --- | --- |
-| Ask for risky actions | `except_push` |
-| Ask for every action | `ask` |
+| Ask for approval | `ask` |
+| Approve for me | `except_push` |
+| Allow all actions | `full` |
 | Use agent defaults | no GrantTap gate for that task |
 
-Legacy custom levels remain compatible but are not part of the primary flow.
+Custom levels remain compatible. Native provider restrictions and global deny
+still apply; a selected mode is distinct from a confirmed policy receipt.
 
 ## Project Governance
 
