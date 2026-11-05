@@ -64,6 +64,26 @@ export function desktopOperationTimeout(operation: unknown, input: unknown): num
   return 15_000;
 }
 
+function sendDesktopResult(socket: Socket, requestId: string, result: unknown): void {
+  if (socket.destroyed) return;
+  try {
+    socket.end(encodeEngineFrame({
+      protocol_version: ENGINE_PROTOCOL_VERSION, request_id: requestId,
+      status: "ok", result,
+    }));
+  } catch {
+    try {
+      if (!socket.destroyed) socket.end(encodeEngineFrame({
+        protocol_version: ENGINE_PROTOCOL_VERSION, request_id: requestId,
+        status: "error", error: {
+          code: "ENGINE_RESPONSE_UNAVAILABLE",
+          message: "The local response could not be delivered.",
+        },
+      }));
+    } catch { socket.destroy(); }
+  }
+}
+
 /** Same-user desktop channel; Task sends require an exact persisted execution link. */
 export async function startDesktopEngineBridge(options: {
   engineSocketPath?: string;
@@ -115,10 +135,7 @@ export async function startDesktopEngineBridge(options: {
         void read.then(
           (result) => {
             if (!result) { socket.destroy(); return; }
-            if (!socket.destroyed) socket.end(encodeEngineFrame({
-              protocol_version: ENGINE_PROTOCOL_VERSION, request_id: requestId,
-              status: "ok", result,
-            }));
+            sendDesktopResult(socket, requestId, result);
           },
           () => {
             if (!socket.destroyed) socket.end(encodeEngineFrame({

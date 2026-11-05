@@ -69,7 +69,7 @@ test("selected Mac refresh admits its checkout and returns completed Engine anal
     names.forEach((key, index) => {
       if (previous[index] === undefined) delete process.env[key]; else process.env[key] = previous[index];
     });
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
   }
 });
 
