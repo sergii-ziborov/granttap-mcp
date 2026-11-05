@@ -1,6 +1,6 @@
 {
   "name": "granttap",
-  "version": "0.1.13+codex.20261005111840",
+  "version": "0.1.14",
   "description": "Pair local coding agents with GrantTap and approve, answer, or steer their work from iPhone and Apple Watch.",
   "author": {
     "name": "GrantTap",
@@ -21,7 +21,7 @@
   ],
   "interface": {
     "displayName": "GrantTap",
-    "shortDescription": "Connect GrantTap by QR or Mac passkey",
+    "shortDescription": "Control local coding agents",
     "longDescription": "Try now / Connect GrantTap opens the connection card. Add a device, Add another device, or Reconnect shows a one-time QR for GrantTap on iPhone or iPad; QR pairing needs no account. Connect with passkey links this Mac to your GrantTap account through granttap.com without changing its QR room, chat, or Mesh routing. Authenticate opens granttap.com/connect to authorize this local MCP client separately. Pairing stays out of chat.",
     "developerName": "GrantTap",
     "category": "Developer Tools",
@@ -29,18 +29,19 @@
       "Interactive"
     ],
     "websiteURL": "https://granttap.com/connect",
+    "supportURL": "https://granttap.com/support",
     "privacyPolicyURL": "https://granttap.com/privacy",
     "termsOfServiceURL": "https://granttap.com/terms",
     "defaultPrompt": [
       "Connect GrantTap to this computer.",
       "Connect this Mac to my GrantTap account with passkey.",
-      "Check whether this computer is connected to GrantTap.",
-      "Reconnect this computer to GrantTap."
+      "Check whether this computer is connected to GrantTap."
     ],
     "brandColor": "#E0612E",
     "composerIcon": "./assets/composer-icon.png",
     "logo": "./assets/logo.png"
   },
+  "requires_local_executor": true,
   "mcpServers": {
     "granttap": {
       "type": "http",
