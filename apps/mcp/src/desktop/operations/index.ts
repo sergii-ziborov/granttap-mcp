@@ -57,7 +57,7 @@ export function desktopReadOperation(input: {
     return Promise.resolve(desktopInstalledSkills(queryInput, storePath));
   }
   if (operation === "desktop.mesh_snapshots") {
-    return Promise.resolve(desktopMeshSnapshots(storePath));
+    return Promise.resolve(desktopMeshSnapshots(queryInput, storePath));
   }
   if (operation === "desktop.live_catalog") return activity.liveCatalog(storePath);
   if (operation === "desktop.task_capabilities") return activity.capabilities(queryInput, storePath);
