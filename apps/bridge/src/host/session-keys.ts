@@ -2,6 +2,7 @@ import { retainedPayloadOptions } from "../../../../packages/core/retained-state
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { loadSessionKeys, persistedSessionKey } from "./session-key-store";
+import { fitMeshSnapshot } from "../mesh/runtime/snapshot/fit";
 import { RelayClient, type SendOptions } from "../../../../packages/core/relay-client";
 import type {
   MeshClaimReleaseResult,
@@ -49,7 +50,8 @@ export async function sendMeshPayload(
   options: SendOptions = {},
 ): Promise<void> {
   const purpose = payload.type === "mesh.snapshot" ? "project" : "task";
-  await sendScopedPayload({ client, payload, sessionId: payload.sessionId, purpose, to, options });
+  const fitted = payload.type === "mesh.snapshot" ? fitMeshSnapshot(payload) : payload;
+  await sendScopedPayload({ client, payload: fitted, sessionId: fitted.sessionId, purpose, to, options });
 }
 
 export async function sendProjectPayload(

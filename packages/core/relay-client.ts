@@ -120,6 +120,10 @@ export class RelayClient {
         this.socketHealth.stop(ws);
         this.admissionLease.stop(ws);
         if (this.ws === ws) { this.reconnect.closed(openedAt, code, reason.toString()); this.ws = undefined; }
+        // The relay names why it closed; without this a refusal loop looked like an idle, online computer.
+        if (opened && code !== 1000 && code !== 1001 && code !== 1005) {
+          process.stderr.write(`[relay] connection closed: ${code} ${reason.toString().slice(0, 80)}\n`);
+        }
         if (!opened) reject(new Error(`relay connection closed (${this.cfg.relayUrl})`));
         this.scheduleReconnect();
       });

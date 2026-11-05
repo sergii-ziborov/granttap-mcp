@@ -39,8 +39,20 @@ export function sealEnvelope(
     nonce,
     box,
   };
-  return JSON.stringify(envelope);
+  const frame = JSON.stringify(envelope);
+  if (envelope.deliveryId && to !== "all" && Buffer.byteLength(frame) > MAX_STORED_FRAME_BYTES) {
+    throw new Error(`relay frame of ${Buffer.byteLength(frame)} bytes exceeds the stored-message limit`);
+  }
+  return frame;
 }
+
+/**
+ * The relay stores a frame that carries a `deliveryId` until the peer confirms it, and refuses one
+ * larger than this by closing the sender's socket with a cool-down. A computer whose Mesh snapshot
+ * outgrew it reconnected every few seconds and never stayed long enough to receive a phone message,
+ * so such a frame is refused here and the socket stays up.
+ */
+export const MAX_STORED_FRAME_BYTES = 1_800_000;
 
 /** Apply the independent task encryption layer before transport encryption. */
 export function sealSessionPayload(payload: Payload, sessionId: string, key: string | undefined): Payload {
