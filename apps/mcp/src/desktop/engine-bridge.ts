@@ -115,10 +115,23 @@ export async function startDesktopEngineBridge(options: {
         void read.then(
           (result) => {
             if (!result) { socket.destroy(); return; }
-            if (!socket.destroyed) socket.end(encodeEngineFrame({
-              protocol_version: ENGINE_PROTOCOL_VERSION, request_id: requestId,
-              status: "ok", result,
-            }));
+            if (socket.destroyed) return;
+            try {
+              socket.end(encodeEngineFrame({
+                protocol_version: ENGINE_PROTOCOL_VERSION, request_id: requestId,
+                status: "ok", result,
+              }));
+            } catch {
+              try {
+                if (!socket.destroyed) socket.end(encodeEngineFrame({
+                  protocol_version: ENGINE_PROTOCOL_VERSION, request_id: requestId,
+                  status: "error", error: {
+                    code: "ENGINE_RESPONSE_UNAVAILABLE",
+                    message: "The local response could not be delivered.",
+                  },
+                }));
+              } catch { socket.destroy(); }
+            }
           },
           () => {
             if (!socket.destroyed) socket.end(encodeEngineFrame({
