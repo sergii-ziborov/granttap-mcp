@@ -163,3 +163,43 @@ test("Graph refresh publishes bounded static contracts without changing verified
     assert.deepEqual(sent[0]?.peers, [contract]);
     assert.equal(sent[0]?.backbone, undefined);
 });
+
+test("every repository bound to the Mesh gets a report, not only the one whose analysis finished first", async () => {
+    const bindings = ["ios", "android", "backend"].map(name => ({ bindingId: name, projectId: "torch", endpointId: "mac",
+        repositoryId: `github.com/me/torch-${name}`, displayName: `torch-${name}`, available: false }));
+    const snapshot = { type: "mesh.snapshot", sessionId: "torch", projectId: "torch",
+        project: { projectId: "torch", name: "Torch", canonicalRepositoryId: "github.com/me/torch-ios", createdAt: 1 },
+        bindings, tasks: [], executions: [], claims: [], dependencies: [], events: [], generatedAt: 1 } as MeshSnapshot;
+    const ready = { projectId: "torch", repositoryId: "github.com/me/torch-ios", revision: "r", weavatrixVersion: "1",
+        analysisStatus: "COMPLETE" as const, nodes: [{ id: "root", kind: "component", label: "Repository root" }],
+        relations: [], totalNodes: 1, totalRelations: 0, truncated: false };
+    const sent: MeshSnapshot[] = [];
+    await analyzeProjectGraphNow({} as never, "torch", {
+        snapshots: () => [snapshot], wait: async () => undefined, backbone: async () => undefined,
+        graphs: async () => [ready], endpoint: () => "mac", send: async (_client: unknown, value: MeshSnapshot) => { sent.push(value); },
+    });
+    assert.deepEqual(sent[0]?.repositoryGraphs?.map(report => [report.repositoryId, report.analysisStatus, report.analysisErrorCode]), [
+        ["github.com/me/torch-ios", "COMPLETE", undefined],
+        ["github.com/me/torch-android", "UNAVAILABLE", "ANALYSIS_NOT_FINISHED"],
+        ["github.com/me/torch-backend", "UNAVAILABLE", "ANALYSIS_NOT_FINISHED"],
+    ]);
+});
+
+test("a Project folder that is not a Git checkout says it needs one instead of vanishing from Graph", async () => {
+    const { mkdtempSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const folder = mkdtempSync(join(tmpdir(), "granttap-plain-project-"));
+    const own = { bindingId: "own", projectId: "plain", endpointId: "mac", repositoryId: `local:${folder}`,
+        displayName: "plain", available: true, localPathHint: folder };
+    const snapshot = { type: "mesh.snapshot", sessionId: "plain", projectId: "plain",
+        project: { projectId: "plain", name: "Plain", canonicalRepositoryId: `local:${folder}`, createdAt: 1 },
+        bindings: [own], tasks: [], executions: [], claims: [], dependencies: [], events: [], generatedAt: 1 } as MeshSnapshot;
+    const sent: MeshSnapshot[] = [];
+    await analyzeProjectGraphNow({} as never, "plain", {
+        snapshots: () => [snapshot], wait: async () => undefined, backbone: async () => undefined,
+        graphs: async () => [], endpoint: () => "mac", send: async (_client: unknown, value: MeshSnapshot) => { sent.push(value); },
+    });
+    assert.deepEqual(sent[0]?.repositoryGraphs?.map(report => [report.repositoryId, report.analysisErrorCode]),
+        [[`local:${folder}`, "GIT_CHECKOUT_REQUIRED"]]);
+});

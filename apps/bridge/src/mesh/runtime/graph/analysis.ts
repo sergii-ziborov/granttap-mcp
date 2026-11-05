@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { projectRelationshipPeers, mergeRelationshipPeers } from "../../../engine/runtime/project-relationships";
 import type { RelayClient } from "../../../../../../packages/core/relay-client";
 import type { MeshSnapshot } from "../../../../../../packages/protocol/schema";
@@ -58,7 +59,12 @@ export async function analyzeProjectGraphNow(
   const rejected = new Set(failures.map(report => report.repositoryId));
   const bindings = graphAnalysisBindings((current.bindings ?? [])
     .filter(binding => !rejected.has(binding.repositoryId)), dependencies.endpoint?.());
-  if (dependencies.endpoint && !bindings.length && !failures.length && current.bindings?.length) return false;
+  // The Engine analyses Git checkouts only; the Project's own folder without one is named, not dropped.
+  const endpoint = dependencies.endpoint?.();
+  const own = (current.bindings ?? []).find(binding => binding.repositoryId === current.project.canonicalRepositoryId
+    && (!endpoint || binding.endpointId === endpoint) && binding.available && binding.localPathHint
+    && existsSync(binding.localPathHint) && !bindings.some(selected => selected.repositoryId === binding.repositoryId));
+  if (dependencies.endpoint && !bindings.length && !failures.length && !own && current.bindings?.length) return false;
   const [backbone, repositoryGraphs, details] = await Promise.all([
     dependencies.backbone(projectId),
     dependencies.graphs(projectId, bindings, { background: false }),
@@ -73,9 +79,14 @@ export async function analyzeProjectGraphNow(
     analysisStatus: "UNAVAILABLE" as const, analysisErrorCode,
     nodes: [], relations: [], totalNodes: 0, totalRelations: 0, truncated: false,
   });
-  // "Not bound" is true only without bindings here; checkouts whose analysis did not come back are named.
-  const reports = observed.length > 0 ? observed : bindings.length > 0
-    ? [...new Set(bindings.map(binding => binding.repositoryId))].map(id => unavailable(id, "ANALYSIS_NOT_FINISHED"))
+  // "Not bound" is true only without bindings here. Every bound repository is named: one whose
+  // analysis did not come back used to vanish once another finished, so a Mesh of several
+  // repositories showed a single graph as if it were the whole Mesh.
+  const reported = new Set(observed.map(report => report.repositoryId));
+  const unfinished = [...new Set(bindings.map(binding => binding.repositoryId))]
+    .filter(id => !reported.has(id)).map(id => unavailable(id, "ANALYSIS_NOT_FINISHED"));
+  const needsGit = own ? [unavailable(own.repositoryId, "GIT_CHECKOUT_REQUIRED")] : [];
+  const reports = observed.length + unfinished.length + needsGit.length > 0 ? [...observed, ...unfinished, ...needsGit]
     : [unavailable(current.project.canonicalRepositoryId, "REPOSITORY_NOT_BOUND")];
   const receipts = requestIds?.size ? requestIds : new Set<string | undefined>([undefined]);
   for (const id of receipts) {
