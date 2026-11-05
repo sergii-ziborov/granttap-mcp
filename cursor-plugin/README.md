@@ -44,7 +44,7 @@ JavaScript entry point through Node, avoiding command-shell quoting. Do not add 
 
 ## Install the Cursor plugin
 
-The plugin source is public and Apache-2.0-licensed at
+The plugin source is public under the GrantTap Commercial Source License at
 `sergii-ziborov/granttap-mcp`. Cursor Marketplace listings require Cursor's
 review; a Git import does not automatically receive marketplace updates. Install
 the reviewed **GrantTap** listing when it is available to your account, or
@@ -89,5 +89,5 @@ Troubleshooting details live in
 
 ## License
 
-The plugin is distributed under the [Apache License 2.0](LICENSE). The GrantTap iPhone
+The plugin is distributed under the [GrantTap Commercial Source License](LICENSE). The GrantTap iPhone
 and Apple Watch app and hosted service have separate terms.

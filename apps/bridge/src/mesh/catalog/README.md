@@ -19,4 +19,4 @@ Behavior tests: `tests/agentic/codex-workspace-binding.test.ts` and
 
 ## License
 
-Apache License 2.0. See [LICENSE](../../../../../LICENSE).
+GrantTap Commercial Source License. See [LICENSE](../../../../../LICENSE).

@@ -8,8 +8,8 @@ const config: PeerConfig = { relayUrl: "wss://relay.granttap.com", room: "fixtur
   role: "machine", deviceName: "fixture", senderId: "fixture",
   myPublicKey: "fixture-key", mySecretKey: "fixture-secret", peerPublicKey: "fixture-peer" };
 
-test("an unlinked free-beta client does not claim paid server rights", async () => {
-  assert.deepEqual(await managedAdmissionOptions(config).upgradeHeaders!(), {});
+test("an unlinked client must sign in before obtaining managed access", async () => {
+  await assert.rejects(managedAdmissionOptions(config).upgradeHeaders!(), /Sign in/);
 });
 
 test("own relays never obtain a paid lease and managed authentication failures are not hidden", async () => {
@@ -31,7 +31,8 @@ test("own relays never obtain a paid lease and managed authentication failures a
   const denied = managedAdmissionOptions(config, async () => new Response(null, { status: 403 }));
   await assert.rejects(denied.upgradeHeaders!(), /computer limit/);
   for (const status of [404, 503]) {
-    assert.deepEqual(await managedAdmissionOptions(config, async () => new Response(null, { status })).upgradeHeaders!(), {});
+    await assert.rejects(managedAdmissionOptions(config, async () => new Response(null, { status })).upgradeHeaders!(),
+      /could not be verified/);
   }
   for (const body of [{}, { ticket: "bad", expiresAt: 1 }, { ticket: "bad", expiresAt: Date.now() + 600_000 }]) {
     await assert.rejects(managedAdmissionOptions(config, async () => Response.json(body)).upgradeHeaders!(), /invalid lease/);

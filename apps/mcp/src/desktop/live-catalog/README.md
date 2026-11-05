@@ -7,4 +7,4 @@ It does not rewrite Execution closure, Task ownership or handoff history.
 Completed Tasks and former owners cannot become current through this read.
 The result is bounded to 40 sessions; tests live beside this entry point.
 
-Licensed under the Apache License 2.0; see the repository LICENSE.
+Licensed under the GrantTap Commercial Source License; see the repository LICENSE.

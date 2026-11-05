@@ -12,7 +12,7 @@ requested to stop. The stop count records accepted signals, not confirmed exit
 of every descendant. Windows uses the direct-child stop path; remote jobs and
 resources that outlive the agent process need their own cancellation receipts.
 
-License: this module is distributed under the Apache License 2.0
+License: this module is distributed under the GrantTap Commercial Source License
 in the repository-root `LICENSE` file.
 
 Model reasoning effort reaches resumed and new provider turns as native arguments.

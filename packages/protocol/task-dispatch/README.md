@@ -14,7 +14,7 @@ Tests live in `tests/wire.test.ts`.
 
 ## License
 
-Licensed under the Apache License, Version 2.0 (Apache-2.0). See LICENSE and NOTICE.
+Licensed under the GrantTap Commercial Source License. See LICENSE and NOTICE.
 
 ## Pending native chats
 

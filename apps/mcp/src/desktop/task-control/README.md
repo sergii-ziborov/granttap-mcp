@@ -23,4 +23,4 @@ it does not claim that native process exit has already been confirmed.
 Tests in `tests/` exercise a real synthetic child process, durable settings and
 foreign execution rejection. Parent: [Desktop channel](../README.md).
 
-Covered by the [Apache License 2.0](../../../../../LICENSE).
+Covered by the [GrantTap Commercial Source License](../../../../../LICENSE).

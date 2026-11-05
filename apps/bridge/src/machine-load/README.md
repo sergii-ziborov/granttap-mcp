@@ -20,5 +20,5 @@ token estimates come from existing call arguments and results. Exact model
 tokens belong to provider replies and are not allocated to individual OS
 commands.
 
-License: this module is distributed under the Apache License 2.0
+License: this module is distributed under the GrantTap Commercial Source License
 in the repository-root `LICENSE` file.

@@ -10,4 +10,4 @@ A chat grant can answer a verified ASK. Global and Project DENY, an unavailable
 governance engine, paused automation, and disabled capabilities retain priority.
 This changes no machine default or other chat. Tests live in `tests/`.
 
-License: Apache License 2.0; see the repository LICENSE.
+License: GrantTap Commercial Source License; see the repository LICENSE.

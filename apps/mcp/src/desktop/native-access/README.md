@@ -33,4 +33,4 @@ it or submit JSON to the loopback service.
 Tests exercise real HTTP and Unix sockets, consent forgery rejection, PKCE,
 one-use codes, expiration, restart and authenticated forwarding.
 
-This runtime module is covered by the repository Apache License 2.0.
+This runtime module is covered by the repository GrantTap Commercial Source License.

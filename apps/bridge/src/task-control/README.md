@@ -10,4 +10,4 @@ enforced by configuration capability policy, independently of client presentatio
 Regression scenarios: `tests/session/session-pause.test.ts` and the desktop
 Task-control module tests.
 
-Covered by the [Apache License 2.0](../../../../LICENSE).
+Covered by the [GrantTap Commercial Source License](../../../../LICENSE).

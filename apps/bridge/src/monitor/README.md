@@ -10,7 +10,7 @@ snapshots. Repository analysis uses its own Engine socket to keep policy and
 Backbone requests responsive.
 
 Integration tests remain in `tests/monitor`; background publication tests live
-beside `mesh-publication`. This module uses the repository Apache License 2.0.
+beside `mesh-publication`. This module uses the repository GrantTap Commercial Source License.
 
 `message-delivery/index.ts` reserves the durable delivery lease, then
 emits a non-terminal processing receipt only after workspace, attachment and

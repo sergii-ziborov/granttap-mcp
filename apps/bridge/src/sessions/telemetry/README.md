@@ -9,5 +9,5 @@ values are redacted for password-taking commands rather than ordinary build,
 port and path options. Behavior tests live in `tests/`, with provider integration
 tests in the root `tests/provider/` directory.
 
-License: this module is distributed under the Apache License 2.0
+License: this module is distributed under the GrantTap Commercial Source License
 in the repository-root `LICENSE` file.

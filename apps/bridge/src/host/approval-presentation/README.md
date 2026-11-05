@@ -7,4 +7,4 @@ alter provider input, classify an unknown operation as safe, or authorize it.
 
 Behavior tests live in `tests/`.
 
-License: Apache License 2.0; see the repository LICENSE.
+License: GrantTap Commercial Source License; see the repository LICENSE.

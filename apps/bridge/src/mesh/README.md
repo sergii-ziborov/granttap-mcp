@@ -88,5 +88,5 @@ be retained as attributed task knowledge, but it does not become a verified
 architecture result or a source of CPU, memory, timing, or token measurements.
 These projections must not require an extra model turn to produce a report.
 
-License: this module is distributed under the Apache License 2.0
+License: this module is distributed under the GrantTap Commercial Source License
 in the repository-root `LICENSE` file.

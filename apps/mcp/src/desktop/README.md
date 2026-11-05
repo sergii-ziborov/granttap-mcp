@@ -25,7 +25,7 @@ Knowledge, graph, and invocation reads remain Engine responses.
 
 Tests are in `../../../../tests/http/desktop-engine-bridge.test.ts`.
 
-This MCP component is covered by the repository [Apache License 2.0](../../../../LICENSE).
+This MCP component is covered by the repository [GrantTap Commercial Source License](../../../../LICENSE).
 
 `image/artifacts.ts` recognises explicit local image links in visible messages,
 excluding code examples and remote URLs. `desktop.task_image` reads bounded

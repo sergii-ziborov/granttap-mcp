@@ -15,4 +15,4 @@ Tests: `tests/selection.test.ts` exercises compatible capacity, disabled routing
 unknown/stale reports, policy/repository/model/effort mismatches and portable
 NVIDIA work.
 
-Licensed under the Apache License, Version 2.0 (Apache-2.0). See LICENSE and NOTICE.
+Licensed under the GrantTap Commercial Source License. See LICENSE and NOTICE.

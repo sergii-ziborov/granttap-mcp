@@ -12,4 +12,4 @@ Tests live in `tests/`.
 
 ## License
 
-This module is distributed under the Apache License 2.0. See the repository LICENSE.
+This module is distributed under the GrantTap Commercial Source License. See the repository LICENSE.

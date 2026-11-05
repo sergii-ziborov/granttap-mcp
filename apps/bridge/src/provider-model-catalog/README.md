@@ -19,7 +19,7 @@ CLI aliases as aliases, whose resolved versions remain the provider's choice.
 
 Behavior tests: [`tests/catalog.test.ts`](tests/catalog.test.ts).
 
-Apache License 2.0. See [LICENSE](../../../../LICENSE).
+GrantTap Commercial Source License. See [LICENSE](../../../../LICENSE).
 
 ## All four providers
 

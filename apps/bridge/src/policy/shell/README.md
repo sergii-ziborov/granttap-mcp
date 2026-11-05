@@ -7,5 +7,5 @@ before this legacy auto-accept check.
 
 See [the policy module](../README.md) and the repository engineering index.
 
-License: this module is distributed under the Apache License 2.0 in the repository-root
+License: this module is distributed under the GrantTap Commercial Source License in the repository-root
 `LICENSE` file.

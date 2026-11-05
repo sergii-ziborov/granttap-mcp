@@ -2,7 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/granttap-mcp)](https://www.npmjs.com/package/granttap-mcp)
 [![CI](https://github.com/sergii-ziborov/granttap-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/sergii-ziborov/granttap-mcp/actions/workflows/ci.yml)
-[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![License: Commercial](https://img.shields.io/badge/license-Commercial-orange.svg)](LICENSE)
 
 > **See what your coding agents are doing. Step in when they need you.**
 
@@ -29,9 +29,10 @@ requesting controller, and restricted to that native execution's admitted
 checkout. Received previews remain on the device for offline inspection.
 **Agents** opens nested execution conversations within the same Task.
 
-The MCP runtime, plugins, and CLI are open source under the Apache License 2.0.
-The Apple apps, Engine, relay, and website are separately licensed commercial
-products or source. Their licenses do not change this repository's Apache-2.0 grant.
+The MCP runtime, plugins, and CLI use the GrantTap Commercial Source License.
+Product use requires authorized GrantTap account access; official TestFlight
+access remains free. Earlier releases through 0.8.75 retain their Apache-2.0
+permissions. The Apple apps, Engine, relay, and website have their own terms.
 
 [Website](https://granttap.com) · [npm](https://www.npmjs.com/package/granttap-mcp) ·
 [Security model](SECURITY.md) ·
@@ -371,7 +372,7 @@ them. A lost connection keeps Claude's local question flow available.
 
 ## Install
 
-The local runtime and plugins are available under the [Apache License 2.0](LICENSE).
+The local runtime and plugins are available under the [GrantTap Commercial Source License](LICENSE).
 The iPhone and Apple Watch app and hosted service have separate terms.
 
 Install the GrantTap plugin directly from this repository's marketplace:
@@ -700,7 +701,7 @@ typecheck, and release checks pass.
 ## License
 
 GrantTap MCP, its CLI, and bundled plugins are distributed under the
-[Apache License 2.0](LICENSE). The Mac, iPhone, iPad, and Apple Watch apps are licensed separately.
+[GrantTap Commercial Source License](LICENSE). The Mac, iPhone, iPad, and Apple Watch apps are licensed separately.
 Third-party dependencies retain their own terms; see
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
