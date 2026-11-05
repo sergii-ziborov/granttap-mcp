@@ -15,12 +15,16 @@ import { confirmPendingController, controllerPeerGate } from "../../../../bridge
 import { applyNetworkRoute } from "../../../../bridge/src/device-network/settings";
 import { startEndpointPublisher } from "../../../../bridge/src/device-network/directory";
 import { managedAdmissionOptions } from "../../../../bridge/src/managed-admission";
+import { createIdleRelease } from "./idle-release";
 
 const ASK_TIMEOUT_MS = Number(
   process.env.GRANTTAP_ASK_TIMEOUT_MS ?? process.env.NODVOX_ASK_TIMEOUT_MS ?? 180_000,
 );
 let client: RelayClient | null = null;
 let monitor: SessionMonitor | null = null;
+// Longer than any question can wait for its answer, so a pending ask never loses its link.
+const idle = createIdleRelease({ idleMs: Math.max(5 * 60_000, ASK_TIMEOUT_MS + 60_000),
+  isLeader: () => monitor?.isLeader() === true, release: () => resetRelay() });
 let phoneLastSeenAt: number | null = null;
 let stopEndpointPublisher = () => {};
 
@@ -64,6 +68,7 @@ export async function relay(): Promise<RelayClient | null> {
       stopEndpointPublisher = startEndpointPublisher(config);
     }
     await client.connect();
+    idle.touch();
     await publishHeldHeartbeat(client).catch(() => {});
     await monitor?.publish().catch(() => {});
     return client;
@@ -73,6 +78,7 @@ export async function relay(): Promise<RelayClient | null> {
 }
 
 export function resetRelay(): void {
+  idle.cancel();
   stopEndpointPublisher();
   monitor?.close();
   monitor = null;

@@ -2,6 +2,7 @@ import { retainedPayloadOptions } from "./retained-state";
 /** Shared authenticated relay transport. See README.md for delivery and encryption boundaries. */
 import WebSocket from "ws";
 import { ManagedRelayLease, RelaySocketHealth, RelayReconnectBackoff, RelayConnectionNotifications, relayUpgradeHeaders } from "./socket-lifecycle";
+import { RelayLinkWatch, type LinkStuckReport } from "./socket-lifecycle/link-watch";
 import { OutboundFrameQueue, sendEncryptedPayload, priorityControlPayload } from "./outbound-scheduler";
 import { openRelayMessage, parseRelayControl, waitForRelayPayload } from "./relay-inbound";
 import { consumeTaskJobOffer, type TaskDispatchListener } from "./task-dispatch";
@@ -30,6 +31,11 @@ export class RelayClient {
   private readonly reconnect: RelayReconnectBackoff;
   private readonly socketHealth = new RelaySocketHealth();
   private readonly admissionLease = new ManagedRelayLease();
+  private readonly linkStuckListeners = new Set<(report: LinkStuckReport) => void>();
+  private readonly linkWatch = new RelayLinkWatch({ onStuck: report => {
+    for (const listener of this.linkStuckListeners) { try { listener(report); } catch { /* the watch outlives a listener */ } }
+  } });
+  private readonly refusalLoggedAt = new Map<string, number>();
   private readonly sessionKeys = new Map<string, string>();
   private readonly replay: RelayMessageAcceptance;
 
@@ -88,6 +94,7 @@ export class RelayClient {
 
       ws.on("open", () => {
         opened = true;
+        this.linkWatch.opened();
         clearTimeout(timer);
         openedAt = Date.now();
         this.socketHealth.start(ws, this.opts.pingIntervalMs ?? 20_000);
@@ -107,12 +114,13 @@ export class RelayClient {
       ws.on("message", (data: WebSocket.RawData) => void this.onRaw(data.toString()).catch(() => {}));
       ws.on('unexpected-response', (_request, response) => {
         this.reconnect.defer(response.headers['retry-after']);
+        this.noteRefusal(response.statusCode, response.headers['x-hostwatch-client-limit']);
         response.resume(); ws.terminate();
         clearTimeout(timer); reject(new Error('Relay upgrade was not accepted.'));
       });
       ws.on("error", (err) => {
         clearTimeout(timer);
-        if (!opened) reject(err);
+        if (!opened) { this.linkWatch.failed((err as NodeJS.ErrnoException).code ?? "connect error"); reject(err); }
       });
       ws.on("close", (code, reason) => {
         frames.cancel();
@@ -120,6 +128,7 @@ export class RelayClient {
         this.socketHealth.stop(ws);
         this.admissionLease.stop(ws);
         if (this.ws === ws) { this.reconnect.closed(openedAt, code, reason.toString()); this.ws = undefined; }
+        if (opened) this.linkWatch.closed(code, reason.toString().slice(0, 80));
         // The relay names why it closed; without this a refusal loop looked like an idle, online computer.
         if (opened && code !== 1000 && code !== 1001 && code !== 1005) {
           process.stderr.write(`[relay] connection closed: ${code} ${reason.toString().slice(0, 80)}\n`);
@@ -254,6 +263,22 @@ export class RelayClient {
   }
 
   /** Observe each actual socket recovery so replaceable snapshots are sent immediately. */
+  /** Told when this computer cannot stay on the relay; see `RelayLinkWatch`. */
+  onLinkStuck(listener: (report: LinkStuckReport) => void): () => void {
+    this.linkStuckListeners.add(listener);
+    return () => { this.linkStuckListeners.delete(listener); };
+  }
+
+  /** A refused upgrade is a failure for the watch, and its reason is logged once per ten minutes. */
+  private noteRefusal(status: number | undefined, limit: string | string[] | undefined): void {
+    const reason = `${status ?? "?"} ${typeof limit === "string" && /^[a-z-]{1,40}$/.test(limit) ? limit : ""}`.trim();
+    this.linkWatch.failed(reason);
+    const now = Date.now();
+    if (now - (this.refusalLoggedAt.get(reason) ?? -Infinity) < 10 * 60_000) return;
+    this.refusalLoggedAt.set(reason, now);
+    process.stderr.write(`[relay] upgrade refused: ${reason}\n`);
+  }
+
   onConnected(listener: () => void | Promise<void>): () => void {
     return this.connections.subscribe(listener);
   }

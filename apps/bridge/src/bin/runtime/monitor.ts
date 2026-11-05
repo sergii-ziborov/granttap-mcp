@@ -20,6 +20,7 @@ import { startRuntimeWatchdog } from "../../runtime-watchdog";
 
 import { startTaskDispatchMonitor } from "../../task-dispatch/worker/monitor";
 import { startTaskNetworkMonitor } from '../../task-network/runtime';
+import { claimLinkRestart } from '../../monitor/support/link-restart';
 
 let client: RelayClient;
 let monitor: ReturnType<typeof startSessionMonitor>;
@@ -58,7 +59,7 @@ try {
   process.exit(1);
 }
 
-const stop = (): void => {
+const stop = (exitCode = 0): void => {
   if (stopping) return;
   stopping = true;
   stopWatchdog();
@@ -70,11 +71,19 @@ const stop = (): void => {
   monitor.close();
   stopEndpointPublisher();
   client.close();
-  void engine.stop().finally(() => process.exit(0));
+  void engine.stop().finally(() => process.exit(exitCode));
 };
 
-process.on("SIGINT", stop);
-process.on("SIGTERM", stop);
+process.on("SIGINT", () => stop());
+process.on("SIGTERM", () => stop());
+// A monitor that cannot stay on the relay looks online on the phone while no message reaches it.
+client.onLinkStuck(report => {
+  process.stderr.write(`[monitor] cannot stay on the relay: ${report.failures} failures in five minutes, last ${report.reason}\n`);
+  if (claimLinkRestart()) {
+    process.stderr.write("[monitor] restarting for a fresh relay link\n");
+    stop(75);
+  }
+});
 
 stopEngineRecovery = startEngineRecovery({
   prepare: prepareMonitorEngine,
