@@ -73,7 +73,7 @@ export async function runCodex(
   const imageArgs = images.flatMap((path) => ["-i", path]);
   const args = [
     "exec", "resume", ...accessArgs, ...mcpArgs, ...modelArgs, ...providerEffortArgs("codex", options.effort), ...imageArgs,
-    session.sessionId, "--json", "-",
+    session.sessionId, "--json", "--skip-git-repo-check", "-",
   ];
   const result = await runProcess(
     resolveCodexBinary(),
