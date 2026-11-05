@@ -77,15 +77,42 @@ export function desktopFixtureSnapshot(
   });
 }
 
-/** Durable Mesh list; live Engine enrichment is requested for the selected Mesh only. */
-export function desktopMeshSnapshots(storePath = join(configDir(), "project-mesh.json")) {
+/** Durable Mesh list; each page fits the shared 512 KiB Engine frame. */
+export function desktopMeshSnapshots(
+  input: unknown = undefined, storePath = join(configDir(), "project-mesh.json")
+) {
+  const query = input == null ? {} : input;
+  if (typeof query !== "object" || Array.isArray(query)) throw new Error("Invalid Mesh snapshot page");
+  const options = query as Record<string, unknown>;
+  const limit = options.limit == null ? 16 : Number(options.limit);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 64) throw new Error("Invalid Mesh snapshot page");
+  const after = options.after_project_id;
+  if (after != null && (typeof after !== "string" || after.length > 128)) {
+    throw new Error("Invalid Mesh snapshot page");
+  }
+  const projects = desktopWorkspace(storePath)?.projects ?? [];
+  const start = after == null ? 0 : projects.findIndex((project) => project.project_id === after) + 1;
+  if (after != null && start === 0) throw new Error("Unknown Mesh snapshot cursor");
   const models = desktopModelCatalog();
-  return {
-    operation: "desktop.mesh_snapshots" as const,
-    snapshots: (desktopWorkspace(storePath)?.projects ?? []).flatMap((project) =>
-      desktopFixtureSnapshot({ project_id: project.project_id }, storePath) ?? [])
-      .map((snapshot, index) => withDesktopModels(snapshot, models, index === 0)),
-  };
+  const snapshots: NonNullable<ReturnType<typeof desktopFixtureSnapshot>>[] = [];
+  let index = start;
+  while (index < projects.length && snapshots.length < limit) {
+    const project = projects[index]!;
+    const snapshot = desktopFixtureSnapshot({ project_id: project.project_id }, storePath);
+    if (!snapshot) throw new Error("Mesh snapshot unavailable");
+    const candidate = withDesktopModels(snapshot, models, index === 0);
+    const page = { operation: "desktop.mesh_snapshots", snapshots: [...snapshots, candidate],
+      next_after_project_id: project.project_id };
+    // Keep room for the protocol envelope and the caller's request identifier.
+    if (Buffer.byteLength(JSON.stringify(page)) > 480 * 1_024) {
+      if (snapshots.length === 0) throw new Error("Mesh snapshot exceeds the frame budget");
+      break;
+    }
+    snapshots.push(candidate);
+    index += 1;
+  }
+  return { operation: "desktop.mesh_snapshots" as const, snapshots,
+    next_after_project_id: index < projects.length ? projects[index - 1]!.project_id : undefined };
 }
 
 /** Global Task index for the Mac's Now and Tasks views. */
