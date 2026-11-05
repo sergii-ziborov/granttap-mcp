@@ -68,3 +68,24 @@ test("the content fingerprint retains the admitted Git revision as separate prov
   assert.equal(reports[0]?.revision, "content-fingerprint");
   assert.equal(reports[0]?.sourceRevision, "git-head");
 });
+
+test("a person's build gives a large repository ten minutes while background builds keep two", async () => {
+  const timeouts: number[] = [];
+  const client: EngineClientLike = { close() {}, async request(input, options) {
+    timeouts.push(options?.timeoutMs ?? 0);
+    if (input.operation !== "graph.analyze_repository") throw new Error("unexpected operation");
+    return { operation: "graph.repository", graph: {
+      project_id: input.input.project_id, repository_id: input.input.repository_id,
+      revision: "sha", weavatrix_version: "2.17.4", analysis_status: "COMPLETE",
+      nodes: [], relations: [], total_nodes: 1, total_relations: 0, truncated: false,
+    } };
+  } } as EngineClientLike;
+  const bindings = [{ projectId: "large-build", bindingId: "b", endpointId: "mac",
+    repositoryId: "github.com/pytorch/pytorch", displayName: "pytorch", available: true }];
+  const options = { client, env: { GRANTTAP_ENGINE_ENABLED: "1" } };
+  await projectRepositoryGraphs("large-build", bindings, options);
+  await projectRepositoryGraphs("large-build-background", bindings.map(b => ({ ...b, projectId: "large-build-background" })),
+    { ...options, background: true });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.deepEqual(timeouts, [600_000, 120_000]);
+});

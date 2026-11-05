@@ -33,6 +33,8 @@ const pendingBindingSyncs = new Map<string, Promise<boolean>>();
 // The Apple Mesh envelope is 256KiB; leave room for Tasks, bindings and receipts.
 const MAX_REPOSITORY_GRAPH_WIRE_BYTES = 192 * 1_024 - 128;
 const MAX_SINGLE_GRAPH_WIRE_BYTES = 192 * 1_024;
+/** A person asked for this build; a repository the size of pytorch did not finish in two minutes. */
+const EXPLICIT_ANALYSIS_MS = 600_000;
 const repositoryGraphJobs = new RepositoryGraphJobs<ProjectRepositoryGraph>(Date.now,120_000,300_000,32,
   new RepositoryGraphCache(()=>join(configDir(),"repository-graph-cache")));
 
@@ -209,7 +211,7 @@ export async function projectRepositoryGraphs(
     ))
     : await Promise.all(repositories.map((binding, index) => repositoryGraphJobs.refresh(
       JSON.stringify([projectId, binding.repositoryId, binding.revision]),
-      () => analyzeRepositoryGraph(client, projectId, binding.repositoryId, 120_000, binding.revision),
+      () => analyzeRepositoryGraph(client, projectId, binding.repositoryId, EXPLICIT_ANALYSIS_MS, binding.revision),
       Number.MAX_SAFE_INTEGER, observations[index],
     )));
   return boundRepositoryGraphs(graphs.filter((item): item is ProjectRepositoryGraph => item != null));
