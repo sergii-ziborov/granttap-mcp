@@ -68,6 +68,7 @@ function collectCodexRoots(candidates: CodexCandidate[]): {
         tokensLastTurn: 0,
         contextTokensUsed: latest.session.contextTokensUsed,
         contextWindow: latest.session.contextWindow,
+        ...(latest.session.contextUsage ? { contextUsage: latest.session.contextUsage } : {}),
       },
       observations: [],
     });

@@ -5,6 +5,7 @@ import type { ChildThreadInfo, SessionInfo } from "../../../../../../packages/pr
 import { aggregateChildThreads, childTitle } from "../../support/child-threads";
 import { rememberCapabilityObservation } from "../../telemetry";
 import { observeClaudeTurn } from "./turn-state";
+import { claudeContextReport } from "../../context-usage";
 import { LIVE_MS, safeParse, stateFor, ts } from "../../support/common";
 import { finishScan } from "../../cooperative-scan";
 import { claudeCapabilityUsage, createClaudeCapabilityCollector } from "./activity";
@@ -34,6 +35,7 @@ type ClaudeParseState = {
   tokensSession: number;
   tokensLastTurn: number;
   contextTokensUsed?: number;
+  contextUsage?: SessionInfo["contextUsage"];
   repositoryPaths: string[];
   changedPaths: string[];
   turnEnded: boolean;
@@ -95,6 +97,7 @@ function applyClaudeLine(d: any, state: ClaudeParseState): void {
       state.tokensLastTurn = spent;
     }
     state.contextTokensUsed = claudeContextUsage(usage) ?? state.contextTokensUsed;
+    if (d.isSidechain !== true) state.contextUsage = claudeContextReport(usage, ts(d.timestamp) ?? 0) ?? state.contextUsage;
     if (d.message?.model && !state.model) state.model = String(d.message.model);
   }
   if (d.message?.role === "assistant") {
@@ -273,6 +276,7 @@ export function* parseClaudeFileSteps(file: string): Generator<void, ClaudeParse
     tokensSession: state.tokensSession,
     tokensLastTurn: state.tokensLastTurn,
     contextTokensUsed: state.contextTokensUsed,
+    ...(state.contextUsage ? { contextUsage: state.contextUsage } : {}),
   };
   const actualChildPaths =
     state.sessionId === cachedSessionId ? childPaths : claudeChildLogPaths(file, state.sessionId);

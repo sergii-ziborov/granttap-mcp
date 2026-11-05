@@ -3,6 +3,8 @@ import { TaskTransferNotice } from "../../task-transfer";
 import { z } from "zod";
 import { CodingAgent } from "../primitives";
 import { ActivityEntry, McpServerInfo, SkillInfo } from "../capabilities";
+import { SessionContextUsage } from "./context";
+export { SessionContextUsage } from "./context";
 import {
   AgentId,
   AutoAcceptLevel,
@@ -91,6 +93,7 @@ export const SessionInfo = z.object({
   tokensLastTurn: z.number(),
   contextTokensUsed: z.number().optional(),
   contextWindow: z.number().optional(),
+  contextUsage: SessionContextUsage.optional(),
   mcpServers: z.array(McpServerInfo).optional(),
   skills: z.array(SkillInfo).optional(),
   childThreads: z.array(ChildThreadInfo).max(32).optional(),
