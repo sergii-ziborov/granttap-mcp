@@ -32,9 +32,12 @@ export function createMcpSessionHandler(): {
         await transport.handleRequest(req, res, req.body);
         return;
       }
-      res.status(400).json({
+      const staleSession = typeof sessionId === "string";
+      res.status(staleSession ? 404 : 400).json({
         jsonrpc: "2.0",
-        error: { code: -32000, message: "Bad Request: No valid session ID provided" },
+        error: staleSession
+          ? { code: -32001, message: "Session not found" }
+          : { code: -32000, message: "Bad Request: No valid session ID provided" },
         id: null,
       });
     } catch (error) {
