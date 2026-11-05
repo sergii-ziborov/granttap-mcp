@@ -11,6 +11,7 @@ import {observeCodexTurn,codexTurnState,type CodexTurnClock} from '../sessions/s
 import {ts} from '../sessions/support/common';
 import {grokResumeActivity} from '../providers/grok-activity';
 import {cursorConversationSession} from '../sessions/cursor';
+import {isDeliveryInFlight} from '../reply/in-flight';
 
 type NativeClock={revision:string;lastActivityAt:number;claude:ClaudeTurnClock;codex:CodexTurnClock};
 const clocks=new Map<string,NativeClock>();
@@ -18,13 +19,32 @@ export type SessionObservation={session:SessionInfo;revision:string};
 
 /** Discovery may have started before an open chat finished its turn. Recheck before publication. */
 export function refreshObservedCatalog(status: SessionsStatus): SessionsStatus {
-  const refresh = (session: SessionInfo) => observeSessionExecution(session)?.session ?? session;
+  const refresh = (session: SessionInfo) => observeSessionExecution(session)?.session
+    ?? ownedRun(session, localTaskTransfers().nativeSession(session).sessionId);
   return {...status, sessions: status.sessions.map(refresh), history: status.history?.map(refresh)};
 }
 
 /** A known chat uses one bounded native tail, never discovery across unrelated projects. */
 export function observeSessionExecution(input:SessionInfo):SessionObservation|undefined {
   const native=localTaskTransfers().nativeSession(input);
+  const observed=observeNativeTail(input,native);
+  if(!observed)return;
+  const session=ownedRun(observed.session,native.sessionId);
+  // The revision moves when the run starts and ends, so an open chat republishes both times.
+  return session===observed.session?observed:{session,revision:`${observed.revision}:owned-run`};
+}
+
+/**
+ * A headless run this runtime started is still executing, however long its
+ * current tool call keeps the transcript quiet. Only Idle is corrected:
+ * Waiting and the provider's own Working stay as observed.
+ */
+function ownedRun(session:SessionInfo,nativeId:string):SessionInfo {
+  if(session.state!=='idle')return session;
+  return isDeliveryInFlight(session.sessionId)||isDeliveryInFlight(nativeId)?{...session,state:'working'}:session;
+}
+
+function observeNativeTail(input:SessionInfo,native:SessionInfo):SessionObservation|undefined {
   if(native.agent==='cursor'){
     const current=cursorConversationSession(native.sessionId);
     return current?{session:{...input,state:current.state,lastActivityAt:current.lastActivityAt},revision:`${current.lastActivityAt}:${current.state}`}:undefined;

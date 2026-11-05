@@ -105,7 +105,8 @@ require('node:readline').createInterface({input:process.stdin}).on('line',line=>
   assert.equal(cachedClaudeModels('fixture-account-scope', env)[0]?.modelId, 'claude-account-a');
   assert.equal(readFileSync(probes, 'utf8').length, 1);
   writeFileSync(config, JSON.stringify({ ...saved, oauthAccount: { ...saved.oauthAccount, accountUuid: 'account-b' } }));
-  assert.deepEqual(cachedClaudeModels('fixture-account-scope', env), [], 'A different account must not inherit old model metadata');
+  assert.deepEqual(cachedClaudeModels('fixture-account-scope', env).map(row => row.modelId), ['opus', 'sonnet', 'haiku', 'fable'],
+    'A different account must not inherit old model metadata; only the CLI aliases stand in until it answers');
   await waitFor('claude-account-b');
   assert.equal(readFileSync(probes, 'utf8').length, 2);
 });

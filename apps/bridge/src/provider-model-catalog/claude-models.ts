@@ -4,7 +4,7 @@ import { homedir } from 'node:os';
 import { statSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AdvertisedModel } from '../../../../packages/protocol/schema';
-import { resolveClaudeBinary } from '../providers/claude-bin';
+import { installedClaudeBinary } from '../providers/claude-bin';
 import { claudeAccountScope } from './claude-account-scope';
 
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,159}$/;
@@ -29,35 +29,66 @@ export function projectClaudeModels(value: unknown, endpointId: string, now: num
   });
 }
 
-/** No prompt, saved session, hooks, MCP children or tools. Never persists the account payload. */
+/**
+ * `--model` documents these aliases, and the installed CLI resolves each to a
+ * concrete version, so none is invented here. The descriptions are the phone's
+ * own localization keys.
+ */
+const ALIASES: ReadonlyArray<{ modelId: string; label: string; description: string }> = [
+  { modelId: 'opus', label: 'Opus', description: 'Latest Opus alias · complex reasoning tasks.' },
+  { modelId: 'sonnet', label: 'Sonnet', description: 'Latest Sonnet alias · everyday coding tasks.' },
+  { modelId: 'haiku', label: 'Haiku', description: 'Latest Haiku alias · fast, efficient simple tasks.' },
+  { modelId: 'fable', label: 'Fable',
+    description: 'Fable alias · hardest and longest-running tasks. May require usage credits.' },
+];
+
+function claudeAliasRows(endpointId: string, now: number): AdvertisedModel[] {
+  return ALIASES.map((alias, priority) => ({ ...alias, provider: 'claude' as const, endpointId,
+    observedAt: now, source: 'advertised' as const, priority }));
+}
+
+export type ClaudeModelQuery = { timeoutMs?: number; cwd?: string; env?: NodeJS.ProcessEnv;
+  onFailure?: (reason: string) => void };
+
+/**
+ * No prompt, saved session, hooks, MCP children or tools. Never persists the account payload.
+ * Startup took 2–7 s by hand on an idle Mac; a busy monitor runs several CLIs beside it.
+ */
 export async function readClaudeModels(binary: string, endpointId: string,
-  options: { timeoutMs?: number; cwd?: string; env?: NodeJS.ProcessEnv } = {}): Promise<AdvertisedModel[]> {
+  options: ClaudeModelQuery = {}): Promise<AdvertisedModel[]> {
   return new Promise(resolve => {
+    const timeoutMs = options.timeoutMs ?? 30_000;
     const child = spawn(binary, ['--print', '--input-format', 'stream-json', '--output-format', 'stream-json',
       '--verbose', '--no-session-persistence', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}',
       '--settings', '{"disableAllHooks":true}', '--tools', ''],
-    { cwd: options.cwd ?? homedir(), env: options.env ?? process.env, stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true });
+    { cwd: options.cwd ?? homedir(), env: options.env ?? process.env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
     const lines = createInterface({ input: child.stdout });
-    let bytes = 0, done = false;
-    const stop = (rows: AdvertisedModel[] = []) => {
+    let bytes = 0, done = false, stderr = '';
+    const stop = (rows: AdvertisedModel[], failure: string) => {
       if (done) return;
       done = true; clearTimeout(timeout); lines.close(); child.stdin.destroy();
       child.kill('SIGTERM');
       const force = setTimeout(() => { child.kill('SIGKILL'); }, 1_000); force.unref();
       child.once('exit', () => clearTimeout(force));
+      const said = text(stderr.slice(-480));
+      if (!rows.length) options.onFailure?.(said ? `${failure}: ${said}` : failure);
       resolve(rows);
     };
-    const timeout = setTimeout(() => stop(), options.timeoutMs ?? 10_000);
-    child.on('error', () => stop()); child.on('exit', () => stop());
-    child.stdin.on('error', () => stop());
-    child.stdout.on('data', data => { bytes += data.length; if (bytes > 512_000) stop(); });
+    const timeout = setTimeout(() => stop([], `timed out after ${timeoutMs / 1000} s`), timeoutMs);
+    child.on('error', error => stop([], `could not start (${(error as NodeJS.ErrnoException).code ?? error.name})`));
+    // `close` follows the last stderr bytes, so the reason a CLI gave on its way out is kept.
+    child.on('close', (code, signal) => stop([], `exited with ${signal ?? `code ${code}`} before answering`));
+    child.stdin.on('error', () => stop([], 'closed its input before answering'));
+    child.stderr.on('data', data => { stderr = (stderr + data).slice(-4_000); });
+    child.stdout.on('data', data => { bytes += data.length; if (bytes > 512_000) stop([], 'answered with more than 512 KB'); });
     lines.on('line', line => {
       if (done || line.length > 512_000) return;
       try {
         const value = JSON.parse(line);
         if (value.type === 'control_response' && value.response?.request_id === 'granttap-model-catalog') {
-          stop(value.response.subtype === 'success'
-            ? projectClaudeModels(value.response.response?.models, endpointId, Date.now()) : []);
+          if (value.response.subtype !== 'success') {
+            stop([], `initialize failed (${text(value.response.error) ?? 'no reason given'})`);
+          } else stop(projectClaudeModels(value.response.response?.models, endpointId, Date.now()), 'listed no usable models');
         }
       } catch { /* A non-protocol line does not advertise models. */ }
     });
@@ -66,25 +97,38 @@ export async function readClaudeModels(binary: string, endpointId: string,
   });
 }
 
-let scope = '', report: AdvertisedModel[] = [], checkedAt = 0;
+let scope = '', report: AdvertisedModel[] = [], checkedAt = 0, recorded = '';
 let pending: Promise<void> | undefined;
+const stderrLog = (line: string) => { process.stderr.write(`[granttap] ${line}\n`); };
 
-/** Nonblocking, one bounded metadata process at a time, shared by all catalog readers. */
-export function cachedClaudeModels(endpointId: string, env = process.env): AdvertisedModel[] {
-  const binary = resolveClaudeBinary(homedir(), env);
+/**
+ * Nonblocking, one bounded metadata process at a time, shared by all catalog readers.
+ * Live picker rows win; an installed Claude Code without them still offers its aliases.
+ */
+export function cachedClaudeModels(endpointId: string, env = process.env, home = homedir(),
+  log: (line: string) => void = stderrLog): AdvertisedModel[] {
+  const binary = installedClaudeBinary(home, env);
+  if (!binary) return [];
   const config = env.GRANTTAP_CLAUDE_DIR ?? env.NODVOX_CLAUDE_DIR ?? env.CLAUDE_CONFIG_DIR;
-  const root = config ?? join(homedir(), '.claude');
+  const root = config ?? join(home, '.claude');
   const key = [endpointId, binary.path, binary.version, root,
-    modified(join(root, '.credentials.json')), claudeAccountScope(config ? join(root, '.claude.json') : join(homedir(), '.claude.json')),
+    modified(join(root, '.credentials.json')), claudeAccountScope(config ? join(root, '.claude.json') : join(home, '.claude.json')),
     modified(join(root, 'settings.json')), modified(join(root, 'settings.local.json'))].join('\u001f');
   if (key !== scope) { scope = key; report = []; checkedAt = 0; }
-  if (binary && !pending && Date.now() - checkedAt > (report.length ? 10 : 2) * 60_000) {
+  if (!pending && Date.now() - checkedAt > (report.length ? 10 : 2) * 60_000) {
     checkedAt = Date.now();
-    pending = readClaudeModels(binary.path, endpointId, { env: config ? { ...env, CLAUDE_CONFIG_DIR: config } : env }).then(rows => {
-      if (scope === key) report = rows;
-    }).finally(() => { pending = undefined; });
+    const onFailure = (reason: string) => {
+      if (reason !== recorded) log(`Claude Code model list unavailable, offering its aliases: ${reason}`);
+      recorded = reason;
+    };
+    pending = readClaudeModels(binary.path, endpointId, { env: config ? { ...env, CLAUDE_CONFIG_DIR: config } : env, onFailure })
+      .then(rows => {
+        if (rows.length) recorded = '';
+        if (scope === key) report = rows;
+      }).finally(() => { pending = undefined; });
   }
-  return report.filter(row => Date.now() - row.observedAt <= 15 * 60_000);
+  const live = report.filter(row => Date.now() - row.observedAt <= 15 * 60_000);
+  return live.length ? live : claudeAliasRows(endpointId, Date.now());
 }
 
 function modified(path: string): string {
