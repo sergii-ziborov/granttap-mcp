@@ -104,7 +104,9 @@ async function monitorSnapshot(input: {
     type: "sessions.status",
     machine: computerDisplayName(),
     sessions: decorateSessions(sessions, subscriptions, inspection),
-    history: historical ? decorateSessions(historical, subscriptions, inspection) : undefined,
+    // A finished chat's ring needs only its totals; the breakdown would grow every catalog.
+    history: historical ? decorateSessions(historical.map(({ contextUsage: _detail, ...session }) => session),
+      subscriptions, inspection) : undefined,
     tokensRecent,
     tokenWindowHours: TOKEN_WINDOW_HOURS,
     tokensAllTime: tokensRecent,

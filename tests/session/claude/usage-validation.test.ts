@@ -37,4 +37,6 @@ test("Claude ignores malformed usage counters without replacing valid totals or 
   assert.equal(session.tokensSession, 7);
   assert.equal(session.tokensLastTurn, 7);
   assert.equal(session.contextTokensUsed, 8);
+  assert.deepEqual(session.contextUsage, { observedAt: now + 1, source: "claude", usedTokens: 8, lastOutputTokens: 2,
+    parts: [{ id: "cache-read", tokens: 3 }, { id: "cache-write", tokens: 1 }, { id: "new-input", tokens: 4 }] });
 });

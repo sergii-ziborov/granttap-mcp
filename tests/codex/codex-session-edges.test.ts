@@ -53,7 +53,7 @@ test("Codex fallback roots retain structured activity and nested capability outc
     { timestamp: new Date(now - 1_200).toISOString(), type: "event_msg", payload: {
       type: "token_count", info: {
         total_token_usage: { total_tokens: 50, cached_input_tokens: 20 },
-        last_token_usage: { total_tokens: 10, cached_input_tokens: 2 },
+        last_token_usage: { total_tokens: 10, input_tokens: 8, cached_input_tokens: 2 },
         model_context_window: 128_000,
       },
     } },
@@ -69,6 +69,8 @@ test("Codex fallback roots retain structured activity and nested capability outc
   assert.equal(parent.childThreads?.[0]?.agentName, "Ada");
   assert.equal(parent.tokensSession, 30);
   assert.equal(parent.contextWindow, 128_000);
+  assert.deepEqual(parent.contextUsage, { observedAt: now - 1_200, source: "codex", usedTokens: 8, windowTokens: 128_000,
+    parts: [{ id: "cached-input", tokens: 2 }, { id: "new-input", tokens: 6 }] }, "A child-only root keeps its context reading.");
   const second = scanCodex();
   assert.equal(second.sessions[0]?.sessionId, "missing-root");
   const usage = codexCapabilityUsage(parent);

@@ -17,6 +17,7 @@ import { childTitle } from "../../support/child-threads";
 import { visibleUserText } from "../../support/activity-helpers";
 import { codexHeadRequest, isProvisionalPageTitle } from "../../support/codex-head";
 import { heartbeatDisplayText } from '../../host-heartbeat';
+import { codexContextReport } from "../../context-usage";
 
 type CodexParseState = {
   sessionId: string;
@@ -36,6 +37,7 @@ type CodexParseState = {
   tokensLastTurn: number;
   contextTokensUsed?: number;
   contextWindow?: number;
+  contextUsage?: SessionInfo["contextUsage"];
   workdirs: string[];
   turn: CodexTurnClock;
 };
@@ -136,6 +138,7 @@ function applyCodexLine(d: any, state: CodexParseState): void {
     if (typeof input === "number" && Number.isFinite(input)) state.contextTokensUsed = input;
     const window = info.model_context_window;
     if (typeof window === "number" && Number.isFinite(window)) state.contextWindow = window;
+    state.contextUsage = codexContextReport(info, ts(d.timestamp) ?? 0) ?? state.contextUsage;
   }
 }
 
@@ -197,6 +200,7 @@ export function parseCodexFile(file: string): CodexCandidate | undefined {
     tokensLastTurn: state.tokensLastTurn,
     contextTokensUsed: state.contextTokensUsed,
     contextWindow: state.contextWindow,
+    ...(state.contextUsage ? { contextUsage: state.contextUsage } : {}),
   };
   const observations = codexCapabilityUsage(session, lines);
   const child = state.child;
