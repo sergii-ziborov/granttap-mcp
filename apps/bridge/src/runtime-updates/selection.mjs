@@ -39,8 +39,9 @@ export function selectedRuntime(bundled, directory) {
  * this cache. Each cached launcher hands off to the selection above, so the hook
  * stays current after an update; one naming a newer, rolled-back release does not.
  */
-export function cachedHookLauncher(command, route, directory, current) {
-  const match=typeof command==='string' && command.trim().match(/^node "(.+)[\\/]bin[\\/]granttap-mcp\.mjs" internal hook (\S+)$/);
+export function cachedHookLauncher(command, route, directory, current, nodeCommand = 'node') {
+  const prefix=nodeCommand+' "', raw=typeof command==='string' ? command.trim() : '';
+  const match=raw.startsWith(prefix) && raw.slice(prefix.length).match(/^(.+)[\\/]bin[\\/]granttap-mcp\.mjs" internal hook (\S+)$/);
   if(!match || match[2]!==route) return false;
   try { const version=runtimeVersion(match[1]);
     return validRuntime(match[1],directory,version) && !newerVersion(version,current); } catch { return false; }

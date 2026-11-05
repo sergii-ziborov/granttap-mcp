@@ -36,3 +36,12 @@ test('a hook keeps an earlier cached launcher, never a newer one or one outside 
  assert.equal(cachedHookLauncher(`${hook(older)}; echo extra`,'claude',f.dir,'0.8.101'),false);
  assert.equal(cachedHookLauncher(undefined,'claude',f.dir,'0.8.101'),false);
 });
+
+test('cached Codex launchers retain their exact absolute Node command',()=>{
+ const f=fixture(),older=f.add('0.8.100'),node='"/fixture/Node Tools/node"';
+ const command=`${node} "${join(older,'bin','granttap-mcp.mjs')}" internal hook codex-policy`;
+ assert.equal(cachedHookLauncher(command,'codex-policy',f.dir,'0.8.101',node),true);
+ assert.equal(cachedHookLauncher(command,'codex-policy',f.dir,'0.8.101','node'),false);
+ assert.equal(cachedHookLauncher(command.replace(node,'node'),'codex-policy',f.dir,'0.8.101',node),false);
+ assert.equal(cachedHookLauncher(command+'; echo extra','codex-policy',f.dir,'0.8.101',node),false);
+});

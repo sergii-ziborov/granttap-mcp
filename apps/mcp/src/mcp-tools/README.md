@@ -18,6 +18,10 @@ Both are caller-scoped. `granttap://mesh/current` returns no Project data;
 Task, owners, claims, dependencies, and relevant events. A `notify` Mesh event
 is published for the session its provider hook attributed, never for a session
 the model named, and ownership-transfer event types are refused outright.
+Codex records allowed calls in its trusted `PreToolUse` hook, because normally
+allowed MCP calls need not emit `PermissionRequest`. Governed requests retain
+the permission hook's attribution after their decision. Untrusted or disabled
+native hooks cannot establish a caller scope.
 
 `mesh-tools.ts`, `mesh-actions.ts`, and `mesh-relay.ts` serve the separate scoped
 server started by `granttap internal mesh-mcp` for a connected Grok Bot endpoint.

@@ -2,6 +2,15 @@ import { mkdirSync, readlinkSync, renameSync, rmSync, symlinkSync } from "node:f
 import { join } from "node:path";
 import { configDir } from "../../config";
 
+/** User Codex hooks run outside the plugin PATH, including apps started from the Dock. */
+export function hookNodeCommand(route: string, nodePath = process.execPath,
+  platform: NodeJS.Platform = process.platform): string {
+  if (route !== "codex" && route !== "codex-policy") return "node";
+  const escaped = platform === "win32" ? nodePath.replaceAll('"', '""')
+    : nodePath.replace(/["\\$`]/g, "\\$&");
+  return `"${escaped}"`;
+}
+
 function currentTarget(link: string): string | undefined {
   try { return readlinkSync(link); } catch { return undefined; }
 }

@@ -3,18 +3,19 @@ import { fileURLToPath } from "node:url";
 import { ProviderHook, type ProviderHook as Hook } from "../../../../packages/protocol/messages/provider-hooks";
 import { configDir } from "../config/runtime/paths";
 import { cachedHookLauncher, runtimeVersion } from "../runtime-updates/selection.mjs";
+import { hookNodeCommand } from "../install/stable-node";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..");
 
 export function ownedHookCommands() {
-  const base = `node "${join(root, "bin", "granttap-mcp.mjs")}" internal hook`;
+  const base = `${hookNodeCommand("codex")} "${join(root, "bin", "granttap-mcp.mjs")}" internal hook`;
   return { policy: `${base} codex-policy`, permission: `${base} codex` };
 }
 
 /** This runtime's command, or an earlier runtime's cached launcher that hands off to it. */
 export function ownedHookCommand(command: unknown, kind: "policy" | "permission"): boolean {
   return command === ownedHookCommands()[kind] || cachedHookLauncher(command,
-    kind === "policy" ? "codex-policy" : "codex", join(configDir(), "runtime-updates"), runtimeVersion(root));
+    kind === "policy" ? "codex-policy" : "codex", join(configDir(), "runtime-updates"), runtimeVersion(root), hookNodeCommand("codex"));
 }
 
 /** Only the two exact user-config hooks installed by this runtime are reviewable. */

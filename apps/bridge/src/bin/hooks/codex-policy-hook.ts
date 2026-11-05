@@ -6,6 +6,7 @@ import { blockedSessionCapability, isProviderEnabled } from "../../config";
 import { recordCodexProjectAsk } from "../../policy/codex-project-ask";
 import { evaluateEffectiveAction } from "../../policy/effective-action";
 import { protectedGrantTapAccess } from "../../host/self-protection";
+import { recordAttributedCall } from "../../mesh/identity/call-scope";
 
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
@@ -51,7 +52,11 @@ async function main(): Promise<void> {
     deny(decision.reason);
     return;
   }
-  if (decision.effect !== "ask") return;
+  if (decision.effect !== "ask") {
+    recordAttributedCall({ provider: "codex", sessionId: input.session_id,
+      toolName: input.tool_name, args: input.tool_input });
+    return;
+  }
   const recorded = recordCodexProjectAsk({
     sessionId: input.session_id,
     toolUseId: input.tool_use_id,

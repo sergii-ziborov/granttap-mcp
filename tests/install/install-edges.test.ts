@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { versionRoot } from "../../apps/bridge/src/runtime-updates/selection.mjs";
 import { projectCodexHooks } from "../../apps/bridge/src/codex-hook-trust";
+import { hookNodeCommand } from "../../apps/bridge/src/install/stable-node";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -106,7 +107,9 @@ test("hooks an earlier runtime wrote through the version cache survive an update
   const files = [join(claude, "settings.json"), join(codex, "config.toml"), join(cursor, "hooks.json")];
   const point = async (from: string, to: string) => {
     for (const path of files) {
-      const [a, b] = path.endsWith(".toml") ? [from, to] : [from, to].map((text) => JSON.stringify(text).slice(1, -1));
+      const [a, b] = path.endsWith(".toml")
+        ? [from, to].map(text => text.replace(/^node /, hookNodeCommand("codex") + " "))
+        : [from, to].map((text) => JSON.stringify(text).slice(1, -1));
       await writeFile(path, (await readFile(path, "utf8")).replaceAll(a!, b!));
     }
   };
@@ -120,7 +123,7 @@ test("hooks an earlier runtime wrote through the version cache survive an update
   assert.equal(status.find((item) => item.agent === "claude")?.hookConfigured, true);
   assert.equal(status.find((item) => item.agent === "codex")?.hookConfigured, true);
   assert.equal(inspectCursorIntegration().hookConfigured, true);
-  const [policy] = projectCodexHooks({ data: [{ hooks: [{ key: "k", eventName: "preToolUse", command: `${earlier} codex-policy`,
+  const [policy] = projectCodexHooks({ data: [{ hooks: [{ key: "k", eventName: "preToolUse", command: `${earlier.replace(/^node /, hookNodeCommand("codex") + " ")} codex-policy`,
     handlerType: "command", source: "user", matcher: ".*", timeoutSec: 30, enabled: true, isManaged: false,
     currentHash: "a".repeat(64), trustStatus: "trusted" }], errors: [] }] });
   assert.equal(policy?.trustStatus, "trusted");

@@ -44,6 +44,7 @@ import { inspectLinuxService } from "./linux-service";
 import { codexHooksExplicitlyDisabled } from "./hooks";
 import { cachedCodexHooks, codexHookSet } from "../codex-hook-trust";
 import { cachedHookLauncher, runtimeVersion } from "../runtime-updates/selection.mjs";
+import { hookNodeCommand } from "./stable-node";
 import type { ProviderHook } from "../../../../packages/protocol/messages/provider-hooks";
 export { codexHookSet } from "../codex-hook-trust";
 
@@ -63,7 +64,7 @@ export type HookRoute =
 
 /** The stable command agents will call. */
 export function hookCommand(agent: HookRoute): string {
-  return `node "${join(repoRoot, "bin", "granttap-mcp.mjs")}" internal hook ${agent}`;
+  return `${hookNodeCommand(agent)} "${join(repoRoot, "bin", "granttap-mcp.mjs")}" internal hook ${agent}`;
 }
 
 export function commandHasRoute(command: unknown, route: HookRoute): boolean {
@@ -79,7 +80,7 @@ export function commandHasRoute(command: unknown, route: HookRoute): boolean {
  */
 export function hookCommandIsCurrent(command: unknown, route: HookRoute): boolean {
   return typeof command === "string" && (command.trim() === hookCommand(route)
-    || cachedHookLauncher(command, route, join(configDir(), "runtime-updates"), runtimeVersion(repoRoot)));
+    || cachedHookLauncher(command, route, join(configDir(), "runtime-updates"), runtimeVersion(repoRoot), hookNodeCommand(route)));
 }
 
 export type InstallResult = { status: "installed" | "already" | "manual"; detail: string };
