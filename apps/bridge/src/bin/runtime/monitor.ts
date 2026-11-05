@@ -20,7 +20,7 @@ import { startRuntimeWatchdog } from "../../runtime-watchdog";
 
 import { startTaskDispatchMonitor } from "../../task-dispatch/worker/monitor";
 import { startTaskNetworkMonitor } from '../../task-network/runtime';
-import { claimLinkRestart } from '../../monitor/support/link-restart';
+import { claimLinkRestart } from '../../monitor/relay-link';
 
 let client: RelayClient;
 let monitor: ReturnType<typeof startSessionMonitor>;

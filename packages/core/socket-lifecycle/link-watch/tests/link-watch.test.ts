@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { RelayLinkWatch } from "../../packages/core/socket-lifecycle/link-watch";
+import { RelayLinkWatch } from "..";
 
 test("a computer that keeps being refused or dropped is reported once, with the relay's last reason", () => {
   let now = 0;

@@ -3,7 +3,7 @@ import test from "node:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { claimLinkRestart } from "../link-restart";
+import { claimLinkRestart } from "..";
 
 test("a monitor that cannot stay on the relay restarts at most once an hour, even across its own restarts", (t) => {
   const directory = mkdtempSync(join(tmpdir(), "granttap-link-restart-"));
