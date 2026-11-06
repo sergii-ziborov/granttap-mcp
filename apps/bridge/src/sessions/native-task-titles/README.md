@@ -4,3 +4,5 @@
 Host question-reply envelopes and their clipped JSON metadata yield to the
 original request. Ordinary JSON requests and quoted examples stay eligible.
 Scanner behavior and retained history are covered in `tests/`.
+
+Licensed under the GrantTap Commercial Source License. See LICENSE and NOTICE.
