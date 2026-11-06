@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test, { type TestContext } from 'node:test';
-import { codexActivity, scanCodex } from '..';
+import { codexActivity, scanCodex } from '../../scan/codex';
 
 const answer = JSON.stringify([{ questionItemId: JSON.stringify(['request_user_input_async', 'call_fixture', 0]),
   question: 'Which check should run?', answer: 'The physical check' }]);

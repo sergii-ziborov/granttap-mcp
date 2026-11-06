@@ -18,7 +18,7 @@ import { visibleUserText } from "../../support/activity-helpers";
 import { codexHeadRequest, isProvisionalPageTitle } from "../../support/codex-head";
 import { heartbeatDisplayText } from '../../host-heartbeat';
 import { codexContextReport } from "../../context-usage";
-import { codexRequestTitle } from '../../support/codex-titles';
+import { codexRequestTitle } from '../../native-task-titles';
 
 type CodexParseState = {
   sessionId: string;

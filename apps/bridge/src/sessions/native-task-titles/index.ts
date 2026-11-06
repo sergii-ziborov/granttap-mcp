@@ -1,5 +1,5 @@
-import { visibleUserText } from './activity-helpers';
-import { childTitle } from './child-threads';
+import { visibleUserText } from '../support/activity-helpers';
+import { childTitle } from '../support/child-threads';
 
 /** A host answer envelope, including a previously clipped native title, is not a Task name. */
 export function isCodexQuestionReply(text: string): boolean {

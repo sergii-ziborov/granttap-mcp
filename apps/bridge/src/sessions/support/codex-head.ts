@@ -1,7 +1,7 @@
 import { closeSync, openSync, readSync } from "node:fs";
 import { visibleUserText } from "./activity-helpers";
 import { ts } from "./common";
-import { isCodexQuestionReply } from './codex-titles';
+import { isCodexQuestionReply } from '../native-task-titles';
 
 const TITLE_HEAD_BYTES = 256 * 1024;
 
