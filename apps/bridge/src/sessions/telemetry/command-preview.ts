@@ -85,7 +85,7 @@ function redactCommandSecrets(raw: string): string {
     `$1${REDACTED_COMMAND_VALUE}`,
   );
   value = value.replace(
-    /([a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+:[^\s/@]+@/gi,
+    /(?<![a-z0-9+.-])([a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+:[^\s/@]+@/gi,
     `$1${REDACTED_COMMAND_VALUE}@`,
   );
   value = value.replace(
