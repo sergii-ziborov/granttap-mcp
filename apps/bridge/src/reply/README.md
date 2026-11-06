@@ -41,6 +41,9 @@ owner, without a competing `exec resume` writer. The `codex-desktop` feature own
 that versioned local connection and durable admission receipt. Headless resume is
 used only when no native owner exists. Native admission carries the controller's
 message ID and returns promptly; the provider transcript supplies the answer.
+Local image and document files remain available for one day after native
+admission, because accepting a queued turn does not mean its files were read.
+The regular attachment sweep removes expired stages without following symlinks.
 
 New and resumed headless Codex tasks both accept workspaces outside Git. The
 repository presence check is skipped consistently; configured sandbox, approval,

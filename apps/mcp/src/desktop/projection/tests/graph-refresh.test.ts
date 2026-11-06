@@ -16,11 +16,13 @@ test("selected Mac refresh admits its checkout and returns completed Engine anal
     "-c", "user.email=sergii.ziborov@gmail.com", "commit", "--quiet", "--allow-empty", "-m", "Fixture"]);
   execFileSync("git", ["-C", checkout, "remote", "add", "origin", "https://github.com/example/refresh.git"]);
   const names = ["GRANTTAP_CONFIG_DIR", "GRANTTAP_COMPUTER_ID", "GRANTTAP_ENGINE_ENABLED",
-    "GRANTTAP_CODEX_DIR", "GRANTTAP_CLAUDE_DIR"];
+    "GRANTTAP_CODEX_DIR", "GRANTTAP_CLAUDE_DIR", "GRANTTAP_CODEX_BIN", "GRANTTAP_CLAUDE_BIN", "GRANTTAP_GROK_BIN"];
   const previous = names.map((key) => process.env[key]);
   for (const key of names) process.env[key] = root;
   process.env.GRANTTAP_COMPUTER_ID = "test-mac";
   process.env.GRANTTAP_ENGINE_ENABLED = "1";
+  // Graph refresh exercises the worker and Engine socket, never installed provider CLIs.
+  for (const key of ["GRANTTAP_CODEX_BIN", "GRANTTAP_CLAUDE_BIN", "GRANTTAP_GROK_BIN"]) process.env[key] = process.execPath;
   writeFileSync(`${root}/runtime.json`, JSON.stringify({ contextCompilerEnabled: false }));
   writeFileSync(`${root}/project-mesh.json`, JSON.stringify({ version: 1,
     projects: [{ projectId: "refresh", name: "Refresh", canonicalRepositoryId: "github.com/example/refresh", createdAt: 1 }],

@@ -25,7 +25,7 @@ test('native admission keeps document attachments available to the continuing tu
   assert.equal(f.requests.filter(r => r.method === 'thread-follower-start-turn').length, 1);
 });
 
-test('images reach native admission as local images and replay uses content identity', async t => {
+test('native image admission keeps files readable by the continuing turn and deduplicates replay', async t => {
   const f = await fixture(t);
   const image = { name: 'synthetic.png', mimeType: 'image/png', data: Buffer.from('Synthetic image').toString('base64') };
   const options = { messageId: randomUUID() };
@@ -34,7 +34,9 @@ test('images reach native admission as local images and replay uses content iden
   assert.equal(input[1].type, 'localImage');
   assert.equal((await deliverToSession(f.session, 'Synthetic image follow-up', 2_000, [image], options)).ok, true);
   assert.equal(f.requests.filter(r => r.method === 'thread-follower-start-turn').length, 1);
-  assert.equal(existsSync(input[1].path), false, 'native admission has consumed the image file');
+  await new Promise<void>(resolve => setImmediate(resolve));
+  assert.deepEqual(await readFile(input[1].path), Buffer.from('Synthetic image'),
+    'native admission acknowledges a queued turn before Codex reads its local images');
 });
 
 test('a phone-native receipt returns promptly without a fake assistant response or completed run digest', async t => {

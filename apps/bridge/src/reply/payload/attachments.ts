@@ -27,7 +27,7 @@ export async function withAttachments(
       claudePrompt: `${text || "Please inspect the attached content."}${claudeNote}`,
       images: files.filter((file) => file.image).map((file) => file.path),
     });
-    retained = result.delivery === 'native' && documents.length > 0;
+    retained = result.delivery === 'native' && files.length > 0;
     return result;
   } catch (error) {
     return { ok: false, error: `Could not prepare attachment: ${(error as Error).message}` };
@@ -36,7 +36,7 @@ export async function withAttachments(
   }
 }
 
-/** Native admission returns before the agent reads documents. Retain those for one day. */
+/** Native admission queues a turn before it reads local files. Retain images and documents for one day. */
 export function prunePreparedAttachments(now = Date.now()): number {
   const root = join(configDir(), 'message-attachments');
   if (!existsSync(root)) return 0;

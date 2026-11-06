@@ -22,7 +22,8 @@ test('the native receipt survives a runtime process restart without replaying th
   const script = `import {deliverToSession} from ${JSON.stringify(module)};` +
     `console.log(JSON.stringify(await deliverToSession(${JSON.stringify(f.session)},'Synthetic durable receipt',1000,[],${JSON.stringify(options)})));`;
   const result = JSON.parse(execFileSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', script],
-    { env: process.env, encoding: 'utf8', timeout: 5_000 }));
+    // This bounds a fresh TypeScript process startup, not the 1s delivery deadline above.
+    { env: process.env, encoding: 'utf8', timeout: 15_000 }));
   assert.equal(result.ok, true);
   assert.equal(result.delivery, 'native');
   assert.equal(existsSync(f.marker), false);
