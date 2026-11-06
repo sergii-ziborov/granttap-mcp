@@ -18,6 +18,7 @@ import { visibleUserText } from "../../support/activity-helpers";
 import { codexHeadRequest, isProvisionalPageTitle } from "../../support/codex-head";
 import { heartbeatDisplayText } from '../../host-heartbeat';
 import { codexContextReport } from "../../context-usage";
+import { codexRequestTitle } from '../../support/codex-titles';
 
 type CodexParseState = {
   sessionId: string;
@@ -43,7 +44,7 @@ type CodexParseState = {
 };
 
 function adoptRequestTitle(state: CodexParseState, text: string | undefined): void {
-  const title = childTitle(text);
+  const title = codexRequestTitle(text);
   if (!title) return;
   if (isProvisionalPageTitle(title)) state.provisionalTitle ??= title;
   else state.title = title;
@@ -75,7 +76,7 @@ function applyCodexLine(d: any, state: CodexParseState): void {
     if (p?.model) state.model = String(p.model);
     if (p?.git?.branch) state.branch = String(p.git.branch);
     if (typeof p?.title === "string") {
-      const title = visibleUserText(p.title);
+      const title = codexRequestTitle(p.title);
       if (title && !isProvisionalPageTitle(title)) state.title = title.slice(0, 120);
     }
     state.child = codexChildSource(p);

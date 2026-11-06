@@ -20,6 +20,11 @@ walking up for `.git` without running Git; the current folder decides only
 until such a change is known. Catalog linking verifies the chosen Git root while
 preserving the existing Task and Project identities.
 
+Codex host question-reply envelopes remain intact in conversation history but
+cannot name a Task. A native title containing that transport JSON, including a
+clipped older title, yields to the person's request from the bounded log head.
+Ordinary JSON requests and quoted markup remain eligible human titles.
+
 A pasted Claude image appears as an attachment. The label Claude Code writes
 beside it (`[Image: source: …]`, `[Image #1]`) is dropped from the chat, title
 and child title when that block holds only labels and the message carries the

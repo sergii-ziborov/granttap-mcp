@@ -1,6 +1,7 @@
 import { closeSync, openSync, readSync } from "node:fs";
 import { visibleUserText } from "./activity-helpers";
 import { ts } from "./common";
+import { isCodexQuestionReply } from './codex-titles';
 
 const TITLE_HEAD_BYTES = 256 * 1024;
 
@@ -69,6 +70,7 @@ export function codexHeadRequest(path: string, preferHumanTitle = false): CodexH
     for (const line of source.split("\n")) {
       const text = visibleText(line);
       if (!text) continue;
+      if (preferHumanTitle && isCodexQuestionReply(text)) continue;
       const request = { text, createdAt: ts(jsonStringAfter(line, "timestamp")) };
       if (preferHumanTitle && isProvisionalPageTitle(text)) { provisional ??= request; continue; }
       return request;
