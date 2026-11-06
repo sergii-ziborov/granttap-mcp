@@ -6,6 +6,11 @@ socket and does not rotate task keys or reload transcript state. A failed lookup
 cannot extend the server's signed expiry. Closing or replacing a socket cancels
 only its own timers.
 
+Network health honors the configured pong deadline independently of ping cadence.
+Pongs, relay pings and inbound frames prove transport liveness. Deadline checks
+allow buffered I/O to run after a busy event loop; stopping or replacing a socket
+removes its health listeners and cancels its deadline.
+
 Reconnect pacing resets only after a non-policy connection lived at least 30
 seconds. Short handshakes keep exponential backoff and jitter. WebSocket
 `retry-after` reasons and HTTP `Retry-After` are lower bounds even when they

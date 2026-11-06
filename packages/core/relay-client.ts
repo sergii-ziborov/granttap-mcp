@@ -97,7 +97,7 @@ export class RelayClient {
         this.linkWatch.opened();
         clearTimeout(timer);
         openedAt = Date.now();
-        this.socketHealth.start(ws, this.opts.pingIntervalMs ?? 20_000);
+        this.socketHealth.start(ws, this.opts.pingIntervalMs ?? 20_000, this.opts.pongTimeoutMs);
         this.admissionLease.start(ws, this.opts);
         // Announce ourselves. The envelope's cleartext (room, from) is what the
         // relay uses to register this socket; the Hello body stays encrypted.
