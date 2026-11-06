@@ -1,5 +1,6 @@
 import { diffPreviewFromInput, patchStatsByToolUse, sensitivePath, statsFromInput } from "../../support/edit-stats";
 import { redactSecrets } from "../../telemetry/command-preview";
+import { createChildSummary } from "./transcript-reading";
 import { recordObservedWrite, writtenPaths } from "../../../mesh/observed/writes";
 /**
  * Claude Code session logs:
@@ -98,58 +99,16 @@ export function claudeChildSummary(
   parentSessionId: string,
   lines: string[],
 ): ChildThreadInfo {
-  let threadId = basename(path, ".jsonl").replace(/^agent-/, "");
-  let title: string | undefined;
-  let startedAt = 0;
-  let lastActivityAt = 0;
-  let tokensSession = 0;
-  let tokensLastTurn = 0;
-  for (const line of lines) {
-    const row = safeParse(line);
-    if (!row || !claudeTranscriptRecord(row)) continue;
-    if (typeof row.agentId === "string" && row.agentId) threadId = row.agentId;
-    const at = ts(row.timestamp);
-    if (at) {
-      if (!startedAt || at < startedAt) startedAt = at;
-      if (at > lastActivityAt) lastActivityAt = at;
-    }
-    if (!title && (row.type === "user" || row.message?.role === "user")) {
-      const content = row.message?.content;
-      if (typeof content === "string") title = childTitle(content);
-      else if (Array.isArray(content)) {
-        title = childTitle(
-          content
-            .filter((block: any) => block?.type === "text" && !pastedImageLabel(block, content))
-            .map((block: any) => block.text)
-            .join("\n"),
-        );
-      }
-    }
-    const spent = sumClaudeUsage(row.message?.usage);
-    if (spent != null) {
-      tokensSession += spent;
-      tokensLastTurn = spent;
-    }
-  }
-  try {
-    const stat = statSync(path);
-    startedAt ||= stat.birthtimeMs || stat.mtimeMs;
-    lastActivityAt = Math.max(lastActivityAt, stat.mtimeMs);
-  } catch {
-    // Parsed timestamps still make this child usable.
-  }
-  claudeChildPathByThread.set(`${parentSessionId}\0${threadId}`, path);
-  return {
-    threadId,
-    parentThreadId: parentSessionId,
-    title,
-    depth: 1,
-    state: stateFor(lastActivityAt),
-    startedAt: startedAt || lastActivityAt,
-    lastActivityAt,
-    tokensSession,
-    tokensLastTurn,
-  };
+  const summary = createClaudeChildSummary(path, parentSessionId);
+  for (const line of lines) summary.add(safeParse(line));
+  return summary.finish();
+}
+
+export function createClaudeChildSummary(path: string, parentSessionId: string) {
+  return createChildSummary(path, parentSessionId, {
+    sumUsage: sumClaudeUsage,
+    remember: threadId => claudeChildPathByThread.set(`${parentSessionId}\0${threadId}`, path),
+  });
 }
 
 /**

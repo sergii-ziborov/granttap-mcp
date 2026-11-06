@@ -113,7 +113,8 @@ export function monitorPlistNeedsRepair(path: string): boolean {
   if (!existsSync(path)) return true;
   try {
     const contents = readFileSync(path, "utf8");
-    return plistUsesTemporaryIO(contents) || legacyUnconfiguredEngine(contents);
+    return plistUsesTemporaryIO(contents) || legacyUnconfiguredEngine(contents)
+      || /<key>ProcessType<\/key>\s*<string>Background<\/string>/.test(contents);
   } catch {
     return true;
   }
@@ -193,7 +194,8 @@ function buildMonitorPlist(input: {
     "  <key>KeepAlive</key>",
     "  <true/>",
     "  <key>ProcessType</key>",
-    "  <string>Background</string>",
+    // iPhone decisions depend on timely socket and filesystem callbacks, without XPC transactions.
+    "  <string>Interactive</string>",
     "  <key>ThrottleInterval</key>",
     `  <integer>${usePin ? 10 : 5}</integer>`,
     "  <key>StandardErrorPath</key>",

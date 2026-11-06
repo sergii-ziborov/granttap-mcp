@@ -3,6 +3,7 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { execFileSync } from "node:child_process";
 import { installMonitorHelper, monitorPlistNeedsRepair } from "../../apps/bridge/src/install";
 import { saveRuntimeConfig } from "../../apps/bridge/src/config";
 import { installHttpMcpService } from "../../apps/mcp/src/http-service";
@@ -33,6 +34,21 @@ async function sandbox(t: { after: (fn: () => void) => void }): Promise<{
 }
 
 const CHECKSUM = "a".repeat(64);
+
+test("the live monitor has app scheduling and a throttled old helper needs repair", async t => {
+  if (process.platform !== "darwin") return t.skip("LaunchAgent is macOS-only");
+  const { agentsDir, root } = await sandbox(t);
+  assert.equal(installMonitorHelper().status, "installed");
+  const path = join(agentsDir, "com.granttap.monitor.plist");
+  const definition = JSON.parse(execFileSync("plutil", ["-convert", "json", "-o", "-", path], { encoding: "utf8" }));
+  assert.equal(definition.ProcessType, "Interactive", "phone responsiveness depends on this non-XPC service");
+  const current = (await readFile(path, "utf8")).replaceAll(root, "/Users/granttap/GrantTap");
+  await writeFile(path, current.replace("<string>Interactive</string>", "<string>Background</string>"));
+  assert.equal(monitorPlistNeedsRepair(path), true);
+  assert.equal(installMonitorHelper().status, "installed");
+  const repaired = JSON.parse(execFileSync("plutil", ["-convert", "json", "-o", "-", path], { encoding: "utf8" }));
+  assert.equal(repaired.ProcessType, "Interactive");
+});
 
 test("a configured engine is wired into the LaunchAgent that publishes", async (t) => {
   if (process.platform !== "darwin") return t.skip("LaunchAgent is macOS-only");

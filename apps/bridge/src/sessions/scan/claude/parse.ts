@@ -14,12 +14,13 @@ import { claudeChangedPaths, claudeCheckout, claudeRepositoryPaths } from "./rep
 import {
   childLogsFingerprint,
   claudeChildLogPaths,
-  claudeChildSummary,
   claudeContextUsage,
   claudeSummaryCache,
-  readLines,
   sumClaudeUsage,
 } from "./shared";
+
+import { readTranscriptRows } from "./transcript-reading";
+import { readClaudeChild } from "./child-reading";
 
 type ClaudeParseState = {
   sessionId: string;
@@ -128,9 +129,6 @@ export type ClaudeParseProgress = {
   children: Map<string, { fingerprint: string; summary: ChildThreadInfo; observations: ReturnType<typeof claudeCapabilityUsage> }>;
 };
 
-const READ_CHUNK_BYTES = 1024 * 1024;
-const TAIL_BYTES = 256;
-
 function newProgress(device: number, inode: number, fallbackSessionId: string): ClaudeParseProgress {
   const state: ClaudeParseState = {
     sessionId: "", startedAt: 0, lastActivityAt: 0, lastMessageAt: 0,
@@ -156,42 +154,17 @@ function applyRow(line: string, progress: ClaudeParseProgress): boolean {
   return true;
 }
 
-/** Reads only what was appended, in slices, so one long chat cannot hold the event loop. */
-function* readAppended(fd: number, progress: ClaudeParseProgress, size: number): Generator<void> {
-  let carry = Buffer.alloc(0);
-  while (progress.offset + carry.length < size) {
-    const wanted = Math.min(READ_CHUNK_BYTES, size - progress.offset - carry.length);
-    const chunk = Buffer.allocUnsafe(wanted);
-    const count = readSync(fd, chunk, 0, wanted, progress.offset + carry.length);
-    if (count === 0) break;
-    const data = carry.length ? Buffer.concat([carry, chunk.subarray(0, count)]) : chunk.subarray(0, count);
-    const end = data.lastIndexOf(0x0a);
-    if (end < 0) { carry = data; continue; }
-    for (const line of data.toString("utf8", 0, end).split("\n")) applyRow(line, progress);
-    progress.offset += end + 1;
-    progress.tail = Buffer.from(data.subarray(Math.max(0, end + 1 - TAIL_BYTES), end + 1));
-    carry = data.subarray(end + 1);
-    yield;
-  }
-  // A complete last row without its newline counts; a row still being written waits.
-  if (carry.length && applyRow(carry.toString("utf8"), progress)) {
-    progress.offset += carry.length;
-    progress.tail = Buffer.from(carry.subarray(Math.max(0, carry.length - TAIL_BYTES)));
-  }
-}
-
 /** A subagent log is read again only when it changed, not whenever its parent chat did. */
-function readChildren(paths: string[], ownSession: SessionInfo, progress: ClaudeParseProgress,
-  observations: ReturnType<typeof claudeCapabilityUsage>): ChildThreadInfo[] {
+function* readChildren(paths: string[], ownSession: SessionInfo, progress: ClaudeParseProgress,
+  observations: ReturnType<typeof claudeCapabilityUsage>): Generator<void, ChildThreadInfo[]> {
   const childThreads: ChildThreadInfo[] = [];
   for (const childPath of paths) {
     const fingerprint = childLogsFingerprint([childPath]);
     let known = progress.children.get(childPath);
     if (known?.fingerprint !== fingerprint || !recordedClaudeUsageIsCurrent(known.observations)) {
-      const childLines = readLines(childPath);
-      if (!childLines) continue;
-      const child = claudeChildSummary(childPath, ownSession.sessionId, childLines);
-      known = { fingerprint, summary: child, observations: claudeCapabilityUsage(ownSession, childLines, child.threadId) };
+      const child = yield* readClaudeChild(childPath, ownSession);
+      if (!child) continue;
+      known = { fingerprint, ...child };
       progress.children.set(childPath, known);
     }
     childThreads.push(known.summary);
@@ -199,6 +172,7 @@ function readChildren(paths: string[], ownSession: SessionInfo, progress: Claude
       rememberCapabilityObservation(observations, observation);
     }
     mergeRecordedClaudeUsage(observations, known.observations);
+    yield;
   }
   return childThreads;
 }
@@ -252,7 +226,7 @@ export function* parseClaudeFileSteps(file: string): Generator<void, ClaudeParse
   try {
     progress = continues(resumable, fd, fileStat) ? resumable
       : newProgress(fileStat.dev, fileStat.ino, basename(file, ".jsonl"));
-    yield* readAppended(fd, progress, fileStat.size);
+    yield* readTranscriptRows(fd, progress, fileStat.size, line => applyRow(line, progress));
   } catch {
     return undefined;
   } finally {
@@ -280,19 +254,21 @@ export function* parseClaudeFileSteps(file: string): Generator<void, ClaudeParse
   };
   const actualChildPaths =
     state.sessionId === cachedSessionId ? childPaths : claudeChildLogPaths(file, state.sessionId);
+  const scannedChildFingerprint = childLogsFingerprint(actualChildPaths);
   const observations = progress.capabilities.snapshot();
-  const childThreads = readChildren(actualChildPaths, ownSession, progress, observations);
+  const childThreads = yield* readChildren(actualChildPaths, ownSession, progress, observations);
   const session = aggregateChildThreads(ownSession, childThreads);
   claudeSummaryCache.set(file, {
     mtimeMs: fileStat.mtimeMs,
     size: fileStat.size,
-    childFingerprint: childLogsFingerprint(actualChildPaths),
+    // A child can grow between cooperative slices. Only cache the snapshot we started reading.
+    childFingerprint: scannedChildFingerprint,
     session,
     tokensSession: session.tokensSession,
     observations,
     turnEnded: state.turnEnded,
     // A chat that has gone quiet gives its memory back and is read again if it returns.
-    progress: Date.now() - state.lastActivityAt <= LIVE_MS ? progress : undefined,
+    progress: Date.now() - session.lastActivityAt <= LIVE_MS ? progress : undefined,
   });
   return { session, tokensSession: session.tokensSession, childPaths: actualChildPaths };
 }

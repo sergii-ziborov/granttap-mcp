@@ -17,7 +17,7 @@ import {
 import { noteDeliveredRun } from "../../mesh/delivery/run-digest";
 import { evaluateCreateTask } from "../../mesh/tasks/create-task";
 import { sendSessionPayload } from "../../host/session-keys";
-import { scanSessions } from "../../sessions";
+import { findSessionCooperatively } from "../../sessions";
 import { publishedSession } from "../../session-catalog";
 import { localTaskOrigins, type TaskOriginRegistry, type TaskOriginScope } from '../../task-origins';
 import { agentEventForUserMessage, sendDeliveryReceipt } from "./receipts";
@@ -158,7 +158,7 @@ export async function handleUserMessage(
   // provider scan blocks the event loop for seconds on a large transcript set,
   // so it runs only for a chat newer than that catalog.
   const target = publishedSession(client, message.sessionId)
-    ?? scanSessions().sessions.find((session) => session.sessionId === message.sessionId);
+    ?? await findSessionCooperatively(message.sessionId, false);
   if (!target) return refuse("This task is no longer available on the computer.");
 
   const settings = loadRuntimeConfig().providerSettings;

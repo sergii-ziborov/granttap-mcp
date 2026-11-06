@@ -5,7 +5,7 @@ import { sendSessionPayload } from '../host/session-keys';
 import { readTranscriptHistory } from '../transcript-history';
 import { publishedSession } from '../session-catalog';
 import { cachedSessionActivity } from '../monitor/support/session-activity';
-import { scanSessions, scanSessionHistory } from '../sessions';
+import { findSessionCooperatively } from '../sessions';
 import { sessionImageChunk, transcriptImages } from '../../../mcp/src/desktop/image';
 
 export function activityWithImages(activity: SessionActivity): SessionActivity {
@@ -25,8 +25,7 @@ export function readSessionImage(query: SessionImageQuery, session: SessionInfo,
 export async function publishSessionImage(client: RelayClient, query: SessionImageQuery,
   peerPublicKey?: string): Promise<boolean> {
   const session = publishedSession(client, query.sessionId)
-    ?? scanSessions().sessions.find(s => s.sessionId === query.sessionId)
-    ?? scanSessionHistory().find(s => s.sessionId === query.sessionId);
+    ?? await findSessionCooperatively(query.sessionId);
   const activity = session ? readTranscriptHistory(session, query.historyCursor)
     ?? cachedSessionActivity(session) : undefined;
   const chunk = session && activity ? readSessionImage(query, session, activity) : undefined;

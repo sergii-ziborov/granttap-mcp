@@ -57,3 +57,5 @@ minutes, so the transcript-age rule alone would show Idle. Only Idle is
 corrected: Waiting and the provider's own states stay as observed. Open chats
 use the same rule, and their observation revision changes when the run starts
 and ends. Tests: [`tests/freshness/owned-delivery.test.ts`](tests/freshness/owned-delivery.test.ts).
+
+Cold transcript, image, and message requests use cooperative discovery when the published catalog does not yet know the native identity. Concurrent requests share the same in-progress provider read; a stale phone target cannot reintroduce a synchronous full scan in the relay callback. Tests exercise real files and pending transport callbacks before both successful and unavailable replies.

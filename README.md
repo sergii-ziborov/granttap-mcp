@@ -22,6 +22,9 @@ walk through every provider log. The local helper retains a private metadata
 index so a restart can send current heads of the saved Now chats before a fresh
 discovery scan. The Apple clients keep downloaded conversations, pictures, and
 Mesh data locally for offline use; clearing that cache preserves the account login.
+Large Claude parent and child transcripts are read in cooperative slices so network
+heartbeats and decisions keep running. A live child retains its quiet parent
+checkpoint, and an append during a scan is discovered on the next pass.
 
 The chat's **Files** pill opens recorded changes for the current reply and the
 Task's **All files** tree. Directory and text reads are paged, encrypted for the

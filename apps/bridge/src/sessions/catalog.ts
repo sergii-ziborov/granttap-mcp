@@ -72,6 +72,13 @@ export async function scanSessionHistoryCooperatively(): Promise<SessionInfo[]> 
   return historyCatalog(catalogFromScans(await cooperativeProviderScans()).all);
 }
 
+/** Network requests share fresh discovery without making their socket wait on synchronous CLI reads. */
+export async function findSessionCooperatively(sessionId: string, includeHistory = true): Promise<SessionInfo | undefined> {
+  const catalog = catalogFromScans(await cooperativeProviderScans());
+  return liveCatalog(catalog).sessions.find(session => session.sessionId === sessionId)
+    ?? (includeHistory ? historyCatalog(catalog.all).find(session => session.sessionId === sessionId) : undefined);
+}
+
 export function scanSessions(): { sessions: SessionInfo[]; tokensRecent: number } {
   return liveCatalog(scanCatalog());
 }

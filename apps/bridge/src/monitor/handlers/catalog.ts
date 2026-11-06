@@ -8,8 +8,7 @@ import { publishedSession } from "../../session-catalog";
 import { activityWithImages } from '../../session-images';
 import { cursorConversationSession } from "../../sessions/cursor";
 import {
-  scanSessionHistory,
-  scanSessions,
+  findSessionCooperatively,
   scanThreadActivity,
 } from "../../sessions";
 
@@ -41,7 +40,7 @@ export function boundedCatalogHistory(
   return [...pinned, ...rest].sort((a, b) => b.lastActivityAt - a.lastActivityAt);
 }
 
-function resolveSession(client: RelayClient, sessionId: string, status?: SessionsStatus): SessionInfo | undefined {
+async function resolveSession(client: RelayClient, sessionId: string, status?: SessionsStatus): Promise<SessionInfo | undefined> {
   const cursor = cursorConversationSession(sessionId);
   const known = status?.sessions.find((session) => session.sessionId === sessionId)
     ?? status?.history?.find((session) => session.sessionId === sessionId)
@@ -50,8 +49,7 @@ function resolveSession(client: RelayClient, sessionId: string, status?: Session
     return { ...known, ...cursor, title: known?.title ?? cursor.title };
   }
   if (known) return known;
-  return scanSessions().sessions.find((session) => session.sessionId === sessionId)
-    ?? scanSessionHistory().find((session) => session.sessionId === sessionId);
+  return findSessionCooperatively(sessionId);
 }
 
 /** Send one bounded transcript under the task-specific E2EE key. */
@@ -85,7 +83,7 @@ async function sendTranscript(
   threadId?: string,
   history?: { history?: boolean; historyCursor?: string; peerPublicKey?: string },
 ): Promise<boolean> {
-  const known = resolveSession(client, sessionId, status);
+  const known = await resolveSession(client, sessionId, status);
   if (!known) return false;
   const observation = observeSessionExecution(known);
   const session = observation?.session ?? known;
