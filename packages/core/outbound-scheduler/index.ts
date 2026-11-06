@@ -17,8 +17,29 @@ export class OutboundFrameQueue {
   private closed = false;
   private timer?: NodeJS.Timeout;
   private nextAt = 0;
+  private ingressWindow?: number;
+  private sentFrames = 0;
+  private receivedFrames = 0;
 
   constructor(private readonly write: (frame: string) => Promise<void>, private readonly intervalMs = 6) {}
+
+  /** Read receipts bound TCP bursts; they never acknowledge application delivery. */
+  enableIngressWindow(window: number | undefined): void {
+    if (!Number.isSafeInteger(window) || window! < 16) return;
+    this.ingressWindow = Math.min(window!, 64);
+    this.schedule();
+  }
+
+  acknowledgeIngress(received: number): void {
+    if (this.ingressWindow === undefined || !Number.isSafeInteger(received)
+      || received <= this.receivedFrames || received > this.sentFrames) return;
+    this.receivedFrames = received;
+    this.schedule();
+  }
+
+  private get hasIngressCredit(): boolean {
+    return this.ingressWindow === undefined || this.sentFrames - this.receivedFrames < this.ingressWindow;
+  }
 
   send(frame: string, urgent = false): Promise<void> {
     if (this.closed) return Promise.reject(CLOSED());
@@ -45,18 +66,20 @@ export class OutboundFrameQueue {
   }
 
   private schedule(): void {
-    if (this.closed || this.running || this.timer || (!this.controls.length && !this.snapshots.length)) return;
+    if (this.closed || this.running || this.timer || !this.hasIngressCredit
+      || (!this.controls.length && !this.snapshots.length)) return;
     this.timer = setTimeout(() => { this.timer = undefined; void this.pump(); },
       Math.max(0, this.nextAt - performance.now()));
   }
 
   private async pump(): Promise<void> {
-    if (this.closed) return;
+    if (this.closed || !this.hasIngressCredit) return;
     const job = this.controls.shift() ?? this.snapshots.shift();
     if (!job) return;
     this.running = true;
     this.inFlight = job;
     this.bytes -= job.bytes;
+    this.sentFrames += 1;
     try {
       await this.write(job.frame);
       if (this.closed) throw CLOSED();

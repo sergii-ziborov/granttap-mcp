@@ -12,6 +12,13 @@ Disconnect rejects the current write as well as queued frames. Catalog and
 history publishers can retry on the next connection even if the previous
 socket never calls its write-completion callback.
 
+Supporting relays negotiate an ingress window and cumulative read receipts.
+At most 64 frames then wait for relay reads, in addition to the existing pace.
+Short TCP buffering or a slow relay cannot release several seconds of ordinary
+traffic as one excessive burst. Controls retain queue priority and reconnecting
+creates a new counter generation. Managed admission renewals use their separate
+control lane. A read receipt proves no persistence, decryption or task delivery.
+
 Tests live in `tests/`; they include an actual WebSocket server with the relay's
 rate limit. A socket write is transport evidence, never an approval receipt.
 

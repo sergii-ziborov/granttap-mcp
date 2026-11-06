@@ -144,10 +144,16 @@ export class RelayClient {
   }
 
   private async onRaw(raw: string): Promise<void> {
-    const control = parseRelayControl(raw) as { type?: string; recipientRouting?: boolean; retainedState?: boolean; retainedStateGroups?: boolean } | null;
+    const control = parseRelayControl(raw) as { type?: string; recipientRouting?: boolean; retainedState?: boolean;
+      retainedStateGroups?: boolean; ingressWindow?: number; received?: number } | null;
     if (control?.type === "relay.capabilities" && control.recipientRouting === true) {
       this.recipientRouting = true;
       this.retainedState = control.retainedState === true && control.retainedStateGroups === true;
+      this.frames?.enableIngressWindow(control.ingressWindow);
+      return;
+    }
+    if (control?.type === 'relay.ingress') {
+      if (typeof control.received === 'number') this.frames?.acknowledgeIngress(control.received);
       return;
     }
     if (control?.type === "relay.task-job") {
