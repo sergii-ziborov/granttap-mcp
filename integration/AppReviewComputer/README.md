@@ -23,3 +23,5 @@ Run `node --import tsx --test integration/AppReviewComputer/tests/*.test.ts`.
 Tests exchange actual encrypted WebSocket questions and replies, verify durable
 progress across calls, and prove unanswered steps do not advance. The service
 health endpoint reports relay connectivity, not provider execution or AI usage.
+
+License: [GrantTap Commercial Source License](../../LICENSE).
