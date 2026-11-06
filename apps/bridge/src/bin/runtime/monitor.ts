@@ -44,7 +44,7 @@ try {
     replayPath: join(configDir(), `replay-${cfg.room}.json`),
     peerAllowed: controllerPeerGate(cfg),
   });
-  monitor = startSessionMonitor(client, { primary: process.env.GRANTTAP_MONITOR_PRIMARY === "1" });
+  monitor = startSessionMonitor(client, { primary: process.env.GRANTTAP_MONITOR_PRIMARY === "1", config: cfg });
   stopTaskDispatch = startTaskDispatchMonitor({ config: cfg, client,
     isLeader: monitor.isLeader, peerAllowed: controllerPeerGate(cfg), publish: monitor.publish });
   stopTaskNetwork = startTaskNetworkMonitor({ config: cfg, client,

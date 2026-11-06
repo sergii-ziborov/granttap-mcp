@@ -64,7 +64,7 @@ export async function relay(): Promise<RelayClient | null> {
         recordPhoneSeen(phoneLastSeenAt, peerPublicKey);
         return false;
       });
-      monitor = startSessionMonitor(client);
+      monitor = startSessionMonitor(client, {config});
       stopEndpointPublisher = startEndpointPublisher(config);
     }
     await client.connect();

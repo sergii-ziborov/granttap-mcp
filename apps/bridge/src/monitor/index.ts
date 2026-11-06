@@ -1,4 +1,5 @@
 import type { RelayClient } from "../../../../packages/core/relay-client";
+import type { PeerConfig } from "../../../../packages/core/relay-client";
 import { startSessionMonitor as start } from "./support/runtime";
 
 export { HISTORY_PUBLISH_LIMIT, boundedCatalogHistory, publishSessionEvents } from "./handlers/catalog";
@@ -16,6 +17,6 @@ export { sweepAttachments, resolveMessageAttachments } from "./handlers/receipts
 export { handleUserMessage } from "./handlers/user-message";
 export type { SessionMonitor } from "./support/runtime";
 
-export function startSessionMonitor(client: RelayClient, options: { primary?: boolean } = {}) {
+export function startSessionMonitor(client: RelayClient, options: { primary?: boolean; config?: PeerConfig } = {}) {
   return start(client, options);
 }

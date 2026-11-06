@@ -37,6 +37,8 @@ import { handleMonitorMessage } from "../handlers/inbound";
 import { decorateTaskOriginCatalog } from '../../task-origins';
 import { publishCodexQuestions } from '../../codex-questions';
 import { publishClaudeOpenQuestions } from '../../claude-open-questions';
+import { startTaskActivities } from '../../task-activities';
+import type { PeerConfig } from '../../../../../packages/core/relay-client';
 
 const HISTORY_INTERVAL_MS = 60_000;
 const resumedHeads = new WeakSet<RelayClient>();
@@ -176,7 +178,7 @@ async function publishMonitorTick(input: {
  * used by MCP tools. This keeps STDIO stdout clean and removes the old need for
  * a separate `granttap-mcp monitor` terminal process.
  */
-export function startSessionMonitor(client: RelayClient, options: { primary?: boolean } = {}): SessionMonitor {
+export function startSessionMonitor(client: RelayClient, options: { primary?: boolean; config?: PeerConfig } = {}): SessionMonitor {
   const subscriptions = new Set<string>();
   const leadership = monitorLeadership(Date.now, undefined, () => client.isConnected, options.primary === true);
   restoreMonitorState(client);
@@ -186,6 +188,8 @@ export function startSessionMonitor(client: RelayClient, options: { primary?: bo
   let closed = false;
   const work = runtimeWorkTracker(() => hasPendingDeliveries() || approvalsStatus().pending.length > 0 || providerLogins.active() || deviceManagementWorkActive());
   const loadLoop = monitorLoadLoop(client, leadership);
+  const stopActivities = options.config ? startTaskActivities({config: options.config,
+    catalog: () => publishedCatalog(client), isLeader: () => !closed && client.isConnected && leadership.acquire()}) : () => {};
 
   const history = (force = false): Promise<SessionsStatus["sessions"]> => {
     if (historyRead) return historyRead;
@@ -256,6 +260,7 @@ export function startSessionMonitor(client: RelayClient, options: { primary?: bo
     canUpdate: work.idle,
     close: () => {
       closed = true;
+      stopActivities();
       offConnected?.();
       stopCatalog();
       stopCatalogHeads(client);

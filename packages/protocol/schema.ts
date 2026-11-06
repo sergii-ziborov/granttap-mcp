@@ -121,6 +121,7 @@ export const MachineHeartbeat = z.object({
   createdAt: z.number().catch(() => Date.now()),
   taskQueueImmediate: z.boolean().optional(),
   taskScheduleControls: z.boolean().optional(),
+  taskActivityPreviews: z.boolean().optional(),
 });
 export type MachineHeartbeat = z.infer<typeof MachineHeartbeat>;
 
