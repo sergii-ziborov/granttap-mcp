@@ -4,7 +4,7 @@ import { resolveCodexBinary } from "../../providers/codex-bin";
 import { runProcess } from ".";
 import { providerEffortArgs } from "./provider-effort";
 import type { DeliveryOptions, ReplyResult } from "../payload/types";
-import { deliverToCodexDesktop } from '../../codex-desktop';
+import { continueCodexQuestion, deliverToCodexDesktop, nativeQuestionAttachmentEnvelope } from '../../codex-desktop';
 
 function parseCodexJsonl(stdout: string, fallbackSessionId?: string): ReplyResult {
   let lastMessage = "";
@@ -55,6 +55,13 @@ export async function runCodex(
   const native = await deliverToCodexDesktop({ session, text, images, options, timeoutMs });
   if (native) return native;
   if (options.nativeOnly) return { ok: false, error: 'Open this conversation in Codex to answer its question.' };
+  if (options.questionReply) return continueCodexQuestion(session.sessionId, options,
+    () => resumeCodex(session, nativeQuestionAttachmentEnvelope(text), timeoutMs, images, options));
+  return resumeCodex(session, text, timeoutMs, images, options);
+}
+
+async function resumeCodex(session: SessionInfo, text: string, timeoutMs: number,
+  images: string[], options: DeliveryOptions): Promise<ReplyResult> {
   const configured = loadRuntimeConfig().sessionAccess[session.sessionId];
   const disabledMcp = loadRuntimeConfig().sessionMcpDisabled[session.sessionId] ?? [];
   const sandbox = configured === "read-only"

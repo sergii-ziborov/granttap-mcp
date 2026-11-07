@@ -8,6 +8,8 @@ import { DesktopConnection } from './connection';
 import { DesktopReceipt } from './receipts';
 import { desktopSocketPath } from './socket-path';
 export { interruptCodexDesktop } from './controls';
+export { continueCodexQuestion } from './question-continuation';
+export { nativeQuestionAttachmentEnvelope } from './question-attachment-envelope';
 
 const UNAVAILABLE = 'Codex desktop is not ready to receive this message. Keep the original chat open and try again.';
 const UNCERTAIN = 'Codex has not confirmed this message. Check the original chat before sending it again.';
@@ -73,7 +75,8 @@ function turnRequest(input: { session: SessionInfo; text: string; images: string
       networkAccess: false, excludeTmpdirEnvVar: false, excludeSlashTmp: false }
     : access === 'full' ? { type: 'dangerFullAccess' } : undefined;
   return { threadId: session.sessionId, clientUserMessageId: options.messageId ?? randomUUID(),
-    input: [{ type: 'text', text: options.nativeOnly ? nativeQuestionAttachmentEnvelope(text) : text, text_elements: [] }, ...images.map(path => ({ type: 'localImage', path }))],
+    input: [{ type: 'text', text: options.nativeOnly || options.questionReply
+      ? nativeQuestionAttachmentEnvelope(text) : text, text_elements: [] }, ...images.map(path => ({ type: 'localImage', path }))],
     ...(options.model ? { model: options.model } : {}), ...(effort ? { effort } : {}),
     ...(sandboxPolicy ? { sandboxPolicy } : {}) };
 }

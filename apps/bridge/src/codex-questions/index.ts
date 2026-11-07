@@ -108,7 +108,7 @@ export async function handleCodexQuestionReply(client: RelayClient, message: Use
   return deliver(client, { ...message, requestId: undefined,
     messageId: message.messageId ?? 'codex-answer-' + record.requestId,
     text: nativeAnswerEnvelope(record, message.text) }, publish, peerPublicKey,
-  { messageId: record.requestId, nativeOnly: true });
+  { messageId: record.requestId, questionReply: true });
 }
 
 function resolveQuestion(client: RelayClient, record: QuestionRecord, peerPublicKey?: string, expired = false) {

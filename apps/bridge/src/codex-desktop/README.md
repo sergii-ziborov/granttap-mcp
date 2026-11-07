@@ -24,13 +24,13 @@ An uncertain or crashed dispatch is not replayed. A native receipt produces no
 synthetic assistant reply or completed-run digest; the existing transcript carries
 the actual work. Pause sends the user's stop request to the same owner. Document
 attachments remain in private staging for up to a day after admission; the monitor
-removes expired stages. Image-only stages are removed once native admission has
-consumed them. Tests exercise native delivery, framing, socket trust, durable
+removes expired stages. Image-only stages have the same retention because
+admission precedes attachment consumption. Tests exercise framing, socket trust, durable
 deduplication, and refusal without launching the CLI.
 
 License: GrantTap Commercial Source License in the repository-root `LICENSE`.
 
-Document staging for a native-only question keeps the file note inside its
+Document staging for a correlated question keeps the file note inside its
 original answer envelope. The host's native question and all paired controllers
 therefore observe the same question item as answered; document paths remain
 available to the admitted turn. Ordinary chat text is unchanged.
@@ -39,3 +39,9 @@ The bounded native admission deadline leaves time for the installed router’s
 ten-second owner discovery window. A five-second client cap otherwise reports
 healthy CLI conversations unavailable before discovery can finish. Missing-owner
 confirmation preserves CLI continuation; uncertain dispatch remains unreplayed.
+
+`continueCodexQuestion`, exported through `index.ts`, reserves the same durable
+question identity for an ownerless CLI continuation. Its caller must first
+obtain a definitive absent-owner result inside the existing per-chat queue.
+The original native envelope is preserved, and another controller cannot retry
+an uncertain dispatch or replace an already accepted answer.

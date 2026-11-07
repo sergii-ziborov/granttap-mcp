@@ -108,10 +108,10 @@ test('a phone answer carries the native item identity through ordinary scoped de
   let forwarded: UserMessage | undefined;
   f.sent.length = 0;
   const deliver = async (_client: RelayClient, message: UserMessage, _publish: () => Promise<void>, peer?: string,
-    native?: { messageId: string; nativeOnly: true }) => {
+    native?: { messageId: string; questionReply: true }) => {
     forwarded = message; assert.equal(peer, 'phone');
     assert.equal(native?.messageId, first.requestId);
-    assert.equal(native?.nativeOnly, true);
+    assert.equal(native?.questionReply, true);
     return true;
   };
   assert.equal(await handleCodexQuestionReply(f.client, base, async () => {}, 'phone', deliver), true);

@@ -12,6 +12,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { configDir } from "../../config/runtime/paths";
+import { questionAnswerPresentation } from '../../codex-questions/presentation';
 
 export type RunRecord = {
   /** Stable id for this run. Start time is not a confirmation key. */
@@ -87,7 +88,7 @@ export function recordRun(sessionId: string, record: RunRecord): void {
     const bounded: RunRecord = {
       ...record,
       runId: record.runId || `run:${record.at}`,
-      prompt: compactText(record.prompt, MAX_PROMPT_CHARS),
+      prompt: compactText(questionAnswerPresentation(record.prompt), MAX_PROMPT_CHARS),
       outcome: compactText(record.outcome, MAX_OUTCOME_CHARS),
       files: record.files.slice(0, MAX_FILES),
     };
@@ -141,7 +142,7 @@ export type RunDescriptionLimits = { files?: number; outcome?: number };
 /** One line a person or a model can read: what was asked, what happened, what it touched. */
 export function describeRun(record: RunRecord, limits: RunDescriptionLimits = {}): string {
   const outcome = limits.outcome == null ? record.outcome : compactText(record.outcome, limits.outcome);
-  const parts = [`«${record.prompt}» → ${record.ok ? "" : "failed: "}${outcome}`];
+  const parts = [`«${questionAnswerPresentation(record.prompt)}» → ${record.ok ? "" : "failed: "}${outcome}`];
   const files = limits.files ?? 6;
   if (record.files.length > 0 && files > 0) {
     const shown = record.files.slice(0, files).join(", ");

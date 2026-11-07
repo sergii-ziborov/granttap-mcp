@@ -17,9 +17,15 @@ Replies use the original host question item ID and normal scoped phone delivery,
 including current provider, pause and Task policy. Native admission uses one
 stable delivery ID per question, so concurrent controllers cannot submit two
 different answers. The phone's own message ID still receives its receipts.
-If the desktop owner is unavailable, question replies do not launch a separate
-CLI writer. An uncertain admission is not replayed or described as a confirmed
-native answer. Native transcript files are read without modification.
+When discovery confirms there is no desktop owner, an answer resumes the same
+CLI conversation through the existing per-chat queue. It waits for a running
+delivery, preserves the original question envelope and attachments, and shares
+the durable native admission identity across controllers. An uncertain native
+or CLI dispatch is never replayed. Native transcript files remain read-only.
+
+The public `presentation/index.ts` boundary extracts human answers for run journals
+and Task progress before truncation. Unknown or truncated question envelopes
+show a neutral reply label; ordinary messages and quoted examples stay intact.
 
 Tests under `tests/` cover publication, reconnect replay, native acknowledgement,
 scope rejection, expiry and delivery through an isolated native IPC fixture.

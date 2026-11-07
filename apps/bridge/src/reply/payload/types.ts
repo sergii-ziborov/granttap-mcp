@@ -9,6 +9,8 @@ export type DeliveryOptions = {
   messageId?: string;
   /** Native host questions must never fall back to a second CLI conversation. */
   nativeOnly?: boolean;
+  /** Correlated question answer; use serialized resume only when no desktop owner exists. */
+  questionReply?: boolean;
   /** Computer-generated identity before temporary attachment paths are inserted. */
   intentDigest?: string;
   preferredMcp?: string;

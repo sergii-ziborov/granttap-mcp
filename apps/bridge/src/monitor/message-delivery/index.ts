@@ -11,7 +11,7 @@ export async function handleInboundUserMessage(
   client: RelayClient, payload: Extract<Payload, { type: "user.message" }>,
   publish: (forceHistory?: boolean) => Promise<void>,
   peerPublicKey?: string,
-  native?: { messageId: string; nativeOnly: true },
+  native?: { messageId: string; questionReply: true },
 ): Promise<boolean> {
   if (payload.requestId) return false;
   let deliveryStarted = false;
