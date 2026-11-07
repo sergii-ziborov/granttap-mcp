@@ -19,6 +19,7 @@ import { codexHeadRequest, isProvisionalPageTitle } from "../../support/codex-he
 import { heartbeatDisplayText } from '../../host-heartbeat';
 import { codexContextReport } from "../../context-usage";
 import { codexRequestTitle } from '../../native-task-titles';
+import { plainPreview } from '../../plain-preview';
 
 type CodexParseState = {
   sessionId: string;
@@ -113,7 +114,7 @@ function applyCodexLine(d: any, state: CodexParseState): void {
   if (d.type === "event_msg" && d.payload?.type === "agent_message") {
     const raw = d.payload.message ?? d.payload.text;
     const visible = heartbeatDisplayText(raw, 'message') ?? raw;
-    if (visible) state.summary = childTitle(visible)?.slice(0, 180);
+    if (visible) state.summary = plainPreview(visible);
   }
   if (
     d.type === "response_item" &&
@@ -124,7 +125,7 @@ function applyCodexLine(d: any, state: CodexParseState): void {
     for (const block of d.payload.content) {
       if (["output_text", "text"].includes(block?.type) && typeof block.text === "string") {
         const visible = heartbeatDisplayText(block.text, 'message') ?? block.text;
-        if (visible) state.summary = childTitle(visible)?.slice(0, 180);
+        if (visible) state.summary = plainPreview(visible);
       }
     }
   }

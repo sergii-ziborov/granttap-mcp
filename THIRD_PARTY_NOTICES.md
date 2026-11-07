@@ -21,6 +21,8 @@ boundaries and upstream grants remain separate from GrantTap's first-party comme
 | `ws` | MIT |
 | `zod` | MIT |
 | `smol-toml` | BSD-3-Clause |
+| `marked` | MIT, with the original Markdown notice retained |
+| `entities` | BSD-2-Clause |
 
 The unpublished Rust workspace also depends on separately licensed components,
 including `mcport` (MIT), `blazingly-json` (MIT), `serde` (MIT OR Apache-2.0), and

@@ -1,6 +1,6 @@
 {
   "name": "granttap-mcp",
-  "version": "0.8.158",
+  "version": "0.8.159",
   "description": "Commercial computer runtime connecting local coding agents to GrantTap on Mac, iPhone, iPad and Apple Watch.",
   "type": "module",
   "bin": {
@@ -37,7 +37,9 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
+    "entities": "9.0.0",
     "express": "^5.2.1",
+    "marked": "18.1.3",
     "qrcode": "^1.5.4",
     "smol-toml": "1.9.1",
     "tsx": "^4.23.4",

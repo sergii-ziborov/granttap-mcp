@@ -3,6 +3,7 @@ import { mergeRecordedClaudeUsage, recordedClaudeUsageIsCurrent } from './record
 import { basename } from "node:path";
 import type { ChildThreadInfo, SessionInfo } from "../../../../../../packages/protocol/schema";
 import { aggregateChildThreads, childTitle } from "../../support/child-threads";
+import { plainPreview } from '../../plain-preview';
 import { rememberCapabilityObservation } from "../../telemetry";
 import { observeClaudeTurn } from "./turn-state";
 import { claudeContextReport } from "../../context-usage";
@@ -104,11 +105,11 @@ function applyClaudeLine(d: any, state: ClaudeParseState): void {
   if (d.message?.role === "assistant") {
     const content = d.message.content;
     if (typeof content === "string" && content.trim()) {
-      state.summary = childTitle(content)?.slice(0, 180);
+      state.summary = plainPreview(content);
     } else if (Array.isArray(content)) {
       for (const block of content) {
         if (block?.type === "text" && typeof block.text === "string" && block.text.trim()) {
-          state.summary = childTitle(block.text)?.slice(0, 180);
+          state.summary = plainPreview(block.text);
         }
       }
     }

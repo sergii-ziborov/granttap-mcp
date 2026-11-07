@@ -3,15 +3,14 @@ import type {
   ChildThreadInfo,
   SessionInfo,
 } from "../../../../../packages/protocol/schema";
-import { stripTranscriptMarkup } from "./activity-helpers";
+import { plainPreview } from '../plain-preview';
 
 /** Protocol and UI share this hard ceiling; provider logs can contain thousands. */
 export const MAX_CHILD_THREADS = 32;
 export const MAX_CHILD_THREAD_TITLE = 160;
 
 export function childTitle(value: unknown): string | undefined {
-  const text = stripTranscriptMarkup(value).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-  return text ? text.slice(0, MAX_CHILD_THREAD_TITLE) : undefined;
+  return plainPreview(value, MAX_CHILD_THREAD_TITLE);
 }
 
 /** Keep the most recently active children while returning them chronologically. */
