@@ -6,3 +6,5 @@ Call only after native owner discovery returns definitive absence. Pending or
 uncertain admissions are never retried, including from another controller.
 Public delivery integration tests live in
 `../../codex-questions/continuation/tests/cli-delivery.test.ts`.
+
+License: [GrantTap Commercial Source License](../../../../../LICENSE).
