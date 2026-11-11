@@ -17,6 +17,19 @@ import { isMachineConfigured } from "../../../../mcp/src/status/pairing-status";
 import { removeCursorUserGrantTap } from "../../../../mcp/src/cursor-config";
 import { installHttpMcpService, waitForHttpMcpHealth } from "../../../../mcp/src/http-service";
 
+const SETUP_USAGE = [
+  "Usage: granttap setup [--engine <path>]",
+  "",
+  "Detects local coding agents, installs or repairs their GrantTap hooks, the background",
+  "helper and the local MCP service, prepares the Graph Engine, and starts phone pairing",
+  "when run in an interactive terminal. Without an Engine, everything else is still set up.",
+  "",
+  "Options:",
+  "  --engine <path>  Use this absolute path to an executable as the Engine",
+  "  -h, --help       Show this help without changing anything",
+  "",
+].join("\n");
+
 /** Argument mistakes stop setup before it changes any provider configuration. */
 function engineArgument(args: string[]): string | undefined {
   const flag = args.indexOf("--engine");
@@ -135,9 +148,14 @@ async function main(): Promise<void> {
   ].join("\n"));
 }
 
-void main().catch((error: unknown) => {
-  process.stderr.write(
-    `[granttap-mcp] setup failed: ${error instanceof Error ? error.message : String(error)}\n`,
-  );
-  process.exitCode = 1;
-});
+const args = process.argv.slice(2);
+if (args.includes("--help") || args.includes("-h")) {
+  process.stdout.write(SETUP_USAGE);
+} else {
+  void main().catch((error: unknown) => {
+    process.stderr.write(
+      `[granttap-mcp] setup failed: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    process.exitCode = 1;
+  });
+}

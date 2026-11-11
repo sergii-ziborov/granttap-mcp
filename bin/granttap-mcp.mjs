@@ -28,7 +28,7 @@ const usage = [
   "GrantTap — personal control center for local coding agents",
   "",
   "Usage:",
-  "  granttap setup                    Detect agents and install or repair GrantTap",
+  "  granttap setup [--help]           Detect agents and install or repair GrantTap",
   "  granttap status [--json]          Show pairing, helper, and provider readiness",
   "  granttap connect [--relay <url>]  Pair this computer with iPhone/Apple Watch",
   "  granttap phone add              Show a QR for another controller phone",
@@ -36,6 +36,7 @@ const usage = [
   "  granttap reset [--yes]            Reset this computer's phone pairing",
   "  granttap mesh connect <invite>    Redeem a one-time Grok Bot Mesh invite",
   "  granttap restrictions check [dir] Check files against Mesh / .granttap restrictions",
+  "  granttap --version                Print the installed GrantTap version",
   "",
   "The legacy granttap-mcp command is an alias for granttap.",
   "",
@@ -43,6 +44,11 @@ const usage = [
 
 if (command === "help" || command === "--help" || command === "-h") {
   process.stdout.write(usage);
+  process.exit(0);
+}
+if (command === "version" || command === "--version" || command === "-v") {
+  // The selected runtime is what every other command runs, so its version is the one reported.
+  process.stdout.write(`${runtimeVersion(root)}\n`);
   process.exit(0);
 }
 
