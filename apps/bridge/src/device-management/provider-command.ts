@@ -7,6 +7,7 @@ import { executableOnPath, resolveClaudeBinary } from '../providers/claude-bin';
 import { resolveCodexBinary } from '../providers/codex-bin';
 import { resolveGrokBinary } from '../providers/grok-bin';
 import { resolveCursorAgentBin } from '../reply/process/cursor-agent-bin';
+import { providerSignIns } from './sign-in-refusals';
 
 export function providerCommand(agent: CodingAgent): string {
   switch (agent) {
@@ -52,6 +53,11 @@ type Authentication = 'signed-in' | 'signed-out' | 'unknown' | 'not-installed';
 
 /** Presence is reported separately from a successful agent turn; credentials never leave their native store. */
 export async function providerAuthentication(agent: CodingAgent, command = providerCommand(agent)): Promise<Authentication> {
+  const reported = await reportedAuthentication(agent, command);
+  return reported === 'signed-in' && providerSignIns.wasRefused(agent) ? 'signed-out' : reported;
+}
+
+async function reportedAuthentication(agent: CodingAgent, command: string): Promise<Authentication> {
   if (!installedProvider(command)) return 'not-installed';
   if (agent === 'grok') {
     try {

@@ -4,6 +4,7 @@ import type { CodingAgent, ProviderLoginProgress } from '../../../../packages/pr
 import { signalOwnedProcess } from '../reply/process';
 import { stripAnsi } from '../tools/version';
 import { allowedLoginURL, installedProvider, loginArguments, providerCommand, providerEnvironment } from './provider-command';
+import { providerSignIns } from './sign-in-refusals';
 
 type Flow = { scope: string; child: ChildProcess; progress: ProviderLoginProgress; output: string;
   timer: NodeJS.Timeout; emit: (value: ProviderLoginProgress) => void };
@@ -98,6 +99,7 @@ export class ProviderLogins {
     const flow = this.flows.get(id);
     if (!flow || terminal.has(flow.progress.phase)) return;
     clearTimeout(flow.timer);
+    if (phase === 'signed-in') providerSignIns.accepted(flow.progress.agent);
     if (phase !== 'signed-in') {
       signalOwnedProcess(flow.child, 'SIGTERM');
       const kill = setTimeout(() => {
