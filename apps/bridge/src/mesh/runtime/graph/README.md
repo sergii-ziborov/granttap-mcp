@@ -25,6 +25,14 @@ fresh in-memory results; they do not queue additional multi-repository scans.
 A verified Backbone remains authoritative. Project identities and grants are
 preserved.
 
+Every phone-bound snapshot, the build's reply included, is fitted to the 256 KiB
+plaintext envelope every iPhone build enforces (`../snapshot/fit.ts`); a larger
+reply crossed the relay and was dropped on the phone, so the build spun and then
+failed. Graphs take the room the rest leaves. Repository details and the oldest
+events and executions, which the phone merges from earlier snapshots, make way
+before the Graph falls below half of it. Every repository keeps its entry, so a
+requested build is always answered.
+
 Behavior tests: `tests/`, root `tests/graph/graph-binding-sync.test.ts`, and
 `apps/mcp/src/desktop/projection/tests/graph-refresh.test.ts`. The optional
 `engine-selection-live.test.ts` uses `GRANTTAP_ENGINE_TEST_BINARY` to verify the
