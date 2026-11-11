@@ -233,3 +233,27 @@ test("a Mesh whose only folder was removed is answered, so the phone stops waiti
     assert.deepEqual(await build([removed, checkout]), [["build-1", [["github.com/me/kept", undefined]]]],
         "beside a real checkout a removed folder stays out of Health");
 });
+test("the monitor log says whether each Graph build started, joined, answered, found nothing or failed", async () => {
+    const lines: string[] = [];
+    let clock = 1_000;
+    const log = (line: string) => { lines.push(line); };
+    const now = () => clock;
+    let finish: (value: boolean) => void = () => undefined;
+    const running = new Promise<boolean>((resolve) => { finish = resolve; });
+    assert.equal(requestProjectGraphRefresh({} as never, "project-with-a-long-id", async () => running, "request-one", log, now), true);
+    assert.equal(requestProjectGraphRefresh({} as never, "project-with-a-long-id", async () => true, "request-two", log, now), false);
+    clock += 3_200;
+    finish(true);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.match(lines[0]!, /^Graph build requested project=project-with…\s?request=request-one; started\.$/);
+    assert.match(lines[1]!, /joined the build already running/);
+    assert.match(lines[2]!, /finished in 3\.2 s; answer sent for 2 request\(s\)/);
+
+    requestProjectGraphRefresh({} as never, "empty", async () => false, undefined, log, now);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.match(lines.at(-1)!, /project=empty sent no answer after 0\.0 s/);
+
+    requestProjectGraphRefresh({} as never, "broken", async () => { throw new Error("engine closed"); }, undefined, log, now);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.match(lines.at(-1)!, /project=broken failed after 0\.0 s \(Error: engine closed\); the phone gets no answer\./);
+});
