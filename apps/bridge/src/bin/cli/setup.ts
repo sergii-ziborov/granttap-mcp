@@ -11,10 +11,28 @@ import {
   type InstallResult,
 } from "../../install";
 import { createOneTimePairing, DEFAULT_RELAY, PAIRING_CODE_TTL_MINUTES } from "../../pairing";
-import { prepareEngine } from "../../engine/distribution";
+import { prepareSetupEngine, type SetupEngine } from "../../engine/distribution";
+import { usableEngineBinary } from "../../engine/protocol/engine-declaration";
 import { isMachineConfigured } from "../../../../mcp/src/status/pairing-status";
 import { removeCursorUserGrantTap } from "../../../../mcp/src/cursor-config";
 import { installHttpMcpService, waitForHttpMcpHealth } from "../../../../mcp/src/http-service";
+
+/** Argument mistakes stop setup before it changes any provider configuration. */
+function engineArgument(args: string[]): string | undefined {
+  const flag = args.indexOf("--engine");
+  if (flag < 0) return undefined;
+  const path = args[flag + 1];
+  if (!path) throw new Error("Choose an executable after --engine");
+  if (!usableEngineBinary(path)) throw new Error("The selected Engine must be an absolute path to an executable regular file");
+  return path;
+}
+
+function engineNote(engine: SetupEngine): string[] {
+  if (!engine.reason) return [];
+  return [engine.declaration
+    ? `Engine not prepared: ${engine.reason}. Using the verified Engine already installed on this computer.`
+    : `Graph Engine unavailable on this computer: ${engine.reason}. Graph and Project Governance stay off.`];
+}
 
 function state(result: InstallResult): string {
   return result.status === "manual" ? "Needs attention" : "Ready";
@@ -49,6 +67,7 @@ async function pairIfNeeded(): Promise<string | null> {
 }
 
 async function main(): Promise<void> {
+  const explicitEngine = engineArgument(process.argv.slice(2));
   const before = {
     cursor: inspectCursorIntegration(),
     agents: inspectAgentIntegrations(),
@@ -57,10 +76,9 @@ async function main(): Promise<void> {
   const claudeHook = installClaudeHook();
   const codexHook = installCodexHook();
   // Declared before the helper is written, so the LaunchAgent picks the engine
-  // up in the same run rather than needing a second one.
-  const engineFlag = process.argv.indexOf("--engine");
-  if (engineFlag >= 0 && !process.argv[engineFlag + 1]) throw new Error("Choose an executable after --engine");
-  const engine = await prepareEngine(engineFlag >= 0 ? process.argv[engineFlag + 1] : undefined);
+  // up in the same run rather than needing a second one. A missing Engine never
+  // stops the helper, HTTP service, Codex trust or pairing below.
+  const engine = await prepareSetupEngine(explicitEngine);
   const helper = installMonitorHelper();
   let httpService: InstallResult | null = null;
   let cursorConfig: InstallResult | null = null;
@@ -102,8 +120,9 @@ async function main(): Promise<void> {
       : "Not installed"}`,
     // Governance is edited on the phone but cannot report until an engine is
     // declared here, so say plainly which of the two is missing.
-    `Project Governance  ${engine ? "Ready" : "No engine found"}`,
+    `Project Governance  ${engine.declaration ? "Ready" : "No engine found"}`,
     "",
+    ...engineNote(engine),
     paired && installed.has("codex")
       ? codexHooksReady(codexTrust.hooks) ? "Codex confirmed both GrantTap hooks are trusted and enabled."
         : `Next: review GrantTap hooks in GrantTap Settings → This Mac → Codex hooks, or ${CODEX_TRUST_INSTRUCTION}`

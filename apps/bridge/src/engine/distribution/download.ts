@@ -5,7 +5,8 @@ import { engineArtifactName, type EngineArtifact } from "./artifacts";
 export async function downloadEngine(artifact: EngineArtifact, fetcher: typeof fetch): Promise<Buffer> {
   const url = `https://granttap.com/downloads/engine/${artifact.version}/${engineArtifactName(artifact)}`;
   const response = await fetcher(url, { redirect: "error", credentials: "omit",
-    headers: { "Accept-Encoding": "identity" }, signal: AbortSignal.timeout(120_000) });
+    headers: { "Accept-Encoding": "identity" }, signal: AbortSignal.timeout(120_000) })
+    .catch(() => { throw new Error("Engine download could not reach granttap.com"); });
   if (!response.ok || response.redirected) throw new Error("Verified Engine download is unavailable");
   const length = response.headers.get("content-length");
   if (length !== null && Number(length) !== artifact.bytes) throw new Error("Engine download size is invalid");
