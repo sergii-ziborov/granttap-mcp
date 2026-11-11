@@ -18,6 +18,12 @@ computer analyzes only its own endpoint bindings. Failed bindings remain visible
 projection and phone refresh use this rule. The graph contains actual Engine
 analysis; unavailable analysis is never synthesized as a successful graph.
 
+A folder that no longer exists is not analyzed. When this computer's bindings
+are only such folders, an explicit build still answers and names each one
+`REPOSITORY_NOT_LOCAL`, which the phone already explains; the build used to get
+no reply and failed after its 150-second wait. Beside a real checkout a removed
+folder stays out of the report.
+
 After repository analysis, explicit builds request bounded cross-repository
 contract matches from the same admitted bindings. These are projected as shared
 static contracts with an unverified runtime target. Background snapshots reuse

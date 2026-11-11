@@ -64,7 +64,13 @@ export async function analyzeProjectGraphNow(
   const own = (current.bindings ?? []).find(binding => binding.repositoryId === current.project.canonicalRepositoryId
     && (!endpoint || binding.endpointId === endpoint) && binding.available && binding.localPathHint
     && existsSync(binding.localPathHint) && !bindings.some(selected => selected.repositoryId === binding.repositoryId));
-  if (dependencies.endpoint && !bindings.length && !failures.length && !own && current.bindings?.length) return false;
+  // A removed folder is named only when it is all this computer holds: the phone's build would otherwise
+  // wait for an answer that never came, while beside a real checkout it would only crowd Health.
+  const removed = bindings.length || failures.length || own ? [] : [...new Set((current.bindings ?? [])
+    .filter(binding => (!endpoint || binding.endpointId === endpoint) && binding.available
+      && binding.localPathHint && !existsSync(binding.localPathHint)).map(binding => binding.repositoryId))];
+  if (dependencies.endpoint && !bindings.length && !failures.length && !own && !removed.length
+    && current.bindings?.length) return false;
   const [backbone, repositoryGraphs, details] = await Promise.all([
     dependencies.backbone(projectId),
     dependencies.graphs(projectId, bindings, { background: false }),
@@ -85,8 +91,9 @@ export async function analyzeProjectGraphNow(
   const reported = new Set(observed.map(report => report.repositoryId));
   const unfinished = [...new Set(bindings.map(binding => binding.repositoryId))]
     .filter(id => !reported.has(id)).map(id => unavailable(id, "ANALYSIS_NOT_FINISHED"));
-  const needsGit = own ? [unavailable(own.repositoryId, "GIT_CHECKOUT_REQUIRED")] : [];
-  const reports = observed.length + unfinished.length + needsGit.length > 0 ? [...observed, ...unfinished, ...needsGit]
+  const folders = [...(own ? [unavailable(own.repositoryId, "GIT_CHECKOUT_REQUIRED")] : []),
+    ...removed.map(id => unavailable(id, "REPOSITORY_NOT_LOCAL"))];
+  const reports = observed.length + unfinished.length + folders.length > 0 ? [...observed, ...unfinished, ...folders]
     : [unavailable(current.project.canonicalRepositoryId, "REPOSITORY_NOT_BOUND")];
   const receipts = requestIds?.size ? requestIds : new Set<string | undefined>([undefined]);
   for (const id of receipts) {

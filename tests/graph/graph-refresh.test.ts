@@ -203,3 +203,33 @@ test("a Project folder that is not a Git checkout says it needs one instead of v
     assert.deepEqual(sent[0]?.repositoryGraphs?.map(report => [report.repositoryId, report.analysisErrorCode]),
         [[`local:${folder}`, "GIT_CHECKOUT_REQUIRED"]]);
 });
+
+test("a Mesh whose only folder was removed is answered, so the phone stops waiting and says why", async () => {
+    const { mkdtempSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const folder = mkdtempSync(join(tmpdir(), "granttap-removed-project-"));
+    rmSync(folder, { recursive: true });
+    const removed = { bindingId: "removed", projectId: "gone", endpointId: "mac", repositoryId: `local:${folder}`,
+        displayName: "gone", available: true, localPathHint: folder };
+    const checkout = { bindingId: "checkout", projectId: "gone", endpointId: "mac", repositoryId: "github.com/me/kept",
+        displayName: "kept", available: false };
+    const ready = { projectId: "gone", repositoryId: "github.com/me/kept", revision: "r", weavatrixVersion: "1",
+        analysisStatus: "COMPLETE" as const, nodes: [], relations: [], totalNodes: 0, totalRelations: 0, truncated: false };
+    const build = async (bindings: object[]) => {
+        const snapshot = { type: "mesh.snapshot", sessionId: "gone", projectId: "gone",
+            project: { projectId: "gone", name: "Gone", canonicalRepositoryId: `local:${folder}`, createdAt: 1 },
+            bindings, tasks: [], executions: [], claims: [], dependencies: [], events: [], generatedAt: 1 } as MeshSnapshot;
+        const sent: MeshSnapshot[] = [];
+        await analyzeProjectGraphNow({} as never, "gone", {
+            snapshots: () => [snapshot], wait: async () => undefined, backbone: async () => undefined,
+            graphs: async (_id, selected) => selected.length ? [ready] : [], endpoint: () => "mac",
+            send: async (_client: unknown, value: MeshSnapshot) => { sent.push(value); },
+        }, new Set(["build-1"]));
+        return sent.map(value => [value.graphAnalysisRequestId,
+            value.repositoryGraphs?.map(report => [report.repositoryId, report.analysisErrorCode])]);
+    };
+    assert.deepEqual(await build([removed]), [["build-1", [[`local:${folder}`, "REPOSITORY_NOT_LOCAL"]]]]);
+    assert.deepEqual(await build([removed, checkout]), [["build-1", [["github.com/me/kept", undefined]]]],
+        "beside a real checkout a removed folder stays out of Health");
+});
