@@ -69,7 +69,9 @@ test("totals separate outcomes, windows, and keep the busiest names", () => {
   assert.equal(cli?.failures, 1);
   assert.equal(cli?.cancelled, 1);
   assert.equal(day.find((row) => row.name === "Bash")?.count, 3);
-  assert.equal(day.filter((row) => row.name != null).length, MAX_NAMES_PER_WINDOW);
+  // Each kind keeps its own busiest names: the one MCP row is not crowded out by shell commands.
+  assert.equal(day.filter((row) => row.kind === "cli" && row.name != null).length, MAX_NAMES_PER_WINDOW);
+  assert.equal(day.filter((row) => row.kind === "mcp" && row.name != null).length, 1);
   assert.equal(
     rows.filter((row) => row.windowHours === 30 * 24 && row.kind === "mcp" && row.name == null)
       .at(0)?.count,
@@ -85,4 +87,38 @@ test("future observations do not enter a past or current half-open window", () =
   ], now);
   assert.equal(totals.find((row) => row.windowHours === 24
     && row.kind === "cli" && row.name == null)?.count, 1);
+});
+
+test("rarely used skills keep their own rows beside thousands of shell and MCP calls", () => {
+  // A real week: dozens of busy CLI commands and MCP servers, and a few skills
+  // called once or twice. A shared top-N handed every slot to the busy names,
+  // so the phone's Skills filter read "No observed tool calls".
+  const events: RemoteCapabilityUsageEvent[] = [];
+  let index = 0;
+  for (let name = 0; name < 30; name += 1) {
+    for (let call = 0; call < 50; call += 1) events.push(event(index++, { name: `cli-${name}` }));
+    for (let call = 0; call < 40; call += 1) {
+      events.push(event(index++, { kind: "mcp", name: `server-${name}`, toolName: `mcp__server-${name}__run` }));
+    }
+  }
+  events.push(event(index++, { kind: "skill", name: "chrome-browser", toolName: "Skill", createdAt: now - 30 * hour }));
+  events.push(event(index++, { kind: "skill", name: "dataviz", toolName: "Skill", createdAt: now - 3 * 24 * hour }));
+
+  const totals = capabilityUsageTotals(events, now);
+  for (const windowHours of [7 * 24, 30 * 24]) {
+    const skills = totals.filter(row => row.windowHours === windowHours && row.kind === "skill" && row.name);
+    assert.deepEqual(skills.map(row => row.name).sort(), ["chrome-browser", "dataviz"], `${windowHours}h`);
+  }
+  const weekCli = totals.filter(row => row.windowHours === 7 * 24 && row.kind === "cli" && row.name);
+  assert.ok(weekCli.length > 0 && weekCli.length <= MAX_NAMES_PER_WINDOW);
+  assert.ok(totals.length <= 160, "the published totals stay inside the protocol limit");
+});
+
+test("a merged total and a counted event for the same name share one row", () => {
+  const totals = createCapabilityTotals(now);
+  totals.add(event(1, { kind: "skill", name: "dataviz", toolName: "Skill" }));
+  totals.merge({ windowHours: 24, kind: "skill", name: "dataviz", count: 2, failures: 0, cancelled: 0, lastUsedAt: now - 5_000 });
+  const rows = totals.rows().filter(row => row.windowHours === 24 && row.kind === "skill" && row.name === "dataviz");
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.count, 3);
 });
