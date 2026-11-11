@@ -38,12 +38,15 @@ async function engineAt(path: string, body = "#!/bin/sh\nexit 0\n"): Promise<{ p
 
 test("a computer with no release or an unavailable download completes setup without an Engine", async t => {
   await fixture(t);
-  const noRelease = await prepareSetupEngine(undefined, { platform: "linux", arch: "arm64", locations: [] });
-  assert.deepEqual(noRelease, { declaration: null,
-    reason: "No verified Engine release is available for this computer yet" });
-  const missing = await prepareSetupEngine(undefined, { platform: "linux", arch: "x64", fetcher: unavailable, locations: [] });
+  for (const [platform, arch] of [["linux", "arm64"], ["linux", "x64"], ["darwin", "x64"]]) {
+    // Intel Mac and Linux x64 0.1.2 are no longer published, so they have no pin to request.
+    const noRelease = await prepareSetupEngine(undefined, { platform, arch, locations: [] });
+    assert.deepEqual(noRelease, { declaration: null,
+      reason: "No verified Engine release is available for this computer yet" }, `${platform}-${arch}`);
+  }
+  const missing = await prepareSetupEngine(undefined, { platform: "darwin", arch: "arm64", fetcher: unavailable, locations: [] });
   assert.deepEqual(missing, { declaration: null, reason: "Verified Engine download is unavailable" });
-  const offline = await prepareSetupEngine(undefined, { platform: "darwin", arch: "x64", locations: [],
+  const offline = await prepareSetupEngine(undefined, { platform: "darwin", arch: "arm64", locations: [],
     fetcher: async () => { throw new TypeError("fetch failed"); } });
   assert.equal(offline.reason, "Engine download could not reach granttap.com");
   assert.equal(loadRuntimeConfig().enginePath, null);
@@ -55,7 +58,7 @@ test("a failed download keeps the verified Engine this computer already declared
   const older = await engineAt(join(root, "config", "engine", "0.1.0-0123456789abcdef", "granttap-engine"));
   saveRuntimeConfig({ enginePath: older.path, engineSha256: older.sha256 });
   const standard = await engineAt(join(root, "bin", "granttap-engine"), "#!/bin/sh\necho other\n");
-  const result = await prepareSetupEngine(undefined, { platform: "linux", arch: "x64", fetcher: unavailable,
+  const result = await prepareSetupEngine(undefined, { platform: "darwin", arch: "arm64", fetcher: unavailable,
     locations: [standard.path] });
   assert.deepEqual(result, { declaration: older, reason: "Verified Engine download is unavailable" });
   assert.equal(loadRuntimeConfig().enginePath, older.path);

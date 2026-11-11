@@ -10,10 +10,9 @@ export type EngineArtifact = {
 export const ENGINE_ARTIFACTS: readonly EngineArtifact[] = [
   { version: "0.1.7", platform: "darwin", arch: "arm64",
     sha256: "bf7fcf3d08d78a437da21fcb88057d77840be4b22a0f7388f383059e685a76ef", bytes: 12201856 },
-  { version: "0.1.2", platform: "darwin", arch: "x64",
-    sha256: "b3235a15936a77ec323d5ecbc54a0bc19994fe6e5a36044da964b68524b4c1dd", bytes: 13944984 },
-  { version: "0.1.2", platform: "linux", arch: "x64",
-    sha256: "1a6b227289b69459a64cd13078044960cf83bb858e6be1b70b1b38c950b00cc0", bytes: 14753312 },
+  // The 0.1.2 Intel Mac and Linux x64 builds are no longer published. Without a
+  // pin, setup reports Graph as unavailable and the helper does not retry a 404;
+  // an Engine already installed and verified on such a computer keeps working.
 ];
 
 export function selectEngineArtifact(platform: string = process.platform, arch: string = process.arch): EngineArtifact | undefined {

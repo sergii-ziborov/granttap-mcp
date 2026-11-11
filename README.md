@@ -524,7 +524,9 @@ Health and Project Governance need. It installs the release pinned for this
 computer, verified by size and SHA-256, or uses the absolute executable given
 with `--engine <path>`; that binary is checksummed here, because the checksum
 is the only thing verified before it is launched. Pinned releases do not exist
-for every computer. When none exists for this one, or its download is
+for every computer: today only Apple silicon Macs (Engine 0.1.7) have one; Intel
+Macs, Linux and Windows need an Engine supplied with `--engine` or in a standard
+location. When no release exists for this one, or its download is
 unavailable, setup keeps an Engine it declared earlier whose bytes still match
 the saved checksum. Otherwise it searches the standard locations:
 `engine/granttap-engine` in the GrantTap config directory,

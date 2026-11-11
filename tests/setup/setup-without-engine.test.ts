@@ -8,7 +8,7 @@ import { usableEngineBinary } from "../../apps/bridge/src/engine/protocol/engine
 
 const root = join(import.meta.dirname, "../..");
 const launcher = join(root, "bin/granttap-mcp.mjs");
-// Every Engine download answers 404, as for the withdrawn x64 releases; nothing reaches the network.
+// Every Engine download answers 404, as when the site lost its Engine files; nothing reaches the network.
 const unavailableDownloads = "--import=data:text/javascript,globalThis.fetch=async()=>new%20Response(null,{status:404});";
 
 test("setup completes the helper, hooks and summary when no Engine can be prepared", t => {
