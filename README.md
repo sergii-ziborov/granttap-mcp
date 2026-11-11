@@ -519,26 +519,51 @@ hooks, installs the background helper, removes a leftover user GrantTap MCP
 entry when Cursor is present, and starts phone pairing when run in an
 interactive terminal. It ends with one exact next action.
 
-Setup also declares the separately distributed GrantTap Engine, which Project
-Governance needs before it can report anything. The standard locations are
-searched, and `--engine <path>` points at one that lives elsewhere; the binary
-is checksummed here, because that checksum is the only thing verified before it
-is launched. Without an engine the rollout stays off and setup says so, rather
-than leaving "Governance not reported" on the phone as the only symptom.
-A paired monitor can prepare the pinned managed Engine in the background.
-Inspect current readiness and coverage rather than assuming every missing
-Engine requires a manual binary path; initial catalog delivery does not wait
-for background preparation.
+Setup also prepares the separately distributed GrantTap Engine, which Graph,
+Health and Project Governance need. It installs the release pinned for this
+computer, verified by size and SHA-256, or uses the absolute executable given
+with `--engine <path>`; that binary is checksummed here, because the checksum
+is the only thing verified before it is launched. Pinned releases do not exist
+for every computer. When none exists for this one, or its download is
+unavailable, setup keeps an Engine it declared earlier whose bytes still match
+the saved checksum. Otherwise it searches the standard locations:
+`engine/granttap-engine` in the GrantTap config directory,
+`~/.local/bin/granttap-engine`, `/usr/local/bin/granttap-engine` and
+`/opt/homebrew/bin/granttap-engine` (on Windows, `granttap-engine.exe` in the
+config directory's `engine` folder and in the profile's
+`AppData\Local\GrantTap\bin`).
+
+Without any Engine, setup prints `Graph Engine unavailable on this computer:`
+with the reason, reports `Project Governance  No engine found`, and still
+installs the hooks, the background helper and, for an installed agent, the
+local MCP service, checks Codex hook trust, offers pairing in an interactive
+terminal, prints the summary and its next action, and exits 0. Graph and
+Health then report the Engine as unavailable; chats, questions and approvals
+keep working. An `--engine` value that is missing or is not an absolute path to
+an executable file stops setup before it changes anything.
+
+A paired monitor prepares the pinned managed Engine in the background and
+retries a failed download. If an update cannot be downloaded, it keeps the
+verified Engine already declared and retries when the helper next starts; a
+computer with no pinned release is not retried. Initial catalog delivery does
+not wait for background preparation.
 
 The normal CLI surface is intentionally small:
 
 ```text
 granttap setup [--engine <path>]
+granttap setup --help
 granttap status [--json]
 granttap connect [--relay <wss-url>]
 granttap reset [--yes]
 granttap mesh connect <one-time-invite>
+granttap --version
 ```
+
+`granttap --version` (also `-v` or `version`) prints the version of the
+runtime the other commands run, including an automatically updated one, and
+exits. `granttap setup --help` (or `-h`) prints setup usage without
+running setup or writing any configuration.
 
 `connect` reuses a valid pairing. If none exists, it creates a one-time QR.
 Custom relays are CLI-only and explicit. `reset` moves active pairing files to
@@ -556,16 +581,19 @@ trust.
 
 ## MCP contract
 
-`tools/list` returns exactly six public tools:
+`tools/list` returns exactly nine public tools:
 
 | Tool | Contract |
 | --- | --- |
+| `set_runtime_auto_update` | When the user asks, turn automatic GrantTap runtime updates on this computer on or off; saves the preference without restarting services or changing pairing, tasks, or provider policy |
 | `connection_status` | Open the connection card and inspect saved pairing, QR expiry, relay observations, and provider readiness without changing pairing |
+| `connect_with_passkey` | Open a short-lived GrantTap account passkey request for this computer; the passkey is entered only on granttap.com and existing QR pairings stay unchanged |
 | `connect` | Reuse the existing production pairing or return a one-time QR |
 | `reconnect` | After explicit confirmation, show a one-time QR to reconnect or add an independent controller device while retaining the current room |
 | `notify` | Send a non-blocking status update of at most 2,000 characters |
 | `ask_yes_no` | Ask a yes/no question and wait for the explicit answer |
 | `ask` | Ask an open question and wait for typed or spoken text |
+| `offload_task` | Request moving the calling Task to a compatible computer in its Mesh, keeping provider, model, effort and visible conversation; requires Automatic computer transfers, and `action=status` or `action=cancel` acts only on the caller's own request |
 
 MCP `connect` accepts no custom routing, replacement, or key-rotation input.
 `reconnect` is declared destructive and requires `confirmed: true`; the
@@ -574,7 +602,7 @@ Setup is CLI-only because it changes provider configuration and must not be
 available to a model through prompt injection.
 
 `notify` may alternatively carry one bounded task-scoped Mesh event. This does
-not add a fifth MCP tool or grant any global setup capability, and it publishes
+not add another MCP tool or grant any global setup capability, and it publishes
 only for the execution whose provider hook attributed the call.
 
 `notify`, `ask_yes_no`, and `ask` accept an `operationId`. A named call is
