@@ -41,3 +41,28 @@ test("a controller grants only the displayed pending chat and policy revision", 
     autoAcceptSession: { ...command.autoAcceptSession!, sessionId: "other-chat" } }, now),
     { kind: "rejected", reason: "approval_unavailable" });
 });
+
+test("a request the hook left without a policy revision can still be granted, minutes after it was raised", t => {
+  const dir = mkdtempSync(join(tmpdir(), "granttap-controller-grant-"));
+  const previous = process.env.GRANTTAP_CONFIG_DIR;
+  process.env.GRANTTAP_CONFIG_DIR = dir;
+  t.after(() => { if (previous == null) delete process.env.GRANTTAP_CONFIG_DIR;
+    else process.env.GRANTTAP_CONFIG_DIR = previous; rmSync(dir, { recursive: true }); });
+  const raised = Date.now() - 20 * 60_000;
+  // As observed on 2026-11-11: projectId set, policyRevision absent, Project governed at revision 1.
+  const request: ApprovalRequest = { type: "approval.request", requestId: "unstamped",
+    sessionId: "spare-chat", projectId: "project", agent: "claude", kind: "permission", tool: "Bash",
+    title: "ssh host 'echo ok'", command: "ssh host 'echo ok'", risk: "medium", createdAt: raised };
+  registerPendingApproval(request, raised);
+  rememberGovernedProject("project", 1, raised);
+  const now = Date.now();
+  const command: ConfigSet = { type: "config.set", operationId: "grant-unstamped",
+    instanceEpoch: currentInstanceEpoch(), expiresAt: now + 60_000, createdAt: now,
+    autoAcceptSession: { sessionId: "spare-chat", level: "except_push",
+      authorizeProjectAsk: true, approvalRequestId: "unstamped" } };
+  assert.equal(applyConfigSet(command, now).kind, "applied");
+  assert.equal(taskAutomationLevel("spare-chat", "project", 1), "except_push", "bound to the revision in force");
+  assert.deepEqual(applyConfigSet({ ...command, operationId: "claims-a-revision",
+    autoAcceptSession: { ...command.autoAcceptSession!, expectedPolicyRevision: 7 } }, now),
+    { kind: "rejected", reason: "policy_changed" }, "a revision the request never carried is still refused");
+});
