@@ -3,6 +3,8 @@ import { projectCursorPeriodUsage, projectNativeAccountUsage, type NativeUsagePr
 
 type Options = {
   credential: (provider: NativeUsageProvider) => Promise<string | undefined>;
+  /** Tells an expired login from none, so a lapsed login is reported rather than silent. */
+  expired?: (provider: NativeUsageProvider) => Promise<boolean>;
   fetcher?: (url: string, init: RequestInit) => Promise<Response>;
   clock?: () => number;
   /** Told when a signed-in account's limits become unreadable or readable again; never given a credential. */
@@ -14,6 +16,19 @@ const requests = {
   cursor: { url: "https://api2.cursor.sh/aiserver.v1.DashboardService/GetSandUsageStatus", method: "POST" },
   grok: { url: "https://cli-chat-proxy.grok.com/v1/billing?format=credits", method: "GET" },
 } as const;
+
+/**
+ * A limit report with no windows whose id ends in ":signed-out": the provider is
+ * installed but its own login has lapsed. The wire format is unchanged, so older
+ * phones show no numbers and newer ones say why.
+ */
+export const SIGNED_OUT_SUFFIX = ":signed-out";
+export function signedOutUsage(provider: NativeUsageProvider, now: number): ProviderAccountUsage {
+  return { provider, limitId: `${provider}${SIGNED_OUT_SUFFIX}`, observedAt: now, windows: [] };
+}
+export function isSignedOutUsage(report: ProviderAccountUsage): boolean {
+  return report.windows.length === 0 && report.limitId.endsWith(SIGNED_OUT_SUFFIX);
+}
 
 async function boundedResponse(response: Response): Promise<unknown> {
   if (!response.ok || !response.body) return undefined;
@@ -50,7 +65,13 @@ export function createNativeAccountUsageReader(options: Options) {
   async function update(provider: NativeUsageProvider): Promise<void> {
     try {
       const token = await options.credential(provider);
-      if (!token) { reports.delete(provider); reasons.delete(provider); return; }
+      if (!token) {
+        if (await options.expired?.(provider)) {
+          reports.set(provider, signedOutUsage(provider, clock()));
+          note(provider, "the provider's console login has expired");
+        } else { reports.delete(provider); reasons.delete(provider); }
+        return;
+      }
       const request = requests[provider];
       const response = await fetcher(request.url, {
         method: request.method, redirect: "error", signal: AbortSignal.timeout(8_000),
@@ -83,7 +104,8 @@ export function createNativeAccountUsageReader(options: Options) {
       const now = clock();
       return [...reports.values()].flatMap(report => {
         const windows = report.windows.filter(window => window.resetsAt > now);
-        return now - report.observedAt <= 300_000 && windows.length ? [{ ...report, windows }] : [];
+        return now - report.observedAt <= 300_000 && (windows.length || isSignedOutUsage(report))
+          ? [{ ...report, windows }] : [];
       });
     },
     refresh(): Promise<void> {

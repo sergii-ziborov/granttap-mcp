@@ -104,3 +104,17 @@ test("a refused or unreadable account read is reported once per reason, never wi
   assert.equal(notes.join(" ").includes("private"), false);
   assert.deepEqual(notes.filter(note => note.startsWith("cursor")), [], "A provider that is not signed in is not a failure.");
 });
+
+test("a lapsed Claude login reports a signed-out marker, not silence, and says so once", async () => {
+  const { isSignedOutUsage } = await import("../reader");
+  const said: string[] = [];
+  const reader = createNativeAccountUsageReader({ clock: () => at, credential: async () => undefined,
+    expired: async provider => provider === "claude",
+    fetcher: async () => { throw Error("no request is made without a login"); },
+    report: (provider, reason) => said.push(`${provider}:${reason}`) });
+  await reader.refresh();
+  const current = reader.current();
+  assert.deepEqual(current.map(report => report.limitId), ["claude:signed-out"]);
+  assert.equal(isSignedOutUsage(current[0]!), true);
+  assert.deepEqual(said, ["claude:the provider's console login has expired"]);
+});

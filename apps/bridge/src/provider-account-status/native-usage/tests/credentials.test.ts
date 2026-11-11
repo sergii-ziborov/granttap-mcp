@@ -81,3 +81,20 @@ test("native keychain reads are bounded and do not put credential values on a co
   const empty = ((_file: string, _args: string[], _options: unknown, done: Function) => done(null, "")) as any;
   assert.equal(await readNativeKeychain("service", undefined, empty), undefined);
 });
+
+test("an expired Claude Code login is told apart from no login", async () => {
+  const { claudeCredentialState } = await import("../credentials");
+  const home = await mkdtemp(join(tmpdir(), "granttap-claude-state-"));
+  const save = async (file: string, data: unknown) => {
+    await mkdir(join(home, file, ".."), { recursive: true });
+    await writeFile(join(home, file), JSON.stringify(data));
+  };
+  const options = { home, env: {}, platform: "darwin" as const, keychain: async () => undefined, now: 1_000 };
+  try {
+    assert.equal(await claudeCredentialState(options), "absent");
+    await save(".claude/.credentials.json", { claudeAiOauth: { accessToken: "lapsed", expiresAt: 500 } });
+    assert.equal(await claudeCredentialState(options), "expired");
+    await save(".claude/.credentials.json", { claudeAiOauth: { accessToken: "current", expiresAt: 5_000 } });
+    assert.equal(await claudeCredentialState(options), "valid");
+  } finally { await rm(home, { recursive: true, force: true }); }
+});

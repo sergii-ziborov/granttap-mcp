@@ -32,6 +32,33 @@ function token(value: unknown): string | undefined {
     && !/[\r\n]/.test(value) ? value : undefined;
 }
 
+/** Claude Code's saved login record, from its file or the macOS Keychain; never refreshed or written. */
+async function claudeCredentialRecord(options: Options = {}): Promise<any> {
+  const home = options.home ?? homedir();
+  const env = options.env ?? process.env;
+  const platform = options.platform ?? process.platform;
+  const keychain = options.keychain ?? readNativeKeychain;
+  const keychainAllowed = options.keychain !== undefined || home === userInfo().homedir;
+  const override = env.GRANTTAP_CLAUDE_DIR ?? env.NODVOX_CLAUDE_DIR ?? env.CLAUDE_CONFIG_DIR;
+  const saved = await jsonFile(join(override ?? join(home, ".claude"), ".credentials.json"));
+  if (claudeToken(saved, options.now ?? Date.now()) || platform !== "darwin" || override || !keychainAllowed) return saved;
+  if (!await jsonFile(join(home, ".claude", "settings.json"))) return saved;
+  try {
+    const raw = await keychain("Claude Code-credentials");
+    return raw ? JSON.parse(raw) : saved;
+  } catch { return saved; }
+}
+
+/**
+ * Whether Claude Code's own login can be used. An expired one used to read as
+ * "no limits reported", which blamed the computer for a login that had lapsed.
+ */
+export async function claudeCredentialState(options: Options = {}): Promise<"valid" | "expired" | "absent"> {
+  const record = await claudeCredentialRecord(options);
+  if (!record?.claudeAiOauth) return "absent";
+  return claudeToken(record, options.now ?? Date.now()) ? "valid" : "expired";
+}
+
 function claudeToken(value: any, now: number): string | undefined {
   const row = value?.claudeAiOauth;
   return typeof row?.expiresAt === "number" && row.expiresAt <= now ? undefined : token(row?.accessToken);
@@ -51,14 +78,7 @@ export async function readNativeCredential(provider: NativeUsageProvider, option
       .find(Boolean);
   }
   if (provider === "claude") {
-    const override = env.GRANTTAP_CLAUDE_DIR ?? env.NODVOX_CLAUDE_DIR ?? env.CLAUDE_CONFIG_DIR;
-    const saved = claudeToken(await jsonFile(join(override ?? join(home, ".claude"), ".credentials.json")), options.now ?? Date.now());
-    if (saved || platform !== "darwin" || override || !keychainAllowed) return saved;
-    if (!await jsonFile(join(home, ".claude", "settings.json"))) return undefined;
-    try {
-      const raw = await keychain("Claude Code-credentials");
-      return raw ? claudeToken(JSON.parse(raw), options.now ?? Date.now()) : undefined;
-    } catch { return undefined; }
+    return claudeToken(await claudeCredentialRecord(options), options.now ?? Date.now());
   }
   const root = platform === "win32" ? join(env.APPDATA ?? join(home, "AppData", "Roaming"), "Cursor")
     : platform === "darwin" ? join(home, ".cursor") : join(env.XDG_CONFIG_HOME ?? join(home, ".config"), "cursor");
