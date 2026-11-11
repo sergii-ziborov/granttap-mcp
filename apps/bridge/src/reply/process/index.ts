@@ -1,8 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { delimiter, dirname } from 'node:path';
 import { realpathSync } from 'node:fs';
-import { isSignInFailure, providerAgent, providerSignInFailure, providerExitFailure } from './auth-failure';
-import { providerSignIns } from '../../device-management/sign-in-refusals';
+import { isSignInFailure, providerAgent, providerSignIns, providerSignInFailure, providerExitFailure } from './auth-failure';
 import { computerId } from "../../mesh/identity/computer";
 import { inspectRepository } from "../../mesh/catalog";
 import { localMeshStore } from "../../mesh/local-remote/local";
@@ -162,11 +161,7 @@ export function runProcess(
       stderr += chunk;
       if (done || (admission && admission.confirmed(stdout))) return;
       const error = providerSignInFailure(command, stderr);
-      if (error) {
-        providerSignIns.refused(providerAgent(command));
-        signalOwnedProcess(child, 'SIGKILL');
-        finish({ ok: false, error });
-      }
+      if (error) { providerSignIns.refused(providerAgent(command)); signalOwnedProcess(child, 'SIGKILL'); finish({ ok: false, error }); }
     });
     child.on("error", (error) => {
       finish({ ok: false, error: `${command}: ${error.message}` });
@@ -179,8 +174,7 @@ export function runProcess(
       if (code !== 0) {
         const error = providerExitFailure(command, stderr, stdout, code);
         if (isSignInFailure(error)) providerSignIns.refused(providerAgent(command));
-        finish({ ok: false, error });
-        return;
+        return finish({ ok: false, error });
       }
       providerSignIns.accepted(providerAgent(command));
       try {

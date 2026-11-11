@@ -33,6 +33,19 @@ export function providerSignInFailure(command: string, ...outputs: string[]): st
 
 export function isSignInFailure(error: string): boolean { return error.startsWith('Sign-in required for '); }
 
+/**
+ * `claude auth status` keeps reporting a login whose token can no longer be
+ * renewed, so Devices said "Signed in" while every phone message was refused.
+ * A run refused for sign-in outranks that status until the provider signs in
+ * again or completes a run.
+ */
+const refusedSignIns = new Set<CodingAgent>();
+export const providerSignIns = {
+  refused(agent: CodingAgent | undefined): void { if (agent) refusedSignIns.add(agent); },
+  accepted(agent: CodingAgent | undefined): void { if (agent) refusedSignIns.delete(agent); },
+  wasRefused(agent: CodingAgent): boolean { return refusedSignIns.has(agent); },
+};
+
 /** Match the provider's explicit diagnostic, not an arbitrary HTTP 402 from a tool. */
 export function providerUsageFailure(stderr: string): string | undefined {
   if (!/\bGrok Build usage balance exhausted\b/i.test(stderr)) return;

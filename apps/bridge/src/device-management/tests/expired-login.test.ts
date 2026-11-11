@@ -4,9 +4,8 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runProcess } from '../../reply/process';
-import { providerExitFailure, providerSignInFailure } from '../../reply/process/auth-failure';
+import { providerExitFailure, providerSignIns, providerSignInFailure } from '../../reply/process/auth-failure';
 import { providerAuthentication } from '../provider-command';
-import { providerSignIns } from '../sign-in-refusals';
 
 const EXPIRED = 'Failed to authenticate: this login reached its time limit and cannot be renewed. '
   + 'Run `claude auth login` to sign in again, or use `claude setup-token` and set CLAUDE_CODE_OAUTH_TOKEN for unattended jobs';

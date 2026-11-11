@@ -4,7 +4,7 @@ import type { CodingAgent, ProviderLoginProgress } from '../../../../packages/pr
 import { signalOwnedProcess } from '../reply/process';
 import { stripAnsi } from '../tools/version';
 import { allowedLoginURL, installedProvider, loginArguments, providerCommand, providerEnvironment } from './provider-command';
-import { providerSignIns } from './sign-in-refusals';
+import { providerSignIns } from '../reply/process/auth-failure';
 
 type Flow = { scope: string; child: ChildProcess; progress: ProviderLoginProgress; output: string;
   timer: NodeJS.Timeout; emit: (value: ProviderLoginProgress) => void };

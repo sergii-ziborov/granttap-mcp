@@ -7,7 +7,7 @@ import { executableOnPath, resolveClaudeBinary } from '../providers/claude-bin';
 import { resolveCodexBinary } from '../providers/codex-bin';
 import { resolveGrokBinary } from '../providers/grok-bin';
 import { resolveCursorAgentBin } from '../reply/process/cursor-agent-bin';
-import { providerSignIns } from './sign-in-refusals';
+import { providerSignIns } from '../reply/process/auth-failure';
 
 export function providerCommand(agent: CodingAgent): string {
   switch (agent) {
