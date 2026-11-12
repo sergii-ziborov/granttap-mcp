@@ -15,3 +15,14 @@ test("status-line and direct Claude reads collapse to the newest real observatio
   const expired = row(now); expired.windows[0]!.resetsAt = now;
   assert.deepEqual(mergeNativeUsage([expired], [], now), []);
 });
+
+test("a Claude login is called lapsed only when Claude Code's own CLI agrees it is signed out", async () => {
+  const { claudeLoginLapsed } = await import("..");
+  assert.equal(await claudeLoginLapsed(async () => "expired", async () => "signed-out"), true);
+  assert.equal(await claudeLoginLapsed(async () => "expired", async () => "signed-in"), false,
+    "messages still run through the CLI, so the phone must not ask for a new sign-in");
+  assert.equal(await claudeLoginLapsed(async () => "expired", async () => "unknown"), false);
+  let asked = false;
+  assert.equal(await claudeLoginLapsed(async () => "valid", async () => { asked = true; return "signed-out"; }), false);
+  assert.equal(asked, false, "a usable saved login never spends a CLI run");
+});

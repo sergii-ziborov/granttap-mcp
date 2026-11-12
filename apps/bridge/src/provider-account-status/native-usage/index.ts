@@ -3,10 +3,20 @@ import type { ProviderAccountUsage } from "../../../../../packages/protocol/sche
 import { readClaudeUsage } from "../claude-statusline";
 import { claudeCredentialState, readNativeCredential } from "./credentials";
 import { createNativeAccountUsageReader, isSignedOutUsage } from "./reader";
+import { providerAuthentication } from "../../device-management/provider-command";
+
+/**
+ * Claude Code's own CLI decides whether its login lapsed, whether or not the desktop app runs. A saved
+ * record alone said "expired" while phone messages kept running through the CLI.
+ */
+export async function claudeLoginLapsed(read = () => claudeCredentialState(),
+  cli = () => providerAuthentication("claude")): Promise<boolean> {
+  return await read() === "expired" && await cli() === "signed-out";
+}
 
 let scope = "";
 const create = () => createNativeAccountUsageReader({ credential: readNativeCredential,
-  expired: async provider => provider === "claude" && await claudeCredentialState() === "expired",
+  expired: async provider => provider === "claude" && await claudeLoginLapsed(),
   report: (provider, reason) => process.stderr.write(reason
     ? `[granttap-mcp] ${provider} account limits unavailable: ${reason}\n`
     : `[granttap-mcp] ${provider} account limits readable again\n`) });

@@ -98,3 +98,27 @@ test("an expired Claude Code login is told apart from no login", async () => {
     assert.equal(await claudeCredentialState(options), "valid");
   } finally { await rm(home, { recursive: true, force: true }); }
 });
+
+test("a large settings file and a stale credentials file cannot hide a live Keychain login", async () => {
+  const { claudeCredentialState } = await import("../credentials");
+  const home = await mkdtemp(join(tmpdir(), "granttap-claude-live-"));
+  const save = async (file: string, data: string) => {
+    await mkdir(join(home, file, ".."), { recursive: true });
+    await writeFile(join(home, file), data);
+  };
+  const live = { claudeAiOauth: { accessToken: "live", refreshToken: "renews", expiresAt: 9_000 } };
+  let keychain = JSON.stringify(live);
+  const options = { home, env: {}, platform: "darwin" as const, keychain: async () => keychain, now: 1_000 };
+  try {
+    // Claude Code's settings outgrow 64 KB with saved permissions; it is still installed.
+    await save(".claude/settings.json", JSON.stringify({ permissions: { allow: ["x".repeat(100_000)] } }));
+    await save(".claude/.credentials.json", JSON.stringify({ claudeAiOauth: { expiresAt: 500 } }));
+    assert.equal(await readNativeCredential("claude", options), "live");
+    assert.equal(await claudeCredentialState(options), "valid");
+    keychain = JSON.stringify({ claudeAiOauth: { accessToken: "old", refreshToken: "renews", expiresAt: 500 } });
+    assert.equal(await claudeCredentialState(options), "valid",
+      "an expired access token with a refresh token is renewed by Claude Code on its next run");
+    keychain = JSON.stringify({ claudeAiOauth: { accessToken: "old", expiresAt: 500 } });
+    assert.equal(await claudeCredentialState(options), "expired");
+  } finally { await rm(home, { recursive: true, force: true }); }
+});

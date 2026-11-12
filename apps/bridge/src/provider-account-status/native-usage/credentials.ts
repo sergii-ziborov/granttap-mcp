@@ -20,6 +20,10 @@ export function readNativeKeychain(service: string, account?: string, run = exec
     (error, stdout) => resolve(error ? undefined : stdout.trim() || undefined)));
 }
 
+async function exists(path: string): Promise<boolean> {
+  try { await stat(path); return true; } catch { return false; }
+}
+
 async function jsonFile(path: string): Promise<any> {
   try {
     if ((await stat(path)).size > 65_536) return undefined;
@@ -42,7 +46,9 @@ async function claudeCredentialRecord(options: Options = {}): Promise<any> {
   const override = env.GRANTTAP_CLAUDE_DIR ?? env.NODVOX_CLAUDE_DIR ?? env.CLAUDE_CONFIG_DIR;
   const saved = await jsonFile(join(override ?? join(home, ".claude"), ".credentials.json"));
   if (claudeToken(saved, options.now ?? Date.now()) || platform !== "darwin" || override || !keychainAllowed) return saved;
-  if (!await jsonFile(join(home, ".claude", "settings.json"))) return saved;
+  // Only whether Claude Code is set up here matters; its settings outgrow any parse limit with saved
+  // permissions, and reading them used to skip the Keychain for a stale credentials file.
+  if (!await exists(join(home, ".claude", "settings.json"))) return saved;
   try {
     const raw = await keychain("Claude Code-credentials");
     return raw ? JSON.parse(raw) : saved;
@@ -56,6 +62,8 @@ async function claudeCredentialRecord(options: Options = {}): Promise<any> {
 export async function claudeCredentialState(options: Options = {}): Promise<"valid" | "expired" | "absent"> {
   const record = await claudeCredentialRecord(options);
   if (!record?.claudeAiOauth) return "absent";
+  // An access token lasts hours; Claude Code renews it with its refresh token on the next run.
+  if (token(record.claudeAiOauth.refreshToken)) return "valid";
   return claudeToken(record, options.now ?? Date.now()) ? "valid" : "expired";
 }
 
