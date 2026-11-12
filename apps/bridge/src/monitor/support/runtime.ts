@@ -44,6 +44,7 @@ const HISTORY_INTERVAL_MS = 60_000;
 const resumedHeads = new WeakSet<RelayClient>();
 import { publishMonitorMeshes, stopMonitorMeshes } from "../mesh-publication";
 import { publishMonitorCapabilities, stopMonitorCapabilities } from "../capability-publication";
+import { annotateLimitContinuations, scheduleLimitContinuations } from "../../limit-continuation";
 
 export type SessionMonitor = {
   publish: () => Promise<void>;
@@ -158,7 +159,8 @@ async function publishMonitorTick(input: {
   const includeHistory = forceHistory || (!initial && Date.now() - lastHistoryPublishedAt >= HISTORY_INTERVAL_MS);
   const snapshot = await monitorSnapshot({ includeHistory, forceHistory, subscriptions, history });
   if (!input.active()) return { lastHistoryPublishedAt };
-  const status = decorateTaskOriginCatalog(refreshObservedCatalog(snapshot), client.room);
+  const observed = decorateTaskOriginCatalog(refreshObservedCatalog(snapshot), client.room);
+  const status = { ...observed, sessions: annotateLimitContinuations(observed.sessions) };
   rememberPublishedCatalog(client, status);
   await client.send(status, "phone", { ttlMs: INTERVAL_MS * 24, reliable: false });
   // Provider review is independent of task visibility; a hung hook RPC must
@@ -167,6 +169,7 @@ async function publishMonitorTick(input: {
   if (includeHistory || initial) lastHistoryPublishedAt = Date.now();
   loadLoop.updateStatus(status);
   void refreshMcpLoad(status.sessions).catch(() => {});
+  void scheduleLimitContinuations(status.sessions).catch(() => {});
   publishCatalogHeads(client, status, subscriptions, publishSessionEvents);
   if (loadRuntimeConfig().meshEnabled) publishMonitorMeshes(client, status);
   publishMonitorCapabilities(client, status, () => history(false));

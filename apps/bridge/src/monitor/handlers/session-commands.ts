@@ -1,6 +1,7 @@
 import type {
   ConfigSet,
   HostGrant,
+  Payload,
   SessionAccessSet,
   SessionCompact,
   SessionControl,
@@ -10,6 +11,7 @@ import type {
   SessionSubscription,
 } from "../../../../../packages/protocol/schema";
 import type { RelayClient } from "../../../../../packages/core/relay-client";
+import { setAutoContinue } from "../../limit-continuation";
 import {
   applyConfigSet,
   loadConfigCommandState,
@@ -43,6 +45,17 @@ export function handleSkillSet(message: SessionSkillSet): void {
 
 export function handleShellSet(message: SessionShellSet): void {
   setSessionShellAllowed(message.sessionId, message.allowed);
+}
+
+/** One chat's own settings from the phone; each is answered by republishing the catalog. */
+export function applySessionSetting(payload: Payload): boolean {
+  if (payload.type === "session.access.set") handleAccessSet(payload);
+  else if (payload.type === "session.mcp.set") handleMcpSet(payload);
+  else if (payload.type === "session.skill.set") handleSkillSet(payload);
+  else if (payload.type === "session.shell.set") handleShellSet(payload);
+  else if (payload.type === "session.autocontinue.set") setAutoContinue(payload.sessionId, payload.enabled);
+  else return false;
+  return true;
 }
 
 export { RESUME_PROMPT } from "../../task-control";

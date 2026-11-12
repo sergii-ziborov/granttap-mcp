@@ -74,6 +74,7 @@ import {
   SessionMcpSet,
   SessionSealed,
   SessionShellSet,
+  SessionAutoContinueSet,
   SessionSkillSet,
   SessionsStatus,
   SessionsHistoryQuery,
@@ -121,6 +122,8 @@ export const MachineHeartbeat = z.object({
   createdAt: z.number().catch(() => Date.now()),
   taskQueueImmediate: z.boolean().optional(),
   taskScheduleControls: z.boolean().optional(),
+  /** Continues a chat stopped by its subscription limit when the limit resets, and takes `session.autocontinue.set`. */
+  limitAutoContinue: z.boolean().optional(),
   taskActivityPreviews: z.boolean().optional(),
 });
 export type MachineHeartbeat = z.infer<typeof MachineHeartbeat>;
@@ -165,6 +168,7 @@ export const Payload = z.union([
   SessionMcpSet,
   SessionSkillSet,
   SessionShellSet,
+  SessionAutoContinueSet,
   SessionCompact,
   SessionCompactResult,
   SessionControl,

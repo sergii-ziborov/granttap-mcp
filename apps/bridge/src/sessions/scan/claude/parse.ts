@@ -5,7 +5,7 @@ import type { ChildThreadInfo, SessionInfo } from "../../../../../../packages/pr
 import { aggregateChildThreads, childTitle } from "../../support/child-threads";
 import { plainPreview } from '../../plain-preview';
 import { rememberCapabilityObservation } from "../../telemetry";
-import { observeClaudeTurn } from "./turn-state";
+import { claudeWaits, observeClaudeTurn, withClaudeWaits, type ClaudeTurnClock } from "./turn-state";
 import { claudeContextReport } from "../../context-usage";
 import { LIVE_MS, safeParse, stateFor, ts } from "../../support/common";
 import { finishScan } from "../../cooperative-scan";
@@ -23,7 +23,7 @@ import {
 import { readTranscriptRows } from "./transcript-reading";
 import { readClaudeChild } from "./child-reading";
 
-type ClaudeParseState = {
+type ClaudeParseState = ClaudeTurnClock & {
   sessionId: string;
   cwd?: string;
   launchCwd?: string;
@@ -201,7 +201,7 @@ export function* parseClaudeFileSteps(file: string): Generator<void, ClaudeParse
     recordedClaudeUsageIsCurrent(cached.observations)
   ) {
     const session = {
-      ...cached.session,
+      ...withClaudeWaits(cached.session, claudeWaits(cached.waits ?? {}, cached.turnEnded)),
       state:
         cached.session.childThreads?.some((child) => stateFor(child.lastActivityAt) === "working")
           ? "working" as const
@@ -252,6 +252,7 @@ export function* parseClaudeFileSteps(file: string): Generator<void, ClaudeParse
     tokensLastTurn: state.tokensLastTurn,
     contextTokensUsed: state.contextTokensUsed,
     ...(state.contextUsage ? { contextUsage: state.contextUsage } : {}),
+    ...claudeWaits(state, state.turnEnded),
   };
   const actualChildPaths =
     state.sessionId === cachedSessionId ? childPaths : claudeChildLogPaths(file, state.sessionId);
@@ -268,6 +269,7 @@ export function* parseClaudeFileSteps(file: string): Generator<void, ClaudeParse
     tokensSession: session.tokensSession,
     observations,
     turnEnded: state.turnEnded,
+    waits: { background: state.background, limit: state.limit },
     // A chat that has gone quiet gives its memory back and is read again if it returns.
     progress: Date.now() - session.lastActivityAt <= LIVE_MS ? progress : undefined,
   });

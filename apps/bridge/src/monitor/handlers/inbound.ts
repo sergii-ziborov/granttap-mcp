@@ -26,14 +26,11 @@ import { recordPhoneSeen } from "../../pairing/presence";
 import { handleProjectPolicySet } from "../../project-policy/runtime";
 import { sendDeliveryReceipt } from "./receipts";
 import {
-  handleAccessSet,
+  applySessionSetting,
   handleCompact,
   handleConfigSet,
   handleHostGrant,
-  handleMcpSet,
   handleSessionControl,
-  handleShellSet,
-  handleSkillSet,
   handleSubscription,
 } from "./session-commands";
 import { handleTaskCreate } from "./task-create";
@@ -102,20 +99,7 @@ export async function handleMonitorMessage(
     } else if (payload.type === "sessions.history.query") {
       await publishHistoryPage(client, payload);
       return true;
-    } else if (payload.type === "session.access.set") {
-      handleAccessSet(payload);
-      void publish(true).catch(() => {});
-      return true;
-    } else if (payload.type === "session.mcp.set") {
-      handleMcpSet(payload);
-      void publish(true).catch(() => {});
-      return true;
-    } else if (payload.type === "session.skill.set") {
-      handleSkillSet(payload);
-      void publish(true).catch(() => {});
-      return true;
-    } else if (payload.type === "session.shell.set") {
-      handleShellSet(payload);
+    } else if (applySessionSetting(payload)) {
       void publish(true).catch(() => {});
       return true;
     } else if (payload.type === "session.compact") {

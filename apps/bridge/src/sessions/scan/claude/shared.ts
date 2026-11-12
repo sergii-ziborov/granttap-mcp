@@ -2,6 +2,7 @@ import { diffPreviewFromInput, patchStatsByToolUse, sensitivePath, statsFromInpu
 import { redactSecrets } from "../../telemetry/command-preview";
 import { createChildSummary } from "./transcript-reading";
 import { recordObservedWrite, writtenPaths } from "../../../mesh/observed/writes";
+import type { ClaudeWaits } from "./turn-state/waits";
 /**
  * Claude Code session logs:
  *   ~/.claude/projects/<encoded-cwd>/<sessionId>.jsonl
@@ -56,6 +57,8 @@ export type CachedClaudeSummary = {
   observations: CapabilityObservation[];
   /** The chat's own last turn ended; recent writes no longer mean it is working. */
   turnEnded?: boolean;
+  /** What the ended turn waits on besides the person; deadlines are read against the clock at use. */
+  waits?: ClaudeWaits;
   /** Where a growing transcript was last read to; see `ClaudeParseProgress`. */
   progress?: unknown;
 };

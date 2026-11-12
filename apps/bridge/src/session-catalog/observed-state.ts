@@ -6,7 +6,7 @@ import {localTaskTransfers} from '../task-transfer';
 import {nativeTranscriptSource} from '../sessions/native-source';
 import {claudeLogPath} from '../sessions/scan/claude/shared';
 import {previousNativeLines} from '../transcript-history/native-lines';
-import {observeClaudeTurn,claudeTurnState,type ClaudeTurnClock} from '../sessions/scan/claude/turn-state';
+import {observeClaudeTurn,claudeTurnState,claudeWaits,withClaudeWaits,type ClaudeTurnClock} from '../sessions/scan/claude/turn-state';
 import {observeCodexTurn,codexTurnState,type CodexTurnClock} from '../sessions/scan/codex/turn-state';
 import {ts} from '../sessions/support/common';
 import {grokResumeActivity} from '../providers/grok-activity';
@@ -80,6 +80,9 @@ function observeNativeTail(input:SessionInfo,native:SessionInfo):SessionObservat
     const at=Math.max(input.lastActivityAt,clock!.lastActivityAt);
     const state=native.agent==='claude'?claudeTurnState(clock!.claude,at,input.state)
       :clock!.codex.startedAt||clock!.codex.endedAt?codexTurnState(clock!.codex,at):input.state;
-    return {session:{...input,state,lastActivityAt:at},revision:`${revision}:${state}`};
+    if(native.agent!=='claude')return {session:{...input,state,lastActivityAt:at},revision:`${revision}:${state}`};
+    const waits=claudeWaits(clock!.claude,clock!.claude.turnEnded);
+    return {session:withClaudeWaits({...input,state,lastActivityAt:at},waits),
+      revision:`${revision}:${state}:${waits.backgroundTasks??0}:${waits.usageLimit?.resetsAt??0}`};
   }catch{return;}
 }

@@ -66,6 +66,14 @@ export const SessionSealed = z.object({
 });
 export type SessionSealed = z.infer<typeof SessionSealed>;
 
+export const SessionUsageLimit = z.object({
+  resetsAt: z.number().int().positive(),
+  window: z.string().max(40).optional(),
+  /** Whether this computer will continue the chat itself once the limit resets; on unless turned off. */
+  autoContinue: z.boolean().optional(),
+});
+export type SessionUsageLimit = z.infer<typeof SessionUsageLimit>;
+
 export const SessionInfo = z.object({
   creationOrigins: z.array(z.object({ originId: z.string().min(1).max(180),
     controllerPublicKey: z.string().min(1).max(180) }).strict()).max(32).optional(),
@@ -100,6 +108,10 @@ export const SessionInfo = z.object({
   shellAllowed: z.boolean().optional(),
   /** Held from the phone: its tool calls are refused until it is resumed. */
   paused: z.boolean().optional(),
+  /** The turn ended while background work it started still runs; the chat resumes itself when it finishes. */
+  backgroundTasks: z.number().int().min(1).max(32).optional(),
+  /** The subscription refused the chat's last request until `resetsAt`. */
+  usageLimit: SessionUsageLimit.optional(),
 });
 export type SessionInfo = z.infer<typeof SessionInfo>;
 
@@ -223,6 +235,15 @@ export const SessionShellSet = z.object({
   createdAt: z.number(),
 });
 export type SessionShellSet = z.infer<typeof SessionShellSet>;
+
+/** Whether a chat stopped by its subscription limit is continued automatically when the limit resets. */
+export const SessionAutoContinueSet = z.object({
+  type: z.literal("session.autocontinue.set"),
+  sessionId: CapabilitySessionId,
+  enabled: z.boolean(),
+  createdAt: z.number(),
+}).strict();
+export type SessionAutoContinueSet = z.infer<typeof SessionAutoContinueSet>;
 
 export const SessionCompact = z.object({
   type: z.literal("session.compact"),

@@ -13,6 +13,7 @@ import { NativeTaskQueueSender } from '../sender';
 import { dispatchSessionObservation, newTaskOperationKey, queuedCatalogRefreshDue, taskDispatchReady } from './readiness';
 import { localTaskOrigins, resolveTaskOriginJob } from '../../task-origins';
 import { queueFailureReporter } from './failure-report';
+import { limitContinuationUnwanted, registerLimitContinuationQueue } from '../../limit-continuation';
 
 /** Only the persistent monitor advertises durable submission capability. */
 export function startTaskDispatchMonitor(input: {
@@ -28,6 +29,8 @@ export function startTaskDispatchMonitor(input: {
   const waitingSince = new Map<string, number>();
   const sender = new NativeTaskQueueSender({ root: join(configDir(), 'native-task-queue'), config: input.config });
   const peerAllowed = (peer: string) => peer === input.config.myPublicKey || input.peerAllowed(peer);
+  registerLimitContinuationQueue({ submit: (scope, message, notBefore, createdAt) => sender.submit(scope, message, notBefore, createdAt),
+    cancel: (scope, id) => sender.cancel(scope, id) });
   const worker = new TaskDispatchWorker({ inbox, remote: input.remote ?? relayTaskJobRemote(input.config),
     connected: () => !stopped && input.client.isConnected && input.isLeader(),
     authorized: peerAllowed,
@@ -67,6 +70,7 @@ export function startTaskDispatchMonitor(input: {
       return ready;
     },
     deliver: async (original, beforeStart, peer) => {
+      if (original.operation.type === 'user.message' && limitContinuationUnwanted(original.operation)) return 'rejected';
       if (input.deliver) return input.deliver(original, beforeStart, peer);
       const job = resolve(original, peer).job;
       if (!job || job.operation.type === 'user.message.continue') return 'rejected';
@@ -101,5 +105,5 @@ export function startTaskDispatchMonitor(input: {
   });
   const interval = setInterval(tick, 2_000); interval.unref();
   tick();
-  return () => { stopped = true; clearInterval(interval); off(); };
+  return () => { stopped = true; clearInterval(interval); off(); registerLimitContinuationQueue(undefined); };
 }

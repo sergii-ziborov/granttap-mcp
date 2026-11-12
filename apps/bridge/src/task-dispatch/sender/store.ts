@@ -6,8 +6,8 @@ import { withStoreLock } from '../../../../../packages/core/store-file-lock';
 import { Envelope, CodingAgent } from '../../../../../packages/protocol/schema';
 import { digest, readRequest, syncDirectory, writeRequest } from '../journal';
 
-export const NativeQueueScope = z.object({ projectId: z.string().min(1).max(180),
-  taskId: z.string().min(1).max(180), sessionId: z.string().min(1).max(180), provider: CodingAgent }).strict();
+export const NativeQueueScope = z.object({ projectId: z.string().min(1).max(180).optional(),
+  taskId: z.string().min(1).max(180).optional(), sessionId: z.string().min(1).max(180), provider: CodingAgent }).strict();
 export type NativeQueueScope = z.infer<typeof NativeQueueScope>;
 const Header = z.object({ id: z.string(), scope: NativeQueueScope, intent: z.string(),
   createdAt: z.number().int(), notBefore: z.number().int(), expiresAt: z.number().int() }).strict();
