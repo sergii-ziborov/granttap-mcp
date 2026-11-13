@@ -22,5 +22,12 @@ test("the last readings are kept in a private file of numbers, and a damaged fil
     assert.deepEqual(store.read(), [], "anything that is not a reading is refused whole");
     store.write([{ ...reading, windows: [{ ...reading.windows[0]!, usedPercent: 500 }] }]);
     assert.deepEqual(store.read(), [], "an invalid reading is not written over the file's meaning");
+    assert.deepEqual(store.notBefore(), {}, "no pause has been asked for yet");
+    store.defer("claude", 1_800_000_300_000);
+    store.defer("grok", 1_800_000_060_000);
+    assert.deepEqual(savedNativeUsage(() => file).notBefore(), { claude: 1_800_000_300_000, grok: 1_800_000_060_000 },
+      "a pause one process was given holds for every process on the computer");
+    writeFileSync(join(root, "native-usage-schedule.json"), "broken");
+    assert.deepEqual(store.notBefore(), {}, "a damaged schedule pauses nobody");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

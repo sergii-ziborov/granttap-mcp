@@ -1,5 +1,7 @@
 import type { ProviderAccountUsage } from "../../../../../packages/protocol/schema";
 import { projectCursorPeriodUsage, projectNativeAccountUsage, type NativeUsageProvider } from "./projection";
+import { CHECK_EVERY_MS, createUsageMemory, isSignedOutUsage, signedOutUsage, type SharedUsage } from "./memory";
+export { isSignedOutUsage, SIGNED_OUT_SUFFIX, signedOutUsage } from "./memory";
 
 type Options = {
   credential: (provider: NativeUsageProvider) => Promise<string | undefined>;
@@ -7,16 +9,13 @@ type Options = {
   expired?: (provider: NativeUsageProvider) => Promise<boolean>;
   /** The login is live, but its access token waits for the provider's own CLI to renew it. */
   renewable?: (provider: NativeUsageProvider) => Promise<boolean>;
-  /** The last good readings, kept across restarts. Numbers only, never a credential. */
-  saved?: { read: () => ProviderAccountUsage[]; write: (reports: ProviderAccountUsage[]) => void };
+  saved?: SharedUsage;
   fetcher?: (url: string, init: RequestInit) => Promise<Response>;
   clock?: () => number;
   /** Told when a signed-in account's limits become unreadable or readable again; never given a credential. */
   report?: (provider: NativeUsageProvider, reason: string | undefined) => void;
 };
 
-/** A good reading is read again after two minutes; a failed read is tried again much sooner. */
-const FRESH_MS = 120_000, RETRY_MS = 20_000;
 /** How long the last good reading is still offered, with the time it was really read, while reads fail. */
 export const HELD_USAGE_MS = 24 * 3_600_000;
 const MARKER_MS = 300_000;
@@ -26,19 +25,6 @@ const requests = {
   cursor: { url: "https://api2.cursor.sh/aiserver.v1.DashboardService/GetSandUsageStatus", method: "POST" },
   grok: { url: "https://cli-chat-proxy.grok.com/v1/billing?format=credits", method: "GET" },
 } as const;
-
-/**
- * A limit report with no windows whose id ends in ":signed-out": the provider is
- * installed but its own login has lapsed. The wire format is unchanged, so older
- * phones show no numbers and newer ones say why.
- */
-export const SIGNED_OUT_SUFFIX = ":signed-out";
-export function signedOutUsage(provider: NativeUsageProvider, now: number): ProviderAccountUsage {
-  return { provider, limitId: `${provider}${SIGNED_OUT_SUFFIX}`, observedAt: now, windows: [] };
-}
-export function isSignedOutUsage(report: ProviderAccountUsage): boolean {
-  return report.windows.length === 0 && report.limitId.endsWith(SIGNED_OUT_SUFFIX);
-}
 
 async function boundedResponse(response: Response): Promise<unknown> {
   if (!response.ok || !response.body) return undefined;
@@ -61,35 +47,16 @@ async function boundedResponse(response: Response): Promise<unknown> {
 export function createNativeAccountUsageReader(options: Options) {
   const clock = options.clock ?? Date.now;
   const fetcher = options.fetcher ?? fetch;
-  const reports = new Map<NativeUsageProvider, ProviderAccountUsage>();
+  const memory = createUsageMemory(options.saved, clock, provider => provider in requests);
+  const { reports, restore, remember } = memory;
   let pending: Promise<void> | undefined;
-  let attemptedAt = -Infinity, failed = false;
-  const restore = () => {
-    try {
-      for (const report of options.saved?.read() ?? []) {
-        const held = reports.get(report.provider as NativeUsageProvider);
-        if (report.provider in requests && !isSignedOutUsage(report) && (held?.observedAt ?? -Infinity) < report.observedAt
-          && (!held || !isSignedOutUsage(held))) reports.set(report.provider as NativeUsageProvider, report);
-      }
-    } catch { /* A missing or damaged file only means nothing is remembered. */ }
-  };
-  const remember = () => {
-    try { options.saved?.write([...reports.values()].filter(report => !isSignedOutUsage(report))); } catch { /* Best effort. */ }
-  };
-  restore();
+  let attemptedAt = -Infinity;
   // Missing limits used to leave no trace; one line per change of reason keeps the log readable.
   const reasons = new Map<NativeUsageProvider, string | undefined>();
   const note = (provider: NativeUsageProvider, reason: string | undefined) => {
     if (reasons.has(provider) ? reasons.get(provider) === reason : reason === undefined) return;
     reasons.set(provider, reason);
     options.report?.(provider, reason);
-  };
-
-  /** A refused or failed request says nothing about the account: the last good reading stays, and the read is retried soon. */
-  const unreadable = (provider: NativeUsageProvider) => {
-    failed = true;
-    if (isSignedOutUsage(reports.get(provider) ?? signedOutUsage(provider, 0))) reports.delete(provider);
-    restore();
   };
 
   async function update(provider: NativeUsageProvider): Promise<void> {
@@ -107,6 +74,11 @@ export function createNativeAccountUsageReader(options: Options) {
         } else { reports.delete(provider); reasons.delete(provider); remember(); }
         return;
       }
+      restore();
+      const now = clock();
+      // Another process on this computer has just read it, or the provider asked everyone to wait.
+      if (!memory.due(provider, now)) return;
+      memory.claim(provider, now);
       const request = requests[provider];
       const response = await fetcher(request.url, {
         method: request.method, redirect: "error", signal: AbortSignal.timeout(8_000),
@@ -125,12 +97,12 @@ export function createNativeAccountUsageReader(options: Options) {
         });
         report = projectCursorPeriodUsage(await boundedResponse(legacy), clock());
       }
-      if (report) { reports.set(provider, report); remember(); }
+      if (report) { memory.succeeded(provider); reports.set(provider, report); remember(); }
       else if (response.ok) reports.delete(provider);
-      else unreadable(provider);
+      else memory.refused(provider, response);
       note(provider, report ? undefined : response.ok ? "unrecognized response" : `HTTP ${response.status}`);
     } catch (error) {
-      unreadable(provider);
+      memory.refused(provider);
       note(provider, error instanceof Error ? error.name : "request failed");
     }
   }
@@ -146,8 +118,8 @@ export function createNativeAccountUsageReader(options: Options) {
     },
     refresh(): Promise<void> {
       if (pending) return pending;
-      if (clock() - attemptedAt < (failed ? RETRY_MS : FRESH_MS)) return Promise.resolve();
-      attemptedAt = clock(); failed = false;
+      if (clock() - attemptedAt < CHECK_EVERY_MS) return Promise.resolve();
+      attemptedAt = clock();
       pending = Promise.allSettled((Object.keys(requests) as NativeUsageProvider[]).map(update))
         .then(() => undefined).finally(() => { pending = undefined; });
       return pending;

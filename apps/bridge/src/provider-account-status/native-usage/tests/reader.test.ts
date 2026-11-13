@@ -128,12 +128,14 @@ test("a failed read keeps the last good reading and is retried sooner, instead o
     fetcher: async () => { calls += 1; return status === 200
       ? Response.json({ five_hour: { utilization: 30, resets_at: end } }) : new Response("unavailable", { status }); } });
   await reader.refresh();
-  status = 503; now += 121_000; await reader.refresh();
+  status = 503; now += 181_000; await reader.refresh();
   const held = reader.current();
-  assert.equal(held[0]?.windows[0]?.usedPercent, 30, "one 503 does not erase what was read two minutes ago");
+  assert.equal(held[0]?.windows[0]?.usedPercent, 30, "one 503 does not erase what was read three minutes ago");
   assert.equal(held[0]?.observedAt, at, "and it keeps the time it was really read");
   now += 21_000; status = 200; await reader.refresh();
-  assert.equal(calls, 3, "a failed read is tried again after twenty seconds, not two minutes");
+  assert.equal(calls, 2, "a failed read is not hammered: the provider limits how often it may be asked");
+  now += 40_000; await reader.refresh();
+  assert.equal(calls, 3, "it is tried again after a minute");
   assert.equal(reader.current()[0]?.observedAt, now);
 });
 
@@ -159,4 +161,32 @@ test("the last good reading survives a restart and an access token Claude Code h
   assert.deepEqual(said, ["claude:its saved access token has expired; the provider renews it on its next run"]);
   now += 25 * 3_600_000;
   assert.deepEqual(restarted.current(), [], "a day-old reading is no longer offered");
+});
+
+test("every GrantTap process on the computer shares one reading and one pause, and waits as long as the provider asks", async () => {
+  let now = at, status = 200, calls = 0;
+  let stored: ReturnType<ReturnType<typeof createNativeAccountUsageReader>["current"]> = [];
+  const pauses: Record<string, number> = {};
+  const saved = { read: () => stored, write: (reports: typeof stored) => { stored = reports; },
+    notBefore: () => pauses, defer: (provider: string, until: number) => { pauses[provider] = until; } };
+  const make = () => createNativeAccountUsageReader({ clock: () => now, saved,
+    credential: async provider => provider === "claude" ? "private" : undefined,
+    fetcher: async () => { calls += 1; return status === 200 ? Response.json({ seven_day: { utilization: 36, resets_at: end } })
+      : new Response("rate limited", { status, headers: { "Retry-After": "300" } }); } });
+  const monitor = make(), session = make(), another = make();
+  await monitor.refresh();
+  await session.refresh(); await another.refresh();
+  assert.equal(calls, 1, "the other processes use the reading the first one just made");
+  assert.equal(session.current()[0]?.windows[0]?.usedPercent, 36);
+  status = 429; now += 181_000;
+  await monitor.refresh(); await session.refresh(); await another.refresh();
+  assert.equal(calls, 2, "one process asks; the refusal pauses all of them");
+  now += 240_000;
+  await monitor.refresh(); await session.refresh(); await another.refresh();
+  assert.equal(calls, 2, "nobody asks again inside the five minutes the provider named");
+  assert.equal(another.current()[0]?.observedAt, at, "and the last good reading is still offered");
+  status = 200; now += 61_000;
+  await session.refresh(); await monitor.refresh();
+  assert.equal(calls, 3);
+  assert.equal(monitor.current()[0]?.observedAt, now, "whichever process read it, all of them have it");
 });
