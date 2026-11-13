@@ -100,7 +100,10 @@ function applyClaudeLine(d: any, state: ClaudeParseState): void {
     }
     state.contextTokensUsed = claudeContextUsage(usage) ?? state.contextTokensUsed;
     if (d.isSidechain !== true) state.contextUsage = claudeContextReport(usage, ts(d.timestamp) ?? 0) ?? state.contextUsage;
-    if (d.message?.model && !state.model) state.model = String(d.message.model);
+    // The chat's own latest answer names its model. The first one used to stay for good, so the phone's
+    // header kept the old model after a change; a subagent's model and an error placeholder are not it.
+    const model = typeof d.message?.model === "string" ? d.message.model.trim() : "";
+    if (model && model !== "<synthetic>" && d.isSidechain !== true && d.isApiErrorMessage !== true) state.model = model;
   }
   if (d.message?.role === "assistant") {
     const content = d.message.content;

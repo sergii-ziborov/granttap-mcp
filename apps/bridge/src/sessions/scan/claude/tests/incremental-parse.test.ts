@@ -76,3 +76,28 @@ test('a large transcript yields between slices, and a parallel reader cannot dou
   assert.equal(step.value?.session.tokensSession, 15);
   assert.equal(parseClaudeFile(file)?.session.tokensSession, 15);
 });
+
+const modelAt = (offsetMs: number) => new Date(Date.now() + offsetMs).toISOString();
+const answer = (offsetMs: number, model: string, extra: Record<string, unknown> = {}) => JSON.stringify({
+  sessionId: "claude-model", type: "assistant", timestamp: modelAt(offsetMs), ...extra,
+  message: { role: "assistant", model, stop_reason: "end_turn", content: [{ type: "text", text: "Synthetic answer" }],
+    usage: { input_tokens: 10, output_tokens: 5 } } });
+const asked = (offsetMs: number) => JSON.stringify({ sessionId: "claude-model", type: "user", timestamp: modelAt(offsetMs),
+  message: { role: "user", content: "Synthetic question" } });
+
+test("a chat's model is the one its own latest answer used, not the first, a subagent's or an error placeholder", () => {
+  const directory = mkdtempSync(join(tmpdir(), "granttap-claude-model-"));
+  const file = join(directory, "claude-model.jsonl");
+  try {
+    writeFileSync(file, [asked(-60_000), answer(-59_000, "claude-opus-5-5")].join("\n") + "\n");
+    assert.equal(parseClaudeFile(file)?.session.model, "claude-opus-5-5");
+    appendFileSync(file, [asked(-40_000), answer(-39_000, "claude-fable-5-2")].join("\n") + "\n");
+    assert.equal(parseClaudeFile(file)?.session.model, "claude-fable-5-2", "the phone's header follows a model change");
+    appendFileSync(file, [
+      answer(-30_000, "claude-haiku-5-5", { isSidechain: true }),
+      answer(-20_000, "<synthetic>", { isApiErrorMessage: true }),
+    ].join("\n") + "\n");
+    assert.equal(parseClaudeFile(file)?.session.model, "claude-fable-5-2",
+      "a subagent's model and the placeholder of an error message are not the chat's model");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
