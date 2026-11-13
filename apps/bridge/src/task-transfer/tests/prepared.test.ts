@@ -97,3 +97,51 @@ test('confirmed first-turn identity is durable while the provider is still runni
     assert.equal(new PreparedTaskTransfers(root).nativeSession(alias).sessionId, 'confirmed-native-chat');
   } finally { finish?.(); rmSync(root, { recursive: true, force: true }); }
 });
+
+test("after an interrupted first turn, the person's next message continues the session the agent did open", async () => {
+  const root = mkdtempSync(join(tmpdir(), 'granttap-transfer-'));
+  try {
+    const transfers = new PreparedTaskTransfers(root);
+    const row = transfers.prepare({ eventId: 'opened-fixture', projectId: 'project-fixture', title: 'Task',
+      sourceSessionId: 'source', capsule, workspace: '/fixture', branch: 'granttap/fixture', context: 'Visible context', acceptedAt: 1 });
+    let starts = 0;
+    const resumed: string[] = [];
+    const provider = {
+      start: async (request: any) => { starts++; request.onNativeSession('opened-native-chat'); throw new Error('Connection interrupted'); },
+      resume: async (session: any, text: string) => { resumed.push(`${session.sessionId}:${text}`); return { ok: true as const, text: 'Continued' }; },
+    };
+    assert.equal((await transfers.deliver(row.sessionId, 'Go', [], {}, provider))?.ok, false);
+    const next = await new PreparedTaskTransfers(root).deliver(row.sessionId, 'Are you there?', [], {}, provider);
+    assert.equal(next?.ok, true, 'the chat is not a dead end');
+    assert.equal(next?.sessionId, row.sessionId);
+    assert.deepEqual(resumed, ['opened-native-chat:Are you there?'], 'the opened session is continued, not started twice');
+    assert.equal(starts, 1);
+    assert.equal(new PreparedTaskTransfers(root).catalog([])[0]?.state, 'idle', 'and the transfer is active again');
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('an interrupted first turn that opened no session starts again only on a message sent after ten quiet minutes', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'granttap-transfer-'));
+  try {
+    const transfers = new PreparedTaskTransfers(root);
+    const row = transfers.prepare({ eventId: 'unopened-fixture', projectId: 'project-fixture', title: 'Task',
+      sourceSessionId: 'source', capsule, workspace: '/fixture', branch: 'granttap/fixture', context: 'Visible context', acceptedAt: 1 });
+    let starts = 0, fail = true;
+    const provider = {
+      start: async () => { starts++; if (fail) throw new Error('Connection interrupted');
+        return { ok: true as const, sessionId: 'second-native-chat', text: 'Started' }; },
+      resume: async () => ({ ok: true as const, text: 'Unused' }),
+    };
+    const at = Date.now();
+    await transfers.deliver(row.sessionId, 'Go', [], {}, provider, at);
+    fail = false;
+    const soon = await transfers.deliver(row.sessionId, 'Go', [], {}, provider, at + 9 * 60_000);
+    assert.equal(soon?.ok, false, 'a transport retry of the same message is still refused');
+    assert.match(soon && !soon.ok ? soon.error : '', /ten minutes/);
+    assert.equal(starts, 1);
+    const later = await new PreparedTaskTransfers(root).deliver(row.sessionId, 'Please start again', [], {}, provider, at + 11 * 60_000);
+    assert.equal(later?.ok, true, 'a message the person sends later is a deliberate new attempt');
+    assert.equal(starts, 2);
+    assert.equal(new PreparedTaskTransfers(root).nativeSession(new PreparedTaskTransfers(root).catalog([])[0]!).sessionId, 'second-native-chat');
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

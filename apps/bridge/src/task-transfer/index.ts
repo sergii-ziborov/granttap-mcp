@@ -12,6 +12,10 @@ type TransferProvider = {
 };
 const interrupted = (): ReplyResult => ({ ok: false,
   error: 'The first transfer turn was interrupted. Inspect the destination provider before starting another execution.' });
+/** A transport retry arrives within minutes; a message sent after this long is the person deliberately trying again. */
+const RESTART_AFTER_MS = 10 * 60_000;
+const interruptedUnopened = (): ReplyResult => ({ ok: false,
+  error: 'The first transfer turn was interrupted before the agent opened a chat. Send the message again after ten minutes to start it again.' });
 
 /** Prepared executions are visible immediately and start only with a person's first message. */
 export class PreparedTaskTransfers extends TransferPersistence {
@@ -49,13 +53,26 @@ export class PreparedTaskTransfers extends TransferPersistence {
   }
 
   async deliver(id: string, text: string, attachments: UserAttachment[], options: DeliveryOptions,
-    provider: TransferProvider): Promise<ReplyResult | undefined> {
+    provider: TransferProvider, now = Date.now()): Promise<ReplyResult | undefined> {
     if (!/^transfer-[a-f0-9]{48}$/.test(id)) return undefined;
     let row = this.load(id);
     if (!row) return { ok: false, error: 'The prepared transfer is unavailable.' };
     if (row.phase === 'active' && row.nativeSessionId) {
       const result = await provider.resume({ ...this.session(row), sessionId: row.nativeSessionId }, text, attachments, options);
       return result.ok ? { ...result, sessionId: id } : result;
+    }
+    if (row.phase === 'uncertain') {
+      // The launch that owned this transfer is over, whoever ran it. It used to refuse every later message for good.
+      if (row.nativeSessionId) {
+        // The agent did open its chat: the person's next message continues it, and nothing is started twice.
+        const result = await provider.resume({ ...this.session(row), sessionId: row.nativeSessionId }, text, attachments, options);
+        if (!result.ok) return result;
+        this.update(id, current => current.phase === 'uncertain' ? { ...current, phase: 'active', updatedAt: Date.now() } : current);
+        return { ...result, sessionId: id };
+      }
+      if (now - row.updatedAt < RESTART_AFTER_MS) return interruptedUnopened();
+      row = this.update(id, current => current.phase === 'uncertain' && !current.nativeSessionId
+        ? { ...current, phase: 'prepared', ownerPid: undefined, updatedAt: Date.now() } : current);
     }
     if (row.phase !== 'prepared') return interrupted();
     let ownsLaunch = false;
