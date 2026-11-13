@@ -31,7 +31,7 @@ if (process.argv.slice(2).join(' ') === 'auth status --json') {
 test("Claude's expired login in its stream-json result asks for sign-in instead of a raw exit error", () => {
   const stdout = JSON.stringify({ type: 'result', is_error: true, result: EXPIRED });
   const message = providerExitFailure('/Users/me/.local/bin/claude', '', stdout, 1);
-  assert.match(message, /^Sign-in required for Claude Code\. Open Devices/);
+  assert.match(message, /^Sign-in required for Claude Code\. Tap Sign in in this chat, or open Devices/);
   assert.doesNotMatch(message, /stopped with code/);
 });
 

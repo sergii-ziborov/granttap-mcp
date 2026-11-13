@@ -30,7 +30,7 @@ test('a native login failure is returned immediately without pretending the agen
     undefined, 5_000, () => ({ ok: true, text: 'incorrect success' }), undefined, undefined,
     { confirmed: () => false, withinMs: 4_000, timeoutMessage: 'incorrect timeout' });
   assert.equal(result.ok, false);
-  if (!result.ok) { assert.match(result.error, /Open Devices/); assert.equal(result.delivery, undefined); }
+  if (!result.ok) { assert.match(result.error, /Tap Sign in in this chat, or open Devices/); assert.equal(result.delivery, undefined); }
   assert(Date.now() - started < 2_000);
 });
 

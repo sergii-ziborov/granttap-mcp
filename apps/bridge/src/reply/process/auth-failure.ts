@@ -14,6 +14,22 @@ const SIGN_IN_REQUIRED = new RegExp([
   String.raw`"type"\s*:\s*"authentication_error"`,
 ].join('|'), 'i');
 
+/**
+ * A block page from the network protection in front of the provider, not an answer from the
+ * provider about the login. Claude Code words it "Failed to authenticate. API Error: 403
+ * Attention Required! | Cloudflare", which sent people to sign in again when the VPN was the cause.
+ */
+const NETWORK_BLOCK = /\b403\b[\s\S]{0,400}(?:attention required!?|just a moment\.\.\.|sorry, you have been blocked|\bcf-ray\b|\bcloudflare\b)/i;
+
+/** The request never reached the provider's own service, so signing in again changes nothing. */
+export function providerNetworkBlock(command: string, ...outputs: string[]): string | undefined {
+  const text = outputs.join('\n').replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '');
+  if (!NETWORK_BLOCK.test(text)) return;
+  const agent = providerAgent(command);
+  const provider = agent ? PROVIDER_NAMES[agent] : 'The coding agent';
+  return `${provider} could not reach its service: the request was blocked on the network (HTTP 403). This is not a sign-in problem. Check the VPN, proxy or network on the computer, then send the message again. This message has not been submitted to the agent.`;
+}
+
 export function providerAgent(command: string): CodingAgent | undefined {
   const executable = basename(command).toLowerCase();
   return executable.includes('grok') ? 'grok' : executable.includes('claude') ? 'claude'
@@ -25,10 +41,10 @@ const PROVIDER_NAMES: Record<CodingAgent, string> = { claude: 'Claude Code', cod
 /** A native sign-in prompt before admission is actionable, not a minute-long delivery timeout. */
 export function providerSignInFailure(command: string, ...outputs: string[]): string | undefined {
   const text = outputs.join('\n').replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '');
-  if (!SIGN_IN_REQUIRED.test(text)) return;
+  if (!SIGN_IN_REQUIRED.test(text) || NETWORK_BLOCK.test(text)) return;
   const agent = providerAgent(command);
   const provider = agent ? PROVIDER_NAMES[agent] : 'the coding agent';
-  return `Sign-in required for ${provider}. Open Devices, choose this computer, then Sign in for ${provider}. This message has not been submitted to the agent.`;
+  return `Sign-in required for ${provider}. Tap Sign in in this chat, or open Devices, choose this computer, then Sign in for ${provider}. This message has not been submitted to the agent.`;
 }
 
 export function isSignInFailure(error: string): boolean { return error.startsWith('Sign-in required for '); }
@@ -74,7 +90,10 @@ export function providerResultFailure(stdout: string): string | undefined {
 }
 
 export function providerExitFailure(command: string, stderr: string, stdout: string, code: number | null): string {
-  const signIn = providerSignInFailure(command, stderr, providerResultFailure(stdout) ?? '');
+  const said = providerResultFailure(stdout) ?? '';
+  const blocked = providerNetworkBlock(command, stderr, said);
+  if (blocked) return blocked;
+  const signIn = providerSignInFailure(command, stderr, said);
   if (signIn) return signIn;
   const reported = stderr.trim() ? undefined : providerResultFailure(stdout);
   return providerUsageFailure(stderr)
