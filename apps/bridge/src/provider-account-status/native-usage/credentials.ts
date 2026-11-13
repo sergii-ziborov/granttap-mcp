@@ -67,6 +67,12 @@ export async function claudeCredentialState(options: Options = {}): Promise<"val
   return claudeToken(record, options.now ?? Date.now()) ? "valid" : "expired";
 }
 
+/** A live login whose access token has run out: only Claude Code's next run renews it, and nothing is read until then. */
+export async function claudeAccessRenewable(options: Options = {}): Promise<boolean> {
+  const record = await claudeCredentialRecord(options);
+  return !!token(record?.claudeAiOauth?.refreshToken) && !claudeToken(record, options.now ?? Date.now());
+}
+
 function claudeToken(value: any, now: number): string | undefined {
   const row = value?.claudeAiOauth;
   return typeof row?.expiresAt === "number" && row.expiresAt <= now ? undefined : token(row?.accessToken);

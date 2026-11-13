@@ -27,9 +27,11 @@ test("native reads coalesce and throttle independently without returning credent
   await reader.refresh();
   assert.equal(calls.length, 2);
   now += 301_000;
-  assert.deepEqual(reader.current(), []);
+  assert.deepEqual(reader.current().map(x => x.observedAt), [at, at],
+    "an older reading is still offered with the time it was really read; the phone marks it as needing an update");
   await reader.refresh();
   assert.equal(calls.length, 4);
+  assert.deepEqual(reader.current().map(x => x.observedAt), [now, now]);
 });
 
 test("one provider failure never suppresses another; expired windows disappear without a fake reset", async () => {
@@ -117,4 +119,44 @@ test("a lapsed Claude login reports a signed-out marker, not silence, and says s
   assert.deepEqual(current.map(report => report.limitId), ["claude:signed-out"]);
   assert.equal(isSignedOutUsage(current[0]!), true);
   assert.deepEqual(said, ["claude:the provider's console login has expired"]);
+});
+
+test("a failed read keeps the last good reading and is retried sooner, instead of blanking the limits", async () => {
+  let now = at, status = 200, calls = 0;
+  const reader = createNativeAccountUsageReader({ clock: () => now,
+    credential: async provider => provider === "claude" ? "private" : undefined,
+    fetcher: async () => { calls += 1; return status === 200
+      ? Response.json({ five_hour: { utilization: 30, resets_at: end } }) : new Response("unavailable", { status }); } });
+  await reader.refresh();
+  status = 503; now += 121_000; await reader.refresh();
+  const held = reader.current();
+  assert.equal(held[0]?.windows[0]?.usedPercent, 30, "one 503 does not erase what was read two minutes ago");
+  assert.equal(held[0]?.observedAt, at, "and it keeps the time it was really read");
+  now += 21_000; status = 200; await reader.refresh();
+  assert.equal(calls, 3, "a failed read is tried again after twenty seconds, not two minutes");
+  assert.equal(reader.current()[0]?.observedAt, now);
+});
+
+test("the last good reading survives a restart and an access token Claude Code has yet to renew", async () => {
+  let now = at;
+  let stored: ReturnType<ReturnType<typeof createNativeAccountUsageReader>["current"]> = [];
+  const saved = { read: () => stored, write: (reports: typeof stored) => { stored = reports; } };
+  const first = createNativeAccountUsageReader({ clock: () => now, saved,
+    credential: async provider => provider === "claude" ? "private" : undefined,
+    fetcher: async () => Response.json({ seven_day: { utilization: 55, resets_at: end } }) });
+  await first.refresh();
+  assert.equal(stored.length, 1);
+  assert.equal(JSON.stringify(stored).includes("private"), false, "numbers only, never the credential");
+  now += 600_000;
+  const said: string[] = [];
+  const restarted = createNativeAccountUsageReader({ clock: () => now, saved, credential: async () => undefined,
+    renewable: async provider => provider === "claude",
+    fetcher: async () => { throw Error("no request is made without a token"); },
+    report: (provider, reason) => said.push(`${provider}:${reason}`) });
+  assert.equal(restarted.current()[0]?.windows[0]?.usedPercent, 55, "known before the first read after a restart");
+  await restarted.refresh();
+  assert.equal(restarted.current()[0]?.observedAt, at, "an access token awaiting renewal keeps the last reading");
+  assert.deepEqual(said, ["claude:its saved access token has expired; the provider renews it on its next run"]);
+  now += 25 * 3_600_000;
+  assert.deepEqual(restarted.current(), [], "a day-old reading is no longer offered");
 });

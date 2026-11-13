@@ -11,7 +11,9 @@ test("status-line and direct Claude reads collapse to the newest real observatio
   });
   assert.deepEqual(mergeNativeUsage([row(now), row(now, "grok")], [row(now - 1)], now), [row(now), row(now, "grok")]);
   assert.deepEqual(mergeNativeUsage([row(now - 1)], [row(now)], now), [row(now)]);
-  assert.deepEqual(mergeNativeUsage([row(now - 301_000), row(now + 61_000)], [], now), []);
+  assert.deepEqual(mergeNativeUsage([row(now - 301_000)], [], now), [row(now - 301_000)],
+    "a reading the reader still holds is published with its real time, not dropped");
+  assert.deepEqual(mergeNativeUsage([row(now - 86_400_001), row(now + 61_000)], [], now), []);
   const expired = row(now); expired.windows[0]!.resetsAt = now;
   assert.deepEqual(mergeNativeUsage([expired], [], now), []);
 });
