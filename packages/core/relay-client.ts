@@ -62,6 +62,11 @@ export class RelayClient {
     catch { return false; }
   }
 
+  /** The peers a broadcast is sealed for right now, so its answer can be held to them. */
+  get authorizedPeers(): string[] {
+    return peerPublicKeys(this.cfg.peerPublicKey, this.cfg.extraPeerPublicKeys).filter(key => this.peerIsAllowed(key));
+  }
+
   connect(timeoutMs = 10_000): Promise<void> {
     if (this.isConnected) return Promise.resolve();
     if (this.connectPromise) return this.connectPromise;

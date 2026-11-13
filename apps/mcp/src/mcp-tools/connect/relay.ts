@@ -77,6 +77,11 @@ export async function relay(): Promise<RelayClient | null> {
   }
 }
 
+/** Keep this process's link for as long as a call waits on the phone; the returned function ends the wait. */
+export function holdRelay(): () => void {
+  return idle.hold();
+}
+
 export function resetRelay(): void {
   idle.cancel();
   stopEndpointPublisher();

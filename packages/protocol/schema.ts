@@ -15,6 +15,8 @@ import { SessionWorkspaceQuery, SessionWorkspaceResult } from './messages/sessio
 export { SessionWorkspaceQuery, SessionWorkspaceResult } from './messages/sessions/workspace';
 export { SessionImageQuery, SessionImageChunk } from './messages/session-images';
 import { ProviderHookTrust, ProviderHookTrustResult } from "./messages/provider-hooks";
+import { SignInRequest, SignInResult } from "./messages/sign-in";
+export * from "./messages/sign-in";
 import {
   ApprovalDecision,
   ApprovalRequest,
@@ -177,6 +179,8 @@ export const Payload = z.union([
   ToolUpdateResult,
   ProviderHookTrust,
   ProviderHookTrustResult,
+  SignInRequest,
+  SignInResult,
   MeshEvent,
   MeshClaimRelease,
   MeshClaimReleaseResult,

@@ -138,9 +138,12 @@ export function interactionScope(
   text: string,
   operation?: string,
 ): TaskInteractionScope | undefined {
-  const attributed = consumeAttributedCall(
-    tool, { question: text, operationId: operation }, Date.now(), sessionFromEnvironment(),
-  );
+  return attributedScope(tool, { question: text, operationId: operation });
+}
+
+/** The live chat whose provider hook saw exactly this call; nothing the model said decides it. */
+export function attributedScope(tool: string, args: unknown): TaskInteractionScope | undefined {
+  const attributed = consumeAttributedCall(tool, args, Date.now(), sessionFromEnvironment());
   if (!attributed) return undefined;
   const live = liveExecutionScope(attributed.sessionId);
   if (!live || live.execution.provider !== attributed.provider) return undefined;

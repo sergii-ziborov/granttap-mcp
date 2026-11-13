@@ -9,17 +9,32 @@ export function createIdleRelease(options: {
   idleMs: number;
   isLeader: () => boolean;
   release: () => void;
-}): { touch: () => void; cancel: () => void } {
+}): { touch: () => void; cancel: () => void; hold: () => () => void } {
   let timer: NodeJS.Timeout | undefined;
+  let waits = 0;
   const cancel = () => { if (timer) clearTimeout(timer); timer = undefined; };
   const touch = () => {
     cancel();
     timer = setTimeout(() => {
       timer = undefined;
-      if (options.isLeader()) { touch(); return; }
+      if (options.isLeader() || waits > 0) { touch(); return; }
       options.release();
     }, options.idleMs);
     timer.unref?.();
   };
-  return { touch, cancel };
+  /**
+   * Someone is waiting for the phone on this link, for as long as it takes: a sign-in in a
+   * browser has no fixed length. The returned function ends that wait, once.
+   */
+  const hold = () => {
+    let held = true;
+    waits += 1;
+    return () => {
+      if (!held) return;
+      held = false;
+      waits -= 1;
+      if (waits === 0) touch();
+    };
+  };
+  return { touch, cancel, hold };
 }

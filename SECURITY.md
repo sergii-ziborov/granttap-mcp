@@ -105,6 +105,14 @@ background services. The public MCP server can only connect an existing or new
 phone pairing, notify, and ask bounded questions; it cannot reconfigure the
 machine or select a custom relay.
 
+`request_sign_in` sends an https page to the phone and may deliver one loopback
+redirect back. That delivery is a single `GET` to `127.0.0.1` or `::1` on the
+port the pending request declared, made once, only while the request waits, and
+only for a result from a phone the request was sealed for. The path and query
+are bounded printable ASCII starting with `/`; redirects are not followed and
+no response header or body is returned or logged. The agent learns the outcome
+and a status code, never a cookie, token, or the redirect's query.
+
 A Grok Bot endpoint is a separate scoped identity. Its one-time invite is
 created only on the iPhone, stored on the relay as ciphertext, redeemed only by
 the trusted `granttap mesh connect` CLI, and written to disk with `0600`

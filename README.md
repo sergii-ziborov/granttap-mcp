@@ -583,7 +583,7 @@ trust.
 
 ## MCP contract
 
-`tools/list` returns exactly nine public tools:
+`tools/list` returns exactly ten public tools:
 
 | Tool | Contract |
 | --- | --- |
@@ -595,6 +595,7 @@ trust.
 | `notify` | Send a non-blocking status update of at most 2,000 characters |
 | `ask_yes_no` | Ask a yes/no question and wait for the explicit answer |
 | `ask` | Ask an open question and wait for typed or spoken text |
+| `request_sign_in` | Send an https sign-in page to the phone, wait for the person, and deliver the browser's loopback redirect once to the port the CLI listens on; returns `completed`, `cancelled` or `timed_out`, never the page or the redirect's contents |
 | `offload_task` | Request moving the calling Task to a compatible computer in its Mesh, keeping provider, model, effort and visible conversation; requires Automatic computer transfers, and `action=status` or `action=cancel` acts only on the caller's own request |
 
 MCP `connect` accepts no custom routing, replacement, or key-rotation input.
@@ -618,6 +619,35 @@ hook attributed, and the hook carries the `operationId` with the call.
 Provider-native approvals and mobile continuation require the matching local
 adapter. MCP registration alone is never reported as proof that an integration
 is ready.
+
+### Signing in from the phone
+
+When a CLI or service needs a browser sign-in (`wrangler login`, `gh auth
+login`, `vercel login`, an OAuth consent page, a device-code page), the browser
+would open on the computer, where nobody may be sitting. An agent calls
+`request_sign_in` with the page's `url`, a `service` name, an optional `reason`,
+and, when the CLI waits for a redirect to `http://localhost:<port>/…`, that
+port as `callbackPort`. The request appears as a card in the calling chat on
+the phone and opens in a browser inside GrantTap.
+
+A redirect to `localhost` ends on the phone, where the browser is. While the
+sign-in is open the app listens on that same loopback port, reads the request
+line of the redirect, and sends its path and query back in `signin.result`.
+The computer then repeats that one request against its own loopback address:
+
+- only `GET`, only to `127.0.0.1` or `::1`, only to the port the request declared;
+- once per request, and only while the request waits and has not expired;
+- the path and query are bounded printable ASCII starting with `/`, so they
+  cannot end a request line, add a header or name another host;
+- a redirect in the CLI's answer is reported, never followed, and the answer's
+  headers and body are dropped: the tool returns the status code alone;
+- a result is taken only from a phone the request was sealed for, in the same
+  pairing room and chat; a result for an unknown request is ignored.
+
+Only `https` pages without a user name or password in the address are sent.
+The address, the redirect's query and anything the person typed are never
+logged and never returned to the agent. Phones and computers that do not know
+`signin.request` or `signin.result` ignore them.
 
 ## What the runtime publishes
 

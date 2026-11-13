@@ -5,6 +5,7 @@ import { registerConnectionWidget } from "../mcp-tools/connect/widget";
 import { registerInteractionTools } from "../mcp-tools/interaction";
 import { registerMeshResource } from "../mcp-tools/mesh/resource";
 import { registerRoutingTool } from '../mcp-tools/routing';
+import { registerSignInTool } from "../mcp-tools/sign-in";
 import { packageVersion } from "../status/package-version";
 
 export { askOpenQuestion, askYesNo, relay, resetRelay } from "../mcp-tools/connect/relay";
@@ -19,6 +20,7 @@ export function createGrantTapServer(): McpServer {
   });
   registerConnectTool(server);
   registerInteractionTools(server);
+  registerSignInTool(server);
   registerRoutingTool(server);
   registerMeshResource(server);
   registerConnectionWidget(server);

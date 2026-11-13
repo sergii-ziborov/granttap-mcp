@@ -2,7 +2,7 @@
 
 The Personal MCP surface is an exact allowlist: `connection_status`, `connect`,
 `connect_with_passkey`, `reconnect`, `set_runtime_auto_update`, `notify`,
-`ask_yes_no`, `ask`, and `offload_task`. Context compilation belongs
+`ask_yes_no`, `ask`, `request_sign_in`, and `offload_task`. Context compilation belongs
 inside Project Mesh, not as extra tools. `relay.ts` owns one shared encrypted relay connection
 and the durable question lifecycle. Machine setup, custom relay selection, and
 pairing reset remains an explicit CLI operation. The narrower `reconnect` MCP
@@ -32,6 +32,12 @@ call, and can never create invites, expand scope, change the relay, or reach
 
 License: this module is distributed under the GrantTap Commercial Source License
 in the repository-root `LICENSE` file.
+
+`sign-in/` owns `request_sign_in`: `index.ts` registers the tool, `pending.ts`
+binds one request to its id, room, recipients and chat and takes one result,
+and `callback-replay.ts` delivers the browser's loopback redirect to the port
+that request declared. A session's relay link is held while a sign-in waits.
+Tests live in `sign-in/tests/`.
 
 The connection center lives in `../connection-center`. Status requests are
 read-only. Saved pairing, a connected relay socket, and recent encrypted phone

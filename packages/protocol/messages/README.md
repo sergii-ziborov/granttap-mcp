@@ -26,6 +26,12 @@ to the requester. It is device-network pairing, not Project membership.
 `mesh/knowledge/write.ts` carries a Task-bound human decision or correction and a
 separate Engine-confirmed result.
 
+`sign-in/index.ts` carries a browser sign-in done on the phone: `signin.request`
+names an https page, the service, and optionally the loopback port a command
+listens on; `signin.result` says `completed` or `cancelled` and may carry the
+path and query of the loopback redirect, bounded and free of characters that
+could end a request line. Tests live in `sign-in/tests/`.
+
 Tests are discoverable in `tests/core.test.ts` and the feature-level bridge and MCP suites.
 
 License: this module is distributed under the GrantTap Commercial Source License in the repository-root `LICENSE` file.

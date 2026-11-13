@@ -114,6 +114,7 @@ healthy pairing merely to display a new QR.
 - `notify` sends a task update to GrantTap.
 - `ask_yes_no` asks for an explicit yes or no decision.
 - `ask` asks for typed or spoken input.
+- `request_sign_in` sends a browser sign-in to the phone and waits for it.
 
 Codex, Claude Code, Cursor, and Grok Build use the persistent local HTTP
 service installed by `granttap setup`. See
