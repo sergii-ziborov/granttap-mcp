@@ -67,7 +67,7 @@ test('a staged update activates as soon as the running work ends, although phone
   assert.deepEqual(f.waiting, ['first', 'second', 'third'], 'the new runtime delivers what arrived meanwhile');
   assert.equal(f.lines.length, 2);
   assert.match(f.lines[0]!, /0\.8\.102 is ready/);
-  assert.match(f.lines[1]!, /0\.8\.102 is selected.*waited 10 s/);
+  assert.match(f.lines[1]!, /0\.8\.102 takes over.*waited 10 s/);
 });
 
 test('a run that lasts hours gives the hold up after ten minutes, and the update activates once the monitor is idle', async t => {
@@ -88,7 +88,7 @@ test('a run that lasts hours gives the hold up after ten minutes, and the update
   await f.tick(60_000);
   assert.equal(f.selected(), f.candidate);
   assert.equal(f.count.activations, 1);
-  assert.deepEqual(f.lines.map(line => line.split(' ').slice(2, 4).join(' ')), ['is ready.', 'still waits:', 'is selected']);
+  assert.deepEqual(f.lines.map(line => line.split(' ').slice(2, 4).join(' ')), ['is ready.', 'still waits:', 'takes over:']);
 });
 
 test('a staged release that does not start never holds phone messages', async t => {

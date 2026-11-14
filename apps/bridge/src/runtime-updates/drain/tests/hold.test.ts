@@ -76,7 +76,7 @@ test('once the update is selected, new work stays held until the launcher replac
   f.drain.handoff('0.8.172');
   f.drain.handoff('0.8.172');
   assert.equal(f.lines.length, 2, 'one line when the update activates');
-  assert.match(f.lines[1]!, /0\.8\.172 is selected.*restarts.*42 s/);
+  assert.match(f.lines[1]!, /0\.8\.172 takes over.*restarts.*42 s/);
   f.pass(HOLD_LIMIT_MS - 42_000);
   assert.equal(f.drain.holding(), false, 'a launcher that never restarts the monitor cannot hold messages for good');
   assert.match(f.lines[2]!, /was not restarted/);
@@ -88,7 +88,7 @@ test('an idle monitor that activates at once still holds new work while it is be
   f.drain.handoff('0.8.172');
   assert.equal(f.drain.holding(), true);
   assert.equal(f.lines.length, 1);
-  assert.match(f.lines[0]!, /0\.8\.172 is selected/);
+  assert.match(f.lines[0]!, /0\.8\.172 takes over/);
   f.pass(HANDOFF_LIMIT_MS - 1);
   assert.equal(f.drain.holding(), true);
   f.pass(1);
@@ -98,7 +98,7 @@ test('an idle monitor that activates at once still holds new work while it is be
 test('a runtime selected from the phone is named without its version', () => {
   const f = fixture();
   f.drain.request();
-  assert.match(f.lines[0]!, /^The selected update is ready/);
+  assert.match(f.lines[0]!, /^The newer runtime is ready/);
 });
 
 test('turning automatic updates off lets the held messages run at once', () => {

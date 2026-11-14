@@ -65,7 +65,7 @@ export class UpdateDrain {
     this.handoffAt = now;
     this.since ??= now;
     this.version = version ?? this.version;
-    this.log(`${this.label()} is selected and the monitor restarts with it`
+    this.log(`${this.label()} takes over: the monitor restarts with it`
       + (waited > 0 ? `; new phone messages waited ${Math.round(waited / 1000)} s.` : '.'));
   }
 
@@ -101,7 +101,7 @@ export class UpdateDrain {
     const now = this.now();
     if (this.handoffAt !== undefined) {
       if (now - this.handoffAt < HANDOFF_LIMIT_MS) return;
-      this.log(`${this.label()} is selected, but the monitor was not restarted in `
+      this.log(`${this.label()} was to take over, but the monitor was not restarted in `
         + `${minutes(HANDOFF_LIMIT_MS)} min. Phone messages run again.`);
       this.notBefore = now + HOLD_RETRY_MS;
     } else {
@@ -123,7 +123,7 @@ export class UpdateDrain {
     return oldest !== undefined && oldest <= this.outlastedAt;
   }
 
-  private label(): string { return this.version ? `Update ${this.version}` : 'The selected update'; }
+  private label(): string { return this.version ? `Update ${this.version}` : 'The newer runtime'; }
   private now(): number { return (this.options.now ?? Date.now)(); }
   private log(line: string): void { this.options.log?.(line); }
 }
