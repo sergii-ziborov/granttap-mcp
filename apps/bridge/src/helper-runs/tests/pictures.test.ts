@@ -159,7 +159,7 @@ test("a run's folder is followed while it lives: each finished picture is kept o
   const reduced: number[] = [];
   const follower = createPictureFollower({
     reduce: async (bytes, mime) => { reduced.push(bytes.length); return { bytes, mime }; },
-    watchFolder: () => undefined,
+    repeat: () => () => undefined,
   });
   writeFileSync(join(folder, "image.png"), picture.subarray(0, picture.length - 8));
   writeFileSync(join(folder, "notes.txt"), "not a picture");
@@ -182,7 +182,7 @@ test("a run's folder is followed while it lives: each finished picture is kept o
   assert.deepEqual(follower.following(), []);
 });
 
-test("a picture written while the run is followed is caught by the watch, before the next sample", async (t) => {
+test("a picture written while the run is followed is caught within a fraction of a second, before the next sample", async (t) => {
   const root = configured(t);
   const folder = join(root, "hw-image-watch001");
   mkdirSync(folder);
@@ -200,7 +200,7 @@ test("a picture that cannot be reduced is not kept, and a missing folder is not 
   const folder = join(root, "hw-image-fail0001");
   mkdirSync(folder);
   writeFileSync(join(folder, "image.png"), png(4, 4));
-  const follower = createPictureFollower({ reduce: async () => undefined, watchFolder: () => undefined });
+  const follower = createPictureFollower({ reduce: async () => undefined, repeat: () => () => undefined });
   follower.follow([folder, join(root, "hw-image-gone0001")]);
   await follower.settled();
   assert.deepEqual(helperRunPictures(folder), []);

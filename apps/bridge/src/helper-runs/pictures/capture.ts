@@ -3,15 +3,16 @@
  *
  * A run writes its picture into its throwaway folder, and the script that
  * started it copies the picture away and deletes the folder the moment the run
- * ends. So the folder of every live run is watched: a picture is read as soon
- * as it is written to its end, and reduced and kept from memory, so deleting
- * the folder afterwards loses nothing. Each process sample also looks again,
- * in case the watch missed a write.
+ * ends. So the folder of every live run is looked at five times a second: a
+ * picture is read as soon as it is written to its end, and reduced and kept
+ * from memory, so deleting the folder afterwards loses nothing. The system's
+ * file events are not used: under load they arrived seconds late, after such a
+ * folder was gone. Each process sample also looks again.
  */
 import { execFile } from "node:child_process";
 import {
-  existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, watch, writeFileSync,
-  type Dirent, type FSWatcher, type Stats,
+  existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync,
+  type Dirent, type Stats,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, relative, sep } from "node:path";
@@ -26,7 +27,7 @@ const run = promisify(execFile);
 const PICTURE_NAME = /\.(?:png|jpe?g|webp)$/i;
 const MAX_SOURCE_BYTES = 48 * 1024 * 1024;
 const MAX_ENTRIES = 200;
-const SETTLE_MS = 120;
+const LOOK_EVERY_MS = 200;
 /** A picture this small is kept as it is. */
 const KEEP_AS_IS_BYTES = 400 * 1024;
 const LONG_EDGE = 1_600;
@@ -71,23 +72,21 @@ export async function reducePicture(bytes: Uint8Array, mime: PictureMime): Promi
   }
 }
 
-type Followed = { folder: string; watcher?: FSWatcher; timer?: NodeJS.Timeout; seen: Set<string> };
+type Followed = { folder: string; seen: Set<string>; stop: () => void };
 
 export type PictureFollowerOptions = {
   reduce?: Reducer;
   keep?: typeof keepHelperRunPicture;
-  watchFolder?: (folder: string, changed: () => void) => FSWatcher | undefined;
+  /** Calls `look` again and again; returns how to stop. */
+  repeat?: (look: () => void) => () => void;
   now?: () => number;
 };
 
-function watchFolder(folder: string, changed: () => void): FSWatcher | undefined {
-  try {
-    const watcher = watch(folder, { persistent: false }, changed);
-    watcher.on("error", () => watcher.close());
-    return watcher;
-  } catch {
-    return undefined;
-  }
+/** Look at a live run's folder again and again until told to stop. */
+function lookRepeatedly(look: () => void): () => void {
+  const timer = setInterval(look, LOOK_EVERY_MS);
+  timer.unref?.();
+  return () => clearInterval(timer);
 }
 
 /** Picture files in the folder and the folders directly inside it. */
@@ -109,7 +108,7 @@ function pictureFiles(folder: string): string[] {
 export function createPictureFollower(options: PictureFollowerOptions = {}) {
   const reduce = options.reduce ?? reducePicture;
   const keep = options.keep ?? keepHelperRunPicture;
-  const watchOne = options.watchFolder ?? watchFolder;
+  const repeat = options.repeat ?? lookRepeatedly;
   const now = options.now ?? Date.now;
   const followed = new Map<string, Followed>();
   let queue: Promise<unknown> = Promise.resolve();
@@ -142,8 +141,7 @@ export function createPictureFollower(options: PictureFollowerOptions = {}) {
   };
 
   const stop = (item: Followed) => {
-    item.watcher?.close();
-    if (item.timer) clearTimeout(item.timer);
+    item.stop();
     followed.delete(item.folder);
   };
 
@@ -154,12 +152,8 @@ export function createPictureFollower(options: PictureFollowerOptions = {}) {
     for (const folder of live) {
       let item = followed.get(folder);
       if (!item) {
-        const fresh: Followed = { folder, seen: new Set() };
-        fresh.watcher = watchOne(folder, () => {
-          if (fresh.timer) clearTimeout(fresh.timer);
-          fresh.timer = setTimeout(() => { fresh.timer = undefined; if (followed.get(folder) === fresh) scan(fresh); }, SETTLE_MS);
-          fresh.timer.unref?.();
-        });
+        const fresh: Followed = { folder, seen: new Set(), stop: () => undefined };
+        fresh.stop = repeat(() => scan(fresh));
         followed.set(folder, fresh);
         item = fresh;
       }
