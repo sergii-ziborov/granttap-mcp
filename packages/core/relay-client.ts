@@ -1,4 +1,5 @@
 import { retainedPayloadOptions } from "./retained-state";
+import { RetainedStateLedger } from "./retained-state/ledger";
 /** Shared authenticated relay transport. See README.md for delivery and encryption boundaries. */
 import WebSocket from "ws";
 import { ManagedRelayLease, RelaySocketHealth, RelayReconnectBackoff, RelayConnectionNotifications, relayUpgradeHeaders } from "./socket-lifecycle";
@@ -38,6 +39,8 @@ export class RelayClient {
   private readonly refusalLoggedAt = new Map<string, number>();
   private readonly sessionKeys = new Map<string, string>();
   private readonly replay: RelayMessageAcceptance;
+  /** Read state this connection already handed to the relay, which replays it to joining phones. */
+  private readonly retainedSent = new RetainedStateLedger();
 
   constructor(
     private readonly cfg: PeerConfig,
@@ -91,6 +94,7 @@ export class RelayClient {
         ws.send(frame, error => error ? reject(error) : resolve());
       }));
       this.frames = frames;
+      this.retainedSent.forget();
       let opened = false, openedAt: number | undefined;
       const timer = setTimeout(() => {
         ws.terminate();
@@ -228,6 +232,8 @@ export class RelayClient {
     if (peerPublicKey !== this.cfg.peerPublicKey && !peers.includes(peerPublicKey)) {
       if (peers.length >= 16) throw new Error("controller device limit reached");
       this.cfg.extraPeerPublicKeys = [...peers, peerPublicKey];
+      // The relay holds no state for the new phone yet.
+      this.retainedSent.forget();
     }
   }
 
@@ -250,6 +256,15 @@ export class RelayClient {
     return this.sessionKeys.has(sessionId);
   }
 
+  /**
+   * True when a broadcast of this exact read state already reached the relay on
+   * this connection: the relay keeps it for every phone, so sending it again
+   * would only spend upload. A reply to one phone is never skipped.
+   */
+  retainedUnchanged(payload: Payload, to: Role | "all" = this.otherRole(), peerPublicKey?: string): boolean {
+    return this.retainedState && !peerPublicKey && this.retainedSent.unchanged(payload, to);
+  }
+
   /** Add an independent authenticated-encryption layer for one task. */
   async sendSession(
     payload: Payload,
@@ -259,6 +274,7 @@ export class RelayClient {
   ): Promise<void> {
     await this.send(sealSessionPayload(payload, sessionId, this.sessionKeys.get(sessionId)), to, { ...retainedPayloadOptions(payload), ...options,
       urgent: options.urgent === true || priorityControlPayload(payload.type) });
+    if (this.retainedState && !options.peerPublicKey) this.retainedSent.remember(payload, to);
   }
 
   /** Register before connect so only durable receivers advertise task-job support. */

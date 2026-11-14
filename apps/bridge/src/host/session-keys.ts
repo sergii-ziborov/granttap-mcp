@@ -74,6 +74,8 @@ async function sendScopedPayload(input: {
   options: SendOptions;
 }): Promise<void> {
   const { client, payload, sessionId, purpose, to, options } = input;
+  // The relay already holds this exact state from this connection; the grant and the copy would only spend upload.
+  if (client.retainedUnchanged?.(payload, to, options.peerPublicKey)) return;
   const retained = retainedPayloadOptions(payload);
   const grantOptions = retained.stateKey ? {}
     : { stateKey: undefined, stateRevision: undefined, statePriority: undefined, stateGroup: undefined };

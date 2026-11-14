@@ -16,6 +16,17 @@ The phone's queue is restored through the separate durable task-job API. Relay
 state caching does not execute commands or change provider policy. Older relays
 continue using live updates and the existing acknowledged mailbox.
 
+`ledger.ts` remembers which read state each relay connection has already handed
+over. A broadcast of exactly that state again (`RelayClient.retainedUnchanged`)
+is skipped together with its key grant: the relay keeps the copy and replays it
+to joining phones. Without this the monitor resent every Mesh snapshot, plain
+and enriched, and every chat head each time a phone asked for a catalog, about
+8 MB/s of identical frames that queued its heartbeat and replies behind them.
+The three latest copies of a state count as sent, so a Mesh generation's plain and
+enriched copies are both recognised. A reply to one phone is never skipped; a
+new connection, a newly added phone and five minutes without a change all hand
+the state over again.
+
 Tests live in `tests/` and run with the repository's test and release commands.
 
 GrantTap Commercial Source License; see the repository LICENSE.
