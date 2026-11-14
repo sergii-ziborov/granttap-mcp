@@ -38,6 +38,25 @@ export function projectNativeAccountUsage(provider: NativeUsageProvider, input: 
   return windows.length ? { provider, limitId: provider, observedAt: now, windows } : undefined;
 }
 
+/**
+ * Limits narrower than the whole account. Claude reports a weekly limit for one model beside the
+ * account-wide windows; each becomes its own report, named after the model, so the phone can show
+ * it without mistaking it for the account's limit. Only the name and the share cross the wire.
+ */
+export function projectScopedLimits(provider: NativeUsageProvider, input: any, now = Date.now()): ProviderAccountUsage[] {
+  if (provider !== "claude" || !Array.isArray(input?.limits)) return [];
+  const reports = new Map<string, ProviderAccountUsage>();
+  for (const limit of input.limits.slice(0, 16)) {
+    const name = typeof limit?.scope?.model?.display_name === "string" ? limit.scope.model.display_name.trim().slice(0, 40) : "";
+    const slug = name.toLowerCase().replace(/[^a-z0-9.]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
+    const resetsAt = timestamp(limit?.resets_at);
+    if (limit?.kind !== "weekly_scoped" || !name || !slug || !percent(limit.percent) || !(resetsAt > now)) continue;
+    reports.set(slug, { provider, limitId: `${provider}:model:${slug}`, label: name, observedAt: now,
+      windows: [{ id: "secondary", usedPercent: limit.percent, windowMinutes: 10_080, resetsAt }] });
+  }
+  return [...reports.values()].slice(0, 4);
+}
+
 /** Older Cursor plans report a billing-period pool rather than a weekly pool. */
 export function projectCursorPeriodUsage(input: any, now = Date.now()): ProviderAccountUsage | undefined {
   const start = Number(input?.billingCycleStart), end = Number(input?.billingCycleEnd);

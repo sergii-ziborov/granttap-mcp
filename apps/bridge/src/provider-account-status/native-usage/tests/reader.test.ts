@@ -190,3 +190,28 @@ test("every GrantTap process on the computer shares one reading and one pause, a
   assert.equal(calls, 3);
   assert.equal(monitor.current()[0]?.observedAt, now, "whichever process read it, all of them have it");
 });
+
+test("a model's own limit travels with the account's reading: held through a refusal and a restart, gone with the login", async () => {
+  let now = at, status = 200, scoped = true, token: string | undefined = "private";
+  let stored: ReturnType<ReturnType<typeof createNativeAccountUsageReader>["current"]> = [];
+  const saved = { read: () => stored, write: (reports: typeof stored) => { stored = reports; } };
+  const make = () => createNativeAccountUsageReader({ clock: () => now, saved,
+    credential: async provider => provider === "claude" ? token : undefined,
+    fetcher: async () => status !== 200 ? new Response("unavailable", { status }) : Response.json({
+      seven_day: { utilization: 20, resets_at: end },
+      limits: scoped ? [{ kind: "weekly_scoped", percent: 45, resets_at: end, scope: { model: { display_name: "Fable" } } }] : [] }) });
+  const reader = make();
+  await reader.refresh();
+  const ids = (list: typeof stored) => list.map(report => `${report.limitId}:${report.windows[0]?.usedPercent}`).sort();
+  assert.deepEqual(ids(reader.current()), ["claude:20", "claude:model:fable:45"]);
+  assert.equal(reader.current().find(report => report.limitId === "claude:model:fable")?.label, "Fable");
+  status = 503; now += 181_000; await reader.refresh();
+  assert.deepEqual(ids(reader.current()), ["claude:20", "claude:model:fable:45"], "a refused read keeps both");
+  assert.deepEqual(ids(make().current()), ["claude:20", "claude:model:fable:45"], "and so does a restart");
+  status = 200; scoped = false; now += 61_000; await reader.refresh();
+  assert.deepEqual(ids(reader.current()), ["claude:20"], "a limit the provider no longer reports is not kept");
+  scoped = true; now += 181_000; await reader.refresh();
+  token = undefined; now += 61_000; await reader.refresh();
+  assert.deepEqual(reader.current(), [], "signing out clears the model's limit with the account's");
+  assert.deepEqual(make().current(), [], "for every process on the computer");
+});

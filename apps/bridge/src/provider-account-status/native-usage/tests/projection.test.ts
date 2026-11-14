@@ -71,3 +71,28 @@ test("legacy Cursor uses its reported billing period and allowance, never a gues
     assert.equal(projectCursorPeriodUsage(value, now), undefined);
   }
 });
+
+test("Claude's weekly limit for one model is published beside the account-wide windows, under that model's name", async () => {
+  const { projectScopedLimits } = await import("../projection");
+  const now = Date.parse("2026-11-14T06:00:00Z"), resets = "2026-11-16T11:00:00.719684+00:00";
+  const input = { seven_day: { utilization: 12, resets_at: resets }, limits: [
+    { kind: "weekly_all", group: "weekly", percent: 12, severity: "normal", resets_at: resets, scope: null, is_active: true },
+    { kind: "weekly_scoped", group: "weekly", percent: 31.5, severity: "normal", resets_at: resets,
+      scope: { model: { id: null, display_name: "Fable" }, surface: null }, is_active: false },
+  ] };
+  assert.deepEqual(projectScopedLimits("claude", input, now), [{ provider: "claude", limitId: "claude:model:fable", label: "Fable",
+    observedAt: now, windows: [{ id: "secondary", usedPercent: 31.5, windowMinutes: 10_080, resetsAt: Date.parse(resets) }] }]);
+  assert.deepEqual(projectNativeAccountUsage("claude", input, now)?.windows.map(window => window.id), ["secondary"],
+    "the account-wide report is unchanged");
+  const odd = { limits: [
+    { kind: "weekly_scoped", percent: 140, resets_at: resets, scope: { model: { display_name: "Too much" } } },
+    { kind: "weekly_scoped", percent: 10, resets_at: "2020-01-01T00:00:00Z", scope: { model: { display_name: "Past" } } },
+    { kind: "weekly_scoped", percent: 10, resets_at: resets, scope: { model: { display_name: "  " } } },
+    { kind: "weekly_scoped", percent: 10, resets_at: resets, scope: { surface: "desktop" } },
+    { kind: "weekly_scoped", percent: 10, resets_at: resets, scope: { model: { display_name: "Opus 5.5 (preview) <b>" } } },
+  ] };
+  assert.deepEqual(projectScopedLimits("claude", odd, now).map(report => [report.limitId, report.label]),
+    [["claude:model:opus-5.5-preview-b", "Opus 5.5 (preview) <b>"]], "only a named model with a real share and a future reset is published");
+  assert.deepEqual(projectScopedLimits("grok", input, now), []);
+  assert.deepEqual(projectScopedLimits("claude", { limits: "none" }, now), []);
+});

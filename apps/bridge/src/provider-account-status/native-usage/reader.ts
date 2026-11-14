@@ -1,5 +1,5 @@
 import type { ProviderAccountUsage } from "../../../../../packages/protocol/schema";
-import { projectCursorPeriodUsage, projectNativeAccountUsage, type NativeUsageProvider } from "./projection";
+import { projectCursorPeriodUsage, projectNativeAccountUsage, projectScopedLimits, type NativeUsageProvider } from "./projection";
 import { CHECK_EVERY_MS, createUsageMemory, isSignedOutUsage, signedOutUsage, type SharedUsage } from "./memory";
 export { isSignedOutUsage, SIGNED_OUT_SUFFIX, signedOutUsage } from "./memory";
 
@@ -71,7 +71,7 @@ export function createNativeAccountUsageReader(options: Options) {
           if (isSignedOutUsage(reports.get(provider) ?? signedOutUsage(provider, 0))) reports.delete(provider);
           restore();
           note(provider, "its saved access token has expired; the provider renews it on its next run");
-        } else { reports.delete(provider); reasons.delete(provider); remember(); }
+        } else { memory.forget(provider); reasons.delete(provider); }
         return;
       }
       restore();
@@ -97,8 +97,11 @@ export function createNativeAccountUsageReader(options: Options) {
         });
         report = projectCursorPeriodUsage(await boundedResponse(legacy), clock());
       }
-      if (report) { memory.succeeded(provider); reports.set(provider, report); remember(); }
-      else if (response.ok) reports.delete(provider);
+      if (report) {
+        memory.succeeded(provider); reports.set(provider, report);
+        memory.setScoped(provider, projectScopedLimits(provider, value, report.observedAt));
+        remember();
+      } else if (response.ok) memory.forget(provider);
       else memory.refused(provider, response);
       note(provider, report ? undefined : response.ok ? "unrecognized response" : `HTTP ${response.status}`);
     } catch (error) {
@@ -110,7 +113,8 @@ export function createNativeAccountUsageReader(options: Options) {
   return {
     current(): ProviderAccountUsage[] {
       const now = clock();
-      return [...reports.values()].flatMap(report => {
+      const held = [...reports.values()].flatMap(report => [report, ...memory.scopedFor(report.provider as NativeUsageProvider)]);
+      return held.flatMap(report => {
         const windows = report.windows.filter(window => window.resetsAt > now);
         return isSignedOutUsage(report) ? (now - report.observedAt <= MARKER_MS ? [report] : [])
           : windows.length && now - report.observedAt <= HELD_USAGE_MS ? [{ ...report, windows }] : [];

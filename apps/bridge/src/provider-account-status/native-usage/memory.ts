@@ -34,6 +34,8 @@ export function isSignedOutUsage(report: ProviderAccountUsage): boolean {
 /** The readings one process holds, kept in step with the other processes on the computer. */
 export function createUsageMemory(saved: SharedUsage | undefined, clock: () => number, known: (provider: string) => boolean) {
   const reports = new Map<NativeUsageProvider, ProviderAccountUsage>();
+  /** Limits narrower than the account, such as one model's. They are read with the account's reading and follow it. */
+  const scoped = new Map<NativeUsageProvider, ProviderAccountUsage[]>();
   const pauses = new Map<NativeUsageProvider, number>(), failures = new Map<NativeUsageProvider, number>();
   const notBefore = (provider: NativeUsageProvider) => {
     let shared = -Infinity;
@@ -46,19 +48,35 @@ export function createUsageMemory(saved: SharedUsage | undefined, clock: () => n
   };
   const restore = () => {
     try {
-      for (const report of saved?.read() ?? []) {
-        const held = reports.get(report.provider as NativeUsageProvider);
-        if (known(report.provider) && !isSignedOutUsage(report) && (held?.observedAt ?? -Infinity) < report.observedAt
-          && (!held || !isSignedOutUsage(held))) reports.set(report.provider as NativeUsageProvider, report);
+      const stored = saved?.read() ?? [];
+      for (const report of stored) {
+        const provider = report.provider as NativeUsageProvider, held = reports.get(provider);
+        if (!known(provider) || report.limitId !== provider || isSignedOutUsage(report)
+          || (held?.observedAt ?? -Infinity) >= report.observedAt || held && isSignedOutUsage(held)) continue;
+        reports.set(provider, report);
+        scoped.set(provider, stored.filter(other => other.provider === provider && other.limitId !== provider
+          && !isSignedOutUsage(other)).slice(0, 4));
       }
     } catch { /* A missing or damaged file only means nothing is remembered. */ }
+  };
+  const persist = () => {
+    const kept = [...reports.values()].filter(report => !isSignedOutUsage(report));
+    try { saved?.write([...kept, ...kept.flatMap(report => scoped.get(report.provider as NativeUsageProvider) ?? [])]); }
+    catch { /* Best effort. */ }
   };
   restore();
   return {
     reports, restore,
-    remember(): void {
-      restore();
-      try { saved?.write([...reports.values()].filter(report => !isSignedOutUsage(report))); } catch { /* Best effort. */ }
+    remember(): void { restore(); persist(); },
+    /** A fresh reading names every narrower limit the provider still reports; one it dropped is not kept. */
+    setScoped(provider: NativeUsageProvider, limits: ProviderAccountUsage[]): void { scoped.set(provider, limits.slice(0, 4)); },
+    scopedFor(provider: NativeUsageProvider): ProviderAccountUsage[] {
+      const main = reports.get(provider);
+      return main && !isSignedOutUsage(main) ? scoped.get(provider) ?? [] : [];
+    },
+    /** The login is gone: its readings leave this process and the shared file, instead of coming back from it. */
+    forget(provider: NativeUsageProvider): void {
+      restore(); reports.delete(provider); scoped.delete(provider); persist();
     },
     /** Not while another process has just read it, or while the provider asked everyone to wait. */
     due(provider: NativeUsageProvider, now: number): boolean {

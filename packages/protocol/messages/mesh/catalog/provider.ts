@@ -21,6 +21,8 @@ export type SharedSkill = z.infer<typeof SharedSkill>;
 export const ProviderAccountUsage = z.object({
   provider: MeshProvider,
   limitId: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,159}$/),
+  /** What a limit narrower than the whole account covers, such as one model's name. Absent for the account-wide limit. */
+  label: z.string().trim().min(1).max(40).optional(),
   observedAt: z.number().nonnegative(),
   windows: z.array(z.object({
     id: z.enum(["primary", "secondary"]),
