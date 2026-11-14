@@ -164,4 +164,10 @@ test("this computer's own tools report a live process's folder and the chat in i
   assert.equal(directories.get(pid), folder);
   assert.deepEqual((await readProcessParents([pid])).get(pid), { agent: "claude", sessionId: "synthetic-parent-chat" });
   assert.deepEqual([...await readProcessParents([])], []);
+  const gone = 2_000_000_000;
+  assert.equal((await readProcessDirectories([pid, gone])).get(pid), folder,
+    "a process that has exited does not hide the ones still running");
+  assert.deepEqual([...await readProcessDirectories([gone])], []);
+  await assert.rejects(readProcessParents([gone]), /^Error: process environment unavailable$/,
+    "a failed listing says only that it failed");
 });

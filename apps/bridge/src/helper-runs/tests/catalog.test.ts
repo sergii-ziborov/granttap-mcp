@@ -13,6 +13,7 @@ import {
   scanThreadActivity,
 } from "../../sessions";
 import { scanClaude } from "../../sessions/scan/claude";
+import { attachHelperRuns } from "../attach";
 import { rememberHelperRunLinks } from "../links";
 
 const TEMP = "/private/var/folders/ab/c0ffee123/T";
@@ -127,6 +128,10 @@ test("the run's conversation is read from the run and shown under the chat", (t)
   assert.equal(thread.entries[0]?.childThreadTitle, "A lighthouse at dusk");
   assert.deepEqual(scanThreadActivity(parent, "helper-orphan-0001").entries, [],
     "a run that is not this chat's cannot be read through it");
+  // A monitor that has just started serves the catalog it saved before it has scanned again.
+  attachHelperRuns([], []);
+  assert.deepEqual(scanThreadActivity(parent, "helper-linked-0001").entries.map((entry) => entry.text),
+    thread.entries.map((entry) => entry.text));
   const own = scanSessionActivity(parent);
   assert.ok(own.entries.length > 0);
   assert.ok(own.entries.every((entry) => !entry.childThreadId), "the chat's own window is its own messages");
