@@ -34,6 +34,7 @@ import { scanSessionHistoryCooperatively, scanSessionsCooperatively, TOKEN_WINDO
 import { boundedCatalogHistory, INTERVAL_MS, publishSessionEvents } from "../handlers/catalog";
 import { sweepAttachments } from "../handlers/receipts";
 import { handleMonitorMessage } from "../handlers/inbound";
+import { lateRunsSettling } from "../message-delivery/acceptance";
 import { decorateTaskOriginCatalog } from '../../task-origins';
 import { publishCodexQuestions } from '../../codex-questions';
 import { publishClaudeOpenQuestions } from '../../claude-open-questions';
@@ -50,6 +51,8 @@ export type SessionMonitor = {
   publish: () => Promise<void>;
   isLeader: () => boolean;
   canUpdate: () => boolean;
+  /** Counts work started outside the relay listener, such as a queued delivery, against `canUpdate`. */
+  track: <T>(work: () => Promise<T>) => Promise<T>;
   close: () => void;
 };
 
@@ -189,7 +192,8 @@ export function startSessionMonitor(client: RelayClient, options: { primary?: bo
   let historyRead: Promise<SessionsStatus["sessions"]> | undefined;
   let lastHistoryPublishedAt = 0;
   let closed = false;
-  const work = runtimeWorkTracker(() => hasPendingDeliveries() || approvalsStatus().pending.length > 0 || providerLogins.active() || deviceManagementWorkActive());
+  const work = runtimeWorkTracker(() => hasPendingDeliveries() || lateRunsSettling()
+    || approvalsStatus().pending.length > 0 || providerLogins.active() || deviceManagementWorkActive());
   const loadLoop = monitorLoadLoop(client, leadership);
   const stopActivities = options.config ? startTaskActivities({config: options.config,
     catalog: () => publishedCatalog(client), isLeader: () => !closed && client.isConnected && leadership.acquire()}) : () => {};
@@ -261,6 +265,7 @@ export function startSessionMonitor(client: RelayClient, options: { primary?: bo
     publish: () => publish(false),
     isLeader: () => leadership.acquire(),
     canUpdate: work.idle,
+    track: work.run,
     close: () => {
       closed = true;
       stopActivities();

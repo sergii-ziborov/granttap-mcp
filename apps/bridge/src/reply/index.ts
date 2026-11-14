@@ -24,7 +24,7 @@ import {
 } from "./process/provider-headless";
 export type { DeliveryOptions, ReplyResult } from "./payload/types";
 export { prunePreparedAttachments } from './payload/attachments';
-export { hasPendingDeliveries, isDeliveryInFlight } from "./in-flight";
+export { hasPendingDeliveries, isDeliveryInFlight, oldestDeliveryStartedAt } from "./in-flight";
 
 export const GENERAL_WORKSPACE = "granttap:general";
 

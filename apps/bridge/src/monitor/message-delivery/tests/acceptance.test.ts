@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ACCEPTANCE_WINDOW_MS, acceptWhenStarted, PHONE_RUN_LIMIT_MS } from '../acceptance';
+import { ACCEPTANCE_WINDOW_MS, acceptWhenStarted, lateRunsSettling, PHONE_RUN_LIMIT_MS } from '../acceptance';
 
 type Result = { ok: boolean; text?: string; error?: string };
 
@@ -39,4 +39,30 @@ test('a long turn is not cut off at ten minutes', () => {
 
 test('a started run leaves the phone queue within a few seconds', () => {
   assert.ok(ACCEPTANCE_WINDOW_MS <= 3_000, 'a provider CLI that refuses does so at once; longer only delays the person');
+});
+
+test('a long run stays unfinished until its late answer has been sent', async () => {
+  let complete!: (result: Result) => void, sent!: () => void;
+  const run = new Promise<Result>(resolve => { complete = resolve; });
+  const sending = new Promise<void>(resolve => { sent = resolve; });
+  assert.equal(lateRunsSettling(), false);
+  assert.equal(await acceptWhenStarted(run, () => sending, 10), 'started');
+  assert.equal(lateRunsSettling(), true, 'the monitor still owes this run its answer');
+  complete({ ok: true, text: 'Done after a long turn' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(lateRunsSettling(), true, 'the run ended, but its answer is still on its way to the phone');
+  sent();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(lateRunsSettling(), false);
+});
+
+test('an answer that could not be sent, or one reported early, leaves nothing to wait for', async () => {
+  let complete!: (result: Result) => void;
+  const run = new Promise<Result>(resolve => { complete = resolve; });
+  assert.equal(await acceptWhenStarted(run, async () => { throw new Error('relay not connected'); }, 10), 'started');
+  complete({ ok: true, text: 'Done' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(lateRunsSettling(), false);
+  await acceptWhenStarted(Promise.resolve<Result>({ ok: true, text: 'At once' }), async () => {}, 50);
+  assert.equal(lateRunsSettling(), false);
 });

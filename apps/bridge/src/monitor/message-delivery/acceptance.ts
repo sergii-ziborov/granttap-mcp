@@ -20,6 +20,15 @@ export const ACCEPTANCE_WINDOW_MS = 3_000;
 /** A safety bound for an unattended turn; the person stops a run with Stop, not with a deadline. */
 export const PHONE_RUN_LIMIT_MS = 6 * 60 * 60_000;
 
+let settling = 0;
+
+/**
+ * True while a run that outlived its acceptance window still owes its chat the answer. The provider
+ * process ending is not the end of the turn: the answer is sent after it, and a runtime handoff in
+ * between would lose it.
+ */
+export function lateRunsSettling(): boolean { return settling > 0; }
+
 export async function acceptWhenStarted<T>(
   run: Promise<T>,
   finish: (result: T) => Promise<unknown>,
@@ -32,6 +41,7 @@ export async function acceptWhenStarted<T>(
   const first = await Promise.race([run, started]);
   clearTimeout(timer);
   if (first !== "started") return first;
-  void run.then(finish).catch(() => {});
+  settling += 1;
+  void run.then(finish).catch(() => {}).finally(() => { settling -= 1; });
   return "started";
 }
