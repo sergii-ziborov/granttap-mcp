@@ -43,7 +43,9 @@ Managed service use requires authorized GrantTap account access; official TestFl
 access remains free. Earlier releases through 0.8.75 retain their Apache-2.0
 permissions. The Apple apps, Engine, relay, and website have their own terms.
 
-[Website](https://granttap.com) · [npm](https://www.npmjs.com/package/granttap-mcp) ·
+[Website](https://granttap.com) ·
+[App Store](https://apps.apple.com/app/id6809739366) ·
+[npm](https://www.npmjs.com/package/granttap-mcp) ·
 [Security model](SECURITY.md) ·
 [Relay source](https://github.com/sergii-ziborov/granttap-relay)
 
@@ -81,10 +83,13 @@ monthly at the price shown by Apple. To avoid renewal, cancel at least 24 hours
 before the trial ends in Apple's subscription settings.
 A local cache is not deleted when managed access ends.
 
-**Official TestFlight builds include all features without a purchase or
-subscription.** A trial and TestFlight access are different forms of access.
-Paid products are still being prepared for commercial launch; the App Store
-purchase sheet determines availability, localized prices, eligibility and terms.
+**GrantTap for iPhone and iPad is on the
+[App Store](https://apps.apple.com/app/id6809739366)** as a free download;
+subscriptions and Mac Local are sold through Apple. The Mac app is available by
+TestFlight invitation. Official TestFlight builds include all features without a
+purchase or subscription; a trial and TestFlight access are different forms of
+access. The App Store purchase sheet determines availability, localized prices,
+eligibility and terms.
 Models, AI tokens and coding-provider plans are purchased separately.
 
 **Mac Local is a separate $39.99 one-time purchase** for local control and an
@@ -128,7 +133,7 @@ local helper reports the Mac's user-assigned Computer Name and updates its
 account display name when that name changes. Device names are display labels,
 not routing keys: each Task keeps the computer route selected by its Mesh.
 
-Install the local helper separately from the Mac App Store app:
+Install the local helper separately from the GrantTap app:
 
 ```bash
 npm install -g granttap-mcp
