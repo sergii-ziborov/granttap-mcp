@@ -45,6 +45,8 @@ export function stripTranscriptMarkup(value: unknown): string {
   }
   text = text.replace(/<\/?user_query\b[^>]*>/gi, "");
   text = text.replace(/<\/?timestamp\b[^>]*>/gi, "");
+  // Claude Code wraps text the person pasted; the words are theirs, the tags are not.
+  text = text.replace(/<pasted_content\b[^>]*>[ \t]*\n?|\n?[ \t]*<\/pasted_content\s*>/gi, "");
   return text.replace(/^\s+|\s+$/g, "");
 }
 

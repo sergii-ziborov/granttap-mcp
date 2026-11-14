@@ -362,6 +362,10 @@ test("Cursor timestamp and user_query marks are not the message", () => {
     "attributed wrap",
   );
   assert.doesNotMatch(stripTranscriptMarkup(unclosed), /user_query/);
+  const pasted = "<pasted_content id=\"2ebe\">\nVersemora v1.1 — genealogy\nsecond line\n</pasted_content>";
+  assert.equal(stripTranscriptMarkup(pasted), "Versemora v1.1 — genealogy\nsecond line");
+  assert.equal(visibleUserText(`Continue the Task: ${pasted} please`),
+    "Continue the Task: Versemora v1.1 — genealogy\nsecond line please");
   assert.equal(childTitle("<user_query>\nname this chat\n</user_query>"), "name this chat");
   assert.equal(childTitle("<user_query>\nstill open"), "still open");
   const out: import("../../packages/protocol/schema").ActivityEntry[] = [];

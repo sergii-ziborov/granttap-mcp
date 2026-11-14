@@ -10,7 +10,7 @@ import { claudeContextReport } from "../../context-usage";
 import { LIVE_MS, safeParse, stateFor, ts } from "../../support/common";
 import { finishScan } from "../../cooperative-scan";
 import { claudeCapabilityUsage, createClaudeCapabilityCollector } from "./activity";
-import { claudeTranscriptRecord, pastedImageLabel } from "../../support/activity-helpers";
+import { claudeTranscriptRecord, pastedImageLabel, visibleUserText } from "../../support/activity-helpers";
 import { claudeChangedPaths, claudeCheckout, claudeRepositoryPaths } from "./repository-observation";
 import {
   childLogsFingerprint,
@@ -74,7 +74,8 @@ function applyClaudeLine(d: any, state: ClaudeParseState): void {
           : typeof d.content === "string"
             ? d.content
             : "";
-    const clean = String(raw).replace(/\s+/g, " ").trim();
+    // Named by what the person wrote, without the host's wrappers around it.
+    const clean = visibleUserText(raw).replace(/\s+/g, " ").trim();
     if (clean) state.title = clean.slice(0, 120);
   }
   const t = ts(d.timestamp);
