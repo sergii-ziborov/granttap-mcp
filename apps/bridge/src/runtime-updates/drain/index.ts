@@ -1,8 +1,8 @@
 /** How long new phone messages may wait for the running work to end before the update gives way. */
 export const HOLD_LIMIT_MS = 10 * 60_000;
-/** After a hold gave up, the messages it kept waiting get this long to start before another hold. */
+/** After a first hold gave up, the messages it kept waiting get this long to start before another hold. */
 export const HOLD_PAUSE_MS = 5 * 60_000;
-/** When no provider run was to blame for a hold giving up, the next one follows after this. */
+/** After a second hold in a row gave up, or one that no provider run outlasted, the next follows after this. */
 export const HOLD_RETRY_MS = 30 * 60_000;
 /** The launcher replaces a monitor within seconds of being told; past this the monitor works on. */
 export const HANDOFF_LIMIT_MS = 2 * 60_000;
@@ -22,13 +22,16 @@ type Options = {
  * Lets a newer runtime take over a monitor that is never idle. Messages keep arriving, so waiting for
  * an idle moment can take hours; instead the monitor stops starting queued work, lets what is running
  * end, and hands over. The hold is bounded, so a run that lasts hours delays other chats once, by
- * `HOLD_LIMIT_MS`, and the next hold waits until that run has ended.
+ * `HOLD_LIMIT_MS`, and the next hold waits until that run has ended. Holds that keep giving up are
+ * spaced `HOLD_RETRY_MS` apart, so messages wait at most a quarter of the time.
  */
 export class UpdateDrain {
   private since?: number;
   private handoffAt?: number;
   private version?: string;
   private notBefore = 0;
+  /** Holds given up in a row for the version that is waiting. */
+  private failures = 0;
   /** Runs still going when the last hold gave up; a new hold cannot succeed before they end. */
   private outlastedAt?: number;
   private passed?: string;
@@ -49,6 +52,7 @@ export class UpdateDrain {
     if (this.since !== undefined) return true;
     const now = this.now();
     if (now < this.notBefore || this.outlasting()) return false;
+    if (version !== this.version) this.failures = 0;
     this.since = now;
     this.version = version;
     this.outlastedAt = undefined;
@@ -99,19 +103,23 @@ export class UpdateDrain {
   private expire(): void {
     if (this.since === undefined) return;
     const now = this.now();
+    // A clock set back would stretch either limit by as much, so time running backwards ends the hold too.
     if (this.handoffAt !== undefined) {
-      if (now - this.handoffAt < HANDOFF_LIMIT_MS) return;
+      if (within(now - this.handoffAt, HANDOFF_LIMIT_MS)) return;
       this.log(`${this.label()} was to take over, but the monitor was not restarted in `
         + `${minutes(HANDOFF_LIMIT_MS)} min. Phone messages run again.`);
       this.notBefore = now + HOLD_RETRY_MS;
     } else {
-      if (now - this.since < HOLD_LIMIT_MS) return;
+      if (within(now - this.since, HOLD_LIMIT_MS)) return;
       const running = this.options.oldestRun?.() !== undefined;
+      this.failures += 1;
+      const soon = running && this.failures === 1;
       this.outlastedAt = running ? now : undefined;
-      this.notBefore = now + (running ? HOLD_PAUSE_MS : HOLD_RETRY_MS);
+      this.notBefore = now + (soon ? HOLD_PAUSE_MS : HOLD_RETRY_MS);
       this.log(`${this.label()} still waits: the running work did not end in ${minutes(HOLD_LIMIT_MS)} min. `
-        + `Phone messages run again; the update is tried again `
-        + (running ? 'when the runs still going have ended.' : `in ${minutes(HOLD_RETRY_MS)} min.`));
+        + 'Phone messages run again; the update is tried again '
+        + (soon ? '' : `in ${minutes(HOLD_RETRY_MS)} min${running ? ' at the earliest, ' : '.'}`)
+        + (running ? 'when the runs still going have ended.' : ''));
     }
     this.since = undefined;
     this.handoffAt = undefined;
@@ -129,3 +137,4 @@ export class UpdateDrain {
 }
 
 function minutes(ms: number): number { return Math.round(ms / 60_000); }
+function within(elapsed: number, limit: number): boolean { return elapsed >= 0 && elapsed < limit; }

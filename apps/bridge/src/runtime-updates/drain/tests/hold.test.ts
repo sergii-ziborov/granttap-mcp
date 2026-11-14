@@ -57,6 +57,35 @@ test('messages that waited through a hold get a pause to start before the next o
   assert.ok(HOLD_PAUSE_MS >= 60_000);
 });
 
+test('runs that always outlast the hold cannot keep phone messages waiting most of the time', () => {
+  const f = fixture();
+  f.run(f.at() - 60_000);
+  f.drain.request('0.8.172');
+  f.pass(HOLD_LIMIT_MS);
+  assert.equal(f.drain.holding(), false);
+  f.run(f.at() + 1);
+  f.pass(HOLD_PAUSE_MS);
+  assert.equal(f.drain.request('0.8.172'), true, 'the run that outlasted the first hold ended, so a second is worth it');
+  f.pass(HOLD_LIMIT_MS);
+  assert.equal(f.drain.holding(), false, 'the runs that began after the first hold outlasted the second');
+  assert.match(f.lines.at(-1)!, /in 30 min at the earliest/);
+  f.run(f.at() + 1);
+  f.pass(HOLD_PAUSE_MS);
+  assert.equal(f.drain.request('0.8.172'), false, 'a third hold right away would hold messages two minutes in three');
+  f.pass(HOLD_RETRY_MS - HOLD_PAUSE_MS);
+  assert.equal(f.drain.request('0.8.172'), true);
+  f.pass(HOLD_LIMIT_MS);
+  assert.equal(f.drain.holding(), false);
+  f.run(f.at() + 1);
+  f.pass(HOLD_RETRY_MS);
+  assert.equal(f.drain.request('0.8.173'), true);
+  f.pass(HOLD_LIMIT_MS);
+  assert.equal(f.drain.holding(), false);
+  f.run(f.at() + 1);
+  f.pass(HOLD_PAUSE_MS);
+  assert.equal(f.drain.request('0.8.173'), true, 'a newer release starts over with the short pause');
+});
+
 test('a hold that gave up without a provider run to blame is tried again half an hour later', () => {
   const f = fixture();
   f.drain.request('0.8.172');
@@ -92,6 +121,17 @@ test('an idle monitor that activates at once still holds new work while it is be
   f.pass(HANDOFF_LIMIT_MS - 1);
   assert.equal(f.drain.holding(), true);
   f.pass(1);
+  assert.equal(f.drain.holding(), false);
+});
+
+test('a clock set back during a hold or a handoff cannot keep phone messages waiting for hours', () => {
+  const f = fixture();
+  f.drain.request('0.8.172');
+  f.pass(-3 * 60 * 60_000);
+  assert.equal(f.drain.holding(), false);
+  f.pass(HOLD_RETRY_MS);
+  f.drain.handoff('0.8.172');
+  f.pass(-3 * 60 * 60_000);
   assert.equal(f.drain.holding(), false);
 });
 
