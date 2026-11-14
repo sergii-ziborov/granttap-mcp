@@ -7,6 +7,8 @@ export type ClaudeUsageLimit = {resetsAt: number; window?: string};
 export type ClaudeWaits = {background?: Record<string, ClaudeBackgroundWork>; limit?: ClaudeUsageLimit};
 
 const BASH_DEFAULT_MS = 600_000, LONGEST_MS = 7_200_000, MAX_TRACKED = 32;
+/** The same hour after which the computer no longer continues a limited chat by itself. */
+const LIMIT_STALE_MS = 3_600_000;
 const BASH_LAUNCH = /^Command running in background with ID: ([\w-]+)/;
 const AGENT_LAUNCH = /^Async agent launched/;
 const AGENT_ID = /agentId: ([\w-]+)/;
@@ -89,6 +91,8 @@ export function claudeWaits(waits: ClaudeWaits, turnEnded: boolean | undefined, 
   {backgroundTasks?: number; usageLimit?: ClaudeUsageLimit} {
   if (!turnEnded) return {};
   const pending = Object.values(waits.background ?? {}).filter(work => work.until > now).length;
+  // A chat left at a limit that reset long ago is simply idle; the phone said it was "continuing" a week later.
+  const limited = waits.limit && waits.limit.resetsAt > now - LIMIT_STALE_MS ? waits.limit : undefined;
   return {...(pending ? {backgroundTasks: Math.min(pending, 32)} : {}),
-    ...(waits.limit ? {usageLimit: waits.limit} : {})};
+    ...(limited ? {usageLimit: limited} : {})};
 }

@@ -97,3 +97,19 @@ test("a transient overload is not a subscription limit", () => {
   try { assert.equal(parseClaudeFile(log.file)?.session.usageLimit, undefined); }
   finally { log.done(); }
 });
+
+test("a limit that reset more than an hour ago is no longer something the chat waits on", () => {
+  const resetsAt = Math.floor((Date.now() - 8 * 86_400_000) / 1_000);
+  const log = transcript([
+    row("user", -8 * 86_400_000 - 10_000, { role: "user", content: "Synthetic request" }),
+    row("assistant", -8 * 86_400_000 - 5_000, { role: "assistant", model: "<synthetic>", stop_reason: "stop_sequence",
+      content: [{ type: "text", text: "You've hit your 5-hour limit" }] },
+    { isApiErrorMessage: true, error: "rate_limit", apiError: "usage_limit_reached",
+      quotaLimits: { status: "rejected", resetsAt, rateLimitType: "five_hour" } }),
+  ]);
+  try {
+    const session = parseClaudeFile(log.file)?.session;
+    assert.equal(session?.state, "idle");
+    assert.equal(session?.usageLimit, undefined, "the phone must not say it is continuing after a limit from last week");
+  } finally { log.done(); }
+});
