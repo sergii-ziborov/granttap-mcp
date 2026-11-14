@@ -20,6 +20,7 @@ import type { MeshStore } from "../store";
 import { queueProjectBindingSync } from "../../engine/runtime/engine-projects";
 import { isCursorTaskCloneId } from "../../sessions/cursor/catalog";
 import { localTaskTransfers } from '../../task-transfer';
+import { helperRunFolder } from '../../helper-runs';
 export { inspectRepositoryAsync, inspectWorkingTreeAsync, readRepositoryGit } from "./repository-inspection";
 export { prepareMonitorInspection } from "./monitor-inspection";
 import type { CatalogInspection } from "./monitor-inspection";
@@ -171,7 +172,8 @@ function linkSession(input: {
   const { store, session, computerId, inspect } = input;
   const agent = provider(session.agent);
   const cwd = session.cwd?.trim();
-  if (!agent || !cwd) return session;
+  // A generator's throwaway folder is not a workspace: registering it minted a Mesh per run.
+  if (!agent || !cwd || helperRunFolder(cwd)) return session;
   const knownTaskId = store.taskForExecution(computerId, agent, session.sessionId);
   const knownProjectId = knownTaskId ? store.task(knownTaskId)?.projectId : undefined;
   const previous = knownProjectId ? store.snapshot(knownProjectId)?.executions.find(row =>

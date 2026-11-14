@@ -34,6 +34,7 @@ import { restoreHandoffResult, validStoredReceipt } from './receipts';
 import {
   projectCapabilityRequests,
 } from "../catalog/project/requests";
+import { helperRunProject } from "../../helper-runs";
 
 export class MeshStore extends MeshPreparedStore {
   recordReceipt(input: ReceiptValue): void {
@@ -266,9 +267,10 @@ export class MeshStore extends MeshPreparedStore {
     return this.state.events.filter((event) => event.projectId === projectId);
   }
 
+  /** One registered for a helper run's throwaway folder, before such runs were recognised, is kept but not listed. */
   projectIds(): string[] {
     this.sync();
-    return this.state.projects.map((project) => project.projectId);
+    return this.state.projects.filter((project) => !helperRunProject(project)).map((project) => project.projectId);
   }
 
   workspaceForRepository(canonicalRepositoryId: string, computerId?: string): string | undefined {
