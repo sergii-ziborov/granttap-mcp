@@ -18,23 +18,39 @@ export type WorkerOptions = {
   deliver: (job: TaskDispatch, beforeStart: () => Promise<void>, peer: string) => Promise<'accepted' | 'rejected'>;
 };
 class DeferredLaunch extends Error {}
+const REFUSED_LOOKUP_MS = 10 * 60_000;
 
 /** Server acceptance follows local fsync. Native submission is never replayed on a lease timer. */
 export class TaskDispatchWorker {
   private readonly active = new Map<string, Promise<void>>();
   private readonly conversations = new Set<string>();
+  /** When each refused job was last looked up on the relay; it only waits there to be cancelled or to expire. */
+  private readonly refusedLookups = new Map<string, number>();
   constructor(private readonly options: WorkerOptions) {}
 
-  async tick(): Promise<void> {
+  async tick(now = Date.now()): Promise<void> {
     if (!this.options.connected()) return;
     const launched: Promise<void>[] = [];
     const records = this.options.inbox.pendingRecords().sort((a, b) =>
       Number(b.job.deliveryMode === 'immediate') - Number(a.job.deliveryMode === 'immediate')
         || a.job.createdAt - b.job.createdAt);
+    const keyOf = (record: StoredTaskDispatch) => this.options.conversationKey?.(record.job, record.peerPublicKey)
+      ?? record.job.sessionId ?? `new:${record.job.operation.agent ?? 'codex'}`;
+    // A refusal is final for its message. It keeps holding the follow-ups that were already queued behind
+    // it until the person cancels it; it used to hold every later message of the chat as well, for days.
+    const refusedAt = new Map<string, number>();
     for (const record of records) {
-      if (['completed', 'cancelled'].includes(record.phase) || this.active.has(record.job.jobId)) continue;
-      const key = this.options.conversationKey?.(record.job, record.peerPublicKey)
-        ?? record.job.sessionId ?? `new:${record.job.operation.agent ?? 'codex'}`;
+      if (record.phase !== 'rejected') continue;
+      const key = keyOf(record);
+      refusedAt.set(key, Math.max(refusedAt.get(key) ?? -Infinity, record.updatedAt));
+      if (!this.active.has(record.job.jobId)) launched.push(this.settleRefused(record, now));
+    }
+    for (const record of records) {
+      if (['completed', 'cancelled', 'rejected'].includes(record.phase) || this.active.has(record.job.jobId)) continue;
+      const key = keyOf(record);
+      // Staged before the refusal: a follow-up written for the message that failed. Staged after it: the
+      // person saw the failure and sent this anyway.
+      if (record.stagedAt <= (refusedAt.get(key) ?? -Infinity)) continue;
       if (this.conversations.has(key)) continue;
       this.conversations.add(key);
       const work = this.process(record).catch(error => { this.options.onError?.(error); }).finally(() => {
@@ -62,12 +78,6 @@ export class TaskDispatchWorker {
       this.options.onTerminal?.(job); return;
     }
     const state = await remote.get(job);
-    if (record.phase === 'rejected') {
-      if (['cancelled', 'expired'].includes(state)) {
-        inbox.transition(job.jobId, 'cancelled'); inbox.retire(job.jobId);
-      }
-      return;
-    }
     if (['cancelled', 'expired'].includes(state)) { inbox.transition(job.jobId, 'cancelled'); inbox.retire(job.jobId); return; }
     if (state === 'completed' || state === 'failed') {
       // A server terminal state cannot authorize a new native invocation.
@@ -103,6 +113,19 @@ export class TaskDispatchWorker {
       this.options.onTerminal?.(job); return;
     }
     await this.finish(inbox.get(job.jobId));
+  }
+
+  /** A refused job leaves once the relay cancelled or expired it. Asking every two seconds was only load. */
+  private async settleRefused(record: StoredTaskDispatch, now: number): Promise<void> {
+    const { inbox, remote } = this.options, id = record.job.jobId;
+    if (now - (this.refusedLookups.get(id) ?? -Infinity) < REFUSED_LOOKUP_MS) return;
+    this.refusedLookups.set(id, now);
+    const work = (async () => {
+      if (!['cancelled', 'expired'].includes(await remote.get(record.job))) return;
+      inbox.transition(id, 'cancelled'); inbox.retire(id); this.refusedLookups.delete(id);
+    })().catch(error => { this.options.onError?.(error); }).finally(() => { this.active.delete(id); });
+    this.active.set(id, work);
+    await work;
   }
 
   private async reject(record: StoredTaskDispatch, code: string): Promise<void> {

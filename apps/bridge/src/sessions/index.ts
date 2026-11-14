@@ -47,7 +47,7 @@ export { MAX_ACTIVITY_ENTRIES, MAX_ACTIVITY_TEXT, TOKEN_WINDOW_HOURS };
 export { nativeTranscriptRoots, nativeTranscriptSource, restoreNativeTranscriptSource } from "./native-source";
 
 export { scanSessions, scanSessionHistory, scanSessionHistoryForPaging,
-  scanSessionsCooperatively, scanSessionHistoryCooperatively, findSessionCooperatively } from "./catalog";
+  scanSessionsCooperatively, scanSessionHistoryCooperatively, findSessionCooperatively, deliveryTarget } from "./catalog";
 import { scanSessions, scanSessionHistory } from "./catalog";
 
 /**

@@ -76,7 +76,17 @@ export async function scanSessionHistoryCooperatively(): Promise<SessionInfo[]> 
 export async function findSessionCooperatively(sessionId: string, includeHistory = true): Promise<SessionInfo | undefined> {
   const catalog = catalogFromScans(await cooperativeProviderScans());
   return liveCatalog(catalog).sessions.find(session => session.sessionId === sessionId)
-    ?? (includeHistory ? historyCatalog(catalog.all).find(session => session.sessionId === sessionId) : undefined);
+    ?? (includeHistory ? historyCatalog(catalog.all).find(session => session.sessionId === sessionId)
+      ?? catalog.all.find(session => session.sessionId === sessionId) : undefined);
+}
+
+/**
+ * The chat a phone message is for. The catalog this monitor last published is used first: a scan can
+ * take seconds. A chat missing from it is looked up among every chat on the computer, not only the
+ * ones active in the last hours: a chat left idle for days was refused as "no longer available".
+ */
+export async function deliveryTarget(published: SessionInfo | undefined, sessionId: string): Promise<SessionInfo | undefined> {
+  return published ?? await findSessionCooperatively(sessionId);
 }
 
 export function scanSessions(): { sessions: SessionInfo[]; tokensRecent: number } {

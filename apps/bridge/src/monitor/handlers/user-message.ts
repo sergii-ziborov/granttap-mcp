@@ -17,7 +17,7 @@ import {
 import { noteDeliveredRun } from "../../mesh/delivery/run-digest";
 import { evaluateCreateTask } from "../../mesh/tasks/create-task";
 import { sendSessionPayload } from "../../host/session-keys";
-import { findSessionCooperatively } from "../../sessions";
+import { deliveryTarget } from "../../sessions";
 import { publishedSession } from "../../session-catalog";
 import { localTaskOrigins, type TaskOriginRegistry, type TaskOriginScope } from '../../task-origins';
 import { agentEventForUserMessage, sendDeliveryReceipt } from "./receipts";
@@ -157,8 +157,7 @@ export async function handleUserMessage(
   // The catalog this monitor last published already names the chat. A full
   // provider scan blocks the event loop for seconds on a large transcript set,
   // so it runs only for a chat newer than that catalog.
-  const target = publishedSession(client, message.sessionId)
-    ?? await findSessionCooperatively(message.sessionId, false);
+  const target = await deliveryTarget(publishedSession(client, message.sessionId), message.sessionId);
   if (!target) return refuse("This task is no longer available on the computer.");
 
   const settings = loadRuntimeConfig().providerSettings;

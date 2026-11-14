@@ -115,3 +115,34 @@ test('a failed queued message holds later follow-ups until the failure is cancel
   assert.equal(f.claims(), 1);
   assert.equal(f.inbox.get(next.jobId).phase, 'staged');
 });
+
+test('a message the computer refused does not hold back the next messages of its chat', async t => {
+  const f = fixture(t), peer = generateKeyPair().publicKey;
+  const states = new Map<string, string>([[f.job.jobId, 'queued']]);
+  let lookups = 0;
+  const delivered: string[] = [];
+  f.options.remote = {
+    get: async (job: TaskDispatch) => { lookups++; return states.get(job.jobId) ?? 'queued'; },
+    claim: async (job: TaskDispatch) => { states.set(job.jobId, 'accepted'); return true; },
+    finish: async (job: TaskDispatch, outcome: string) => { states.set(job.jobId, outcome); },
+  };
+  f.options.deliver = async (job, beforeStart) => {
+    await beforeStart(); delivered.push(job.jobId);
+    return job.jobId === f.job.jobId ? 'rejected' : 'accepted';
+  };
+  const worker = new TaskDispatchWorker(f.options);
+  await worker.tick(); await worker.tick();
+  assert.equal(f.inbox.status(f.job.jobId)?.phase, 'rejected', 'the first message was refused for good');
+  const next = { ...f.job, jobId: 'worker-job-02', createdAt: f.job.createdAt + 60_000,
+    operation: { ...f.job.operation, messageId: 'message-02' } };
+  f.inbox.stage(next, peer);
+  await worker.tick(); await worker.tick();
+  assert.deepEqual(delivered, [f.job.jobId, next.jobId], 'the next message of the same chat runs');
+  assert.equal(f.inbox.status(next.jobId)?.phase, 'completed');
+  const before = lookups;
+  for (let index = 0; index < 5; index++) await worker.tick();
+  assert.ok(lookups - before <= 1, 'a refused message is not looked up on the relay on every pass');
+  states.set(f.job.jobId, 'expired');
+  await worker.tick(Date.now() + 11 * 60_000);
+  assert.equal(f.inbox.status(f.job.jobId)?.phase, 'cancelled', 'and it is still cleared once the relay drops it');
+});
