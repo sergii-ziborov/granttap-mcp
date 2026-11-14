@@ -103,3 +103,36 @@ test("long conversations stay within the desktop frame and keep newest messages"
   assert.equal(f.activity?.entries.at(-1)?.text, rows.at(-1)?.text);
   assert.equal(f.activity?.truncated, true);
 });
+
+test("a picture kept from a helper run is read through the Task whose chat started the run", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "granttap-run-picture-task-"));
+  const previous = process.env.GRANTTAP_CONFIG_DIR;
+  process.env.GRANTTAP_CONFIG_DIR = join(root, "config");
+  t.after(() => {
+    if (previous === undefined) delete process.env.GRANTTAP_CONFIG_DIR; else process.env.GRANTTAP_CONFIG_DIR = previous;
+    rmSync(root, { recursive: true, force: true });
+  });
+  const chat = "task-chat-0001";
+  const storePath = join(root, "mesh.json");
+  writeFileSync(storePath, JSON.stringify({ version: 1,
+    projects: [{ projectId: "project", name: "Test", canonicalRepositoryId: "repo", createdAt: 1 }],
+    tasks: [{ taskId: "task", projectId: "project", title: "Images", goal: "Test", state: "working", createdAt: 1, updatedAt: 2 }],
+    executions: [{ taskId: "task", sessionId: chat, provider: "claude", computerId: "computer", workspace: root, startedAt: 1 }],
+  }));
+  const activity = desktopTaskActivity({ project_id: "project", task_id: "task" }, storePath, {
+    activity: () => ({ type: "session.activity", sessionId: chat, agent: "claude", state: "working", generatedAt: 3,
+      entries: [{ id: "reply", kind: "message" as const, text: "Made a picture.", createdAt: 2 }] }),
+  });
+  const { rememberHelperRunLinks } = await import("../../../apps/bridge/src/helper-runs/links");
+  const { helperRunImageId, keepHelperRunPicture, pictureHash } = await import("../../../apps/bridge/src/helper-runs/pictures/store");
+  const run = (name: string, parent: string) => {
+    const folder = `/var/folders/ab/c0ffee123/T/hw-image-${name}`;
+    rememberHelperRunLinks([{ folder, kind: "image-generation", parentAgent: "claude", parentSessionId: parent, capturedAt: Date.now() }]);
+    keepHelperRunPicture(folder, { hash: pictureHash(png), name: "image.png", source: `${folder}/image.png`,
+      mime: "image/png", capturedAt: Date.now() }, png);
+    return helperRunImageId(folder, pictureHash(png));
+  };
+  const own = desktopTaskImage(request(run("mine0001", chat)), storePath, activity);
+  assert.deepEqual(Buffer.from(own?.data_base64 ?? "", "base64"), png);
+  assert.equal(desktopTaskImage(request(run("else0001", "other-chat-0001")), storePath, activity), undefined);
+});

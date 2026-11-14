@@ -23,7 +23,7 @@ export function scanThreadActivity(input: SessionInfo, threadId: string): Sessio
   const session = localTaskTransfers().nativeSession(input);
   // A helper run is another provider's session; its messages are read from there.
   const run = helperRunThread(input, threadId);
-  const all = run ? helperRunEntries(run.child, activityForSession(run.session))
+  const all = run ? helperRunEntries(run.child, activityForSession(run.session), run.folder)
     : session.agent === 'claude' ? claudeThreadActivity(session, threadId) : activityForSession(input);
   const entries = all.filter(entry => entry.childThreadId === threadId)
     .sort((a, b) => a.createdAt - b.createdAt).slice(-MAX_THREAD_ENTRIES);

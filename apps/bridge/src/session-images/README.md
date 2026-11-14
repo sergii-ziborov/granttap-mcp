@@ -7,6 +7,9 @@ The reader checks the requested image against that conversation's page. Workspac
 artifacts retain the desktop reader's execution/workspace checks. Native user
 pictures are read only from that conversation's provider transcript.
 
+A picture kept from a helper run (`helper-image:` ids) is read from the run
+picture store in `../helper-runs`, for the chat that started the run only.
+
 Unavailable sources produce an explicit reply; they do not change pairing or
 account state. Apple clients retain validated original bytes locally and use
 their scoped copy when offline. Tests live in `tests/`.

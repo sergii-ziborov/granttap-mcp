@@ -28,6 +28,20 @@ clock and spend alone. Opening the conversation reads the run's own messages.
 A run whose parent was not captured, or whose parent is no longer on this
 computer, is published nowhere; the provider's own history still has it.
 
+**Pictures** (`pictures/`). The script copies a
+run's picture away and deletes the run's folder the moment the run ends, so
+the folder of every live linked run is watched, and looked at again at each
+process sample. A picture is read as soon as it is written to its end and is
+kept from memory: on macOS as a JPEG at most 1600 pixels long (`sips`, never
+enlarged), elsewhere as it is when it is at most 8 MB. Copies live in
+`helper-run-pictures/` in the config directory with one `index.json`, at most
+12 per run, and are let go with the run's history or when the store passes its
+bounds. The run's card carries them as `images`, and its last answer shows them
+in place of the path line that names them. A phone reads one with
+`session.image.query` on the parent chat; the id names the run and the
+picture's content, never a path, and only the chat that started the run is
+answered.
+
 **Meshes.** A generator's folder never registers a Mesh. Meshes registered for
 such folders before runs were recognised stay in the Mesh store and are left
 out of every list of this computer's Projects.

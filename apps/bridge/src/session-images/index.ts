@@ -7,6 +7,7 @@ import { publishedSession } from '../session-catalog';
 import { cachedSessionActivity } from '../monitor/support/session-activity';
 import { findSessionCooperatively } from '../sessions';
 import { sessionImageChunk, transcriptImages } from '../../../mcp/src/desktop/image';
+import { helperRunPictureChunk, isHelperRunImageId } from '../helper-runs/pictures/store';
 
 export function activityWithImages(activity: SessionActivity): SessionActivity {
   return { ...activity, entries: activity.entries.map((entry: ActivityEntry) => {
@@ -24,15 +25,22 @@ export function readSessionImage(query: SessionImageQuery, session: SessionInfo,
 
 export async function publishSessionImage(client: RelayClient, query: SessionImageQuery,
   peerPublicKey?: string): Promise<boolean> {
-  const session = publishedSession(client, query.sessionId)
-    ?? await findSessionCooperatively(query.sessionId);
-  const activity = session ? readTranscriptHistory(session, query.historyCursor)
-    ?? cachedSessionActivity(session) : undefined;
-  const chunk = session && activity ? readSessionImage(query, session, activity) : undefined;
+  const chunk = isHelperRunImageId(query.imageId)
+    // A picture kept from a helper run, offered only to the chat that started the run.
+    ? helperRunPictureChunk(query.sessionId, query.imageId, query.offset)
+    : await transcriptImageChunk(client, query);
   await sendSessionPayload(client, SessionImageChunk.parse({ type: 'session.image.chunk', sessionId: query.sessionId,
     requestId: query.requestId, imageId: query.imageId, offset: query.offset,
     ...(chunk ? { mimeType: chunk.mime_type, totalBytes: chunk.total_bytes,
       dataBase64: chunk.data_base64 } : { unavailable: true }) }), query.sessionId,
     'phone', { ttlMs: 20_000, reliable: false, peerPublicKey });
   return chunk !== undefined;
+}
+
+async function transcriptImageChunk(client: RelayClient, query: SessionImageQuery) {
+  const session = publishedSession(client, query.sessionId)
+    ?? await findSessionCooperatively(query.sessionId);
+  const activity = session ? readTranscriptHistory(session, query.historyCursor)
+    ?? cachedSessionActivity(session) : undefined;
+  return session && activity ? readSessionImage(query, session, activity) : undefined;
 }

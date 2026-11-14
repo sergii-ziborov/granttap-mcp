@@ -28,6 +28,14 @@ export const ChildThreadInfo = z.object({
    * `image-generation`. A value this reader does not know is still a helper run.
    */
   kind: z.string().min(1).max(40).optional(),
+  /**
+   * Pictures a helper run made, kept by the computer after the run's folder is gone.
+   * Read with `session.image.query` on the parent chat, like a message's pictures.
+   */
+  images: z.array(z.object({
+    id: z.string().min(1).max(512), name: z.string().min(1).max(256),
+    markdown: z.string().min(1).max(2400),
+  })).max(12).optional(),
   depth: z.number().int().min(1).max(16),
   state: SessionState,
   startedAt: z.number(),

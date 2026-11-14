@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, renameSync, unlinkSync, writeFileSync
 import { dirname } from "node:path";
 
 /** Write ~/.granttap files so a second save cannot fail on Windows overwrite. */
-export function writePrivateFile(path: string, contents: string): void {
+export function writePrivateFile(path: string, contents: string | Uint8Array): void {
   mkdirSync(dirname(path), { recursive: true });
   const temporary = `${path}.tmp-${process.pid}-${randomUUID()}`;
   try {

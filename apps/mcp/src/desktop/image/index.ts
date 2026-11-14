@@ -4,6 +4,7 @@ import type { ActivityEntry, SessionInfo, SessionActivity } from '../../../../..
 import { nativeTranscriptImage, nativeTranscriptEntry } from '../../../../bridge/src/transcript-history';
 import { readStoreState } from '../../../../bridge/src/mesh/store/state';
 import { configDir } from '../../../../bridge/src/config';
+import { helperRunPictureChunk, isHelperRunImageId } from '../../../../bridge/src/helper-runs/pictures/store';
 import { join } from 'node:path';
 
 export function transcriptImages(entry: ActivityEntry) {
@@ -57,6 +58,11 @@ export function desktopTaskImage(input: unknown, storePath?: string,
     || activity.project_id !== query.project_id || activity.task_id !== query.task_id) return undefined;
   const session: SessionInfo = { sessionId: activity.session_id, agent: activity.agent,
     state: "idle", startedAt: 0, lastActivityAt: 0, tokensSession: 0, tokensLastTurn: 0 };
+  if (isHelperRunImageId(imageId)) {
+    // A picture kept from a helper run this Task's chat started.
+    const chunk = helperRunPictureChunk(activity.session_id, imageId, offset);
+    return chunk ? { operation: "desktop.task_image", image_id: imageId, ...chunk } : undefined;
+  }
   const cursor = query.history_cursor;
   if (cursor !== undefined && (typeof cursor !== "string" || cursor.length > 512)) return undefined;
   const artifact = sessionArtifact(session, activity, imageId, cursor as string | undefined);

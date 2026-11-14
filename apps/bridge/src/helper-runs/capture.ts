@@ -13,6 +13,7 @@ import { promisify } from "node:util";
 import type { ProcessRow } from "../machine-load/host/process-sampler";
 import { helperRunFolder, helperRunFoldersNamed, type HelperRunFolder } from "./kinds";
 import { rememberHelperRunLinks, type HelperRunLink, type HelperRunParentAgent } from "./links";
+import { followHelperRunPictures } from "./pictures/capture";
 
 const run = promisify(execFile);
 
@@ -112,6 +113,8 @@ export function helperRunProcesses(
 type CaptureOptions = {
   readers?: HelperRunReaders;
   remember?: (links: HelperRunLink[]) => number;
+  /** Told, at every sample, the folders of the linked runs still alive, so their pictures are caught. */
+  follow?: (folders: readonly string[]) => void;
   now?: () => number;
 };
 
@@ -119,9 +122,12 @@ type CaptureOptions = {
 export function createHelperRunCapture(options: CaptureOptions = {}) {
   const readers = options.readers ?? { directories: readProcessDirectories, parents: readProcessParents };
   const remember = options.remember ?? rememberHelperRunLinks;
+  const follow = options.follow ?? followHelperRunPictures;
   const now = options.now ?? Date.now;
   const settled = new Set<number>();
   const folderReads = new Map<number, number>();
+  /** The folder of each live linked run, by its process. */
+  const running = new Map<number, string>();
 
   const folderOf = (item: HelperRunProcess, directory: string | undefined): HelperRunFolder | undefined => {
     const working = helperRunFolder(directory);
@@ -134,6 +140,7 @@ export function createHelperRunCapture(options: CaptureOptions = {}) {
     const live = new Set(processes.map((item) => item.pid));
     for (const pid of [...settled]) if (!live.has(pid)) settled.delete(pid);
     for (const pid of [...folderReads.keys()]) if (!live.has(pid)) folderReads.delete(pid);
+    for (const pid of [...running.keys()]) if (!live.has(pid)) running.delete(pid);
     const fresh = processes.filter((item) => !settled.has(item.pid));
     if (fresh.length === 0) return 0;
     const directories = await readers.directories(fresh.map((item) => item.pid));
@@ -153,6 +160,7 @@ export function createHelperRunCapture(options: CaptureOptions = {}) {
       settled.add(item.pid);
       const parent = parents.get(item.pid) ?? item.ancestor;
       if (parent) {
+        running.set(item.pid, folder.folder);
         links.push({ folder: folder.folder, kind: folder.kind, parentAgent: parent.agent,
           parentSessionId: parent.sessionId, capturedAt: now() });
       }
@@ -161,7 +169,10 @@ export function createHelperRunCapture(options: CaptureOptions = {}) {
   };
 
   return async (processes: readonly HelperRunProcess[]): Promise<number> => {
-    try { return await examine(processes); } catch { return 0; }
+    let fresh = 0;
+    try { fresh = await examine(processes); } catch { /* The next sample tries again. */ }
+    try { follow([...new Set(running.values())]); } catch { /* A picture missed here is looked for at the next sample. */ }
+    return fresh;
   };
 }
 
