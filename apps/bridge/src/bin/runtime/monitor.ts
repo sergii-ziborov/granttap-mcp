@@ -1,5 +1,7 @@
 import { startRuntimeUpdates } from "../../runtime-updates";
 import { runtimeUpdateReadiness } from "../../runtime-updates/readiness";
+import { UpdateDrain } from "../../runtime-updates/drain";
+import { oldestDeliveryStartedAt } from "../../reply";
 /** Persistent, terminal-free task sync for the GrantTap phone app on macOS. */
 import { join } from "node:path";
 import { RelayClient } from "../../../../../packages/core/relay-client";
@@ -33,6 +35,9 @@ let stopEngineRecovery = () => {};
 let stopRuntimeUpdates = () => {};
 let stopUpdateReadiness = () => {};
 const stopWatchdog = startRuntimeWatchdog();
+// Messages keep arriving, so a newer runtime cannot wait for an idle moment: queued work is held for it instead.
+const updateDrain = new UpdateDrain({ oldestRun: oldestDeliveryStartedAt,
+  log: line => process.stderr.write(`[monitor] ${line}\n`) });
 
 publishStableNode();
 
@@ -46,12 +51,13 @@ try {
   });
   monitor = startSessionMonitor(client, { primary: process.env.GRANTTAP_MONITOR_PRIMARY === "1", config: cfg });
   stopTaskDispatch = startTaskDispatchMonitor({ config: cfg, client,
-    isLeader: monitor.isLeader, peerAllowed: controllerPeerGate(cfg), publish: monitor.publish });
+    isLeader: monitor.isLeader, peerAllowed: controllerPeerGate(cfg), publish: monitor.publish,
+    held: () => updateDrain.holding(), track: monitor.track });
   stopTaskNetwork = startTaskNetworkMonitor({ config: cfg, client,
     isLeader: monitor.isLeader, peerAllowed: controllerPeerGate(cfg), publish: monitor.publish });
   stopEndpointPublisher = startEndpointPublisher(cfg);
-  stopRuntimeUpdates = startRuntimeUpdates(monitor.canUpdate);
-  stopUpdateReadiness = runtimeUpdateReadiness(monitor.canUpdate);
+  stopRuntimeUpdates = startRuntimeUpdates(monitor.canUpdate, updateDrain);
+  stopUpdateReadiness = runtimeUpdateReadiness(monitor.canUpdate, updateDrain);
 } catch (error) {
   process.stderr.write(
     `[granttap-mcp] monitor is not paired: ${error instanceof Error ? error.message : String(error)}\n`,

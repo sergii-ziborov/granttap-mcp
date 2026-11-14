@@ -7,7 +7,7 @@ import test from "node:test";
 import { createPairing } from "../../apps/bridge/src/config";
 import { forwardingRelay, waitFor } from "../support/forwarding-relay";
 
-function launch(configDir: string, extraEnv: NodeJS.ProcessEnv = {}) {
+function launch(configDir: string, extraEnv: NodeJS.ProcessEnv = {}, launcher = false) {
   return spawn(process.execPath, ["--import", "tsx", "apps/bridge/src/bin/runtime/monitor.ts"], {
     cwd: process.cwd(),
     env: {
@@ -16,13 +16,13 @@ function launch(configDir: string, extraEnv: NodeJS.ProcessEnv = {}) {
       GRANTTAP_MONITOR_INTERVAL_MS: "60000",
       ...extraEnv,
     },
-    stdio: ["ignore", "ignore", "pipe"],
+    stdio: launcher ? ["ignore", "ignore", "pipe", "ipc"] : ["ignore", "ignore", "pipe"],
   });
 }
 
 function closed(child: ReturnType<typeof launch>): Promise<{ code: number | null; stderr: string }> {
   let stderr = "";
-  child.stderr.setEncoding("utf8").on("data", (chunk: string) => { stderr += chunk; });
+  child.stderr!.setEncoding("utf8").on("data", (chunk: string) => { stderr += chunk; });
   return new Promise((resolve) => child.on("close", (code) => resolve({ code, stderr })));
 }
 
@@ -49,4 +49,23 @@ test("monitor entry fails closed before pairing and stops cleanly on SIGTERM", a
   const stopped = await completion;
   assert.equal(stopped.code, 0, stopped.stderr);
   assert.match(stopped.stderr, /engine unavailable.*legacy behavior remains active/i);
+});
+
+test("monitor entry hands over to a selected runtime when its launcher asks, and says so in its log", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-monitor-handoff-"));
+  const relay = await forwardingRelay();
+  t.after(() => relay.close());
+  await writeFile(join(root, "machine.json"), JSON.stringify(createPairing(relay.url).machineCfg));
+  const monitor = launch(root, {}, true);
+  t.after(() => { if (monitor.exitCode === null) monitor.kill("SIGTERM"); });
+  const completion = closed(monitor);
+  const messages: Array<{ type?: string }> = [];
+  monitor.on("message", (message) => { messages.push(message as { type?: string }); });
+  await waitFor(() => relay.connections() === 1 && messages.some((message) => message.type === "granttap.runtime-healthy"), 30_000);
+  monitor.send({ type: "granttap.runtime-update-check" });
+  await waitFor(() => messages.some((message) => message.type === "granttap.runtime-update-ready"), 30_000);
+  monitor.kill("SIGTERM");
+  const stopped = await completion;
+  assert.equal(stopped.code, 0, stopped.stderr);
+  assert.match(stopped.stderr, /\[monitor\] The newer runtime takes over: the monitor restarts with it\./);
 });
