@@ -32,7 +32,8 @@ export class UpdateDrain {
   /** Runs still going when the last hold gave up; a new hold cannot succeed before they end. */
   private outlastedAt?: number;
   private passed?: string;
-  private failed?: { version: string; at: number };
+  /** The release whose start check last failed, and when. */
+  private broken?: { version: string; at: number };
 
   constructor(private readonly options: Options = {}) {}
 
@@ -75,14 +76,23 @@ export class UpdateDrain {
     this.since = undefined;
   }
 
+  /** Selecting the update failed, as on a full disk. The hold ends now instead of at its limit. */
+  failed(): void {
+    if (this.since === undefined || this.handoffAt !== undefined) return;
+    this.log(`${this.label()} could not be selected. Phone messages run again; the update is tried again in `
+      + `${minutes(HOLD_RETRY_MS)} min.`);
+    this.notBefore = this.now() + HOLD_RETRY_MS;
+    this.since = undefined;
+  }
+
   /** Starts a staged release once per version, so a hold is taken only for one that works. */
   async verified(version: string, verify: () => Promise<void>): Promise<boolean> {
     if (this.passed === version) return true;
-    if (this.failed?.version === version && this.now() - this.failed.at < VERIFY_RETRY_MS) return false;
+    if (this.broken?.version === version && this.now() - this.broken.at < VERIFY_RETRY_MS) return false;
     try { await verify(); }
-    catch (error) { this.failed = { version, at: this.now() }; throw error; }
+    catch (error) { this.broken = { version, at: this.now() }; throw error; }
     this.passed = version;
-    this.failed = undefined;
+    this.broken = undefined;
     return true;
   }
 

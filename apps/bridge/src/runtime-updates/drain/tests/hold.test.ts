@@ -112,6 +112,20 @@ test('turning automatic updates off lets the held messages run at once', () => {
   assert.equal(f.drain.request('0.8.172'), true, 'turning them back on does not wait out a retry pause');
 });
 
+test('an update that cannot be selected gives its hold up at once instead of keeping messages waiting', () => {
+  const f = fixture();
+  f.drain.failed();
+  assert.equal(f.lines.length, 0);
+  f.drain.request('0.8.172');
+  f.drain.failed();
+  assert.equal(f.drain.holding(), false);
+  assert.match(f.lines[1]!, /0\.8\.172 could not be selected.*run again/);
+  f.pass(HOLD_RETRY_MS - 1);
+  assert.equal(f.drain.request('0.8.172'), false);
+  f.pass(1);
+  assert.equal(f.drain.request('0.8.172'), true);
+});
+
 test('a busy monitor starts a staged release once, and a broken one not again for half an hour', async () => {
   const f = fixture();
   let runs = 0, broken = true;
