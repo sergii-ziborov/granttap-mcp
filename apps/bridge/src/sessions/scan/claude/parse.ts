@@ -30,6 +30,10 @@ type ClaudeParseState = ClaudeTurnClock & {
   branch?: string;
   model?: string;
   title?: string;
+  /** The name the person gave the chat in Claude; the latest one counts. */
+  customTitle?: string;
+  /** The name Claude generated for the chat; the latest one counts. */
+  aiTitle?: string;
   summary?: string;
   startedAt: number;
   lastActivityAt: number;
@@ -42,6 +46,12 @@ type ClaudeParseState = ClaudeTurnClock & {
   changedPaths: string[];
   turnEnded: boolean;
 };
+
+function claudeName(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const name = value.replace(/\s+/g, " ").trim();
+  return name ? name.slice(0, 120) : undefined;
+}
 
 function applyClaudeLine(d: any, state: ClaudeParseState): void {
   if (!claudeTranscriptRecord(d)) return;
@@ -60,7 +70,8 @@ function applyClaudeLine(d: any, state: ClaudeParseState): void {
     }
     if (typeof d.gitBranch === "string" && d.gitBranch.trim()) state.branch = d.gitBranch;
   }
-  if (d.type === "ai-title" && typeof d.content === "string" && !state.title) state.title = d.content;
+  if (d.type === "custom-title") state.customTitle = claudeName(d.customTitle) ?? state.customTitle;
+  if (d.type === "ai-title") state.aiTitle = claudeName(d.aiTitle ?? d.content) ?? state.aiTitle;
   if (!state.title && (d.type === "user" || d.message?.role === "user")) {
     const raw =
       typeof d.message?.content === "string"
@@ -242,7 +253,8 @@ export function* parseClaudeFileSteps(file: string): Generator<void, ClaudeParse
   const ownSession: SessionInfo = {
     sessionId: state.sessionId,
     agent: "claude",
-    title: state.title,
+    // The chat keeps the name Claude shows for it: the person's, then Claude's, then the first message.
+    title: state.customTitle ?? state.aiTitle ?? state.title,
     cwd: state.cwd,
     worktree: state.cwd ? claudeCheckout({ ...state, cwd: state.cwd }) : undefined,
     branch: state.branch,

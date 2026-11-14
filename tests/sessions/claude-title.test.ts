@@ -25,6 +25,17 @@ test("a chat opened with pasted text is named by that text, not by its wrapper",
   assert.equal(title, "Repair the lock screen title more context");
 });
 
+test("a chat keeps the name Claude shows: the person's latest, then Claude's, then the first message", () => {
+  const opening = user("почему то просто дико глючит");
+  const generated = { type: "ai-title", aiTitle: "Fix flicker on the phone", sessionId: "claude-title" };
+  const named = (customTitle: string) => ({ type: "custom-title", customTitle, sessionId: "claude-title" });
+  assert.equal(titleOf([opening]), "почему то просто дико глючит");
+  assert.equal(titleOf([opening, generated]), "Fix flicker on the phone");
+  assert.equal(titleOf([opening, generated, named("Приложение глючит"), named("Приложение глючит на телефоне")]),
+    "Приложение глючит на телефоне");
+  assert.equal(titleOf([opening, named("  "), generated]), "Fix flicker on the phone");
+});
+
 test("a host note before the first typed message does not name the chat", () => {
   const title = titleOf([
     user("<system-reminder>context the host added</system-reminder>"),
