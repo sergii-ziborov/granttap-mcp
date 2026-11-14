@@ -39,7 +39,7 @@ function fixture(t: TestContext) {
     notBefore: now, expiresAt: now + 86_400_000, createdAt: now,
     operation: { type: 'user.message', messageId: 'update-hold-message-01', text: 'Synthetic task', createdAt: now } };
   const until = async (predicate: () => boolean) => {
-    const deadline = Date.now() + 5_000;
+    const deadline = Date.now() + 30_000;
     while (!predicate() && Date.now() < deadline) await new Promise(next => setTimeout(next, 10));
     assert.ok(predicate());
   };

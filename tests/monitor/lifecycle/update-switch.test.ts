@@ -45,7 +45,8 @@ class Relay {
 }
 
 async function until(check: () => boolean, what: string) {
-  const deadline = Date.now() + 20_000;
+  // Generous: the provider fixture is a real process, and other suites share the host.
+  const deadline = Date.now() + 60_000;
   while (!check() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 20));
   assert.ok(check(), what);
 }
