@@ -20,8 +20,13 @@ export function startTaskDispatchMonitor(input: {
   config: PeerConfig; client: RelayClient; isLeader: () => boolean;
   peerAllowed: (peer: string) => boolean; publish: () => Promise<void>;
   remote?: TaskJobRemote; deliver?: WorkerOptions['deliver'];
+  /** True while a runtime update drains the monitor. A queued job then stays staged here and on the relay. */
+  held?: () => boolean;
+  /** Counts a delivery as monitor work until its handler returns, so an update cannot cut it off. */
+  track?: <T>(work: () => Promise<T>) => Promise<T>;
 }): () => void {
   const inbox = new TaskDispatchInbox(join(configDir(), 'task-dispatch'), input.config.room);
+  const track = input.track ?? (work => work());
   const origins = localTaskOrigins();
   const resolve = (job: Parameters<typeof resolveTaskOriginJob>[1], peer: string) =>
     resolveTaskOriginJob(origins, job, input.config.room, peer);
@@ -45,7 +50,7 @@ export function startTaskDispatchMonitor(input: {
         : state === 'failed' ? 'delivery_failed' : state === 'conflict' ? 'policy_denied' : undefined;
     },
     ready: (original, peer) => {
-      const job = resolve(original, peer).job;
+      const job = input.held?.() ? undefined : resolve(original, peer).job;
       if (!job) return false;
       const catalog = publishedCatalog(input.client);
       const session = [...(catalog?.sessions ?? []), ...(catalog?.history ?? [])]
@@ -69,7 +74,7 @@ export function startTaskDispatchMonitor(input: {
       }
       return ready;
     },
-    deliver: async (original, beforeStart, peer) => {
+    deliver: (original, beforeStart, peer) => track(async () => {
       if (original.operation.type === 'user.message' && limitContinuationUnwanted(original.operation)) return 'rejected';
       if (input.deliver) return input.deliver(original, beforeStart, peer);
       const job = resolve(original, peer).job;
@@ -79,7 +84,7 @@ export function startTaskDispatchMonitor(input: {
         : (await handleTaskCreate(input.client, job.operation, beforeStart)).status;
       void input.publish().catch(() => {});
       return outcome;
-    },
+    }),
   });
   const reportFailure = queueFailureReporter().report;
   const tick = () => {
