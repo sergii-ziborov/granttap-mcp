@@ -940,6 +940,13 @@ Verified updates are staged separately and applied after active requests and pen
 decisions finish. Startup failures restore the previous version. Pairing and task
 policies are retained; source checkouts and running provider processes stay in place.
 
+A computer that always has a chat running is never idle on its own. When an update is
+ready, the background monitor therefore stops starting newly arrived phone messages for
+up to ten minutes, lets the runs already going finish, and then switches. Messages that
+arrive meanwhile are kept and delivered by the new version; none is refused or run
+twice. If a run outlasts the ten minutes, messages run again and the update follows
+when that run has ended.
+
 In the plugin's GrantTap connection card, use **Automatic updates: On / Off**.
 The choice is saved for this computer and takes effect without restarting the
 service. Off prevents further update checks and activation; an already running

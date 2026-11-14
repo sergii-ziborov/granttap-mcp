@@ -33,6 +33,13 @@ pause, an in-flight native submission and provider policy still win. Normal jobs
 use a catalog observed within 60 seconds rather than rescanning all native logs
 for every pending message on each receiver tick.
 
+While a runtime update drains the monitor (`held`), the worker starts nothing new:
+a job stays `staged` here and unclaimed on the relay, so the runtime that takes
+over delivers it once. Refusals, cancellations and completions still go through. A
+delivery counts as monitor work (`track`) from the moment it may start until its
+handler returns, so the update never exits between a relay claim and the provider
+taking the message. Regression case: `worker/tests/update-hold.test.ts`.
+
 ## License
 
 Licensed under the GrantTap Commercial Source License. See LICENSE and NOTICE.

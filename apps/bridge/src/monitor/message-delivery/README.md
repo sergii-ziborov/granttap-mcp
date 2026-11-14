@@ -7,6 +7,9 @@ Terminal responses remain correlated to the original message id.
 
 `acceptance.ts` decides when a phone message counts as delivered: when the agent
 has taken it, not when its whole turn ends. Tests live in `tests/acceptance.test.ts`.
+`lateRunsSettling` stays true until the answer of such a run has been sent, so a
+runtime update cannot replace the monitor between the provider exiting and its
+answer reaching the phone.
 
 Integration tests: `tests/delivery/processing-receipt.test.ts`; attachment rejection
 coverage: `tests/attachment/attachment-uploads.test.ts`. See the monitor README.

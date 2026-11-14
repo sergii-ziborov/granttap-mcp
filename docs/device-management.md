@@ -12,7 +12,9 @@ The phone never marks a restart complete until it observes a new process epoch.
 Explicit update uses the existing verified npm installer and rollback selection.
 It can be requested with automatic updates off without changing that preference.
 Activation waits for work to finish; managed macOS launch agents can then be
-restarted from the phone. Development checkouts are not replaced remotely.
+restarted from the phone. With automatic updates on, the monitor holds newly queued
+phone messages for up to ten minutes so that its running work can end and the
+selected version can start. Development checkouts are not replaced remotely.
 
 Cache cleanup is restricted to rebuildable repository indexes and obsolete
 immutable MCP downloads. The running package, selected package and rollback
