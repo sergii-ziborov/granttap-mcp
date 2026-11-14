@@ -50,6 +50,10 @@ test("a temp folder alone, or the prefix alone, is not a helper run", () => {
 test("a temp root named by the caller is honoured, for a computer whose temp directory is elsewhere", () => {
   assert.equal(helperRunFolder("/data/scratch/hw-image-abcd1234"), undefined);
   assert.equal(helperRunFolder("/data/scratch/hw-image-abcd1234", ["/data/scratch/"])?.kind, "image-generation");
+  const windows = "C:\\Users\\someone\\AppData\\Local\\Temp";
+  assert.equal(helperRunFolder(`${windows}\\hw-image-abcd1234`, [windows])?.folder,
+    "C:/Users/someone/AppData/Local/Temp/hw-image-abcd1234");
+  assert.equal(helperRunFolder(`${windows}\\other-abcd1234`, [windows]), undefined);
 });
 
 test("a Mesh that was registered for a helper run's folder is recognised by its workspace", () => {

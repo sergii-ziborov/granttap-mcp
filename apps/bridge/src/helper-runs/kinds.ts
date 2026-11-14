@@ -37,7 +37,7 @@ export type HelperRunFolder = {
 };
 
 function plain(path: string): string {
-  const trimmed = path.trim().replace(/\/+$/, "");
+  const trimmed = path.trim().replace(/\\/g, "/").replace(/\/+$/, "");
   return /^\/private\/(var|tmp)(\/|$)/.test(trimmed) ? trimmed.slice("/private".length) : trimmed;
 }
 
