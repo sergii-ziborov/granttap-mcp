@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { recordCommandProcessSample } from "../command-process/history";
+import { captureHelperRuns, helperRunProcesses } from "../../helper-runs/capture";
 import { sampleProcessRows } from "./ps-reader";
 import { attributeByAncestry, processDetail, processGroupName } from "./process-ownership";
 export { executableOf, processGroupName, processDetail } from "./process-ownership";
@@ -224,6 +225,8 @@ export async function sampleAgentProcesses(): Promise<Record<string, AgentProces
   const sampledAt = Date.now();
   const sessions = await resolveSessions(rows);
   const ownership = attributeByAncestry(rows);
+  // A helper run lives for half a minute; this sample may be the only one that sees its process.
+  await captureHelperRuns(helperRunProcesses(rows, ownership, sessions));
   recordCommandProcessSample(rows.flatMap((row) => {
     const agent = ownership.agents.get(row.pid);
     if (!agent) return [];

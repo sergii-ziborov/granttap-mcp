@@ -23,6 +23,11 @@ export const ChildThreadInfo = z.object({
   parentThreadId: z.string().max(256),
   title: z.string().max(160).optional(),
   agentName: z.string().max(160).optional(),
+  /**
+   * Set when the conversation is a short helper run the chat started, not one of its own agents:
+   * `image-generation`. A value this reader does not know is still a helper run.
+   */
+  kind: z.string().min(1).max(40).optional(),
   depth: z.number().int().min(1).max(16),
   state: SessionState,
   startedAt: z.number(),

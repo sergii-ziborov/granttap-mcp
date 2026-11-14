@@ -22,6 +22,7 @@ import { grokTimeline } from '../../providers/grok-timeline';
 import { grokToolCalls, grokToolCompletions, grokToolSummary, grokRecordedChanges } from '../../providers/grok-tools';
 import { captureGrokConversation, readGrokConversation } from '../../providers/grok-conversation';
 import { GrokCatalogCache, type GrokParsedContext } from '../../providers/grok-catalog-cache';
+import { helperRunFolder, type HelperRunSession } from '../../helper-runs';
 
 type Summary = {
   info?: { id?: unknown; cwd?: unknown };
@@ -30,6 +31,7 @@ type Summary = {
   created_at?: unknown;
   updated_at?: unknown;
   current_model_id?: unknown;
+  session_kind?: unknown;
 };
 
 const catalogCache = new GrokCatalogCache();
@@ -172,6 +174,7 @@ function parseSummary(path: string): Summary | null {
 
 export function scanGrok(maxFiles = MAX_FILES): Scan {
   const sessions: SessionInfo[] = [];
+  const helperRuns: HelperRunSession[] = [];
   const activities = new Map<string, ActivityEntry[]>();
   const usages = new Map<string, CapabilityObservation[]>();
   let tokensRecent = 0;
@@ -202,14 +205,18 @@ export function scanGrok(maxFiles = MAX_FILES): Scan {
       .find((value): value is string => typeof value === "string" && value.trim().length > 0);
     const cwd = typeof summary.info?.cwd === "string" ? summary.info.cwd : undefined;
     const live = grokNativeActivity(sessionId, directory);
-    sessions.push({
+    // A generator's headless run in its throwaway folder is its chat's work, not a chat.
+    const helper = summary.session_kind === "headless" ? helperRunFolder(cwd) : undefined;
+    const session: SessionInfo = {
       sessionId, agent: "grok", title: title?.trim().slice(0, 120), cwd,
       model: typeof summary.current_model_id === "string" ? summary.current_model_id : undefined,
       state: live?.state ?? stateFor(updatedAt), startedAt, lastActivityAt: Math.max(updatedAt, live?.updatedAt ?? 0),
       ...(parsed.lastMessageAt ? { lastMessageAt: parsed.lastMessageAt } : {}),
       tokensSession: parsed.tokens, tokensLastTurn: parsed.lastTurn,
       contextTokensUsed: parsed.tokens,
-    });
+    };
+    if (helper) helperRuns.push({ session, kind: helper.kind, label: helper.label, folder: helper.folder });
+    else sessions.push(session);
     logPaths.set(sessionId, join(directory, "chat_history.jsonl"));
     activities.set(sessionId, parsed.entries);
     usages.set(sessionId, parsed.usage);
@@ -218,7 +225,8 @@ export function scanGrok(maxFiles = MAX_FILES): Scan {
   activityBySession = activities;
   catalogCache.retain(admitted);
   usageBySession = usages;
-  return { sessions, tokensRecent, sourceLimited: listed.length > maxFiles };
+  return { sessions, tokensRecent, sourceLimited: listed.length > maxFiles,
+    ...(helperRuns.length > 0 ? { helperRuns } : {}) };
 }
 
 export function grokActivity(session: SessionInfo, fullText = false): ActivityEntry[] {

@@ -25,6 +25,8 @@ export type Scan = {
   sessions: import("../../../../../packages/protocol/schema").SessionInfo[];
   tokensRecent: number;
   sourceLimited?: boolean;
+  /** Short runs a chat started, kept out of `sessions`: they are shown under that chat. */
+  helperRuns?: import("../../helper-runs").HelperRunSession[];
 };
 
 /**

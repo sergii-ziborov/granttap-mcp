@@ -2,6 +2,7 @@ import type { SessionInfo } from "../../../../packages/protocol/schema";
 import { localTaskTransfers, localTransferContinuations } from "../task-transfer";
 import { MAX_FILES, MAX_HISTORY, MAX_LIVE, TOKEN_WINDOW_MS } from "./support/common";
 import { providerScans, cooperativeProviderScans, type ProviderScan } from "./provider-discovery";
+import { attachHelperRuns } from "../helper-runs";
 
 function sessionKey(session: SessionInfo): string {
   return `${session.agent}\0${session.sessionId}`;
@@ -48,7 +49,9 @@ function pickWithReserve(
 }
 
 function catalogFromScans(scans: ProviderScan[]) {
-  const native = sortedUniqueSessions(scans.flatMap((scan) => scan.sessions));
+  // A helper run is a conversation of the chat that started it, never a chat in these lists.
+  const native = attachHelperRuns(sortedUniqueSessions(scans.flatMap((scan) => scan.sessions)),
+    scans.flatMap((scan) => scan.helperRuns ?? []));
   // Prepared transfers replace native ids; rank their native activity before
   // the bounded live/history windows, rather than appending them after older chats.
   const sessions = sortedUniqueSessions(localTaskTransfers().catalog(native));
