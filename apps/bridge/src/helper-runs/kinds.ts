@@ -7,10 +7,11 @@
  * about the run says what it is. A session in a temp folder is not a helper
  * run by itself: only a generator listed here makes it one.
  */
-import { realpathSync } from "node:fs";
+import { existsSync, realpathSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 
-export type HelperRunKind = "image-generation";
+/** `helper-run` is a run no generator claims: its folder alone says it was made for one run. */
+export type HelperRunKind = "image-generation" | "helper-run";
 
 type Generator = {
   /** How the generator names its throwaway folder. */
@@ -36,7 +37,8 @@ export type HelperRunFolder = {
   folder: string;
 };
 
-function plain(path: string): string {
+/** A folder in one spelling: forward slashes, no trailing slash, and macOS `/private/var` as `/var`. */
+export function plainFolder(path: string): string {
   const trimmed = path.trim().replace(/\\/g, "/").replace(/\/+$/, "");
   return /^\/private\/(var|tmp)(\/|$)/.test(trimmed) ? trimmed.slice("/private".length) : trimmed;
 }
@@ -53,8 +55,9 @@ function systemTempRoots(): readonly string[] {
   return ownTemp;
 }
 
-function isTempRoot(directory: string, roots: readonly string[]): boolean {
-  return PER_USER_TEMP.test(directory) || roots.some((root) => plain(root) === directory);
+/** Whether a folder, in its plain spelling, is a temp directory of this computer. */
+export function isTempRoot(directory: string, roots: readonly string[] = systemTempRoots()): boolean {
+  return PER_USER_TEMP.test(directory) || roots.some((root) => plainFolder(root) === directory);
 }
 
 /** The generator a working folder belongs to, when it is one's throwaway folder directly inside a temp directory. */
@@ -63,7 +66,7 @@ export function helperRunFolder(
   tempRoots: readonly string[] = systemTempRoots(),
 ): HelperRunFolder | undefined {
   if (!path) return undefined;
-  const folder = plain(path);
+  const folder = plainFolder(path);
   const cut = folder.lastIndexOf("/");
   if (cut <= 0 || !isTempRoot(folder.slice(0, cut), tempRoots)) return undefined;
   const name = folder.slice(cut + 1);
@@ -90,12 +93,79 @@ export function helperRunLabel(kind: string): string {
 }
 
 /**
- * A Mesh that was registered for a helper run's folder before helper runs were recognised.
- * A repository with a remote is a real Project wherever it was cloned.
+ * A Mesh that was registered for a helper run's folder before the run was recognised: a generator's
+ * folder, or a folder made for one run that is gone again. A repository with a remote is a real
+ * Project wherever it was cloned.
  */
-export function helperRunProject(project: { repositoryRoot?: string; canonicalRepositoryId: string }): boolean {
+export function helperRunProject(
+  project: { repositoryRoot?: string; canonicalRepositoryId: string },
+  vanished: (folder: string | undefined) => boolean = vanishedRunFolder,
+): boolean {
   const identity = project.canonicalRepositoryId;
   if (!identity.startsWith("local:")) return false;
-  return helperRunFolder(project.repositoryRoot) !== undefined
-    || helperRunFolder(identity.slice("local:".length)) !== undefined;
+  const folders = [project.repositoryRoot, identity.slice("local:".length)];
+  return folders.some((folder) => helperRunFolder(folder) !== undefined) || folders.some((folder) => vanished(folder));
+}
+
+/** A folder made this recently was made for the run found in it, when nothing else is there to work on. */
+export const FRESH_FOLDER_MS = 15 * 60_000;
+const CHECK_AGAIN_MS = 60_000;
+const MAX_REMEMBERED = 4_096;
+const vanishedChecks = new Map<string, { at: number; vanished: boolean }>();
+
+function absolute(folder: string): boolean {
+  return folder.startsWith("/") || /^[A-Za-z]:\//.test(folder);
+}
+
+function parentOf(folder: string): string | undefined {
+  const cut = folder.lastIndexOf("/");
+  if (cut < 0) return undefined;
+  const parent = cut === 0 ? "/" : folder.slice(0, cut);
+  return parent === folder || /^[A-Za-z]:$/.test(parent) ? undefined : parent;
+}
+
+/**
+ * A folder that was made for one run and removed after it: it is gone, and it lay directly inside a
+ * temp directory or anywhere inside a Git checkout. Had it been a workspace of its own it would have
+ * been that checkout's. The answer is kept for a minute; a Mesh list asks about every Project.
+ */
+export function vanishedRunFolder(path: string | undefined, now = Date.now()): boolean {
+  if (!path) return false;
+  const folder = plainFolder(path);
+  if (!absolute(folder)) return false;
+  const known = vanishedChecks.get(folder);
+  if (known && now - known.at < CHECK_AGAIN_MS && now >= known.at) return known.vanished;
+  let vanished = false;
+  try {
+    if (!existsSync(folder)) {
+      let above = parentOf(folder);
+      vanished = above !== undefined && isTempRoot(above);
+      for (let depth = 0; !vanished && above !== undefined && depth < 48; depth += 1) {
+        vanished = existsSync(`${above === "/" ? "" : above}/.git`);
+        above = parentOf(above);
+      }
+    }
+  } catch { /* A folder that cannot be looked at is not called gone. */ }
+  if (vanishedChecks.size >= MAX_REMEMBERED) vanishedChecks.clear();
+  vanishedChecks.set(folder, { at: now, vanished });
+  return vanished;
+}
+
+/** For tests: look at every folder again. */
+export function forgetRunFolderChecks(): void {
+  vanishedChecks.clear();
+}
+
+/** A folder made within the last minutes that is not a checkout of its own: a script made it for the run in it. */
+export function freshRunFolder(path: string | undefined, now = Date.now()): boolean {
+  if (!path) return false;
+  const folder = plainFolder(path);
+  if (!absolute(folder) || isTempRoot(folder)) return false;
+  try {
+    const stat = statSync(folder);
+    if (!stat.isDirectory() || !(stat.birthtimeMs > 0) || now - stat.birthtimeMs > FRESH_FOLDER_MS) return false;
+    return !existsSync(`${folder}/.git`);
+  } catch {
+    return false;
+  }
 }

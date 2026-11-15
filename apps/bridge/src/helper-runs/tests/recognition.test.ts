@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
-import { realpathSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { ChildThreadInfo } from "../../../../../packages/protocol/schema";
-import { helperRunFolder, helperRunLabel, helperRunProject } from "../kinds";
+import {
+  FRESH_FOLDER_MS, forgetRunFolderChecks, freshRunFolder, helperRunFolder, helperRunLabel, helperRunProject, vanishedRunFolder,
+} from "../kinds";
+import { recognizeHelperRun } from "../recognition";
 
 const MAC_TEMP = "/var/folders/ab/c0ffee123/T";
 
@@ -71,4 +74,68 @@ test("a nested conversation carries its helper kind, and one without it still pa
   assert.equal(ChildThreadInfo.parse({ ...child, kind: "image-generation" }).kind, "image-generation");
   assert.equal(ChildThreadInfo.parse(child).kind, undefined);
   assert.equal(ChildThreadInfo.parse({ ...child, kind: "a-kind-from-a-newer-computer" }).kind, "a-kind-from-a-newer-computer");
+});
+
+test("a folder made for one run is known by what became of it, not by its name", (t) => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "granttap-run-folders-")));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  forgetRunFolderChecks();
+  const checkout = join(root, "app");
+  mkdirSync(join(checkout, ".git"), { recursive: true });
+  mkdirSync(join(checkout, "docs"));
+  mkdirSync(join(root, "plain", "kept"), { recursive: true });
+  const now = Date.now();
+
+  assert.equal(vanishedRunFolder(join(checkout, "build", "imagegen", "job.i1wr32"), now), true, "gone from inside a checkout");
+  assert.equal(vanishedRunFolder(join(tmpdir(), "run-that-was-removed-0002"), now), true, "gone from the temp directory");
+  assert.equal(vanishedRunFolder(join(checkout, "docs"), now), false, "a folder that is there");
+  assert.equal(vanishedRunFolder(join(root, "plain", "removed"), now), false, "gone, but it was nobody's subfolder");
+  assert.equal(vanishedRunFolder("build/imagegen/job.i1wr32", now), false);
+  assert.equal(vanishedRunFolder(undefined, now), false);
+
+  const later = join(checkout, "build", "later");
+  assert.equal(vanishedRunFolder(later, now), true);
+  mkdirSync(later, { recursive: true });
+  assert.equal(vanishedRunFolder(later, now + 30_000), true, "the answer is kept for a minute");
+  assert.equal(vanishedRunFolder(later, now + 61_000), false);
+
+  const made = join(checkout, "build", "job.fresh1");
+  mkdirSync(made, { recursive: true });
+  // Not every disk records when a folder was made; where it does not, no folder is called new.
+  if (statSync(made).birthtimeMs > 0) assert.equal(freshRunFolder(made, Date.now()), true, "made a moment ago");
+  assert.equal(freshRunFolder(made, Date.now() + FRESH_FOLDER_MS + 60_000), false, "made too long ago to be this run's");
+  assert.equal(freshRunFolder(checkout, Date.now()), false, "a checkout of its own");
+  assert.equal(freshRunFolder(join(checkout, "missing"), Date.now()), false);
+  assert.equal(freshRunFolder(tmpdir(), Date.now()), false, "the temp directory itself");
+  assert.equal(freshRunFolder(undefined), false);
+
+  const gone = join(checkout, "build", "imagegen", "job.i1wr32");
+  assert.equal(helperRunProject({ repositoryRoot: gone, canonicalRepositoryId: `local:${gone}` }), true);
+  assert.equal(helperRunProject({ repositoryRoot: gone, canonicalRepositoryId: "github.com/acme/app" }), false);
+  assert.equal(helperRunProject({ canonicalRepositoryId: `local:${join(checkout, "docs")}` }), false);
+});
+
+test("a headless session is a run when its folder was made for a single request", () => {
+  const folder = "/Users/someone/dev/app/build/imagegen/job.i1wr32";
+  const session = { cwd: `${folder}/`, startedAt: 1_000, requests: 1, checkoutRoot: "/Users/someone/dev/app/" };
+  const none = { link: () => undefined, vanished: () => false, fresh: () => false, now: 10_000 };
+  const linked = { ...none, link: () => ({ folder, kind: "helper-run", parentAgent: "claude" as const,
+    parentSessionId: "parent-chat-1", capturedAt: 1_500 }) };
+
+  assert.equal(recognizeHelperRun(session, none), undefined, "a workspace that stays is a chat's");
+  assert.deepEqual(recognizeHelperRun(session, { ...none, vanished: () => true }),
+    { kind: "helper-run", label: "Helper run", folder });
+  assert.deepEqual(recognizeHelperRun({ ...session, madePictures: true }, { ...none, fresh: () => true }),
+    { kind: "image-generation", label: "Image generation", folder }, "a run that made a picture is called by it");
+  assert.equal(recognizeHelperRun({ ...session, requests: 2 }, { ...none, vanished: () => true }), undefined,
+    "a second request made it a chat");
+  assert.equal(recognizeHelperRun({ ...session, checkoutRoot: folder }, { ...none, vanished: () => true }), undefined,
+    "a checkout of its own, such as a removed worktree, was a workspace");
+  assert.equal(recognizeHelperRun({ ...session, requests: 2 }, linked)?.kind, "helper-run",
+    "the run that was alive when its folder was linked is a run whatever came after");
+  assert.equal(recognizeHelperRun({ ...session, requests: 2, startedAt: 1_500 + 61_000 }, linked), undefined,
+    "a later session in a folder of the same name is not that run");
+  assert.equal(recognizeHelperRun({ startedAt: 1_000, requests: 1 }, { ...none, vanished: () => true }), undefined);
+  assert.equal(recognizeHelperRun({ ...session, cwd: "/tmp/hw-image-h3ospkyk" }, none)?.kind, "image-generation",
+    "a generator's folder says so by its name");
 });

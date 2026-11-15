@@ -22,7 +22,7 @@ import { grokTimeline } from '../../providers/grok-timeline';
 import { grokToolCalls, grokToolCompletions, grokToolSummary, grokRecordedChanges } from '../../providers/grok-tools';
 import { captureGrokConversation, readGrokConversation } from '../../providers/grok-conversation';
 import { GrokCatalogCache, type GrokParsedContext } from '../../providers/grok-catalog-cache';
-import { helperRunFolder, type HelperRunSession } from '../../helper-runs';
+import { recognizeHelperRun, type HelperRunSession } from '../../helper-runs';
 
 type Summary = {
   info?: { id?: unknown; cwd?: unknown };
@@ -32,6 +32,7 @@ type Summary = {
   updated_at?: unknown;
   current_model_id?: unknown;
   session_kind?: unknown;
+  git_root_dir?: unknown;
 };
 
 const catalogCache = new GrokCatalogCache();
@@ -168,6 +169,11 @@ function parseLog(path: string, sessionId: string, fallbackTime: number, fullTex
   return { entries, usage, firstUser, lastMessageAt: lastMessageAt || undefined, tokens, lastTurn, cacheable };
 }
 
+/** Grok keeps the pictures a session generated beside its history. */
+function madePictures(directory: string): boolean {
+  try { return readdirSync(join(directory, "images")).length > 0; } catch { return false; }
+}
+
 function parseSummary(path: string): Summary | null {
   try { return JSON.parse(readFileSync(path, "utf8")) as Summary; } catch { return null; }
 }
@@ -205,8 +211,12 @@ export function scanGrok(maxFiles = MAX_FILES): Scan {
       .find((value): value is string => typeof value === "string" && value.trim().length > 0);
     const cwd = typeof summary.info?.cwd === "string" ? summary.info.cwd : undefined;
     const live = grokNativeActivity(sessionId, directory);
-    // A generator's headless run in its throwaway folder is its chat's work, not a chat.
-    const helper = summary.session_kind === "headless" ? helperRunFolder(cwd) : undefined;
+    // A headless run in a folder made for it is the work of the chat that started it, not a chat.
+    const helper = summary.session_kind === "headless" ? recognizeHelperRun({
+      cwd, startedAt, requests: parsed.entries.filter(entry => entry.kind === "user").length,
+      checkoutRoot: typeof summary.git_root_dir === "string" ? summary.git_root_dir : undefined,
+      madePictures: madePictures(directory),
+    }) : undefined;
     const session: SessionInfo = {
       sessionId, agent: "grok", title: title?.trim().slice(0, 120), cwd,
       model: typeof summary.current_model_id === "string" ? summary.current_model_id : undefined,

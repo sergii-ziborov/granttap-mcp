@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { writePrivateFile } from "../config/access/write-private";
 import { configDir } from "../config/runtime/paths";
 import { HISTORY_RETENTION_MS } from "../sessions/support/common";
-import { helperRunFolder } from "./kinds";
+import { helperRunFolder, plainFolder } from "./kinds";
 
 export type HelperRunParentAgent = "claude" | "codex";
 
@@ -30,10 +30,20 @@ export function helperRunLinksPath(): string {
   return join(configDir(), "helper-runs.json");
 }
 
+/** A generator's folder for a generator's run; any full path for a run known by its folder alone. */
+function linkFolder(folder: unknown, kind: unknown): string | undefined {
+  if (typeof folder !== "string") return undefined;
+  const generator = helperRunFolder(folder);
+  if (generator) return generator.folder;
+  if (kind !== "helper-run" || folder.length > 1_024) return undefined;
+  const plain = plainFolder(folder);
+  return plain.startsWith("/") || /^[A-Za-z]:\//.test(plain) ? plain : undefined;
+}
+
 function valid(value: unknown): HelperRunLink | undefined {
   if (!value || typeof value !== "object") return undefined;
   const item = value as Record<string, unknown>;
-  const folder = typeof item.folder === "string" ? helperRunFolder(item.folder)?.folder : undefined;
+  const folder = linkFolder(item.folder, item.kind);
   if (!folder || typeof item.kind !== "string" || !item.kind || item.kind.length > 40) return undefined;
   if (item.parentAgent !== "claude" && item.parentAgent !== "codex") return undefined;
   if (typeof item.parentSessionId !== "string" || !SESSION_ID.test(item.parentSessionId)) return undefined;
@@ -74,8 +84,8 @@ function readLinks(): Map<string, HelperRunLink> {
 
 /** The chat that started the run in this folder, when it was captured. */
 export function helperRunLink(folder: string | undefined): HelperRunLink | undefined {
-  const key = helperRunFolder(folder)?.folder;
-  return key ? readLinks().get(key) : undefined;
+  if (!folder) return undefined;
+  return readLinks().get(helperRunFolder(folder)?.folder ?? plainFolder(folder));
 }
 
 /** Write newly captured parents down. The first capture of a run stands. Returns how many were new. */

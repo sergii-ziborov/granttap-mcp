@@ -6,12 +6,15 @@
  * to everything its shell starts, and the run's process inherits it. Only a
  * process already known to be a helper run has its environment read, only the
  * chat's id is kept from it, and nothing read here is ever logged.
+ *
+ * A run is known by its folder: a generator's, or, for Grok, one a script made
+ * minutes ago that is not a checkout of its own.
  */
 import { execFile } from "node:child_process";
 import { existsSync, readlinkSync } from "node:fs";
 import { promisify } from "node:util";
 import type { ProcessRow } from "../machine-load/host/process-sampler";
-import { helperRunFolder, helperRunFoldersNamed, type HelperRunFolder } from "./kinds";
+import { freshRunFolder, helperRunFolder, helperRunFoldersNamed, helperRunLabel, plainFolder, type HelperRunFolder } from "./kinds";
 import { rememberHelperRunLinks, type HelperRunLink, type HelperRunParentAgent } from "./links";
 import { followHelperRunPictures } from "./pictures/capture";
 
@@ -20,7 +23,9 @@ const run = promisify(execFile);
 export type HelperRunParent = { agent: HelperRunParentAgent; sessionId: string };
 
 /** One provider process the listing shows. Its command line is searched for a generator's folder and never kept. */
-export type HelperRunProcess = { pid: number; command: string; ancestor?: HelperRunParent };
+export type HelperRunProcess = { pid: number; command: string; ancestor?: HelperRunParent;
+  /** The provider the process is, as the listing knows it. */
+  agent?: string };
 
 export type HelperRunReaders = {
   directories: (pids: readonly number[]) => Promise<Map<number, string>>;
@@ -102,8 +107,9 @@ export function helperRunProcesses(
     const above = row.ppid != null ? ownership.roots.get(row.ppid) : undefined;
     const agent = above != null ? ownership.agents.get(above) : undefined;
     const sessionId = above != null ? sessions.get(above) : undefined;
+    const own = ownership.agents.get(row.pid);
     return {
-      pid: row.pid, command: row.command,
+      pid: row.pid, command: row.command, ...(own ? { agent: own } : {}),
       ...(agent && sessionId && PARENT_AGENTS.has(agent)
         ? { ancestor: { agent: agent as HelperRunParentAgent, sessionId } } : {}),
     };
@@ -115,6 +121,8 @@ type CaptureOptions = {
   remember?: (links: HelperRunLink[]) => number;
   /** Told, at every sample, the folders of the linked runs still alive, so their pictures are caught. */
   follow?: (folders: readonly string[]) => void;
+  /** Whether a folder was made for the run in it; the disk answers unless a test does. */
+  madeForRun?: (folder: string, now: number) => boolean;
   now?: () => number;
 };
 
@@ -124,6 +132,7 @@ export function createHelperRunCapture(options: CaptureOptions = {}) {
   const remember = options.remember ?? rememberHelperRunLinks;
   const follow = options.follow ?? followHelperRunPictures;
   const now = options.now ?? Date.now;
+  const madeForRun = options.madeForRun ?? freshRunFolder;
   const settled = new Set<number>();
   const folderReads = new Map<number, number>();
   /** The folder of each live linked run, by its process. */
@@ -133,7 +142,10 @@ export function createHelperRunCapture(options: CaptureOptions = {}) {
     const working = helperRunFolder(directory);
     if (working) return working;
     const named = helperRunFoldersNamed(item.command);
-    return named.length === 1 ? named[0] : undefined;
+    if (named.length === 1) return named[0];
+    // A headless Grok run in a folder a script has just made for it is that script's chat's work.
+    if (item.agent !== "grok" || !directory || !madeForRun(directory, now())) return undefined;
+    return { kind: "helper-run", label: helperRunLabel("helper-run"), folder: plainFolder(directory) };
   };
 
   const examine = async (processes: readonly HelperRunProcess[]): Promise<number> => {

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test, { type TestContext } from "node:test";
@@ -11,7 +11,9 @@ import { createLocalMeshRuntime } from "..";
 
 const now = 1_800_000_000_000;
 const RUN = "/private/var/folders/ab/c0ffee123/T/hw-image-1xnbh8ld";
-const SCRATCH = "/private/var/folders/ab/c0ffee123/T/granttap-scratch-1";
+/** A folder a person works in under the temp directory: it is there, so it is a workspace. */
+const SCRATCH = mkdtempSync(join(tmpdir(), "granttap-scratch-"));
+process.on("exit", () => rmSync(SCRATCH, { recursive: true, force: true }));
 
 function freshStore(t: TestContext): MeshStore {
   const root = mkdtempSync(join(tmpdir(), "granttap-helper-mesh-"));
@@ -67,4 +69,20 @@ test("Meshes already registered for helper runs are kept but no longer listed or
   const runtime = createLocalMeshRuntime({ store: () => store, sessions: () => [], computer: () => "MacBook", now: () => now });
   assert.deepEqual(runtime.snapshots().map((snapshot) => snapshot.projectId), [kept]);
   assert.deepEqual((await runtime.snapshotsAsync([])).map((snapshot) => snapshot.projectId), [kept]);
+});
+
+test("a Mesh registered for a folder that was made for one run and is gone is not listed either", (t) => {
+  const store = freshStore(t);
+  const checkout = mkdtempSync(join(tmpdir(), "granttap-helper-checkout-"));
+  t.after(() => rmSync(checkout, { recursive: true, force: true }));
+  mkdirSync(join(checkout, ".git"));
+  mkdirSync(join(checkout, "docs"));
+  const gone = staleRunMesh(store, join(checkout, "build", "imagegen", "job.i1wr32"), "job-1");
+  const purged = staleRunMesh(store, join(tmpdir(), "run-that-was-removed-0001"), "job-2");
+  const there = staleRunMesh(store, join(checkout, "docs"), "chat-in-a-folder-that-stays");
+  const elsewhere = staleRunMesh(store, "/Users/someone/removed-workspace", "chat-in-a-removed-workspace");
+  assert.deepEqual(store.projectIds().sort(), [there, elsewhere].sort(),
+    "a folder gone from inside a checkout or the temp directory was a run's; a workspace of its own is kept, there or not");
+  assert.equal(store.project(gone)?.projectId, gone, "nothing is deleted from the store");
+  assert.equal(store.project(purged)?.projectId, purged);
 });

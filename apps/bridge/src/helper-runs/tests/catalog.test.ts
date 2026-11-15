@@ -19,7 +19,7 @@ import { rememberHelperRunLinks } from "../links";
 const TEMP = "/private/var/folders/ab/c0ffee123/T";
 const PARENT = "parent-chat-0001";
 
-function roots(t: TestContext): { claude: string; grok: string } {
+function roots(t: TestContext): { claude: string; grok: string; config: string } {
   const root = mkdtempSync(join(tmpdir(), "granttap-helper-catalog-"));
   const names = ["GRANTTAP_CLAUDE_PROJECTS_DIR", "GRANTTAP_GROK_SESSIONS_DIR", "GRANTTAP_CONFIG_DIR"] as const;
   const previous = names.map((name) => process.env[name]);
@@ -45,18 +45,25 @@ function claudeChat(root: string, id: string, at: number): void {
   ].map((row) => JSON.stringify(row)).join("\n") + "\n");
 }
 
-function grokSession(root: string, input: { id: string; cwd: string; at: number; kind?: string; title?: string }): void {
+function grokSession(root: string, input: { id: string; cwd: string; at: number; kind?: string; title?: string;
+  /** How many requests the session was given; one unless said. */
+  requests?: number; checkoutRoot?: string; pictures?: boolean }): void {
   const directory = join(root, encodeURIComponent(input.cwd), input.id);
   mkdirSync(directory, { recursive: true });
   writeFileSync(join(directory, "summary.json"), JSON.stringify({
     info: { id: input.id, cwd: input.cwd }, generated_title: input.title ?? `Title of ${input.id}`,
     created_at: new Date(input.at).toISOString(), updated_at: new Date(input.at + 30_000).toISOString(),
     current_model_id: "grok-synthetic", ...(input.kind ? { session_kind: input.kind } : {}),
+    ...(input.checkoutRoot ? { git_root_dir: input.checkoutRoot } : {}),
   }));
-  writeFileSync(join(directory, "chat_history.jsonl"), [
-    { type: "user", prompt_index: 0, content: [{ type: "text", text: `Synthetic prompt of ${input.id}` }] },
-    { type: "assistant", content: [{ type: "text", text: `Synthetic result of ${input.id}` }] },
-  ].map((row) => JSON.stringify(row)).join("\n"));
+  writeFileSync(join(directory, "chat_history.jsonl"), Array.from({ length: input.requests ?? 1 }, (_, index) => [
+    { type: "user", prompt_index: index, content: [{ type: "text", text: `Synthetic prompt${index ? ` ${index + 1}` : ""} of ${input.id}` }] },
+    { type: "assistant", content: [{ type: "text", text: `Synthetic result${index ? ` ${index + 1}` : ""} of ${input.id}` }] },
+  ]).flat().map((row) => JSON.stringify(row)).join("\n"));
+  if (input.pictures) {
+    mkdirSync(join(directory, "images"));
+    writeFileSync(join(directory, "images", "1.jpg"), "synthetic");
+  }
   writeFileSync(join(directory, "events.jsonl"),
     JSON.stringify({ type: "turn_ended", ts: new Date(input.at + 30_000).toISOString() }) + "\n");
 }
@@ -69,7 +76,7 @@ function fixture(t: TestContext) {
   grokSession(paths.grok, { id: "helper-linked-0001", cwd: linked, at: now + 2_000, kind: "headless", title: "A lighthouse at dusk" });
   grokSession(paths.grok, { id: "helper-orphan-0001", cwd: `${TEMP}/hw-image-orphan01`, at: now + 3_000, kind: "headless" });
   grokSession(paths.grok, { id: "helper-lost-parent", cwd: `${TEMP}/hw-image-lostpar1`, at: now + 4_000, kind: "headless" });
-  grokSession(paths.grok, { id: "ordinary-temp-0001", cwd: `${TEMP}/granttap-scratch-1`, at: now + 5_000, kind: "headless" });
+  grokSession(paths.grok, { id: "ordinary-temp-0001", cwd: `${TEMP}/granttap-scratch-1`, at: now + 5_000, kind: "headless", requests: 2 });
   grokSession(paths.grok, { id: "typed-in-such-a-folder", cwd: `${TEMP}/hw-image-typed001`, at: now + 6_000 });
   grokSession(paths.grok, { id: "ordinary-project-chat", cwd: "/Users/someone/dev/app", at: now + 7_000, kind: "headless" });
   rememberHelperRunLinks([
@@ -102,6 +109,35 @@ test("an image generation run is not a chat of its own: it is a conversation of 
       assert.equal(other.childThreads, undefined, other.sessionId);
     }
   }
+});
+
+test("a headless run in a folder made for it is not a chat either, whatever the folder was called", (t) => {
+  const paths = roots(t);
+  const now = Date.now() - 10 * 60_000;
+  claudeChat(paths.claude, PARENT, now);
+  // A checkout whose script made one folder per picture under its build folder and removed each afterwards.
+  const checkout = join(paths.config, "..", "app");
+  mkdirSync(join(checkout, ".git"), { recursive: true });
+  const job = (name: string) => join(checkout, "build", "imagegen", name);
+  const worktree = join(checkout, "worktrees", "removed-one");
+  grokSession(paths.grok, { id: "job-linked-0001", cwd: job("job.linked"), at: now + 2_000, kind: "headless",
+    checkoutRoot: `${checkout}/`, pictures: true, title: "Dots under a curve" });
+  grokSession(paths.grok, { id: "job-orphan-0001", cwd: job("job.orphan"), at: now + 3_000, kind: "headless", checkoutRoot: `${checkout}/` });
+  grokSession(paths.grok, { id: "job-continued-01", cwd: job("job.talked"), at: now + 4_000, kind: "headless", requests: 2 });
+  grokSession(paths.grok, { id: "job-typed-000001", cwd: job("job.typed"), at: now + 5_000 });
+  grokSession(paths.grok, { id: "removed-worktree", cwd: worktree, at: now + 6_000, kind: "headless", checkoutRoot: worktree });
+  grokSession(paths.grok, { id: "later-in-that-folder", cwd: job("job.linked"), at: now + 5 * 60_000, kind: "headless", requests: 2 });
+  rememberHelperRunLinks([{ folder: job("job.linked"), kind: "helper-run", parentAgent: "claude",
+    parentSessionId: PARENT, capturedAt: now + 2_500 }]);
+
+  const sessions = scanSessions().sessions;
+  assert.deepEqual(sessions.map((session) => session.sessionId).sort(),
+    ["job-continued-01", "job-typed-000001", "later-in-that-folder", PARENT, "removed-worktree"].sort(),
+    "a run given a second request, one a person typed in, and a chat in a checkout of its own stay chats");
+  const child = sessions.find((session) => session.sessionId === PARENT)!.childThreads!;
+  assert.deepEqual(child.map((thread) => [thread.threadId, thread.kind, thread.agentName, thread.title]),
+    [["job-linked-0001", "image-generation", "Image generation", "Dots under a curve"]],
+    "the linked run is the chat's conversation, called by what it made; the one nobody was named for is published nowhere");
 });
 
 test("the chat's own state, clock and spend are its own after a helper run is attached", (t) => {

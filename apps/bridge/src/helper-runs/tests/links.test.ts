@@ -56,6 +56,19 @@ test("links older than the chat history kept on the computer are dropped, and th
   assert.equal(JSON.parse(readFileSync(helperRunLinksPath(), "utf8")).links.length, 2_000);
 });
 
+test("a run known by its folder alone is kept under that folder, in one spelling", (t) => {
+  isolatedConfig(t);
+  const job = "/Users/someone/dev/app/build/imagegen/job.i1wr32";
+  assert.equal(rememberHelperRunLinks([
+    { folder: `${job}/`, kind: "helper-run", parentAgent: "claude", parentSessionId: "parent-chat-1", capturedAt: Date.now() },
+    { folder: "build/imagegen/job.relative", kind: "helper-run", parentAgent: "claude", parentSessionId: "parent-chat-1", capturedAt: Date.now() },
+    { folder: job, kind: "image-generation", parentAgent: "claude", parentSessionId: "parent-chat-2", capturedAt: Date.now() },
+  ]), 1, "a path that is not full is not a folder, and a generator's kind needs a generator's folder");
+  assert.equal(helperRunLink(job)?.parentSessionId, "parent-chat-1");
+  assert.equal(helperRunLink(job)?.kind, "helper-run");
+  assert.equal(helperRunLink("build/imagegen/job.relative"), undefined);
+});
+
 test("an unreadable or foreign file is no links, and a malformed entry is skipped", (t) => {
   isolatedConfig(t);
   writeFileSync(helperRunLinksPath(), "{not json");

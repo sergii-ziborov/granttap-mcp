@@ -22,6 +22,8 @@ const PARENT: HelperRunParent = { agent: "claude", sessionId: "parent-chat-1" };
 function harness(input: {
   directories: Array<Record<number, string>>;
   parents?: Record<number, HelperRunParent>;
+  /** Folders a script has just made for a run. */
+  made?: string[];
 }) {
   const asked = { directories: [] as number[][], parents: [] as number[][] };
   const remembered: HelperRunLink[] = [];
@@ -38,10 +40,29 @@ function harness(input: {
       },
     },
     remember: (links) => { remembered.push(...links); return links.length; },
+    madeForRun: (folder) => (input.made ?? []).includes(folder),
     now: () => 1_700_000_000_000,
   });
   return { capture, asked, remembered };
 }
+
+test("a Grok run in a folder a script has just made for it is linked to the chat, whatever the folder is called", async () => {
+  const job = "/Users/someone/dev/app/build/imagegen/job.i1wr32";
+  const { capture, asked, remembered } = harness({
+    directories: [{ 10: "/Users/someone/dev/app", 20: job, 30: job, 40: "/Users/someone/dev/app/docs" }],
+    parents: { 20: PARENT }, made: [job],
+  });
+  assert.equal(await capture([
+    { pid: 10, command: "claude --resume", agent: "claude" },
+    { pid: 20, command: "grok --headless", agent: "grok" },
+    { pid: 30, command: "codex exec", agent: "codex" },
+    { pid: 40, command: "grok --headless", agent: "grok" },
+  ]), 1);
+  assert.deepEqual(remembered, [{ folder: job, kind: "helper-run", parentAgent: "claude",
+    parentSessionId: "parent-chat-1", capturedAt: 1_700_000_000_000 }]);
+  assert.deepEqual(asked.parents, [[20]],
+    "only the Grok process in the made folder has its environment read: not another provider's, not one in a folder that stays");
+});
 
 test("a helper run's live process names the chat that started it, and the link is written down", async () => {
   const { capture, asked, remembered } = harness({
@@ -143,10 +164,10 @@ test("a provider process started under a chat's own process inherits that chat a
   ];
   const processes = helperRunProcesses(rows, attributeByAncestry(rows), new Map([[100, "parent-chat-1"]]));
   assert.deepEqual(processes, [
-    { pid: 100, command: "/usr/local/bin/claude" },
-    { pid: 103, command: "grok --headless", ancestor: { agent: "claude", sessionId: "parent-chat-1" } },
-    { pid: 200, command: "/usr/local/bin/codex" },
-    { pid: 300, command: "/Users/someone/.grok/bin/grok" },
+    { pid: 100, command: "/usr/local/bin/claude", agent: "claude" },
+    { pid: 103, command: "grok --headless", agent: "grok", ancestor: { agent: "claude", sessionId: "parent-chat-1" } },
+    { pid: 200, command: "/usr/local/bin/codex", agent: "codex" },
+    { pid: 300, command: "/Users/someone/.grok/bin/grok", agent: "grok" },
   ]);
 });
 
