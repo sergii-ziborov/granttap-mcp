@@ -46,6 +46,7 @@ const resumedHeads = new WeakSet<RelayClient>();
 import { publishMonitorMeshes, stopMonitorMeshes } from "../mesh-publication";
 import { publishMonitorCapabilities, stopMonitorCapabilities } from "../capability-publication";
 import { annotateLimitContinuations, scheduleLimitContinuations } from "../../limit-continuation";
+import { cachedNativeAccountUsage } from "../../provider-account-status";
 
 export type SessionMonitor = {
   publish: () => Promise<void>;
@@ -172,7 +173,7 @@ async function publishMonitorTick(input: {
   if (includeHistory || initial) lastHistoryPublishedAt = Date.now();
   loadLoop.updateStatus(status);
   void refreshMcpLoad(status.sessions).catch(() => {});
-  void scheduleLimitContinuations(status.sessions).catch(() => {});
+  void scheduleLimitContinuations(status.sessions, undefined, Date.now(), cachedNativeAccountUsage).catch(() => {});
   publishCatalogHeads(client, status, subscriptions, publishSessionEvents);
   if (loadRuntimeConfig().meshEnabled) publishMonitorMeshes(client, status);
   publishMonitorCapabilities(client, status, () => history(false));

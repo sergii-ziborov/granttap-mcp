@@ -6,8 +6,19 @@ persistent monitor then queues one "continue" for that chat on the relay's durab
 due a minute after the reset. The relay holds it while this computer sleeps or the phone is away,
 and offers it back like any queued phone message: the chat receives it when it is idle.
 
+The window often has room before the time the refusal stated. While a continuation waits, the
+monitor looks at Claude's account readings (`lift.ts`). It queues one more continuation, due at once,
+when a reading of the same window, taken after the continuation was queued and less than ten
+minutes old, shows it below 98 % used, or ending more than five minutes before the refusal's reset
+(it already rolled over). `five_hour` is read from the five-hour window, `seven_day` from the weekly
+one, and a weekly limit named after one model (`seven_day_<model>`) from that model's weekly limit
+when exactly one reading names it. `seven_day_overage_included`, other kinds, a signed-out account
+and missing readings never go early. The early continuation is tried once per chat and reset time.
+The one due at the reset stays queued until the chat goes on; a chat refused again for the same
+reset keeps it and gets no second early try.
+
 The phone turns it off or on per chat with `session.autocontinue.set`. It is on by default.
-Turning it off takes the queued copy back from the relay. A copy the relay still offers afterwards
+Turning it off takes the queued copies back from the relay. A copy the relay still offers afterwards
 is refused at delivery. The same happens when the chat went on by itself first. A limit that reset
 more than an hour ago is treated as abandoned and is never woken by an update.
 
