@@ -22,7 +22,9 @@ test('a chat launched in a parent folder transfers only through an explicitly se
   execFileSync('git', ['-C', repo, '-c', 'user.name=Test', '-c', 'user.email=test@example.test', 'commit', '-qm', 'base']);
   const store = new MeshStore(join(root, 'mesh.json'), () => Date.now());
   const sessions: SessionInfo[] = [{ sessionId: 'source', agent: 'claude', cwd: root, state: 'idle',
-    title: 'Existing Task', startedAt: 1, lastActivityAt: 2, tokensSession: 0, tokensLastTurn: 0 }];
+    // Named before the pasted-text wrapper was recognised: the moved Task reads without it.
+    title: '<pasted_content id="2ebe">\nExisting Task\n</pasted_content>', startedAt: 1, lastActivityAt: 2,
+    tokensSession: 0, tokensLastTurn: 0 }];
   const sent: MeshEvent[] = [], captures: string[] = [];
   const transfers = new PreparedTaskTransfers(join(root, 'prepared'));
   let starts = 0, eventSequence = 0;

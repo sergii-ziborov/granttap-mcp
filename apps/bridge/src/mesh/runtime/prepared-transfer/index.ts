@@ -1,6 +1,7 @@
 import type { MeshEvent, SessionInfo, TaskCapsule } from '../../../../../../packages/protocol/schema';
 import type { MeshRuntimeDependencies } from '../dependencies';
 import { captureTransferContext } from '../../../task-transfer';
+import { presentableTitle } from '../../../sessions/support/activity-helpers';
 
 /** The private computer transport owns context; phone notifications are observations only. */
 export function preparedHandoffMetadata(event: MeshEvent): MeshEvent {
@@ -15,7 +16,7 @@ export async function capturePreparedHandoff(deps: MeshRuntimeDependencies, sess
   const captured = await capture(session, facts);
   const task = deps.store().task(facts.taskId);
   return { transferContext: captured.context,
-    capsule: { ...facts, title: task?.title ?? session.title ?? facts.goal.slice(0, 160),
+    capsule: { ...facts, title: presentableTitle(task?.title) ?? presentableTitle(session.title) ?? facts.goal.slice(0, 160),
       launch: 'on_message' as const, contextHash: captured.hash },
     confirm: async () => {
       const current = deps.sessions().find(row => row.sessionId === session.sessionId);

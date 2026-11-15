@@ -288,7 +288,8 @@ test("Codex tasks and visible activity are discovered from local rollouts", asyn
 });
 
 import {
-  harnessTaskNotification, harnessUserNotice, pushEntry, stripAttachmentNote, stripTranscriptMarkup, visibleUserText,
+  harnessTaskNotification, harnessUserNotice, presentableTitle, pushEntry, stripAttachmentNote, stripTranscriptMarkup,
+  visibleUserText,
 } from "../../apps/bridge/src/sessions/support/activity-helpers";
 import { childTitle } from "../../apps/bridge/src/sessions/support/child-threads";
 
@@ -366,6 +367,11 @@ test("Cursor timestamp and user_query marks are not the message", () => {
   assert.equal(stripTranscriptMarkup(pasted), "Versemora v1.1 — genealogy\nsecond line");
   assert.equal(visibleUserText(`Continue the Task: ${pasted} please`),
     "Continue the Task: Versemora v1.1 — genealogy\nsecond line please");
+  assert.equal(presentableTitle(pasted.slice(0, pasted.indexOf("second"))), "Versemora v1.1 — genealogy",
+    "a name cut short keeps the words it has");
+  assert.equal(presentableTitle('<pasted_content id="2e'), undefined, "a name cut inside the wrapper has no words");
+  assert.equal(presentableTitle("  Ship\n the   site "), "Ship the site");
+  assert.equal(presentableTitle(42), undefined);
   assert.equal(childTitle("<user_query>\nname this chat\n</user_query>"), "name this chat");
   assert.equal(childTitle("<user_query>\nstill open"), "still open");
   const out: import("../../packages/protocol/schema").ActivityEntry[] = [];

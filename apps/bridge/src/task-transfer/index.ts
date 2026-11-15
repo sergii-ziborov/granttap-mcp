@@ -1,5 +1,6 @@
 import type { CodingAgent, SessionInfo, UserAttachment } from '../../../../packages/protocol/schema';
 import type { DeliveryOptions, ReplyResult } from '../reply';
+import { presentableTitle } from '../sessions/support/activity-helpers';
 import { TransferPersistence } from './persistence';
 import type { PreparedTransfer } from './records';
 import type { MeshStore } from '../mesh/store';
@@ -36,7 +37,8 @@ export class PreparedTaskTransfers extends TransferPersistence {
       && !rows.some(prepared => prepared.sessionId === row.sessionId));
     return [...ordinary, ...rows.map(row => {
       const actual = native.find(session => session.sessionId === row.nativeSessionId);
-      return { ...this.session(row), ...actual, sessionId: row.sessionId, title: row.title,
+      // The Task's name, saved when it moved; one saved with a host's wrapper reads without it.
+      return { ...this.session(row), ...actual, sessionId: row.sessionId, title: presentableTitle(row.title),
         projectId: row.projectId, taskId: row.capsule.taskId, computerId: row.capsule.targetComputer,
         cwd: row.workspace, worktree: row.capsule.workspaceMode ? undefined : row.workspace, branch: row.branch };
     })];
@@ -113,7 +115,8 @@ export class PreparedTaskTransfers extends TransferPersistence {
   private session(row: PreparedTransfer): SessionInfo {
     return { sessionId: row.sessionId, agent: row.capsule.targetProvider as CodingAgent,
       projectId: row.projectId, taskId: row.capsule.taskId, computerId: row.capsule.targetComputer,
-      title: row.title, cwd: row.workspace, worktree: row.capsule.workspaceMode ? undefined : row.workspace, branch: row.branch,
+      title: presentableTitle(row.title), cwd: row.workspace,
+      worktree: row.capsule.workspaceMode ? undefined : row.workspace, branch: row.branch,
       model: row.capsule.targetModel, summary: row.capsule.currentStatus,
       state: row.phase === 'starting' ? 'working' : row.phase === 'uncertain' ? 'waiting' : 'idle',
       startedAt: row.acceptedAt, lastActivityAt: row.updatedAt, tokensSession: 0, tokensLastTurn: 0 };
@@ -122,7 +125,7 @@ export class PreparedTaskTransfers extends TransferPersistence {
   private prompt(row: PreparedTransfer, context: string, message: string): string {
     const location = this.providerContextPath(row.sessionId);
     const inline = !context.startsWith('{') && Buffer.byteLength(context) <= 32_000 ? `\n<prior-visible-context>\n${context}\n</prior-visible-context>` : '';
-    return `Continue the existing GrantTap Task ${row.capsule.taskId}: ${row.title}.\n`
+    return `Continue the existing GrantTap Task ${row.capsule.taskId}: ${presentableTitle(row.title) ?? row.capsule.taskId}.\n`
       + (row.capsule.workspaceMode ? 'Continue in the same working folder on this computer. Its files are shared with the source chat.\n'
         : `Repository revision: ${row.capsule.latestCommit ?? row.capsule.baseSha}.\n`)
       + `The complete visible conversation and project facts are saved at ${JSON.stringify(location)}. `

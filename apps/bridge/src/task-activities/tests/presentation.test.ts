@@ -26,6 +26,14 @@ test('one card per stable task, bounded UTF-8 previews, deterministic recent ord
   assert.equal(snapshot.generatedAt, 1_000_000);
 });
 
+test('a chat named by pasted text is shown by that text, not by the wrapper around it', () => {
+  const snapshot = taskActivitySnapshot(catalog([
+    session('a', {title: '<pasted_content id="2ebe"> Versemora v1.1 — genealogy', lastActivityAt: 300}),
+    session('b', {title: '<pasted_content id="2e', lastActivityAt: 200}),
+  ]), {keyId: 'opaque', previews: true});
+  assert.deepEqual(snapshot.rows.map(row => row.title), ['Versemora v1.1 — genealogy', 'GrantTap']);
+});
+
 test('privacy mode omits computer and task text, empty catalog remains empty', () => {
   const snapshot = taskActivitySnapshot(catalog([session('a')]), {keyId: 'opaque', previews: false});
   assert.equal(snapshot.machine, 'GrantTap');

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { SessionsStatus } from '../../../../packages/protocol/schema';
+import { presentableTitle } from '../sessions/support/activity-helpers';
 
 export type TaskActivitySnapshot = {version: 1; keyId: string; machine: string; taskCount: number;
   generatedAt: number; rows: {id: string; title: string; preview: string; state: string; lastActivityAt: number}[]};
@@ -28,7 +29,7 @@ export function taskActivitySnapshot(catalog: SessionsStatus,
     taskCount: tasks.size, generatedAt: catalog.generatedAt,
     rows: options.previews ? sorted.slice(0, 2).map(([id, item]) => ({
       id: createHash('sha256').update(id).digest('hex').slice(0, 24),
-      title: text(item.title, 128) || 'GrantTap', preview: text(item.summary, 256),
+      title: text(presentableTitle(item.title), 128) || 'GrantTap', preview: text(item.summary, 256),
       state: item.state, lastActivityAt: item.lastActivityAt,
     })) : []};
 }

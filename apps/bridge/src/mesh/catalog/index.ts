@@ -21,6 +21,7 @@ import { queueProjectBindingSync } from "../../engine/runtime/engine-projects";
 import { isCursorTaskCloneId } from "../../sessions/cursor/catalog";
 import { localTaskTransfers } from '../../task-transfer';
 import { helperRunFolder } from '../../helper-runs';
+import { presentableTitle } from '../../sessions/support/activity-helpers';
 export { inspectRepositoryAsync, inspectWorkingTreeAsync, readRepositoryGit } from "./repository-inspection";
 export { prepareMonitorInspection } from "./monitor-inspection";
 import type { CatalogInspection } from "./monitor-inspection";
@@ -105,8 +106,8 @@ function provider(value: string): MeshProvider | undefined {
  * even that is the fallback.
  */
 export function meshTaskTitle(session: SessionInfo, agent: string): string {
-  const named = session.title?.trim();
-  if (named) return named.slice(0, 160);
+  const named = presentableTitle(session.title);
+  if (named) return named;
   const opening = session.summary
     ?.split("\n")
     .map((line) => line.trim())

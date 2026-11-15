@@ -46,7 +46,8 @@ export function stripTranscriptMarkup(value: unknown): string {
   text = text.replace(/<\/?user_query\b[^>]*>/gi, "");
   text = text.replace(/<\/?timestamp\b[^>]*>/gi, "");
   // Claude Code wraps text the person pasted; the words are theirs, the tags are not.
-  text = text.replace(/<pasted_content\b[^>]*>[ \t]*\n?|\n?[ \t]*<\/pasted_content\s*>/gi, "");
+  // A name cut short can end inside the opening tag.
+  text = text.replace(/<pasted_content\b[^>]*>[ \t]*\n?|\n?[ \t]*<\/pasted_content\s*>|<pasted_content\b[^>]*$/gi, "");
   return text.replace(/^\s+|\s+$/g, "");
 }
 
@@ -84,6 +85,16 @@ export function stripAttachmentNote(text: string): string {
     /\n\nAttached files available locally(?: \(inspect them as part of this request\))?:\n(?:- [^\n]*(?:\n|$))+$/,
     "",
   ).trim();
+}
+
+/**
+ * A chat's or Task's name as a person reads it: without the host's wrappers and on one line.
+ * A name saved before a wrapper was recognised is cleaned the same way wherever it is shown.
+ */
+export function presentableTitle(value: unknown, max = 160): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const clean = visibleUserText(value).replace(/\s+/g, " ").trim();
+  return clean ? clean.slice(0, max) : undefined;
 }
 
 export function visibleUserText(value: unknown): string {
