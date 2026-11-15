@@ -28,7 +28,7 @@ import { projectSharedSkills } from "../../capabilities/skills";
 import { loadExecutionPolicy } from "../runtime/execution-policy";
 import { loadEnvironment, redactEnvironment } from "../context/env";
 import { loadRestrictions } from "../restrictions";
-import { MeshPreparedStore } from "./receipts/prepared-availability";
+import { MeshRepositoryStore } from "./repositories";
 import { activeProjectKnowledge, supersededProjectKnowledgeIds } from "../knowledge/active";
 import { restoreHandoffResult, validStoredReceipt } from './receipts';
 import {
@@ -36,7 +36,7 @@ import {
 } from "../catalog/project/requests";
 import { helperRunProject } from "../../helper-runs";
 
-export class MeshStore extends MeshPreparedStore {
+export class MeshStore extends MeshRepositoryStore {
   recordReceipt(input: ReceiptValue): void {
     this.sync();
     const receipt = HandoffReceipt.parse(input);

@@ -425,6 +425,20 @@ shows is what the mesh holds. A release is written to the store as a
 tombstone, so a snapshot or a late event from a computer that was away cannot
 bring the claim back.
 
+### Repositories of a Mesh
+
+The repositories a Mesh holds are changed from the phone, one computer at a
+time. The phone asks a computer which checkouts it knows: the ones it binds
+to any Mesh and the ones its chats work in, each repository once, with where
+it is bound. Adding a checkout binds its Git work tree to the Mesh on that
+computer; a repository already in another Mesh on the same computer stays
+where it is. Removing takes out one of that computer's own bindings, never
+another computer's, and never the Mesh's last repository — delete the Mesh
+instead. A removed repository stays out: chats that keep working in it, and
+snapshots that still list it, do not bind it again until it is added back.
+Only a controller paired with the computer is answered, and the answer goes
+to that controller alone.
+
 ### Task reports
 
 <p align="center">

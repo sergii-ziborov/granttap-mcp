@@ -22,18 +22,18 @@ import { preferExecution, preferTask } from "../admin/convergence";
 import { preferScopedExecution } from './receipts/execution-merge';
 import { integrationPeerKey } from "../handoff/other-side";
 import {
-  MAX_RELEASED_CLAIMS, MAX_STORE_MIGRATIONS, MAX_STORE_PEERS, type StoreState,
+  MAX_RELEASED_CLAIMS, MAX_REMOVED_BINDINGS, MAX_STORE_MIGRATIONS, MAX_STORE_PEERS, type StoreState,
 } from "./state";
 
 type Collection = Exclude<keyof StoreState, "version">;
 
 const COLLECTIONS: Collection[] = [
   "projects", "bindings", "peers", "tasks", "executions", "claims", "dependencies", "events",
-  "knowledge", "receipts", "migrations", "releasedClaims",
+  "knowledge", "receipts", "migrations", "releasedClaims", "removedBindings",
 ];
 const BOUNDS: Partial<Record<Collection, number>> = {
   peers: MAX_STORE_PEERS, events: 512, receipts: 256, migrations: MAX_STORE_MIGRATIONS,
-  knowledge: 256, releasedClaims: MAX_RELEASED_CLAIMS,
+  knowledge: 256, releasedClaims: MAX_RELEASED_CLAIMS, removedBindings: MAX_REMOVED_BINDINGS,
 };
 /**
  * A write takes milliseconds, so a lock held for seconds belongs to a
@@ -56,6 +56,7 @@ function rowKey(name: Collection, item: unknown): string {
     case "receipts": return row.capsuleHash ?? "";
     case "migrations": return row.capsuleHashFrom ?? "";
     case "releasedClaims": return row.claimId ?? "";
+    case "removedBindings": return [row.projectId, row.endpointId, row.repositoryId].join("\0");
   }
 }
 

@@ -79,6 +79,14 @@ not invent aliases. `task-queue.ts` holds a create until the offline deadline.
 `instance-epoch` (bridge) rejects commands issued for a previous instance after
 restore or clone. Display names and device aliases are never routing keys.
 
+`repositories/` answers the phone's `mesh.repository.query` with the checkouts
+this computer knows, one row per repository, and `mesh.repository.edit` by
+binding one of them to a Mesh or removing one of this computer's own bindings.
+A removal is kept in the store as `removedBindings`, local state that is never
+published: the catalog and snapshot merges skip a removed binding for this
+computer until the person adds it back. Edits are answered once per request id,
+and a repeated request is given the first answer.
+
 The Mesh brief guides an agent with Project scope, relevant restrictions,
 repository topology, dependencies, and neighboring work. The local hook and
 Engine enforce Governance decisions. GrantTap measures

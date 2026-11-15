@@ -2,7 +2,7 @@ import {
   ProjectBindingSummary,
   type ProjectBindingSummary as BindingValue,
 } from "../../../../../packages/protocol/schema";
-import type { StoreState } from "../store/state";
+import { bindingRemoved, type StoreState } from "../store/state";
 
 /**
  * The binding this endpoint owns for this repository, and nothing else.
@@ -36,11 +36,13 @@ export function bindingForRepository(
   return projects.size === 1 ? matches[0] : undefined;
 }
 
+/** A binding the person removed on this computer is not bound again until they add it back. */
 export function upsertBinding(
   state: StoreState,
   input: BindingValue,
 ): { bindings: BindingValue[]; changed: boolean } {
   const binding = ProjectBindingSummary.parse(input);
+  if (bindingRemoved(state, binding)) return { bindings: state.bindings, changed: false };
   const stableConflict = state.bindings.some((item) =>
     item.bindingId === binding.bindingId
     && (item.projectId !== binding.projectId

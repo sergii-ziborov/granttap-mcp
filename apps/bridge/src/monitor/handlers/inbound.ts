@@ -19,6 +19,7 @@ import {
   invalidateMeshSessionHistory,
 } from "../../mesh/runtime";
 import { releaseClaimByPerson, releaseResult } from "../../mesh/admin";
+import { handleMeshRepositoryRequest } from "../../mesh/repositories";
 import { handleInvocationQuery } from "../../engine/invocation/query";
 import { handleProjectKnowledgeQuery } from "../../mesh/knowledge/runtime-read";
 import { applyPairingJoin } from "../../pairing";
@@ -132,6 +133,9 @@ export async function handleMonitorMessage(
       return handleTaskTransferCommand(client, payload, () => { void publish().catch(() => {}); });
     } else if (payload.type === "mesh.claim.release" && loadRuntimeConfig().meshEnabled) {
       return handleInboundClaimRelease(client, payload, publish);
+    } else if (payload.type === "mesh.repository.query" || payload.type === "mesh.repository.edit") {
+      // Answers an edit with "mesh-disabled" when the Mesh is off; a query then goes unanswered.
+      return handleMeshRepositoryRequest(client, payload, input.peerPublicKey, () => publish());
     }
     return false;
 }

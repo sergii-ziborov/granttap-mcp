@@ -54,6 +54,27 @@ export const ReleasedClaim = z.object({
 }).strict();
 export type ReleasedClaim = z.infer<typeof ReleasedClaim>;
 
+/**
+ * A repository the person took out of a Project on this computer, on record
+ * until they add it back. A chat in the checkout, or a snapshot that still
+ * lists the binding, would otherwise bind it again on the next catalog.
+ */
+export const RemovedBinding = z.object({
+  projectId: z.string().min(1).max(128),
+  endpointId: z.string().min(1).max(128),
+  repositoryId: z.string().min(1).max(512),
+  at: z.number().nonnegative(),
+}).strict();
+export type RemovedBinding = z.infer<typeof RemovedBinding>;
+
+export function bindingRemoved(
+  state: Pick<StoreState, "removedBindings">,
+  binding: { projectId: string; endpointId: string; repositoryId: string },
+): boolean {
+  return (state.removedBindings ?? []).some((item) => item.projectId === binding.projectId
+    && item.endpointId === binding.endpointId && item.repositoryId === binding.repositoryId);
+}
+
 export type StoreState = {
   version: 1;
   projects: ProjectValue[];
@@ -68,16 +89,19 @@ export type StoreState = {
   receipts: ReceiptValue[];
   migrations: CapsuleMigration[];
   releasedClaims: ReleasedClaim[];
+  removedBindings: RemovedBinding[];
 };
 
 const EMPTY: StoreState = {
   version: 1, projects: [], bindings: [], peers: [], tasks: [], executions: [], claims: [],
   dependencies: [], events: [], knowledge: [], receipts: [], migrations: [], releasedClaims: [],
+  removedBindings: [],
 };
 
 export const MAX_STORE_PEERS = 256;
 export const MAX_STORE_MIGRATIONS = 64;
 export const MAX_RELEASED_CLAIMS = 256;
+export const MAX_REMOVED_BINDINGS = 256;
 
 function parsedArray<T>(value: unknown, schema: { safeParse: (input: unknown) => { success: boolean; data?: T } }): T[] {
   if (!Array.isArray(value)) return [];
@@ -115,10 +139,14 @@ export function readStoreState(path: string): StoreLoad {
       return { status: "corrupt", state: emptyStoreState() };
     }
     const projects = parsedArray(value.projects, Project);
+    const removedBindings = parsedArray(value.removedBindings, RemovedBinding)
+      .filter((item) => projects.some((project) => project.projectId === item.projectId))
+      .slice(-MAX_REMOVED_BINDINGS);
+    // A binding written back by a writer that does not know the removal stays removed.
     const bindings = validBindings(
       parsedArray(value.bindings, ProjectBindingSummary),
       new Set(projects.map((project) => project.projectId)),
-    );
+    ).filter((binding) => !bindingRemoved({ removedBindings }, binding));
     return {
       status: "ok",
       state: collapseSplitChats({
@@ -139,6 +167,7 @@ export function readStoreState(path: string): StoreLoad {
         receipts: parsedArray(value.receipts, HandoffReceipt),
         migrations: parsedArray(value.migrations, CapsuleMigration).slice(-MAX_STORE_MIGRATIONS),
         releasedClaims: parsedArray(value.releasedClaims, ReleasedClaim).slice(-MAX_RELEASED_CLAIMS),
+        removedBindings,
       }, path, MAX_STORE_MIGRATIONS),
     };
   } catch {

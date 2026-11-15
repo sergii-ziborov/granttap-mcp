@@ -200,34 +200,7 @@ function linkSession(input: {
     createdAt: session.startedAt,
   };
   if (!knownProject) store.upsertProject(project);
-  const knownBinding = store.bindingForEndpoint(repository.canonicalRepositoryId, computerId);
-  const binding = {
-    bindingId: knownBinding?.bindingId
-      ?? projectBindingIdentity(projectId, computerId, repository.canonicalRepositoryId),
-    projectId,
-    endpointId: computerId,
-    repositoryId: repository.canonicalRepositoryId,
-    displayName: knownBinding?.displayName ?? (basename(repository.root) || "Repository"),
-    localPathHint: repository.root,
-    available: true,
-    revision: repository.revision,
-  };
-  try {
-    store.upsertBinding(binding);
-    store.recordIntegrationPeers(
-      projectId, repository.canonicalRepositoryId, readIntegrationMap(repository.root),
-    );
-    void queueProjectBindingSync(project, {
-      summary: binding,
-      localRoot: repository.root,
-      canonicalRemote: repository.baseRemote
-        ? sanitizedRepositoryRemote(repository.baseRemote)
-        : undefined,
-      lastSeenAt: session.lastActivityAt,
-    });
-  } catch {
-    // Reported as an absent binding rather than an absent Mesh.
-  }
+  bindSessionRepository(store, project, repository, computerId, session.lastActivityAt);
   const taskId = knownTaskId ?? taskIdentity(projectId, agent, session.sessionId);
   const task: MeshTask = {
     taskId,
@@ -256,4 +229,43 @@ function linkSession(input: {
     startedAt: session.startedAt,
   });
   return { ...session, projectId, taskId, computerId, worktree: repository.worktree ?? previous?.worktree };
+}
+
+/**
+ * Bind the chat's checkout to its Project on this computer. A repository the
+ * person took out of that Project here stays out, however many chats run in it.
+ */
+function bindSessionRepository(
+  store: MeshStore, project: Project, repository: RepositoryFacts, computerId: string, lastSeenAt: number,
+): void {
+  const { projectId } = project;
+  if (store.bindingRemoved(projectId, computerId, repository.canonicalRepositoryId)) return;
+  const knownBinding = store.bindingForEndpoint(repository.canonicalRepositoryId, computerId);
+  const binding = {
+    bindingId: knownBinding?.bindingId
+      ?? projectBindingIdentity(projectId, computerId, repository.canonicalRepositoryId),
+    projectId,
+    endpointId: computerId,
+    repositoryId: repository.canonicalRepositoryId,
+    displayName: knownBinding?.displayName ?? (basename(repository.root) || "Repository"),
+    localPathHint: repository.root,
+    available: true,
+    revision: repository.revision,
+  };
+  try {
+    store.upsertBinding(binding);
+    store.recordIntegrationPeers(
+      projectId, repository.canonicalRepositoryId, readIntegrationMap(repository.root),
+    );
+    void queueProjectBindingSync(project, {
+      summary: binding,
+      localRoot: repository.root,
+      canonicalRemote: repository.baseRemote
+        ? sanitizedRepositoryRemote(repository.baseRemote)
+        : undefined,
+      lastSeenAt,
+    });
+  } catch {
+    // Reported as an absent binding rather than an absent Mesh.
+  }
 }

@@ -25,6 +25,12 @@ computer for another one-time controller credential. The reply is sealed only
 to the requester. It is device-network pairing, not Project membership.
 `mesh/knowledge/write.ts` carries a Task-bound human decision or correction and a
 separate Engine-confirmed result.
+`mesh/repositories/index.ts` carries `mesh.repository.query` and its
+`mesh.repository.list` of a computer's checkouts (at most 200, bound ones
+first), and `mesh.repository.edit` (`add` a checkout by absolute path,
+`remove` one of the computer's bindings by id) with its
+`mesh.repository.edit.result`. Each is Project-scoped (`sessionId` is the
+`projectId`); a refusal always names its reason.
 
 `sign-in/index.ts` carries a browser sign-in done on the phone: `signin.request`
 names an https page, the service, and optionally the loopback port a command

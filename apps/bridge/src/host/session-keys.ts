@@ -9,6 +9,8 @@ import type {
   MeshEvent,
   MeshSnapshot,
   MeshInvocationPage,
+  MeshRepositoryEditResult,
+  MeshRepositoryList,
   ProjectKnowledgePage,
   Payload,
   ProjectPolicyPayload,
@@ -56,7 +58,8 @@ export async function sendMeshPayload(
 
 export async function sendProjectPayload(
   client: RelayClient,
-  payload: ProjectPolicyPayload | MeshClaimReleaseResult | MeshInvocationPage | ProjectKnowledgePage,
+  payload: ProjectPolicyPayload | MeshClaimReleaseResult | MeshInvocationPage | ProjectKnowledgePage
+    | MeshRepositoryList | MeshRepositoryEditResult,
   to: Role | "all" = "phone",
   options: SendOptions = {},
 ): Promise<void> {

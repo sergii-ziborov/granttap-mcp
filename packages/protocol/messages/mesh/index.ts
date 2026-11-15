@@ -3,4 +3,5 @@ export * from "./tasks";
 export * from "./events";
 export * from "./snapshot";
 export * from "./repository-details";
+export * from "./repositories";
 export * from "./knowledge";
