@@ -8,8 +8,9 @@ export function decorateTaskOriginCatalog(status: SessionsStatus, room: string,
   try { origins = (registry ?? localTaskOrigins()).readyInRoom(room); }
   catch { return status; }
   const decorate = (session: SessionInfo): SessionInfo => {
-    const matching = origins.filter(origin => origin.sessionId === session.sessionId && origin.agent === session.agent
-      && (!origin.projectId || !session.projectId || origin.projectId === session.projectId));
+    // The chat is the one its provider named; the Mesh it is listed in can differ from the one the
+    // message asked for, as when that Mesh was a stale twin of the repository's own.
+    const matching = origins.filter(origin => origin.sessionId === session.sessionId && origin.agent === session.agent);
     if (!matching.length && !session.creationOrigins) return session;
     const { creationOrigins: _previous, ...native } = session;
     return matching.length ? { ...native, creationOrigins: matching.slice(0, 32).map(origin => ({

@@ -59,6 +59,21 @@ export class TaskOriginRegistry {
     });
   }
 
+  /**
+   * The provider named the chat it is creating. The creation is not settled, so a retry still waits
+   * for it, but the catalog can tell the phone which chat its message became as soon as it is listed.
+   */
+  started(scope: TaskOriginScope, sessionId: string): void {
+    const id = sessionId.trim();
+    if (!id || id.length > 180) return;
+    const path = this.path(scope);
+    withStoreLock(path, () => {
+      const record = this.read(scope);
+      if (!record || record.owner !== process.pid || record.phase !== 'creating' || record.sessionId) return;
+      writeOrigin(path, Record.parse({ ...record, sessionId: id }));
+    });
+  }
+
   complete(scope: TaskOriginScope, result: { ok: boolean; sessionId?: string }): void {
     const path = this.path(scope);
     withStoreLock(path, () => {
@@ -66,7 +81,7 @@ export class TaskOriginRegistry {
       if (!record || record.owner !== process.pid) throw new Error('Task origin owner mismatch');
       if (record.phase !== 'creating') return;
       const candidate = result.sessionId?.trim();
-      const sessionId = candidate && candidate.length <= 180 ? candidate : undefined;
+      const sessionId = (candidate && candidate.length <= 180 ? candidate : undefined) ?? record.sessionId;
       const phase = !result.ok ? 'failed' : sessionId ? 'ready' : 'uncertain';
       writeOrigin(path, Record.parse({ ...record, phase, sessionId }));
     });
@@ -97,7 +112,9 @@ export class TaskOriginRegistry {
         const record = cached?.version === version ? cached.record : Record.parse(readOrigin(path));
         if (this.path(record.scope) !== path) return [];
         this.catalogCache.set(path, { version, record });
-        if (record.scope.room !== room || record.phase !== 'ready' || !record.sessionId
+        // A creation still running is listed once its provider has named the chat.
+        const linked = record.phase === 'ready' || record.phase === 'creating';
+        if (record.scope.room !== room || !linked || !record.sessionId
             || record.expiresAt <= this.now()) return [];
         return [{ sessionId: record.sessionId, agent: record.agent, projectId: record.projectId,
           originId: record.scope.originMessageId, controllerPublicKey: record.scope.peerPublicKey }];

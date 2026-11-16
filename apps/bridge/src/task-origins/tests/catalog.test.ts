@@ -36,3 +36,33 @@ test('a fresh catalog restores native identity after the controller missed the c
   assert.equal(decorateTaskOriginCatalog(status, 'room', registry), status,
     'unavailable recovery metadata must not block the normal catalog');
 });
+
+test('a creation still running is linked to the chat its provider named, whatever Mesh it is listed in', t => {
+  const root = mkdtempSync(join(tmpdir(), 'granttap-origin-started-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const registry = new TaskOriginRegistry(root);
+  const scope = { room: 'room', peerPublicKey: 'controller', originMessageId: 'origin' };
+  // The phone asked for a stale twin Mesh; the computer lists the chat under the repository's own.
+  registry.begin(scope, { type: 'user.message', agent: 'claude', projectId: 'stale-twin', text: 'Synthetic task', createdAt: 1 });
+  const session = { sessionId: 'named-early', agent: 'claude' as const, projectId: 'repository-mesh', state: 'working' as const,
+    startedAt: 1, lastActivityAt: 2, tokensSession: 0, tokensLastTurn: 0 };
+  const status: SessionsStatus = { type: 'sessions.status', machine: 'Fixture', generatedAt: Date.now(),
+    sessions: [session], tokensRecent: 0, tokenWindowHours: 24 };
+  assert.equal(decorateTaskOriginCatalog(status, 'room', registry).sessions[0]?.creationOrigins, undefined,
+    'nothing is linked before the provider names the chat');
+  registry.started(scope, 'named-early');
+  registry.started(scope, 'a-second-name');
+  assert.deepEqual(decorateTaskOriginCatalog(status, 'room', registry).sessions[0]?.creationOrigins,
+    [{ originId: 'origin', controllerPublicKey: 'controller' }], 'linked while its first answer is still being written');
+  assert.equal(registry.begin(scope, { type: 'user.message', agent: 'claude', projectId: 'stale-twin', text: 'Synthetic task',
+    createdAt: 2 }).state, 'waiting', 'a retry still waits for the creation to settle');
+  registry.complete(scope, { ok: true });
+  assert.deepEqual(registry.lookup(scope, 'claude'), { state: 'ready', sessionId: 'named-early', projectId: 'stale-twin' },
+    'the end of the run keeps the name the provider gave first');
+
+  const failed = { ...scope, originMessageId: 'failed-origin' };
+  registry.begin(failed, { type: 'user.message', agent: 'claude', text: 'Synthetic failure', createdAt: 3 });
+  registry.started(failed, 'never-listed');
+  registry.complete(failed, { ok: false });
+  assert.equal(registry.lookup(failed, 'claude').state, 'failed', 'a run that failed can be retried');
+});

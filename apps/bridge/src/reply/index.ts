@@ -2,6 +2,7 @@ import { projectGuidancePrompt } from "../mesh/restrictions/guidance";
 /** Deliver phone messages into existing sessions or start a new Codex task. */
 import { localTaskTransfers, localTransferContinuations } from "../task-transfer";
 import { localRoutingRequests } from '../task-routing/requests';
+import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { SessionInfo, UserAttachment } from "../../../../packages/protocol/schema";
@@ -123,10 +124,11 @@ export function createClaudeSession(
   model?: string,
   operationKey?: string,
   effort?: string,
+  onNativeSession?: (sessionId: string) => void,
 ): Promise<ReplyResult> {
   const workspace = resolveAgentWorkspace(cwd, "claude");
   return queued(newTaskDeliveryKey("claude", operationKey), () => withAttachments(attachments, text, (prepared) =>
-    runClaudeNew(prepared.claudePrompt, workspace, timeoutMs, model, operationKey, effort),
+    runClaudeNew(prepared.claudePrompt, workspace, timeoutMs, model, operationKey, effort, onNativeSession),
   ));
 }
 
@@ -218,9 +220,15 @@ function runClaude(
 
 function runClaudeNew(
   text: string, cwd: string, timeoutMs: number, model?: string, operationKey?: string, effort?: string,
+  onNativeSession?: (sessionId: string) => void,
 ): Promise<ReplyResult> {
-  const args = ["-p", ...(model ? ["--model", model] : []), ...providerEffortArgs("claude", effort), "--output-format", "json", text];
+  // The chat is given its id before it starts, so the phone can show the one chat it asked for
+  // while the first answer is still being written, instead of a placeholder beside it.
+  const sessionId = randomUUID();
+  const args = ["-p", "--session-id", sessionId, ...(model ? ["--model", model] : []), ...providerEffortArgs("claude", effort),
+    "--output-format", "json", text];
   const claude = resolveClaudeBinary();
+  onNativeSession?.(sessionId);
   return runProcess(claude.path, args, cwd, timeoutMs, (stdout) => {
     try {
       const parsed = JSON.parse(stdout) as { result?: string; is_error?: boolean; session_id?: string };
@@ -228,7 +236,7 @@ function runClaudeNew(
         return { ok: false, error: explainClaudeFailure(parsed.result ?? "agent error", claude) };
       }
       if (typeof parsed.result === "string") {
-        return { ok: true, text: parsed.result.slice(0, 4000), sessionId: parsed.session_id };
+        return { ok: true, text: parsed.result.slice(0, 4000), sessionId: parsed.session_id ?? sessionId };
       }
     } catch {
       // Fall through to plain output.

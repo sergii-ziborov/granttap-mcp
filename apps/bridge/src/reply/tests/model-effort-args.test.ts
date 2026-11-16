@@ -39,9 +39,15 @@ test("a chosen Claude model and effort reach the CLI on create and on resume", a
   useBinary(t, "GRANTTAP_CLAUDE_BIN", await fake(root, "claude.mjs", [
     "process.stdout.write(JSON.stringify({ result: args.join('|'), session_id: 'claude-new' }));",
   ]));
-  const created = await createClaudeSession("Start", root, 5_000, [], "opus", undefined, "xhigh");
+  const named: string[] = [];
+  const created = await createClaudeSession("Start", root, 5_000, [], "opus", undefined, "xhigh", id => named.push(id));
   assert.equal(created.ok, true);
-  if (created.ok) assert.match(created.text, /^-p\|--model\|opus\|--effort\|xhigh\|--output-format\|json\|Start$/);
+  assert.equal(named.length, 1, "the chat's id is known before its first answer");
+  assert.match(named[0]!, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  if (created.ok) {
+    assert.equal(created.text, `-p|--session-id|${named[0]}|--model|opus|--effort|xhigh|--output-format|json|Start`);
+    assert.equal(created.sessionId, "claude-new", "the id Claude reports at the end stands");
+  }
   const resumed = await deliverToSession(session("claude", root), "Go on", 5_000, [], { model: "sonnet", effort: "low" });
   assert.equal(resumed.ok, true);
   if (resumed.ok) assert.match(resumed.text, /--resume\|claude-existing\|--model\|sonnet\|--effort\|low/);

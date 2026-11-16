@@ -82,16 +82,18 @@ async function startNewAgentTask(input: {
     throw error;
   }
   await say(`Creating a new ${displayName} task…`, undefined, false, "status");
-  const create = {
-    claude: createClaudeSession,
-    codex: createCodexSession,
-    cursor: createCursorSession,
-    grok: createGrokSession,
-  }[agent];
+  // Claude, Grok and Cursor name the chat as it starts; Codex only when its run ends.
+  const started = (sessionId: string) => {
+    try { input.origin?.registry.started(input.origin.scope, sessionId); } catch { /* The run's end records it. */ }
+  };
+  const prompt = projectGuidancePrompt(admittedProjectId, message.text);
   let run: Promise<ReplyResult>;
   try {
-    run = create(projectGuidancePrompt(admittedProjectId, message.text), requestedCwd, PHONE_RUN_LIMIT_MS, resolved.attachments,
-      message.model, message.messageId, message.effort).catch(() => {
+    run = (agent === 'codex'
+      ? createCodexSession(prompt, requestedCwd, PHONE_RUN_LIMIT_MS, resolved.attachments, message.model, message.messageId,
+        message.effort)
+      : { claude: createClaudeSession, cursor: createCursorSession, grok: createGrokSession }[agent](prompt, requestedCwd,
+        PHONE_RUN_LIMIT_MS, resolved.attachments, message.model, message.messageId, message.effort, started)).catch(() => {
       input.origin?.registry.complete(input.origin.scope, { ok: true });
       return { ok: false, error: 'The provider task stopped unexpectedly.' } as ReplyResult;
     });
