@@ -70,7 +70,10 @@ async function withdraw(state: LimitContinuationState, byId: Map<string, Session
   let changed = false;
   for (const [sessionId, job] of Object.entries(state.scheduled)) {
     const session = byId.get(sessionId);
-    const current = session?.usageLimit?.resetsAt === job.resetsAt && wanted(session, off, now);
+    // The relay delivers only to an idle chat, so a chat busy for a moment (an early attempt the limit
+    // refused again, a message of the person's) keeps its continuation. It is withdrawn only when the chat
+    // is no longer held by that limit or the person turned it off.
+    const current = session?.usageLimit?.resetsAt === job.resetsAt && !off.has(sessionId);
     const missing = !session && job.resetsAt > now - 7 * 86_400_000 && !off.has(sessionId);
     // A job queued before its time was recorded counts from now, so no older reading speaks for it.
     if (current && job.scheduledAt === undefined) { job.scheduledAt = now; changed = true; }

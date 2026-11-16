@@ -75,3 +75,27 @@ test('old limits, other agents and chats not stopped by a limit are left alone',
   const message = {type: 'user.message', messageId: 'phone-message', sessionId: 'plain-chat', text: 'x', createdAt: now} as UserMessage;
   assert.equal(limitContinuationUnwanted(message), false, 'ordinary messages are never held back');
 });
+
+test('a continuation stays queued while its chat is busy for a moment under the same limit', async t => {
+  isolated(t);
+  const relay = queue(), resetsAt = now + 25 * 3_600_000;
+  await scheduleLimitContinuations([chat(resetsAt, {usageLimit: {resetsAt, window: 'seven_day'}})], relay, now);
+  // A message of the person's, or an early attempt, ran into the same limit again.
+  await scheduleLimitContinuations([chat(resetsAt, {state: 'working', usageLimit: {resetsAt, window: 'seven_day'}})], relay, now + 60_000);
+  await scheduleLimitContinuations([chat(resetsAt, {usageLimit: {resetsAt, window: 'seven_day'}})], relay, now + 120_000);
+  assert.deepEqual(relay.cancelled, [], 'the relay delivers only to an idle chat, so nothing is taken back');
+  assert.equal(relay.submitted.length, 1, 'and nothing is queued twice');
+  assert.equal(limitContinuationUnwanted(relay.submitted[0]!.message), false);
+});
+
+test('a chat left idle past the live list is still continued when its weekly limit resets', async t => {
+  isolated(t);
+  const relay = queue(), resetsAt = now + 3_600_000;
+  // The chat stopped a day ago; the catalog lists it among history, which the monitor passes in too.
+  const old = chat(resetsAt, {lastActivityAt: now - 25 * 3_600_000, usageLimit: {resetsAt, window: 'seven_day'}});
+  await scheduleLimitContinuations([old], relay, now);
+  assert.equal(relay.submitted.length, 1);
+  assert.equal(relay.submitted[0]!.notBefore, resetsAt + LIMIT_CONTINUE_GRACE_MS);
+  await scheduleLimitContinuations([], relay, now + 60_000);
+  assert.deepEqual(relay.cancelled, [], 'a publication without history keeps what history queued');
+});

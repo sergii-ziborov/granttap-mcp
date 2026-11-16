@@ -173,7 +173,9 @@ async function publishMonitorTick(input: {
   if (includeHistory || initial) lastHistoryPublishedAt = Date.now();
   loadLoop.updateStatus(status);
   void refreshMcpLoad(status.sessions).catch(() => {});
-  void scheduleLimitContinuations(status.sessions, undefined, Date.now(), cachedNativeAccountUsage).catch(() => {});
+  // A weekly limit resets long after its chat has left the live list, so history is looked at too.
+  void scheduleLimitContinuations([...status.sessions, ...(status.history ?? [])], undefined, Date.now(),
+    cachedNativeAccountUsage).catch(() => {});
   publishCatalogHeads(client, status, subscriptions, publishSessionEvents);
   if (loadRuntimeConfig().meshEnabled) publishMonitorMeshes(client, status);
   publishMonitorCapabilities(client, status, () => history(false));
