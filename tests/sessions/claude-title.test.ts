@@ -43,3 +43,21 @@ test("a host note before the first typed message does not name the chat", () => 
   ]);
   assert.equal(title, "Ship the site");
 });
+
+test("a Claude chat reports the reasoning effort of its latest request, wherever it was started", () => {
+  const request = (effort: string, extra: Record<string, unknown> = {}) => ({ type: "api-request", sessionId: "claude-title",
+    timestamp: at, querySource: "repl_main_thread", params: { model: "claude-opus-5-5", output_config: { effort } }, ...extra });
+  const parse = (rows: unknown[]) => {
+    const directory = mkdtempSync(join(tmpdir(), "granttap-claude-effort-"));
+    try {
+      const file = join(directory, "claude.jsonl");
+      writeFileSync(file, rows.map((row) => JSON.stringify(row)).join("\n") + "\n");
+      return parseClaudeFile(file)?.session;
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  };
+  assert.equal(parse([user("Start")])?.effort, undefined, "a chat that sent no request yet reports none");
+  assert.equal(parse([user("Start"), request("medium"), request("xhigh")])?.effort, "xhigh", "the latest request counts");
+  assert.equal(parse([user("Start"), request("high"), request("max", { isSidechain: true })])?.effort, "high",
+    "an agent's request inside the chat does not change the chat's own effort");
+  assert.equal(parse([user("Start"), request("high"), request("sideways")])?.effort, "high", "an unknown level is ignored");
+});

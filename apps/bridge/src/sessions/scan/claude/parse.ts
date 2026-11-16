@@ -34,6 +34,8 @@ type ClaudeParseState = ClaudeTurnClock & {
   customTitle?: string;
   /** The name Claude generated for the chat; the latest one counts. */
   aiTitle?: string;
+  /** The reasoning effort of the chat's latest request. */
+  effort?: SessionInfo["effort"];
   summary?: string;
   startedAt: number;
   lastActivityAt: number;
@@ -46,6 +48,12 @@ type ClaudeParseState = ClaudeTurnClock & {
   changedPaths: string[];
   turnEnded: boolean;
 };
+
+const CLAUDE_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
+
+function claudeEffort(value: unknown): SessionInfo["effort"] | undefined {
+  return typeof value === "string" && CLAUDE_EFFORTS.has(value) ? value as SessionInfo["effort"] : undefined;
+}
 
 function claudeName(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
@@ -71,6 +79,9 @@ function applyClaudeLine(d: any, state: ClaudeParseState): void {
     if (typeof d.gitBranch === "string" && d.gitBranch.trim()) state.branch = d.gitBranch;
   }
   if (d.type === "custom-title") state.customTitle = claudeName(d.customTitle) ?? state.customTitle;
+  // Claude records each request it sends with its settings; the latest one says what the chat runs with,
+  // whether it was started on the phone or on the computer.
+  if (d.type === "api-request" && d.isSidechain !== true) state.effort = claudeEffort(d.params?.output_config?.effort) ?? state.effort;
   if (d.type === "ai-title") state.aiTitle = claudeName(d.aiTitle ?? d.content) ?? state.aiTitle;
   if (!state.title && (d.type === "user" || d.message?.role === "user")) {
     const raw =
@@ -259,6 +270,7 @@ export function* parseClaudeFileSteps(file: string): Generator<void, ClaudeParse
     worktree: state.cwd ? claudeCheckout({ ...state, cwd: state.cwd }) : undefined,
     branch: state.branch,
     model: state.model,
+    ...(state.effort ? { effort: state.effort } : {}),
     summary: state.summary,
     state: state.turnEnded ? "idle" : stateFor(state.lastActivityAt),
     startedAt: state.startedAt || state.lastActivityAt,
