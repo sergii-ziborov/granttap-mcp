@@ -29,9 +29,11 @@ Explicit Graph builds also invoke the Engine's `graph.analyze_project` for two
 to eight admitted local repositories. The projection labels these shared static
 contracts and keeps their runtime destination unverified. They do not become
 verified Backbone dependencies or merge Project grants. The Apple Silicon
-artifact pins Engine 0.1.5 with Weavatrix 2.17.5, injective package import identities
-and per-file function extent reuse during metrics analysis; unsupported Engine operations
-leave this analysis unavailable. See `runtime/project-relationships/README.md`.
+artifact pins Engine 0.1.8 with Weavatrix 2.17.17 and Cortex Loom 0.1.1, injective package
+import identities and per-file function extent reuse during metrics analysis; unsupported Engine
+operations leave this analysis unavailable. The Engine keeps a search index of the repositories it
+searched in `weavatrix-search/` beside its socket, with the socket's owner-only permissions; the
+launch never passes on a person's own `WEAVATRIX_SEARCH_HOME`. See `runtime/project-relationships/README.md`.
 
 Claude, Codex, and Cursor hooks can evaluate the engine's local Project
 Governance policy only when both `GRANTTAP_ENGINE_ENABLED` and

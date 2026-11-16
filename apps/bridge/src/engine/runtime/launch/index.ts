@@ -9,8 +9,11 @@ export function engineLaunchEnvironment(
   env: NodeJS.ProcessEnv, socketPath: string, platform: NodeJS.Platform = process.platform,
 ): NodeJS.ProcessEnv {
   const requestedStack = Number(env.RUST_MIN_STACK);
+  // The Engine keeps its search index of repository text in its own state folder beside the socket;
+  // a person's own Weavatrix setting must not move it into their Weavatrix data.
+  const { WEAVATRIX_SEARCH_HOME: _personalSearchHome, ...inherited } = env;
   return {
-    ...env,
+    ...inherited,
     GRANTTAP_ENGINE_SOCKET: engineSocketEndpoint(socketPath),
     // Rust's default worker stack aborts the daemon on ordinary long ASTs.
     // Scope this reserve to the verified Engine child; keep larger explicit reserves.

@@ -27,3 +27,10 @@ test("the Windows Engine keeps its private state directory alongside the parser 
   assert.equal(child.RUST_MIN_STACK, String(minimum));
   assert.ok(child.GRANTTAP_ENGINE_STATE_DIR?.endsWith(join("engine", "state")));
 });
+
+test("the Engine's search index stays in its own state folder whatever the person's Weavatrix setting is", () => {
+  const launched = engineLaunchEnvironment({ PATH: "/usr/bin", WEAVATRIX_SEARCH_HOME: "/Users/someone/.weavatrix/search" },
+    "/tmp/engine.sock", "darwin");
+  assert.equal(launched.WEAVATRIX_SEARCH_HOME, undefined);
+  assert.equal(launched.PATH, "/usr/bin");
+});
