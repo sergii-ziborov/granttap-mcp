@@ -9,7 +9,9 @@ export function registerRuntimeUpdateControl(
 ): void {
   server.registerTool('set_runtime_auto_update', {
     title: 'GrantTap automatic updates',
-    description: 'Enable or disable automatic GrantTap runtime updates on this computer when the user requests it. Saves the preference without restarting services or changing pairing, tasks, or provider policy.',
+    description: 'Turn automatic GrantTap runtime updates on this computer on or off, only when the person asks for it. '
+      + 'Saves the computer-wide preference without restarting services or changing pairing, tasks or provider policy; a '
+      + 'service-level disable cannot be overridden from here. Returns the same state as connection_status with the saved setting.',
     inputSchema: { enabled: z.boolean().describe('Whether this computer should automatically check for and apply stable GrantTap runtime updates') },
     outputSchema: connectionOutput,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },

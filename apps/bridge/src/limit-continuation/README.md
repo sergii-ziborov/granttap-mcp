@@ -22,6 +22,7 @@ Turning it off takes the queued copies back from the relay. A copy the relay sti
 is refused at delivery. The same happens when the chat went on by itself first. A limit that reset
 more than an hour ago is treated as abandoned and is never woken by an update.
 
-State lives in `limit-continuation.json` in the private config directory. Tests live in `tests/`.
+State lives in `limit-continuation.json` in the private config directory. `limitContinuationFor`
+reads one chat's setting and queued continuation for that chat's own MCP status. Tests live in `tests/`.
 
 License: GrantTap Commercial Source License; see the repository LICENSE.

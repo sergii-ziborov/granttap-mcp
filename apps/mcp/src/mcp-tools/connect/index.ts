@@ -9,6 +9,8 @@ import { CONNECTION_WIDGET_URI } from "./widget";
 import { resetRelay, relay } from "./relay";
 import { startPasskeyAccountLink } from "../../connection-center/passkey";
 import { registerRuntimeUpdateControl } from "../../connection-center/update-controls";
+import { chatStatusLine } from "../../status/chat-status";
+import { phoneSummary } from "../../status/pairing-status";
 
 const widgetMeta = {
   ui: { resourceUri: CONNECTION_WIDGET_URI, visibility: ["model", "app"] },
@@ -36,7 +38,12 @@ export function registerConnectTool(server: McpServer): void {
   };
   server.registerTool("connection_status", {
     title: "GrantTap connection center",
-    description: "Open connection controls and inspect pairing, QR expiry, this computer, relay observations and provider readiness. Does not create or replace pairing.",
+    description: "Read GrantTap's state on this computer without changing it: the pairing and paired phones with when each "
+      + "last reached this computer, any open pairing QR, relay reachability, provider readiness, the runtime version and any "
+      + "newer one waiting to take over, and, for the calling Claude Code chat, how many phone messages are queued to reach "
+      + "it after this turn and whether it continues by itself after a subscription limit. Shows the connection card where "
+      + "the host renders one. Use it to diagnose pairing or phone delivery, and before long repository-wide work. Never "
+      + "creates, replaces or removes a pairing.",
     inputSchema: {},
     outputSchema: connectionOutput,
     annotations: { ...changes, readOnlyHint: true, idempotentHint: true },
@@ -44,7 +51,9 @@ export function registerConnectTool(server: McpServer): void {
   }, async () => connectionResult(state));
   server.registerTool("connect_with_passkey", {
     title: "Link this Mac to a GrantTap account",
-    description: "Open a short-lived GrantTap account passkey request for this Mac. The passkey is entered only on granttap.com; existing QR pairings remain unchanged.",
+    description: "Link this Mac to the person's GrantTap account, so a phone signed in to that account can connect to it "
+      + "without a QR. Returns passkeyUrl, a granttap.com page valid for 15 minutes (also on the connection card), where the "
+      + "person confirms with their account passkey; the passkey is entered only there. Existing QR pairings are unchanged.",
     inputSchema: {},
     outputSchema: connectionOutput,
     annotations: changes,
@@ -65,7 +74,10 @@ export function registerConnectTool(server: McpServer): void {
   server.registerTool(
     "connect",
     {
-      description: "Open the GrantTap connection card: the saved pairing slot and Add a device. QR stays on the card, not in chat.",
+      description: "Pair this computer with the GrantTap phone app. On a computer that is not paired yet, creates a one-time "
+        + "pairing QR, valid 15 minutes, shown on the connection card and never in chat; on a paired computer, only shows the "
+        + "card with the saved pairing and starts the relay link. Returns the same state as connection_status. To pair a "
+        + "phone again or add another device, use reconnect.",
       inputSchema: {},
       outputSchema: connectionOutput,
       annotations: changes,
@@ -76,7 +88,11 @@ export function registerConnectTool(server: McpServer): void {
   server.registerTool(
     "reconnect",
     {
-      description: "Show a one-time QR for reconnect or add an independent controller device to this computer. Requires confirmation and keeps the current room.",
+      description: "After the person confirms, show a new one-time pairing QR, valid 15 minutes, on the connection card. "
+        + "mode=reconnect offers this computer's existing phone pairing again, for a phone that lost it; mode=add_device "
+        + "enrolls one more phone or iPad with its own key (at most 16 added keys; a scanned key stays paired until the "
+        + "pairing is replaced, one never scanned is dropped). The current room and paired phones keep working. Pass "
+        + "confirmed=true only after the person agreed.",
       inputSchema: {
         confirmed: z.boolean().describe("True only after the user confirms showing a new QR"),
         mode: z.enum(["reconnect", "add_device"]).default("reconnect"),
@@ -128,16 +144,21 @@ async function connect(
 
 function connectionResult(state: ConnectionState): CallToolResult {
   const snapshot = state.snapshot();
-  const { status, computer, relay, version, relayStatus, runtimeUpdates } = snapshot.structuredContent;
+  const { status, computer, relay, version, relayStatus, runtimeUpdates, phones, pendingUpdate, chat } = snapshot.structuredContent;
   const instructions = status === "pairing"
     ? "Use the GrantTap card: tap Add a device if needed, then scan the QR on the card."
     : status === "disconnected" ? "Use the GrantTap card and tap Add a device. The QR stays on the card."
     : status === "expired" ? "The card QR expired. Tap Add a device again and confirm."
     : "The GrantTap card shows the saved pairing room on this Mac and last confirmed activity. Add another device to start a new enrollment attempt. A Mesh link shares Mesh only.";
+  const details = [
+    phoneSummary(phones),
+    pendingUpdate ? `Runtime ${pendingUpdate.version} is waiting: ${pendingUpdate.detail}` : undefined,
+    chatStatusLine(chat),
+  ].filter(Boolean).join("\n");
   return {
     ...snapshot,
     content: [{ type: "text", text:
-      `GrantTap: ${status}. Computer: ${computer}. MCP ${version}. Relay: ${relay || "not configured"} (${relayStatus}). Automatic runtime updates: ${runtimeUpdates.enabled ? "on" : "off"}.\n${instructions}`,
+      `GrantTap: ${status}. Computer: ${computer}. MCP ${version}. Relay: ${relay || "not configured"} (${relayStatus}). Automatic runtime updates: ${runtimeUpdates.enabled ? "on" : "off"}.\n${details ? `${details}\n` : ""}${instructions}`,
     }],
   };
 }

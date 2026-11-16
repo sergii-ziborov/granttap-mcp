@@ -71,7 +71,8 @@ once it is offered. No line is added when nothing waits or the message is attach
 delivery's identity stays the person's text, so a retried Codex delivery is still the same one.
 The transcript views remove the line (`visibleUserText`, Cursor's chat name), so the phone shows
 the person's words. `queuedPhoneMessages` reads the same count from another process without
-writing. Regression cases: `tests/queue-note.test.ts`, `worker/tests/queue-depth.test.ts`
+writing; the chat's own MCP server reports it in `connection_status`, so an agent can look again
+before a long run. Regression cases: `tests/queue-note.test.ts`, `worker/tests/queue-depth.test.ts`
 and `../monitor/handlers/tests/queue-note.test.ts`.
 
 Relay queue errors are logged by `worker/failure-report.ts`. A dropped connection,

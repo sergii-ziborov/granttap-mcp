@@ -1,11 +1,11 @@
-import { closeSync, mkdirSync, openSync, statSync, unlinkSync } from 'node:fs';
+import { closeSync, mkdirSync, openSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { configDir } from '../config/runtime/paths';
 import { latestRelease, trustedRelease, installRelease, verifyRelease, type Release } from './registry';
 import { newerVersion, readState, runtimeVersion, saveState, validRuntime, versionRoot } from './selection.mjs';
 import { automaticUpdatesAllowed } from './preferences/storage.mjs';
-import { HOLD_POLL_MS, type UpdateDrain } from './drain';
+import { HOLD_LIMIT_MS, HOLD_POLL_MS, type UpdateDrain } from './drain';
 export { runtimeUpdateSettings, setRuntimeAutoUpdate } from './preferences';
 
 type Options={root:string;stateDirectory:string;manual?:boolean;now?:()=>number;latest?:()=>Promise<unknown>;
@@ -87,6 +87,31 @@ export function runtimeUpdateLoop(options:LoopOptions):()=>void {
   };
   timer=schedule(()=>void tick(),60_000);timer.unref();
   return ()=>{stopped=true;if(timer)clearTimeout(timer);};
+}
+
+export type PendingRuntimeUpdate = { version: string; state: 'selected' | 'downloaded'; detail: string };
+
+/**
+ * A newer runtime this computer holds while `running` is older: selected and started by GrantTap processes
+ * from their next start, or downloaded and not yet selected. Read from the version cache alone, without
+ * writing. The cache does not say why a busy monitor's hold gave way; its log does.
+ */
+export function pendingRuntimeUpdate(running:string,directory=join(configDir(),'runtime-updates')):PendingRuntimeUpdate|undefined {
+  const state=readState(directory);
+  if(state.version && newerVersion(state.version,running) && validRuntime(state.root,directory,state.version)) {
+    return {version:state.version,state:'selected',
+      detail:`Selected. GrantTap processes started on ${running}, this MCP server included, run it from their next start.`};
+  }
+  let versions:string[]=[];
+  try {versions=readdirSync(join(directory,'versions'));} catch {return undefined;}
+  const staged=versions.filter(version=>newerVersion(version,running) && version!==state.rejectedVersion
+    && (!state.version || newerVersion(version,state.version)) && validRuntime(versionRoot(directory,version),directory,version))
+    .sort((a,b)=>newerVersion(a,b)?-1:1)[0];
+  if(!staged)return undefined;
+  return {version:staged,state:'downloaded',detail:automaticUpdatesAllowed(directory)
+    ? 'Downloaded. It takes over once the monitor\'s running work has ended; new phone messages wait for that at most '
+      +`${HOLD_LIMIT_MS/60_000} min at a time, and the monitor log says when a wait gave up.`
+    : 'Downloaded, but automatic updates are off on this computer, so it does not take over.'};
 }
 
 /** Only the owned installed background monitor downloads updates; source checkouts stay fixed. */

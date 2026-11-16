@@ -45,7 +45,10 @@ export function registerNotifyTool(server: McpServer, once: Once): void {
     "notify",
     {
       description:
-        "Send a non-blocking status to the user, or publish one bounded task-scoped Project Mesh event. "
+        "Show a short status on the person's phone without waiting, or publish one bounded task-scoped Project "
+        + "Mesh event, or both. Nobody answers a status: use ask or ask_yes_no for an answer. Use it for what the person "
+        + "would want to know while away, such as a long run finishing or a blocker; the reply that ends this turn reaches "
+        + "the phone without it. "
         + "The result says whether the text was sent and whether the event was recorded; an error means nothing happened, "
         + "and a result with an error field says which part is still owed. Give the call an operationId to make retries safe. "
         + "A handoff is started by the person from the phone, never by an event published here.",

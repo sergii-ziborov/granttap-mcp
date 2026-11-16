@@ -7,7 +7,8 @@ import { packageVersion } from "../status/package-version";
 import { connectionRuntimeStatus } from "../mcp-tools/connect/relay";
 import { beginEnrollment, cancelEnrollment, enrollmentIsOpen } from "./enrollment";
 import { loadAccountLink } from "../../../bridge/src/account-recovery/link";
-import { runtimeUpdateSettings } from "../../../bridge/src/runtime-updates";
+import { pendingRuntimeUpdate, runtimeUpdateSettings } from "../../../bridge/src/runtime-updates";
+import { chatStatus } from "../status/chat-status";
 
 export const connectionOutput = {
   status: z.enum(["disconnected", "paired", "pairing", "expired", "connected"]),
@@ -18,15 +19,30 @@ export const connectionOutput = {
   phoneLastSeenAt: z.number().nullable(),
   phones: z.array(z.object({
     name: z.string(),
-    status: z.enum(["paired", "seen"]),
-    lastSeenAt: z.number().nullable(),
-  })),
+    status: z.enum(["paired", "seen"]).describe("seen: an authenticated message from this phone arrived in the last minute"),
+    lastSeenAt: z.number().nullable().describe(
+      "When this computer last received an authenticated message from this phone key; null: never. A key stays "
+        + "paired until the pairing is replaced, so a test install that was deleted keeps its row with an old or null time",
+    ),
+  })).describe("Every phone or iPad key allowed to control this computer: the first pairing, then added devices"),
   expiresAt: z.number().nullable(),
   expiresInMinutes: z.number().int().positive().nullable(),
   providers: z.array(z.object({ id: z.string(), status: z.string(), detail: z.string() })),
   roomPrefix: z.string(),
   accountLinkSaved: z.boolean(),
   runtimeUpdates: z.object({ enabled: z.boolean(), lockedByEnvironment: z.boolean() }),
+  pendingUpdate: z.object({
+    version: z.string(),
+    state: z.enum(["selected", "downloaded"]),
+    detail: z.string(),
+  }).nullable().describe("A newer GrantTap runtime on this computer than the one this server runs, and why it is not running yet"),
+  chat: z.object({
+    queuedPhoneMessages: z.number().int().nonnegative()
+      .describe("Phone messages this computer holds for the calling chat; they arrive one by one after the current turn"),
+    autoContinue: z.boolean().describe("Whether the chat continues by itself after a subscription limit stopped it"),
+    continuation: z.object({ dueAt: z.number(), early: z.boolean() }).nullable()
+      .describe("The continuation queued for the chat after a subscription limit; early: another goes at once"),
+  }).nullable().describe("The calling chat, when this server knows it (Claude Code); null elsewhere"),
   passkeyUrl: z.string().url().optional(),
 };
 
@@ -83,6 +99,8 @@ export class ConnectionState {
         roomPrefix: config?.room ? config.room.slice(0, 8) : "",
         accountLinkSaved: loadAccountLink() !== null,
         runtimeUpdates: runtimeUpdateSettings(),
+        pendingUpdate: pendingRuntimeUpdate(packageVersion()) ?? null,
+        chat: chatStatus(config?.room),
       },
       _meta: { granttap: code ? { pairingUri: code.pairingUri, qrDataUrl: code.qrDataUrl } : {} },
     };

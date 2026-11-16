@@ -11,6 +11,14 @@ phone export is absent. Reconnect requires explicit confirmation. A pending QR
 is reusable until expiry in this MCP process; restarting the process loses the
 transfer code but preserves the pairing. It never persists transfer secrets.
 
+Status also carries, read without writing: a text line sorting the paired phones by when each
+last reached this computer (keys stay paired until the pairing is replaced, so old test installs
+stay listed); `pendingUpdate`, a newer runtime this computer holds and why it is not running yet;
+and `chat`, for the chat named in this server's environment (Claude Code's
+`CLAUDE_CODE_SESSION_ID`), the phone messages queued to reach it after its turn and whether it
+continues by itself after a subscription limit. Hosts that name no chat get `chat: null`; none is
+guessed. `../status/chat-status.ts` assembles the chat part.
+
 Saved keys, this process's relay socket, and recent authenticated phone messages
 are distinct. Unknown phone availability stays unknown. Provider readiness is
 configuration information, not evidence that the provider is currently running.

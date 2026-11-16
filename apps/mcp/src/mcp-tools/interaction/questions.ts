@@ -23,7 +23,8 @@ export function registerQuestionTools(server: McpServer, once: Once): void {
     "ask_yes_no",
     {
       description:
-        "Ask the user a yes/no question on their phone/watch and wait for the tap. Returns 'yes' or 'no' "
+        "Ask the person a yes/no question on their phone or watch and wait for the tap, about three minutes by default. "
+        + "Use it when the work needs their decision and they may be away from this computer. Returns 'yes' or 'no' "
         + "when they answered, or 'no-answer (timeout)' when nobody answered in time. A timeout is not a "
         + "refusal: do not treat it as 'no', and do not treat it as permission. With an operationId, a retry "
         + "returns the answer already given instead of asking again.",
@@ -50,7 +51,8 @@ export function registerQuestionTools(server: McpServer, once: Once): void {
     "ask",
     {
       description:
-        "Ask the user an open question on their phone/watch and wait for their spoken or typed reply. "
+        "Ask the person an open question on their phone or watch and wait for their spoken or typed reply, about three "
+        + "minutes by default. Use it when the work needs their words, such as a name or a choice among more than two options. "
         + "Returns their answer text, or 'no-answer (timeout)' when nobody answered in time; a timeout is "
         + "not an answer. With an operationId, a retry returns the answer already given instead of asking again.",
       inputSchema: { question, operationId },

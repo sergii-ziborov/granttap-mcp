@@ -73,3 +73,19 @@ export function listPairedPhones(phoneLastSeenAt: number | null = null, now = Da
     });
   return [primary, ...additional];
 }
+
+const RECENT_MS = 7 * 86_400_000;
+
+/**
+ * The paired phones by how recently each spoke to this computer. Keys stay paired until the pairing is
+ * replaced, so test installs and deleted apps pile up; this tells the ones in use from the rest.
+ */
+export function phoneSummary(phones: PairedPhone[], now = Date.now()): string | undefined {
+  if (phones.length === 0) return undefined;
+  const seen = phones.filter((phone) => phone.status === "seen").length;
+  const recent = phones.filter((phone) => phone.status !== "seen" && phone.lastSeenAt != null
+    && now - phone.lastSeenAt < RECENT_MS).length;
+  const rest = phones.length - seen - recent;
+  return `Paired phones: ${phones.length} — ${seen} active in the last minute, ${recent} more seen in the last 7 days, `
+    + `${rest} not seen for 7 days or never.`;
+}

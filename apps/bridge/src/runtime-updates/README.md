@@ -60,7 +60,12 @@ minute tick without restarting services. Administrators may
 set `GRANTTAP_DISABLE_AUTO_UPDATE=1` on their service to retain their installed
 version. Private staging consumes space; old versions are retained for rollback.
 
-Public entry: `startRuntimeUpdates`, `runtimeUpdateReadiness`, `UpdateDrain`, and the
+`pendingRuntimeUpdate` reads the version cache for status views without writing: a newer release
+that is selected but older processes still run, or one downloaded and not yet selected, with the
+reason that can be told from the cache (running work, or automatic updates off). Why a busy
+monitor's hold gave way lives only in that monitor and its log.
+
+Public entry: `startRuntimeUpdates`, `pendingRuntimeUpdate`, `runtimeUpdateReadiness`, `UpdateDrain`, and the
 launcher's `selection.mjs` / `supervision.mjs` boundary. Tests exercise failed downloads
 and verification, deferred activation, concurrent installation, selection, and startup
 rollback using isolated directories and owned child processes. `drain/tests` covers the

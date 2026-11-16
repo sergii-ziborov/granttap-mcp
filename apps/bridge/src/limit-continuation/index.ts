@@ -45,6 +45,17 @@ export function annotateLimitContinuations(sessions: SessionInfo[]): SessionInfo
     ? { ...session, usageLimit: { ...session.usageLimit, autoContinue: !off.has(session.sessionId) } } : session);
 }
 
+/**
+ * For the chat itself: whether it goes on by itself after a subscription limit stopped it, and the
+ * continuation queued for it while it waits at one. `early` says a second one was queued to go at once
+ * because the account's readings showed room before the reset. Read only.
+ */
+export function limitContinuationFor(sessionId: string): { autoContinue: boolean; continuation?: { dueAt: number; early: boolean } } {
+  const state = readLimitContinuationState(), job = state.scheduled[sessionId];
+  return { autoContinue: !state.off.includes(sessionId),
+    ...(job ? { continuation: { dueAt: Math.max(job.scheduledAt ?? 0, job.resetsAt + LIMIT_CONTINUE_GRACE_MS), early: !!job.early } } : {}) };
+}
+
 function wanted(session: SessionInfo, off: Set<string>, now: number): boolean {
   const limit = session.usageLimit;
   return !!limit && session.agent === 'claude' && session.state === 'idle' && !off.has(session.sessionId)

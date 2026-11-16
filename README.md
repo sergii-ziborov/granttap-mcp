@@ -606,14 +606,14 @@ trust.
 
 | Tool | Contract |
 | --- | --- |
-| `set_runtime_auto_update` | When the user asks, turn automatic GrantTap runtime updates on this computer on or off; saves the preference without restarting services or changing pairing, tasks, or provider policy |
-| `connection_status` | Open the connection card and inspect saved pairing, QR expiry, relay observations, and provider readiness without changing pairing |
-| `connect_with_passkey` | Open a short-lived GrantTap account passkey request for this computer; the passkey is entered only on granttap.com and existing QR pairings stay unchanged |
-| `connect` | Reuse the existing production pairing or return a one-time QR |
+| `set_runtime_auto_update` | When the user asks, turn automatic GrantTap runtime updates on this computer on or off; saves the preference without restarting services or changing pairing, tasks, or provider policy, and returns the connection state |
+| `connection_status` | Read-only: saved pairing and paired phones by when each last reached this computer, QR expiry, relay observations, provider readiness, a newer runtime waiting to take over and why, and for the calling Claude Code chat the phone messages queued behind its turn and its continuation after a subscription limit |
+| `connect_with_passkey` | Link this computer to the user's GrantTap account so a signed-in phone can connect without a QR; returns a 15-minute granttap.com link, the passkey is entered only there, and existing QR pairings stay unchanged |
+| `connect` | Show the existing pairing on the connection card, or on an unpaired computer create a one-time QR shown only on the card |
 | `reconnect` | After explicit confirmation, show a one-time QR to reconnect or add an independent controller device while retaining the current room |
-| `notify` | Send a non-blocking status update of at most 2,000 characters |
-| `ask_yes_no` | Ask a yes/no question and wait for the explicit answer |
-| `ask` | Ask an open question and wait for typed or spoken text |
+| `notify` | Send a non-blocking status of at most 2,000 characters that nobody answers, and/or one task-scoped Mesh event |
+| `ask_yes_no` | Ask a yes/no question and wait about three minutes for the explicit answer; a timeout is neither yes nor no |
+| `ask` | Ask an open question and wait about three minutes for typed or spoken text |
 | `request_sign_in` | Send an https sign-in page to the phone, wait for the person, and deliver the browser's loopback redirect once to the port the CLI listens on; returns `completed`, `cancelled` or `timed_out`, never the page or the redirect's contents |
 | `offload_task` | Request moving the calling Task to a compatible computer in its Mesh, keeping provider, model, effort and visible conversation; requires Automatic computer transfers, and `action=status` or `action=cancel` acts only on the caller's own request |
 
