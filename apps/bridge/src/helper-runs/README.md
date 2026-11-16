@@ -55,9 +55,11 @@ picture's content, never a path, and only the chat that started the run is
 answered.
 
 **Meshes.** A run is not passed to the Mesh, and a generator's folder never
-registers one. A Mesh without a remote whose folder is a generator's, or is
-gone from inside a Git checkout or the temp directory, was registered for a
-run before the run was recognised: it stays in the Mesh store and is left out
+registers one. A Mesh without a remote whose folder is a generator's, is
+gone from the temp directory, or lies inside a Git checkout without being a
+checkout of its own (there or gone), was registered for a run before the run
+was recognised: a chat working in a folder of a checkout belongs to the
+checkout's Mesh: it stays in the Mesh store and is left out
 of every list of this computer's Projects. A workspace of its own is kept
 whether its folder is there or not.
 

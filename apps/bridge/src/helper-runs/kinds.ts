@@ -99,7 +99,7 @@ export function helperRunLabel(kind: string): string {
  */
 export function helperRunProject(
   project: { repositoryRoot?: string; canonicalRepositoryId: string },
-  vanished: (folder: string | undefined) => boolean = vanishedRunFolder,
+  vanished: (folder: string | undefined) => boolean = leftoverRunFolder,
 ): boolean {
   const identity = project.canonicalRepositoryId;
   if (!identity.startsWith("local:")) return false;
@@ -124,31 +124,53 @@ function parentOf(folder: string): string | undefined {
   return parent === folder || /^[A-Za-z]:$/.test(parent) ? undefined : parent;
 }
 
-/**
- * A folder that was made for one run and removed after it: it is gone, and it lay directly inside a
- * temp directory or anywhere inside a Git checkout. Had it been a workspace of its own it would have
- * been that checkout's. The answer is kept for a minute; a Mesh list asks about every Project.
- */
-export function vanishedRunFolder(path: string | undefined, now = Date.now()): boolean {
+/** Whether a folder lies inside a Git checkout: one of the folders above it holds `.git`. */
+function insideCheckout(folder: string): boolean {
+  let above = parentOf(folder);
+  for (let depth = 0; above !== undefined && depth < 48; depth += 1) {
+    if (existsSync(`${above === "/" ? "" : above}/.git`)) return true;
+    above = parentOf(above);
+  }
+  return false;
+}
+
+/** One answer per folder and question for a minute; a Mesh list asks about every Project. */
+function remembered(kind: string, path: string | undefined, now: number, look: (folder: string) => boolean): boolean {
   if (!path) return false;
   const folder = plainFolder(path);
   if (!absolute(folder)) return false;
-  const known = vanishedChecks.get(folder);
+  const key = `${kind}\0${folder}`;
+  const known = vanishedChecks.get(key);
   if (known && now - known.at < CHECK_AGAIN_MS && now >= known.at) return known.vanished;
-  let vanished = false;
-  try {
-    if (!existsSync(folder)) {
-      let above = parentOf(folder);
-      vanished = above !== undefined && isTempRoot(above);
-      for (let depth = 0; !vanished && above !== undefined && depth < 48; depth += 1) {
-        vanished = existsSync(`${above === "/" ? "" : above}/.git`);
-        above = parentOf(above);
-      }
-    }
-  } catch { /* A folder that cannot be looked at is not called gone. */ }
+  let answer = false;
+  try { answer = look(folder); } catch { /* A folder that cannot be looked at is not called a run's. */ }
   if (vanishedChecks.size >= MAX_REMEMBERED) vanishedChecks.clear();
-  vanishedChecks.set(folder, { at: now, vanished });
-  return vanished;
+  vanishedChecks.set(key, { at: now, vanished: answer });
+  return answer;
+}
+
+/**
+ * A folder that was made for one run and removed after it: it is gone, and it lay directly inside a
+ * temp directory or anywhere inside a Git checkout. Had it been a workspace of its own it would have
+ * been that checkout's.
+ */
+export function vanishedRunFolder(path: string | undefined, now = Date.now()): boolean {
+  return remembered("vanished", path, now, (folder) => {
+    if (existsSync(folder)) return false;
+    const above = parentOf(folder);
+    return (above !== undefined && isTempRoot(above)) || insideCheckout(folder);
+  });
+}
+
+/**
+ * The folder of a Mesh without Git that can only have been registered for a run: one gone as
+ * `vanishedRunFolder` says, or one inside a Git checkout that is not a checkout of its own, there or
+ * not. A chat working in such a folder belongs to the checkout's Mesh, so a Mesh of its own was
+ * registered while the folder could not be read as part of the checkout.
+ */
+export function leftoverRunFolder(path: string | undefined, now = Date.now()): boolean {
+  return vanishedRunFolder(path, now) || remembered("inside", path, now, (folder) =>
+    existsSync(folder) && !existsSync(`${folder}/.git`) && insideCheckout(folder));
 }
 
 /** For tests: look at every folder again. */

@@ -5,7 +5,8 @@ import { join } from "node:path";
 import test from "node:test";
 import { ChildThreadInfo } from "../../../../../packages/protocol/schema";
 import {
-  FRESH_FOLDER_MS, forgetRunFolderChecks, freshRunFolder, helperRunFolder, helperRunLabel, helperRunProject, vanishedRunFolder,
+  FRESH_FOLDER_MS, forgetRunFolderChecks, freshRunFolder, helperRunFolder, helperRunLabel, helperRunProject,
+  leftoverRunFolder, vanishedRunFolder,
 } from "../kinds";
 import { recognizeHelperRun } from "../recognition";
 
@@ -112,7 +113,9 @@ test("a folder made for one run is known by what became of it, not by its name",
   const gone = join(checkout, "build", "imagegen", "job.i1wr32");
   assert.equal(helperRunProject({ repositoryRoot: gone, canonicalRepositoryId: `local:${gone}` }), true);
   assert.equal(helperRunProject({ repositoryRoot: gone, canonicalRepositoryId: "github.com/acme/app" }), false);
-  assert.equal(helperRunProject({ canonicalRepositoryId: `local:${join(checkout, "docs")}` }), false);
+  assert.equal(helperRunProject({ canonicalRepositoryId: `local:${join(checkout, "docs")}` }), true,
+    "a chat in a folder of a checkout belongs to the checkout's Mesh, so a Mesh of the folder's own is left over");
+  assert.equal(helperRunProject({ canonicalRepositoryId: `local:${checkout}` }), false, "the checkout itself is kept");
 });
 
 test("a headless session is a run when its folder was made for a single request", () => {
@@ -138,4 +141,24 @@ test("a headless session is a run when its folder was made for a single request"
   assert.equal(recognizeHelperRun({ startedAt: 1_000, requests: 1 }, { ...none, vanished: () => true }), undefined);
   assert.equal(recognizeHelperRun({ ...session, cwd: "/tmp/hw-image-h3ospkyk" }, none)?.kind, "image-generation",
     "a generator's folder says so by its name");
+});
+
+test("a folder inside a checkout that is still there is a leftover Mesh's, but never makes a chat a run", (t) => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "granttap-leftover-folders-")));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  forgetRunFolderChecks();
+  const checkout = join(root, "app");
+  mkdirSync(join(checkout, ".git"), { recursive: true });
+  mkdirSync(join(checkout, "build", "imagegen", "job.8fSByF"), { recursive: true });
+  mkdirSync(join(checkout, "vendor", "lib", ".git"), { recursive: true });
+  mkdirSync(join(root, "notes"));
+  const job = join(checkout, "build", "imagegen", "job.8fSByF");
+
+  assert.equal(leftoverRunFolder(job), true, "a folder of a checkout, still on disk");
+  assert.equal(leftoverRunFolder(join(checkout, "build", "imagegen", "job.removed")), true, "and one that is gone");
+  assert.equal(leftoverRunFolder(join(checkout, "vendor", "lib")), false, "a checkout of its own inside another");
+  assert.equal(leftoverRunFolder(checkout), false, "the checkout itself");
+  assert.equal(leftoverRunFolder(join(root, "notes")), false, "a workspace outside every checkout");
+  assert.equal(helperRunProject({ repositoryRoot: job, canonicalRepositoryId: `local:${job}` }), true);
+  assert.equal(vanishedRunFolder(job), false, "a chat in a folder that is there is not taken for a run");
 });

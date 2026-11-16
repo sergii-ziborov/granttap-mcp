@@ -79,10 +79,15 @@ test("a Mesh registered for a folder that was made for one run and is gone is no
   mkdirSync(join(checkout, "docs"));
   const gone = staleRunMesh(store, join(checkout, "build", "imagegen", "job.i1wr32"), "job-1");
   const purged = staleRunMesh(store, join(tmpdir(), "run-that-was-removed-0001"), "job-2");
+  // A chat working in a folder of a checkout is the checkout's; a Mesh of the folder's own is left over.
   const there = staleRunMesh(store, join(checkout, "docs"), "chat-in-a-folder-that-stays");
+  const nested = staleRunMesh(store, join(checkout, "vendor", "lib"), "chat-in-a-checkout-of-its-own");
+  mkdirSync(join(checkout, "vendor", "lib", ".git"), { recursive: true });
   const elsewhere = staleRunMesh(store, "/Users/someone/removed-workspace", "chat-in-a-removed-workspace");
-  assert.deepEqual(store.projectIds().sort(), [there, elsewhere].sort(),
-    "a folder gone from inside a checkout or the temp directory was a run's; a workspace of its own is kept, there or not");
+  assert.deepEqual(store.projectIds().sort(), [elsewhere, nested].sort(),
+    "a folder inside a checkout, there or gone, or gone from the temp directory, was a run's; "
+      + "a workspace of its own and a checkout of its own inside another are kept");
   assert.equal(store.project(gone)?.projectId, gone, "nothing is deleted from the store");
   assert.equal(store.project(purged)?.projectId, purged);
+  assert.equal(store.project(there)?.projectId, there);
 });
