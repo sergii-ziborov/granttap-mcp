@@ -9,6 +9,7 @@ import { sendDeliveryArrival } from '../../monitor/handlers/receipts';
 import { TaskDispatchInbox } from '../index';
 import { TaskDispatchWorker, type TaskJobRemote, type WorkerOptions } from './index';
 import { relayTaskJobRemote } from './remote';
+import { conversationKeyOf } from './queue-depth';
 import { NativeTaskQueueSender } from '../sender';
 import { dispatchSessionObservation, newTaskOperationKey, queuedCatalogRefreshDue, taskDispatchReady } from './readiness';
 import { localTaskOrigins, resolveTaskOriginJob } from '../../task-origins';
@@ -41,9 +42,7 @@ export function startTaskDispatchMonitor(input: {
     authorized: peerAllowed,
     onTerminal: job => sender.confirmReceiverOutcome(job),
     onError: error => reportFailure(error),
-    conversationKey: (job, peer) => resolve(job, peer).job?.sessionId
-      ?? (job.operation.type === 'user.message.continue'
-        ? JSON.stringify([peer, job.operation.originMessageId]) : `new:${job.operation.agent ?? 'codex'}`),
+    conversationKey: conversationKeyOf((job, peer) => resolve(job, peer).job),
     validationCode: (job, peer) => {
       const state = resolve(job, peer).state;
       return state === 'uncertain' ? 'confirmation_required'
@@ -74,13 +73,13 @@ export function startTaskDispatchMonitor(input: {
       }
       return ready;
     },
-    deliver: (original, beforeStart, peer) => track(async () => {
+    deliver: (original, beforeStart, peer, queued) => track(async () => {
       if (original.operation.type === 'user.message' && limitContinuationUnwanted(original.operation)) return 'rejected';
-      if (input.deliver) return input.deliver(original, beforeStart, peer);
+      if (input.deliver) return input.deliver(original, beforeStart, peer, queued);
       const job = resolve(original, peer).job;
       if (!job || job.operation.type === 'user.message.continue') return 'rejected';
       const outcome = job.operation.type === 'user.message'
-        ? await handleUserMessage(input.client, job.operation, beforeStart, peer)
+        ? await handleUserMessage(input.client, job.operation, beforeStart, peer, undefined, undefined, queued)
         : (await handleTaskCreate(input.client, job.operation, beforeStart)).status;
       void input.publish().catch(() => {});
       return outcome;

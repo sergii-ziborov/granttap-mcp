@@ -2,6 +2,7 @@ import { recordObservedWrite, writtenPaths } from "../../mesh/observed/writes";
 import { readFileSync, statSync } from "node:fs";
 import { basename, dirname } from "node:path";
 import { normalizeMcpServerName, stripTranscriptMarkup } from "../support/activity-helpers";
+import { stripQueueNote } from "../../task-dispatch/queue-note";
 import { cursorTranscriptsRoot, recentLogs, safeParse, ts } from "../support/common";
 import {
   estimateTokens,
@@ -43,7 +44,7 @@ export function textBlocks(content: unknown): string[] {
 }
 
 function titleFrom(text: string): string | undefined {
-  const clean = stripTranscriptMarkup(text).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const clean = stripQueueNote(stripTranscriptMarkup(text)).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
   return clean ? clean.slice(0, 120) : undefined;
 }
 

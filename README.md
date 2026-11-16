@@ -623,6 +623,10 @@ existing pairing remains usable during a new enrollment attempt.
 Setup is CLI-only because it changes provider configuration and must not be
 available to a model through prompt injection.
 
+A phone message delivered while more phone messages wait for the same chat carries one GrantTap
+line after the person's words, saying how many follow and that repository-wide checks, full test
+runs and publishing can wait for the last of them. The phone's transcript view does not show it.
+
 `notify` may alternatively carry one bounded task-scoped Mesh event. This does
 not add another MCP tool or grant any global setup capability, and it publishes
 only for the execution whose provider hook attributed the call.

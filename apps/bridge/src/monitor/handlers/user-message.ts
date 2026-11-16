@@ -1,4 +1,5 @@
 import { projectGuidancePrompt } from "../../mesh/restrictions/guidance";
+import { withQueueNote } from "../../task-dispatch/queue-note";
 import type { UserMessage } from "../../../../../packages/protocol/schema";
 import { ATTACHMENT_MISSING_ERROR } from "../../../../../packages/protocol/schema";
 import type { RelayClient } from "../../../../../packages/core/relay-client";
@@ -32,6 +33,7 @@ async function startNewAgentTask(input: {
   onProcessing?: () => Promise<void>;
   origin?: { registry: TaskOriginRegistry; scope: TaskOriginScope };
   peerPublicKey?: string;
+  queuedBehind?: () => number;
 }): Promise<"accepted" | "rejected"> {
   const { client, message, say } = input;
   const agent = message.agent ?? "codex";
@@ -86,7 +88,8 @@ async function startNewAgentTask(input: {
   const started = (sessionId: string) => {
     try { input.origin?.registry.started(input.origin.scope, sessionId); } catch { /* The run's end records it. */ }
   };
-  const prompt = projectGuidancePrompt(admittedProjectId, message.text);
+  // Follow-ups written before this chat existed reach it after its first turn.
+  const prompt = projectGuidancePrompt(admittedProjectId, withQueueNote(message.text, input.queuedBehind?.()));
   let run: Promise<ReplyResult>;
   try {
     run = (agent === 'codex'
@@ -127,6 +130,8 @@ export async function handleUserMessage(
   peerPublicKey?: string,
   native?: { messageId: string; questionReply: true },
   onRefusal?: (error: string) => Promise<void>,
+  /** Phone messages queued for the same chat behind this one; the prompt says how many. */
+  queuedBehind?: () => number,
 ): Promise<"accepted" | "rejected"> {
   const say = (text: string, sessionId?: string, wake = false, kind: "status" | "response" = "response") => {
     const payload = agentEventForUserMessage(message, text, sessionId, kind);
@@ -145,7 +150,7 @@ export async function handleUserMessage(
       registry: localTaskOrigins(),
       scope: { room: client.room, peerPublicKey, originMessageId: message.taskOriginId },
     } : undefined;
-    return startNewAgentTask({ client, message, say, onProcessing, origin, peerPublicKey });
+    return startNewAgentTask({ client, message, say, onProcessing, origin, peerPublicKey, queuedBehind });
   }
   const resolved = resolveMessageAttachments(message, (attachmentId) => takeAttachment(attachmentId, client.room));
   if (!resolved.ok) {
@@ -183,7 +188,7 @@ export async function handleUserMessage(
     skill: message.skill,
     model: message.model,
     permissionMode: message.permissionMode,
-    effort: message.effort,
+    effort: message.effort, queuedBehind: queuedBehind?.(),
   });
   const settle = async (result: ReplyResult, late: boolean) => {
     if (result.ok && result.delivery === 'native') return;

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { TaskDispatch } from '../../../../../packages/protocol/schema';
 import { TaskDispatchInbox, type StoredTaskDispatch } from '../index';
+import { queuedBehind } from './queue-depth';
 
 export interface TaskJobRemote {
   get(job: TaskDispatch): Promise<string>;
@@ -15,7 +16,12 @@ export type WorkerOptions = {
   conversationKey?: (job: TaskDispatch, peer: string) => string;
   validationCode?: (job: TaskDispatch, peer: string) => string | undefined;
   ready: (job: TaskDispatch, peer: string) => boolean;
-  deliver: (job: TaskDispatch, beforeStart: () => Promise<void>, peer: string) => Promise<'accepted' | 'rejected'>;
+  /**
+   * `queued` counts the phone messages that reach the same chat after this one. It reads the queue
+   * when called, so the count is the one at the moment the prompt is written.
+   */
+  deliver: (job: TaskDispatch, beforeStart: () => Promise<void>, peer: string,
+    queued: () => number) => Promise<'accepted' | 'rejected'>;
 };
 class DeferredLaunch extends Error {}
 const REFUSED_LOOKUP_MS = 10 * 60_000;
@@ -34,8 +40,7 @@ export class TaskDispatchWorker {
     const records = this.options.inbox.pendingRecords().sort((a, b) =>
       Number(b.job.deliveryMode === 'immediate') - Number(a.job.deliveryMode === 'immediate')
         || a.job.createdAt - b.job.createdAt);
-    const keyOf = (record: StoredTaskDispatch) => this.options.conversationKey?.(record.job, record.peerPublicKey)
-      ?? record.job.sessionId ?? `new:${record.job.operation.agent ?? 'codex'}`;
+    const keyOf = (record: StoredTaskDispatch) => this.key(record.job, record.peerPublicKey);
     // A refusal is final for its message. It keeps holding the follow-ups that were already queued behind
     // it until the person cancels it; it used to hold every later message of the chat as well, for days.
     const refusedAt = new Map<string, number>();
@@ -59,6 +64,10 @@ export class TaskDispatchWorker {
       this.active.set(record.job.jobId, work); launched.push(work);
     }
     await Promise.all(launched);
+  }
+
+  private key(job: TaskDispatch, peer: string): string {
+    return this.options.conversationKey?.(job, peer) ?? job.sessionId ?? `new:${job.operation.agent ?? 'codex'}`;
   }
 
   private async process(record: StoredTaskDispatch): Promise<void> {
@@ -101,7 +110,7 @@ export class TaskDispatchWorker {
           throw new DeferredLaunch();
         }
         started = true;
-      }, record.peerPublicKey);
+      }, record.peerPublicKey, () => queuedBehind(inbox.pendingRecords(), record, (next, peer) => this.key(next, peer)));
       if (!started) { if (outcome === 'rejected') await this.reject(record, 'policy_denied'); return; }
       inbox.transition(job.jobId, outcome === 'accepted' ? 'delivered' : 'failed',
         outcome === 'rejected' ? { code: 'delivery_failed' } : {});

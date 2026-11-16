@@ -53,6 +53,27 @@ job, refreshes its catalog while held, and starts automatically once it is idle.
 This does not turn a temporary native busy state into a failed delivery or ask
 the person to resend. It does not claim provider-native mid-turn Steer support.
 
+## Messages still queued behind a delivery
+
+When a message reaches its chat while more phone messages for that chat wait here, its prompt
+carries one GrantTap line after the person's words (`queue-note.ts`), for example:
+
+> GrantTap: 3 more messages from the phone are queued for this chat and arrive after this turn.
+> Tests of what you change can run now; repository-wide checks, full test runs and publishing can
+> wait for the last of them unless this message asks for those now.
+
+`worker/queue-depth.ts` counts, when the prompt is written, the jobs staged or claimed for the same
+chat; for a new task, the follow-ups written for it before its chat existed. It leaves out the
+delivered job, this computer's own jobs such as a limit continuation, and messages held behind a
+refusal. Every job the relay offers is staged here at once, whether its chat is free or not, so the
+count covers what the relay has offered; a message scheduled more than five minutes ahead is counted
+once it is offered. No line is added when nothing waits or the message is attachments alone. The
+delivery's identity stays the person's text, so a retried Codex delivery is still the same one.
+The transcript views remove the line (`visibleUserText`, Cursor's chat name), so the phone shows
+the person's words. `queuedPhoneMessages` reads the same count from another process without
+writing. Regression cases: `tests/queue-note.test.ts`, `worker/tests/queue-depth.test.ts`
+and `../monitor/handlers/tests/queue-note.test.ts`.
+
 Relay queue errors are logged by `worker/failure-report.ts`. A dropped connection,
 a timeout or a relay 5xx is retried on the next two-second pass and is logged only
 after 30 seconds of continuing failures; storage faults are logged at once. Both

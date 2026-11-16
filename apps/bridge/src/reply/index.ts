@@ -17,6 +17,7 @@ import { routingPrompt } from "./payload/routing";
 import type { DeliveryOptions, ReplyResult } from "./payload/types";
 import { deliveryIntent } from './payload/identity';
 import { queued } from "./in-flight";
+import { withQueueNote } from "../task-dispatch/queue-note";
 import {
   runCursorNew,
   runCursorResume,
@@ -88,7 +89,7 @@ export function deliverToSession(
       },
     )) ?? { ok: false, error: "The prepared transfer is unavailable." });
   }
-  return queued(session.sessionId, () => withAttachments(attachments, text, (prepared) =>
+  return queued(session.sessionId, () => withAttachments(attachments, withQueueNote(text, options.queuedBehind), (prepared) =>
     runDelivery(
       session,
       session.agent === "codex" ? prepared.prompt : prepared.claudePrompt,

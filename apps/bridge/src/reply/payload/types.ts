@@ -20,4 +20,9 @@ export type DeliveryOptions = {
   effort?: string;
   /** The resume prompt itself is sent while the hold is being lifted. */
   ignorePause?: boolean;
+  /**
+   * Phone messages queued for this chat behind this one. The prompt gets a GrantTap line saying so;
+   * the controller's intent, and so the delivery's identity, stays the person's text.
+   */
+  queuedBehind?: number;
 };

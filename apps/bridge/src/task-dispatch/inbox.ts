@@ -10,6 +10,25 @@ import { InboxState, RequestRecord, phaseTransitions, type InboxPhase, type Stor
 type StageResult = 'staged' | 'existing' | 'conflict';
 const safeId = /^[A-Za-z0-9][A-Za-z0-9_-]{7,119}$/;
 
+/**
+ * The jobs of a room that have not completed or been cancelled, read from another process without
+ * creating, repairing or locking anything. A record being written is skipped until it is whole.
+ */
+export function waitingDispatchRecords(root: string, room: string): StoredTaskDispatch[] {
+  const directory = join(root, digest(room));
+  if (!existsSync(directory)) return [];
+  return readdirSync(directory, { withFileTypes: true })
+    .filter(entry => entry.isDirectory() && safeId.test(entry.name))
+    .flatMap(entry => {
+      try {
+        const request = RequestRecord.parse(readRequest(join(directory, entry.name, 'request.json')));
+        if (request.room !== room || request.job.jobId !== entry.name) return [];
+        const { state } = readJournal(join(directory, entry.name, 'events.jsonl'), { phase: 'staged', updatedAt: request.stagedAt });
+        return ['completed', 'cancelled'].includes(state.phase) ? [] : [{ ...request, ...state }];
+      } catch { return []; }
+    });
+}
+
 /** A receiver persists the complete operation before claiming it from the relay. */
 export class TaskDispatchInbox {
   private readonly directory: string;

@@ -5,6 +5,7 @@
  */
 import type { ActivityEntry } from "../../../../../packages/protocol/schema";
 import { heartbeatDisplayText } from '../host-heartbeat';
+import { stripQueueNote } from '../../task-dispatch/queue-note';
 import {
   parseMcpToolName,
   skillNameFromInput,
@@ -106,7 +107,8 @@ export function visibleUserText(value: unknown): string {
     /^(?:\s*<external_codex_apps_open_page\b[^>]*>[\s\S]*?(?:<\/external_codex_apps_open_page\s*>|$))+/i,
     "",
   );
-  const text = stripAttachmentNote(stripTranscriptMarkup(contextFree).trim());
+  // GrantTap's own lines after the person's words: the queued-messages note, then the attachment note.
+  const text = stripAttachmentNote(stripQueueNote(stripTranscriptMarkup(contextFree).trim()));
   if (!text) return "";
   // The host's own notes about what it showed the model: nobody typed them.
   if (text.startsWith("[Image: original ") || text.startsWith("<local-command-caveat>")) return "";
