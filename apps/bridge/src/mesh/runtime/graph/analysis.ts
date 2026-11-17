@@ -35,7 +35,8 @@ const graphAnalysisDependencies: GraphAnalysisDependencies = {
   endpoint: computerId,
   details: snapshot => repositoryDetails(snapshot, computerId()),
   send: (client, snapshot) => sendMeshPayload(client, snapshot, "phone", {
-    ttlMs: 60_000, reliable: true,
+    // The phone's Graph spinner waits for this answer; it goes ahead of bulk catalog and Mesh refreshes.
+    ttlMs: 60_000, reliable: true, urgent: true,
   }),
 };
 

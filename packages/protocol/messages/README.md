@@ -26,6 +26,10 @@ the phone does not know is shown by `message`: the provider's own first sentence
 (`resetsAt` from the provider's "try again at …"); `autoContinue` is `false` for any agent this computer
 does not continue by itself (everything but Claude).
 
+`startedChildren` (optional, strict: `{ finished, stopped, pictures, lastAt }`, non-negative integers
+and a time in ms) counts the finished chats this chat started headless that the catalog leaves out as
+rows; the newest three stay rows of their own with `startedBy`.
+
 `images` (optional, at most 12 of `{ id, name, markdown }`, the same shape as a helper run's
 `childThreads[].images`) lists pictures the chat's own answer saved in its working folder, kept by the
 computer. Ids start `helper-image:` and are read with `session.image.query` on this chat or on its

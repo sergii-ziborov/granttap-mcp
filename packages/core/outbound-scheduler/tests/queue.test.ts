@@ -23,7 +23,7 @@ test("explicit decisions pass queued snapshots while preserving each completed w
 
 test("queue admission is bounded and a disconnected generation cannot send later", async () => {
   const queue = new OutboundFrameQueue(async () => {});
-  const admitted = queue.send("x".repeat(8 * 1024 * 1024)).catch(error => error);
+  const admitted = queue.send("x".repeat(8 * 1024 * 1024), true).catch(error => error);
   await assert.rejects(queue.send("overflow"), /queue is full/);
   queue.cancel();
   assert.match((await admitted).message, /connection closed/);
@@ -107,4 +107,21 @@ test("an encrypted wake result passes queued replaceable snapshots", async t => 
     });
   release(); await Promise.all([first, snapshot, receipt]);
   assert.deepEqual(writes, ['first', 'agent.event', 'snapshot']);
+});
+
+test("a full queue of replaceable snapshots makes room for a newer frame and an answer instead of refusing them", async () => {
+  const written: string[] = [];
+  const queue = new OutboundFrameQueue(async frame => { written.push(frame); }, 0);
+  const bulk = Array.from({ length: 2_048 }, (_, index) => queue.send(`catalog-${index}`).then(() => "sent", () => "superseded"));
+  const answer = queue.send("graph-answer", true);
+  const latest = queue.send("catalog-latest");
+  // Before: the answer and the newest catalog were refused with "relay outbound queue is full".
+  assert.equal(queue.superseded, 2);
+  await answer;
+  await latest;
+  const outcomes = await Promise.all(bulk);
+  assert.equal(outcomes.filter(item => item === "superseded").length, 2);
+  assert.equal(written[0], "graph-answer", "the answer goes first");
+  assert.equal(written.at(-1), "catalog-latest");
+  queue.cancel();
 });

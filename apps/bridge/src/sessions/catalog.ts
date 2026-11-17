@@ -5,6 +5,7 @@ import { providerScans, cooperativeProviderScans, type ProviderScan } from "./pr
 import { attachHelperRuns } from "../helper-runs";
 import { attachChatPictures, noteChatPictureHints } from "../helper-runs/pictures/chats";
 import { attachStartedBy } from "../started-by";
+import { compactStartedChildren } from "../session-catalog/started-children";
 
 function sessionKey(session: SessionInfo): string {
   return `${session.agent}\0${session.sessionId}`;
@@ -102,7 +103,7 @@ export function scanSessions(): { sessions: SessionInfo[]; tokensRecent: number 
 }
 
 function liveCatalog({ all, tokensRecent }: { all: SessionInfo[]; tokensRecent: number }) {
-  const live = all.filter((session) =>
+  const live = compactStartedChildren(all).filter((session) =>
     session.state !== "idle" || Date.now() - session.lastActivityAt <= TOKEN_WINDOW_MS
   );
   return {
@@ -117,7 +118,7 @@ export function scanSessionHistory(): SessionInfo[] {
 }
 
 function historyCatalog(sessions: SessionInfo[]): SessionInfo[] {
-  return pickWithReserve(sessions, Math.min(MAX_HISTORY, 200), 40);
+  return pickWithReserve(compactStartedChildren(sessions), Math.min(MAX_HISTORY, 200), 40);
 }
 
 /** The UI asks for older catalog rows only when its History list reaches the end. */

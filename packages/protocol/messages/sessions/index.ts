@@ -160,6 +160,15 @@ export const SessionInfo = z.object({
    * `session.image.query` on this chat or on the chat that started it (`startedBy`).
    */
   images: z.array(KeptPicture).max(12).optional(),
+  /**
+   * Finished chats this one started headless that the catalog counts here instead of listing: all of
+   * them (`finished`), those that stopped on an error, those that saved a picture, and the newest one's
+   * time. The newest few stay rows of their own.
+   */
+  startedChildren: z.object({
+    finished: z.number().int().nonnegative(), stopped: z.number().int().nonnegative(),
+    pictures: z.number().int().nonnegative(), lastAt: z.number().nonnegative(),
+  }).strict().optional(),
 });
 export type SessionInfo = z.infer<typeof SessionInfo>;
 

@@ -6,6 +6,10 @@ import { sealEnvelope } from "../relay-envelope";
 
 type Job = { frame: string; bytes: number; resolve: () => void; reject: (error: Error) => void };
 const CLOSED = () => new Error("relay connection closed before delivery");
+export const MAX_QUEUED_BYTES = 8 * 1024 * 1024;
+export const MAX_QUEUED_FRAMES = 2_048;
+/** A queued snapshot is replaceable: a newer frame takes its place rather than being refused. */
+const SUPERSEDED = () => new Error("relay outbound snapshot superseded by newer traffic");
 
 /** Bound bursts below the managed relay cap; explicit decisions precede replaceable snapshots. */
 export class OutboundFrameQueue {
@@ -44,14 +48,26 @@ export class OutboundFrameQueue {
   send(frame: string, urgent = false): Promise<void> {
     if (this.closed) return Promise.reject(CLOSED());
     const bytes = Buffer.byteLength(frame);
-    if (this.bytes + bytes > 8 * 1024 * 1024 || this.controls.length + this.snapshots.length >= 2_048) {
-      return Promise.reject(new Error("relay outbound queue is full"));
+    // The oldest replaceable snapshots make room; only a queue of decisions and answers is full.
+    while (this.full(bytes) && this.snapshots.length) {
+      const dropped = this.snapshots.shift()!;
+      this.bytes -= dropped.bytes;
+      this.superseded += 1;
+      dropped.reject(SUPERSEDED());
     }
+    if (this.full(bytes)) return Promise.reject(new Error("relay outbound queue is full"));
     return new Promise((resolve, reject) => {
       (urgent ? this.controls : this.snapshots).push({ frame, bytes, resolve, reject });
       this.bytes += bytes;
       this.schedule();
     });
+  }
+
+  /** Queued snapshot frames dropped for newer traffic since this queue was made. */
+  superseded = 0;
+
+  private full(bytes: number): boolean {
+    return this.bytes + bytes > MAX_QUEUED_BYTES || this.controls.length + this.snapshots.length >= MAX_QUEUED_FRAMES;
   }
 
   cancel(): void {

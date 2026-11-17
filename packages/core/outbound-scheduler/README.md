@@ -8,6 +8,13 @@ also precede replaceable snapshots, including sealed transfer receipts. TCP writ
 on disconnect, and a fresh queue on reconnect prevent stale bursts from crossing
 connection generations. No message content or keys are logged.
 
+The queue holds at most 2,048 frames or 8 MB. A frame that would not fit first
+takes the place of the oldest queued replaceable snapshots, which are rejected as
+superseded; only a queue of controls refuses with "relay outbound queue is full".
+A burst of catalog and Mesh refreshes for hundreds of short runs once filled the
+queue and refused 103 Graph answers in a day; a Graph answer now also travels in
+the control lane.
+
 Disconnect rejects the current write as well as queued frames. Catalog and
 history publishers can retry on the next connection even if the previous
 socket never calls its write-completion callback.

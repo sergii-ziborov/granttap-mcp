@@ -12,7 +12,9 @@ export function publishCatalogHeads(client: RelayClient, status: SessionsStatus,
   runs.set(client, state);
   if (state.running || state.closed) return;
   const candidates = [...new Set([...subscriptions,
-    ...(client.supportsRetainedState ? status.sessions.map(session => session.sessionId) : [])])];
+    // A finished run another chat started is read when a phone opens it, not refreshed in bulk.
+    ...(client.supportsRetainedState ? status.sessions.filter(session => !(session.startedBy && session.state === "idle"))
+      .map(session => session.sessionId) : [])])];
   if (!candidates.length) return;
   const count = Math.min(32, candidates.length);
   const selected = Array.from({ length: count }, (_, offset) => candidates[(state.cursor + offset) % candidates.length]!);
