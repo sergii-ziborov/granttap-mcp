@@ -110,6 +110,9 @@ test("a folder Mesh whose folder became a clone of a repository with its own Mes
   assert.equal(moved[1]!.projectId, projectIdentity(tellwick), "a new chat goes to the repository's Mesh");
   const published = f.store.snapshot(twin)!;
   assert.equal(published.project.supersededBy, projectIdentity(tellwick));
+  assert.equal(f.store.snapshot(twin, "mac")?.project.supersededBy, projectIdentity(tellwick));
+  assert.equal(f.store.snapshot(twin, "another-mac")?.project.supersededBy, undefined,
+    "another computer's chats in a folder of the same name are not read from this disk");
   assert.equal(published.tasks.length, 1, "its tasks are still published");
   assert.equal(f.store.snapshot(projectIdentity(tellwick))?.project.supersededBy, undefined);
   assert.equal(f.store.snapshot(f.devProject), undefined);

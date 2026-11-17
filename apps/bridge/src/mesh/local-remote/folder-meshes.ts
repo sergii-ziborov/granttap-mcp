@@ -35,7 +35,9 @@ type Facts = { projects: readonly Project[]; tasks: readonly MeshTask[]; executi
  * chat names it. Undefined for a repository Mesh, and for a folder that is still a plain folder.
  */
 export function supersedingProject(project: Project, facts: Facts,
-  isCheckout: (folder: string) => boolean = folder => existsSync(join(folder, ".git"))): string | undefined {
+  isCheckout: (folder: string) => boolean = folder => existsSync(join(folder, ".git")),
+  /** The folder is read on this computer, so only this computer's chats count when it is known. */
+  computerId?: string): string | undefined {
   if (!folderIdentity(project.canonicalRepositoryId)) return undefined;
   const folders = new Set([project.canonicalRepositoryId.slice(FOLDER.length), project.repositoryRoot]
     .filter((folder): folder is string => !!folder));
@@ -43,7 +45,8 @@ export function supersedingProject(project: Project, facts: Facts,
   const projectOf = new Map(facts.tasks.map((task) => [task.taskId, task.projectId]));
   const owners = new Map(facts.projects.map((item) => [item.projectId, item]));
   const latest = facts.executions
-    .filter((row) => row.worktree && folders.has(row.worktree) && row.repositoryId && !folderIdentity(row.repositoryId))
+    .filter((row) => (computerId === undefined || row.computerId === computerId)
+      && row.worktree && folders.has(row.worktree) && row.repositoryId && !folderIdentity(row.repositoryId))
     .flatMap((row) => {
       const projectId = projectOf.get(row.taskId);
       const owner = projectId ? owners.get(projectId) : undefined;

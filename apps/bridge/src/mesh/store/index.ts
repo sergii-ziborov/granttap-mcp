@@ -333,7 +333,7 @@ export class MeshStore extends MeshRepositoryStore {
     const restrictions = loadRestrictions(projectId);
     const environment = redactEnvironment(loadEnvironment(projectId));
     const correctedIds = supersededProjectKnowledgeIds(projectId, this.state.knowledge);
-    const supersededBy = supersedingProject(project, this.state);
+    const supersededBy = supersedingProject(project, this.state, undefined, localEndpointId);
     return MeshSnapshot.parse({
       type: "mesh.snapshot",
       sessionId: projectId,

@@ -116,6 +116,7 @@ export class UpdateDrain {
     this.log(`${this.label()} no longer waits: automatic updates are off. Phone messages run again.`);
     this.since = undefined;
     this.version = undefined;
+    this.failures = 0;
     this.publish();
   }
 
