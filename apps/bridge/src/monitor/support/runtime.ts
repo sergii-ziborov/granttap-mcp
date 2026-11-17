@@ -43,6 +43,7 @@ import { decorateTaskOriginCatalog } from '../../task-origins';
 import { publishCodexQuestions } from '../../codex-questions';
 import { publishClaudeOpenQuestions } from '../../claude-open-questions';
 import { startTaskActivities } from '../../task-activities';
+import { droppedRequestLog } from '../dropped-requests';
 import type { PeerConfig } from '../../../../../packages/core/relay-client';
 
 const HISTORY_INTERVAL_MS = 60_000;
@@ -231,18 +232,7 @@ export function startSessionMonitor(client: RelayClient, options: { primary?: bo
     lastHistoryPublishedAt = next.lastHistoryPublishedAt;
   });
 
-  const off = client.onMessage((payload: Payload, peerPublicKey) => work.run(async () => {
-    if (payload.type === "hello" && payload.role === "phone") {
-      confirmPendingController(client.room, peerPublicKey);
-      recordControllerName(peerPublicKey, payload.deviceName);
-      if (leadership.acquire()) {
-        await client.send(approvalsStatus(), 'phone', { peerPublicKey, reliable: false, ttlMs: 90_000 })
-          .catch(() => {});
-        await replayNativeQuestions(client, peerPublicKey);
-      }
-    }
-    return await handleMonitorMessage(client, payload, { leadership, subscriptions, publish, peerPublicKey });
-  }));
+  const off = listenToPhones(client, { leadership, subscriptions, publish, work });
 
   const offConnected = client.onConnected?.(() => publish().catch(() => {}));
 
@@ -295,6 +285,33 @@ export function startSessionMonitor(client: RelayClient, options: { primary?: bo
       leadership.release();
     },
   };
+}
+
+/** Phone payloads go to the monitor's router; a request it drops is said in one line (`dropped-requests`). */
+function listenToPhones(client: RelayClient, input: { leadership: ReturnType<typeof monitorLeadership>;
+  subscriptions: Set<string>; publish: (forceHistory?: boolean) => Promise<void>; work: ReturnType<typeof monitorWork> }) {
+  const { leadership, subscriptions, publish, work } = input;
+  const dropped = droppedRequestLog();
+  // Every MCP server hears the phone too; only the one that routes says what it could not take.
+  const offUnreadable = client.onUnreadable?.((frame) => { if (leadership.acquire()) dropped.unreadable(frame); });
+  const off = client.onMessage((payload: Payload, peerPublicKey) => work.run(async () => {
+    if (payload.type === "hello" && payload.role === "phone") {
+      confirmPendingController(client.room, peerPublicKey);
+      recordControllerName(peerPublicKey, payload.deviceName);
+      if (leadership.acquire()) {
+        await client.send(approvalsStatus(), 'phone', { peerPublicKey, reliable: false, ttlMs: 90_000 })
+          .catch(() => {});
+        await replayNativeQuestions(client, peerPublicKey);
+      }
+    }
+    try {
+      return await handleMonitorMessage(client, payload, { leadership, subscriptions, publish, peerPublicKey });
+    } catch (error) {
+      if (leadership.acquire()) dropped.unanswered(payload.type, error);
+      return false;
+    }
+  }));
+  return () => { offUnreadable?.(); off(); };
 }
 
 /** Work a runtime update waits for. A run a newer monitor can take over is not among it (`reply/survival`). */

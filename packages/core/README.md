@@ -3,7 +3,10 @@
 Public entry: `RelayClient` in `relay-client.ts`. Machine and phone endpoints
 seal every payload for an authorized peer. `relay-inbound` authenticates routing,
 peer keys and optional per-task encryption before a consumer receives content.
-The relay sees routing metadata and opaque ciphertext only.
+The relay sees routing metadata and opaque ciphertext only. A frame an allowed
+peer sealed that no consumer can read (no key for its chat, a key that does not
+open it, a chat other than its seal's, or a type this runtime does not know) is
+reported to `onUnreadable` listeners by reason and payload name, never content.
 
 Ordinary consumers return true only after durable application acceptance.
 `RelayMessageAcceptance` binds replay protection to ciphertext, including across

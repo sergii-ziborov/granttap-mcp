@@ -5,7 +5,7 @@ import WebSocket from "ws";
 import { ManagedRelayLease, RelaySocketHealth, RelayReconnectBackoff, RelayConnectionNotifications, relayUpgradeHeaders } from "./socket-lifecycle";
 import { RelayLinkWatch, type LinkStuckReport } from "./socket-lifecycle/link-watch";
 import { OutboundFrameQueue, sendEncryptedPayload, priorityControlPayload } from "./outbound-scheduler";
-import { openRelayMessage, parseRelayControl, waitForRelayPayload } from "./relay-inbound";
+import { openRelayMessage, parseRelayControl, waitForRelayPayload, type UnreadableFrame } from "./relay-inbound";
 import { consumeTaskJobOffer, type TaskDispatchListener } from "./task-dispatch";
 import { Payload, type Role } from "../protocol/schema";
 import { clearSharedBoxKeys, peerPublicKeys } from "./crypto";
@@ -37,6 +37,7 @@ export class RelayClient {
     for (const listener of this.linkStuckListeners) { try { listener(report); } catch { /* the watch outlives a listener */ } }
   } });
   private readonly refusalLoggedAt = new Map<string, number>();
+  private readonly unreadableListeners = new Set<(frame: UnreadableFrame) => void>();
   private readonly sessionKeys = new Map<string, string>();
   private readonly replay: RelayMessageAcceptance;
   /** Read state this connection already handed to the relay, which replays it to joining phones. */
@@ -174,7 +175,9 @@ export class RelayClient {
       }));
       return;
     }
-    const opened = openRelayMessage(this.cfg, control, this.sessionKeys, key => this.peerIsAllowed(key));
+    const opened = openRelayMessage(this.cfg, control, this.sessionKeys, key => this.peerIsAllowed(key), frame => {
+      for (const listener of this.unreadableListeners) { try { listener(frame); } catch { /* a report never stops the socket */ } }
+    });
     if (!opened || opened.payload.type === "task.dispatch") return;
     const { env, payload, peerPublicKey, fingerprint } = opened;
     if (this.replay.hasAccepted(fingerprint)) {
@@ -310,6 +313,12 @@ export class RelayClient {
 
   onConnected(listener: () => void | Promise<void>): () => void {
     return this.connections.subscribe(listener);
+  }
+
+  /** Told of each frame an allowed peer sealed for this side that no consumer could read; see `UnreadableFrame`. */
+  onUnreadable(listener: (frame: UnreadableFrame) => void): () => void {
+    this.unreadableListeners.add(listener);
+    return () => { this.unreadableListeners.delete(listener); };
   }
 
   onMessage(l: Listener): () => void {

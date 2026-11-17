@@ -27,3 +27,10 @@ eleven-minute lease only has to cover that window. The answer, or the reason a
 long run stopped, reaches the chat when the run ends; unattended runs are
 bounded at six hours. New-task startup events are status updates; the
 correlated result is terminal. Delivery integration tests live in `tests/delivery`.
+
+The routing monitor writes one line for each phone request it drops
+(`dropped-requests/`): one it cannot open or read, and one whose
+handler failed before answering, such as an answer the relay queue gave up.
+The line names the request's type and the reason, never its contents or keys,
+and repeats at most once a minute with a count. Monitors that do not route
+stay quiet; the router answers or says why it did not.

@@ -10,9 +10,23 @@ export function parseRelayControl(raw: string): unknown {
   catch { return null; }
 }
 
+/**
+ * Why a frame an allowed peer sealed for us reached no consumer: sealed for a chat whose key is not
+ * held (`no-key`), not opened by that key (`unopenable`), naming another chat than its seal
+ * (`wrong-scope`), or of a type or shape this runtime does not read (`unknown`). Never its contents;
+ * `type` only when it is a plain payload name.
+ */
+export type UnreadableFrame = { reason: 'no-key' | 'unopenable' | 'wrong-scope' | 'unknown'; type?: string };
+type Unreadable = (frame: UnreadableFrame) => void;
+
+const payloadType = (body: unknown): string | undefined => {
+  const type = body && typeof body === 'object' && 'type' in body ? body.type : undefined;
+  return typeof type === 'string' && /^[a-z][a-z0-9.-]{0,63}$/.test(type) ? type : undefined;
+};
+
 /** Authenticate routing, peer identity and optional task encryption before consumers run. */
 export function openRelayMessage(cfg: PeerConfig, raw: unknown, sessionKeys: Map<string, string>,
-  peerAllowed: (key: string) => boolean) {
+  peerAllowed: (key: string) => boolean, unreadable: Unreadable = () => {}) {
   const parsed = Envelope.safeParse(raw);
   if (!parsed.success) return undefined;
   const env = parsed.data;
@@ -31,27 +45,34 @@ export function openRelayMessage(cfg: PeerConfig, raw: unknown, sessionKeys: Map
       const paths = parsedPayload.error.issues.map(issue => `${issue.path.join('.')}:${issue.code}`);
       console.error(`[granttap] dropped pairing.join (${paths.join(',') || 'invalid'})`);
     }
+    unreadable({ reason: 'unknown', type: payloadType(body) });
     return undefined;
   }
-  const payload = unwrapTaskPayload(parsedPayload.data, cfg.role, sessionKeys);
+  const payload = unwrapTaskPayload(parsedPayload.data, cfg.role, sessionKeys, unreadable);
   if (!payload) return undefined;
   const fingerprint = createHash('sha256').update(env.nonce).update('.').update(env.box).digest('base64url');
   return { env, payload, peerPublicKey: opened.peerPublicKey, fingerprint };
 }
 
-function unwrapTaskPayload(payload: Payload, role: string, sessionKeys: Map<string, string>): Payload | undefined {
+function unwrapTaskPayload(payload: Payload, role: string, sessionKeys: Map<string, string>,
+  unreadable: Unreadable): Payload | undefined {
   if (payload.type === 'session.key.grant') {
     if (role === 'machine' && !['task', 'project'].includes(payload.purpose ?? '')) return undefined;
     return payload;
   }
   if (payload.type !== 'session.sealed') return payload;
   const key = sessionKeys.get(payload.sessionId);
-  if (!key) return undefined;
-  const inner = Payload.safeParse(openWithTransferKey(payload.nonce, payload.box, key));
-  if (!inner.success || inner.data.type === 'session.key.grant' || inner.data.type === 'session.sealed') return undefined;
+  if (!key) { unreadable({ reason: 'no-key' }); return undefined; }
+  const body = openWithTransferKey(payload.nonce, payload.box, key);
+  if (body === null) { unreadable({ reason: 'unopenable' }); return undefined; }
+  const inner = Payload.safeParse(body);
+  if (!inner.success || inner.data.type === 'session.key.grant' || inner.data.type === 'session.sealed') {
+    unreadable({ reason: 'unknown', type: payloadType(body) });
+    return undefined;
+  }
   const sessionId = 'sessionId' in inner.data ? inner.data.sessionId : undefined;
   if (!payload.sessionId.trim() || typeof sessionId !== 'string' || !sessionId.trim()
-    || sessionId !== payload.sessionId) return undefined;
+    || sessionId !== payload.sessionId) { unreadable({ reason: 'wrong-scope', type: inner.data.type }); return undefined; }
   return inner.data;
 }
 
