@@ -18,6 +18,7 @@ import type { ApprovalDecision, ApprovalRequest, Risk } from "../../../../packag
 import { createHash } from "node:crypto";
 import { randomId } from "../../../../packages/core/crypto";
 import { approvalPresentation } from "./approval-presentation";
+import { removesOnlyTempPaths } from "../policy/shell/temp-removal";
 
 const HIGH = [
   /\brm\s+-rf?\b/,
@@ -31,7 +32,9 @@ const HIGH = [
   /:\s*>\s*\//, // truncate a file
   /\bchmod\s+-r\b/,
 ];
-const isHighRisk = (command: string): boolean => HIGH.some((re) => re.test(command.toLowerCase()));
+const TEMP_REMOVAL = HIGH[0];
+const isHighRisk = (command: string): boolean => HIGH.some((re) => re.test(command.toLowerCase())
+  && !(re === TEMP_REMOVAL && removesOnlyTempPaths(command)));
 
 /** Heuristic risk tag so the watch can color/rank the request at a glance. */
 export function guessRisk(tool: string, command: string | undefined): Risk {

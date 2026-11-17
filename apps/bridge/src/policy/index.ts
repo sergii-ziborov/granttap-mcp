@@ -6,6 +6,7 @@
  */
 import { guessRisk } from "../host/adapters";
 import { isSafeReadonlyShell } from "./shell/safe-shell";
+import { removesOnlyTempPaths } from "./shell/temp-removal";
 export { isSafeReadonlyShell } from "./shell/safe-shell";
 
 export type ActionClass =
@@ -49,7 +50,7 @@ export function classifyAction(tool: string, command: string | null | undefined)
   if (/\bgit\s+reset\s+--hard\b/.test(c)) return "git_force";
 
   if (
-    /\brm\s+-rf?\b/.test(c) ||
+    (/\brm\s+-rf?\b/.test(c) && !removesOnlyTempPaths(command ?? "")) ||
     /\bsudo\b/.test(c) ||
     /\b(drop|truncate)\s+table\b/.test(c) ||
     /\bdd\s+if=/.test(c) ||
