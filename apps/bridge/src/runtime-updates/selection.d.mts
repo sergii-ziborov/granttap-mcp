@@ -7,5 +7,6 @@ export function runtimeVersion(root:string):string;
 export function versionRoot(directory:string,version:string):string;
 export function validRuntime(root:string|undefined,directory:string,version:string|undefined):boolean;
 export function selectedRuntime(bundled:string,directory:string):string;
-export function cachedHookLauncher(command:unknown,route:string,directory:string,current:string,nodeCommand?:string):boolean;
+export function hookLauncherParts(command:unknown):{node:string;root:string;route:string}|undefined;
+export function cachedHookLauncher(command:unknown,route:string,directory:string,current:string,nodeCommand?:string|((token:string)=>boolean)):boolean;
 export function rollbackRuntime(bundled:string,directory:string,failedRoot?:string):boolean;

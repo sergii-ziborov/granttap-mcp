@@ -44,4 +44,8 @@ test('cached Codex launchers retain their exact absolute Node command',()=>{
  assert.equal(cachedHookLauncher(command,'codex-policy',f.dir,'0.8.101','node'),false);
  assert.equal(cachedHookLauncher(command.replace(node,'node'),'codex-policy',f.dir,'0.8.101',node),false);
  assert.equal(cachedHookLauncher(command+'; echo extra','codex-policy',f.dir,'0.8.101',node),false);
+ const other='"/fixture/Other Node/node"';
+ assert.equal(cachedHookLauncher(command.replace(node,other),'codex-policy',f.dir,'0.8.101',token=>token===other),true,'a route may accept more than one Node');
+ assert.equal(cachedHookLauncher(command.replace(node,other),'codex-policy',f.dir,'0.8.101',()=>false),false);
+ assert.equal(cachedHookLauncher(command.replace('internal hook','internal  hook'),'codex-policy',f.dir,'0.8.101',node),false,'only the shape setup writes');
 });

@@ -34,17 +34,25 @@ export function selectedRuntime(bundled, directory) {
   return validRuntime(state.root,directory,state.version) && newerVersion(state.version,runtimeVersion(bundled))
     ? state.root : bundled;
 }
+/** `node` or one double-quoted Node path, the launcher's quoted path, and the route: the shape setup writes. */
+const HOOK_SHAPE=/^(node|"(?:[^"\\]|\\.)+") "([^"]+)[\\/]bin[\\/]granttap-mcp\.mjs" internal hook (\S+)$/;
+/** A hook command in the shape setup writes, taken apart; anything else is not one. */
+export function hookLauncherParts(command) {
+  const match=typeof command==='string' ? command.trim().match(HOOK_SHAPE) : null;
+  return match ? { node:match[1], root:match[2], route:match[3] } : undefined;
+}
 /**
  * A provider hook written by an earlier runtime names that runtime's launcher in
  * this cache. Each cached launcher hands off to the selection above, so the hook
  * stays current after an update; one naming a newer, rolled-back release does not.
+ * `nodeCommand` is the exact Node token, or a test of it for a route that accepts more than one.
  */
 export function cachedHookLauncher(command, route, directory, current, nodeCommand = 'node') {
-  const prefix=nodeCommand+' "', raw=typeof command==='string' ? command.trim() : '';
-  const match=raw.startsWith(prefix) && raw.slice(prefix.length).match(/^(.+)[\\/]bin[\\/]granttap-mcp\.mjs" internal hook (\S+)$/);
-  if(!match || match[2]!==route) return false;
-  try { const version=runtimeVersion(match[1]);
-    return validRuntime(match[1],directory,version) && !newerVersion(version,current); } catch { return false; }
+  const parts=hookLauncherParts(command);
+  const node=typeof nodeCommand==='function' ? nodeCommand : token => token===nodeCommand;
+  if(!parts || parts.route!==route || !node(parts.node)) return false;
+  try { const version=runtimeVersion(parts.root);
+    return validRuntime(parts.root,directory,version) && !newerVersion(version,current); } catch { return false; }
 }
 /** A new background service that exits during startup restores the last working selection. */
 export function rollbackRuntime(bundled, directory, failedRoot) {

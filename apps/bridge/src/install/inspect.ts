@@ -43,8 +43,8 @@ import { monitorPlistLooksInstalled } from "./monitor-helper";
 import { inspectLinuxService } from "./linux-service";
 import { codexHooksExplicitlyDisabled } from "./hooks";
 import { cachedCodexHooks, codexHookSet } from "../codex-hook-trust";
-import { cachedHookLauncher, runtimeVersion } from "../runtime-updates/selection.mjs";
-import { hookNodeCommand } from "./stable-node";
+import { runtimeVersion } from "../runtime-updates/selection.mjs";
+import { hookLaunchesRuntime, hookNodeCommand } from "./stable-node";
 import type { ProviderHook } from "../../../../packages/protocol/messages/provider-hooks";
 export { codexHookSet } from "../codex-hook-trust";
 
@@ -76,11 +76,12 @@ export function commandHasRoute(command: unknown, route: HookRoute): boolean {
 /**
  * This runtime's command, or an earlier runtime's launcher in the version cache,
  * which hands off to this one. Keeping that command after an automatic update
- * also keeps the trust Codex records for it.
+ * also keeps the trust Codex records for it. A Codex hook may name another
+ * existing Node than the one reading it (`hookNodeAccepted`).
  */
 export function hookCommandIsCurrent(command: unknown, route: HookRoute): boolean {
   return typeof command === "string" && (command.trim() === hookCommand(route)
-    || cachedHookLauncher(command, route, join(configDir(), "runtime-updates"), runtimeVersion(repoRoot), hookNodeCommand(route)));
+    || hookLaunchesRuntime(command, route, repoRoot, runtimeVersion(repoRoot), join(configDir(), "runtime-updates")));
 }
 
 export type InstallResult = { status: "installed" | "already" | "manual"; detail: string };

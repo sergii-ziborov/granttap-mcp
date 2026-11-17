@@ -8,6 +8,8 @@ installed by this runtime (`PreToolUse` and `PermissionRequest`) can be reviewed
 A hook an earlier runtime wrote through its launcher in the private version cache
 still counts as this runtime's, because that launcher hands off to the selected
 version; setup keeps it, so an automatic update does not void its Codex trust.
+The hook's absolute Node may be another existing `node` than the one reading it
+([stable Node](../install/stable-node/README.md)).
 Project, plugin, managed, ambiguous, or unrelated commands are never approved.
 Unsupported native APIs report unknown; configured hooks alone do not establish
 readiness or computer enforcement.
