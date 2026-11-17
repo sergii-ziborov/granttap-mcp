@@ -17,6 +17,7 @@ import {
 import { formerComputerNames } from "../identity/computer";
 import { readIntegrationMap } from "../observed/integration-map";
 import type { MeshStore } from "../store";
+import { folderMeshHoldsRemote } from "../local-remote/folder-meshes";
 import { queueProjectBindingSync } from "../../engine/runtime/engine-projects";
 import { isCursorTaskCloneId } from "../../sessions/cursor/catalog";
 import { localTaskTransfers } from '../../task-transfer';
@@ -235,13 +236,26 @@ function linkSession(input: {
 /**
  * Bind the chat's checkout to its Project on this computer. A repository the
  * person took out of that Project here stays out, however many chats run in it.
+ *
+ * A repository with its own remote is never bound to a Mesh made for a folder
+ * without Git: a task begun in `~/dev` that works in `~/dev/app` stays in the
+ * folder Mesh with its history, and `app` keeps its own Mesh. A binding such a
+ * task made before this rule is taken out of the folder Mesh, so the
+ * repository's new chats, which already route past it, can bind it to its own.
  */
 function bindSessionRepository(
   store: MeshStore, project: Project, repository: RepositoryFacts, computerId: string, lastSeenAt: number,
 ): void {
   const { projectId } = project;
-  if (store.bindingRemoved(projectId, computerId, repository.canonicalRepositoryId)) return;
-  const knownBinding = store.bindingForEndpoint(repository.canonicalRepositoryId, computerId);
+  const repositoryId = repository.canonicalRepositoryId;
+  if (folderMeshHoldsRemote(project, repositoryId)) {
+    store.releaseFromFolderMesh(computerId, repositoryId);
+    return;
+  }
+  if (store.bindingRemoved(projectId, computerId, repositoryId)) return;
+  let knownBinding = store.bindingForEndpoint(repositoryId, computerId);
+  if (knownBinding && knownBinding.projectId !== projectId
+    && store.releaseFromFolderMesh(computerId, repositoryId)) knownBinding = undefined;
   const binding = {
     bindingId: knownBinding?.bindingId
       ?? projectBindingIdentity(projectId, computerId, repository.canonicalRepositoryId),

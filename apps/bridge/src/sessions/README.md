@@ -18,7 +18,10 @@ such as `~/dev`, the chat belongs to the repository it most recently changed
 (Write, Edit, MultiEdit, NotebookEdit, or `git -C <path> commit`), found by
 walking up for `.git` without running Git; the current folder decides only
 until such a change is known. Catalog linking verifies the chosen Git root while
-preserving the existing Task and Project identities.
+preserving the existing Task and Project identities. A checkout with its own
+remote found this way is recorded on the execution but not bound to the
+folder's Mesh, so new chats in it go to its own Mesh
+([folder Meshes](../mesh/local-remote/README.md)).
 
 Codex host question-reply envelopes remain intact in conversation history but
 cannot name a Task. A native title containing that transport JSON, including a

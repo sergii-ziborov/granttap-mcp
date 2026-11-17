@@ -211,14 +211,15 @@ export class MeshStoreBase {
     this.save();
   }
 
+  /** The Mesh a repository's chats go to; a folder Mesh never takes a repository that has its own remote. */
   projectIdForRepository(repositoryId: string, endpointId?: string): string | undefined {
     this.sync();
-    return bindingForRepository(this.state.bindings, repositoryId, endpointId)?.projectId;
+    return bindingForRepository(this.state.bindings, repositoryId, endpointId, this.state.projects)?.projectId;
   }
 
   bindingForRepository(repositoryId: string, endpointId?: string): BindingValue | undefined {
     this.sync();
-    return bindingForRepository(this.state.bindings, repositoryId, endpointId);
+    return bindingForRepository(this.state.bindings, repositoryId, endpointId, this.state.projects);
   }
 
   /** This endpoint's own binding, never another computer's. */

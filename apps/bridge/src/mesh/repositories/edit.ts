@@ -16,6 +16,7 @@ import { projectBindingIdentity, sanitizedRepositoryRemote } from "../identity";
 import { readIntegrationMap } from "../observed/integration-map";
 import type { MeshStore } from "../store";
 import { checkoutName, readCheckout, type InspectRepository } from "./checkout";
+import { folderMeshHoldsRemote } from "../local-remote/folder-meshes";
 
 export type RepositoryEditOutcome = {
   ok: boolean;
@@ -46,6 +47,10 @@ export async function addMeshRepository(
       : refusal("not-a-repository", "That folder is not inside a Git checkout.");
   }
   const { root, facts } = reading;
+  if (folderMeshHoldsRemote(store.project(request.projectId), facts.canonicalRepositoryId)) {
+    return refusal("invalid", "This repository has its own remote, so its chats go to a Mesh of its own. "
+      + "A Mesh for a folder without Git does not take it.");
+  }
   const binding: ProjectBindingSummary = {
     bindingId: projectBindingIdentity(request.projectId, endpointId, facts.canonicalRepositoryId),
     projectId: request.projectId,

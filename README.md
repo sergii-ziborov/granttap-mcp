@@ -439,6 +439,14 @@ snapshots that still list it, do not bind it again until it is added back.
 Only a controller paired with the computer is answered, and the answer goes
 to that controller alone.
 
+A Mesh made for a folder without Git never holds a repository that has its own
+remote. A task begun in `~/dev` that works in `~/dev/app` keeps its history in
+the folder's Mesh, while `app`'s chats, new ones at once, go to `app`'s own
+Mesh. A folder Mesh whose folder has since become a clone of a repository with
+a Mesh of its own is published with `project.supersededBy` naming that Mesh, so
+the phone can leave it out of New Task and keep its tasks visible. See
+[folder Meshes](apps/bridge/src/mesh/local-remote/README.md).
+
 ### Task reports
 
 <p align="center">

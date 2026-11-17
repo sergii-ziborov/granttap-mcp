@@ -1,8 +1,12 @@
 import {
   ProjectBindingSummary,
+  type Project as ProjectValue,
   type ProjectBindingSummary as BindingValue,
 } from "../../../../../packages/protocol/schema";
 import { bindingRemoved, type StoreState } from "../store/state";
+import { folderMeshHoldsRemote } from "../local-remote/folder-meshes";
+
+export { folderIdentity, folderMeshHoldsRemote } from "../local-remote/folder-meshes";
 
 /**
  * The binding this endpoint owns for this repository, and nothing else.
@@ -22,11 +26,18 @@ export function bindingForEndpoint(
     item.endpointId === endpointId && item.repositoryId === repositoryId);
 }
 
+/**
+ * The binding that routes a repository's chats. Given the Projects, a folder Mesh's binding of a
+ * repository with its own remote is passed over, so the repository's chats go to its own Mesh.
+ */
 export function bindingForRepository(
-  bindings: BindingValue[],
+  allBindings: BindingValue[],
   repositoryId: string,
   endpointId?: string,
+  knownProjects?: readonly ProjectValue[],
 ): BindingValue | undefined {
+  const bindings = knownProjects ? allBindings.filter((item) => !folderMeshHoldsRemote(
+    knownProjects.find((project) => project.projectId === item.projectId), item.repositoryId)) : allBindings;
   const exact = endpointId == null
     ? undefined
     : bindingForEndpoint(bindings, repositoryId, endpointId);

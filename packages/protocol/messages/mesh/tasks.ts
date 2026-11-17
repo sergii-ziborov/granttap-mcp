@@ -22,6 +22,11 @@ export const Project = z.object({
   canonicalRepositoryId: z.string().trim().min(1).max(512),
   baseRemote: z.string().trim().min(1).max(1_024).optional(),
   createdAt: z.number().nonnegative(),
+  /**
+   * Published only: this Mesh was made for a folder without Git that is now a checkout of a
+   * repository with its own Mesh, named here. Its tasks stay; new tasks belong to that Mesh.
+   */
+  supersededBy: Identifier.optional(),
 }).strict();
 export type Project = z.infer<typeof Project>;
 

@@ -87,6 +87,11 @@ published: the catalog and snapshot merges skip a removed binding for this
 computer until the person adds it back. Edits are answered once per request id,
 and a repeated request is given the first answer.
 
+A Mesh made for a folder without Git (canonical repository `local:<path>`)
+never binds or routes a repository that has its own remote; see
+[folder Meshes](local-remote/README.md), which also says when such a Mesh is
+published as `project.supersededBy` another.
+
 The Mesh brief guides an agent with Project scope, relevant restrictions,
 repository topology, dependencies, and neighboring work. The local hook and
 Engine enforce Governance decisions. GrantTap measures

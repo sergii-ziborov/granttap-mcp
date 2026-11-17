@@ -15,8 +15,10 @@ export function mergeSnapshotState(state: StoreState, input: SnapshotValue): voi
   }
   // repositoryRoot is an endpoint-local path. A snapshot from another
   // computer cannot replace this endpoint's verified checkout binding.
+  // Whether a Mesh is superseded is this endpoint's reading of its own folders, made at publication.
+  const { supersededBy: _published, ...incoming } = snapshot.project;
   const project = {
-    ...snapshot.project,
+    ...incoming,
     repositoryRoot: existing?.repositoryRoot,
   };
   candidate.projects = mergeBy(candidate.projects, [project], (item) => item.projectId);

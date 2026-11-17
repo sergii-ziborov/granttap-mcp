@@ -6,7 +6,10 @@ sessions to stable Tasks, and records endpoint bindings and execution history.
 An execution may discover a checkout after its Task started in a non-Git parent
 workspace. The catalog retains the Task and Project identity and records the
 observed repository on its execution. An observation does not grant Project
-membership or prove a code dependency. Apple clients partition workspace Tasks
+membership or prove a code dependency. A local repository without a remote is
+bound to the parent folder's Mesh as before; one with its own remote is not
+(`local-remote/folder-meshes.ts`), and a binding an older runtime made for it
+there is taken out with a removal record. Apple clients partition workspace Tasks
 using those observations without moving them between access scopes.
 
 Git facts are shared only within one catalog batch. The next reading refreshes

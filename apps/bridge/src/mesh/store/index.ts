@@ -35,6 +35,7 @@ import {
   projectCapabilityRequests,
 } from "../catalog/project/requests";
 import { helperRunProject } from "../../helper-runs";
+import { supersedingProject } from "../local-remote/folder-meshes";
 
 export class MeshStore extends MeshRepositoryStore {
   recordReceipt(input: ReceiptValue): void {
@@ -332,11 +333,12 @@ export class MeshStore extends MeshRepositoryStore {
     const restrictions = loadRestrictions(projectId);
     const environment = redactEnvironment(loadEnvironment(projectId));
     const correctedIds = supersededProjectKnowledgeIds(projectId, this.state.knowledge);
+    const supersededBy = supersedingProject(project, this.state);
     return MeshSnapshot.parse({
       type: "mesh.snapshot",
       sessionId: projectId,
       projectId,
-      project,
+      project: { ...project, supersededBy },
       bindings,
       // Absent rather than empty: a repository without a map publishes the
       // snapshot it always did.

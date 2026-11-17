@@ -5,6 +5,7 @@
  */
 import type { ProjectBindingSummary as BindingValue } from "../../../../../../packages/protocol/schema";
 import { upsertBinding } from "../../catalog/binding-state";
+import { folderMeshHoldsRemote } from "../../local-remote/folder-meshes";
 import { MeshPreparedStore } from "../receipts/prepared-availability";
 import { bindingRemoved, MAX_REMOVED_BINDINGS, type RemovedBinding } from "../state";
 
@@ -58,6 +59,29 @@ export class MeshRepositoryStore extends MeshPreparedStore {
       return { kind: "bound", binding: input };
     });
     return result.applied ? result.value : { kind: "busy" };
+  }
+
+  /**
+   * Take a repository with its own remote out of the folder Mesh that holds it on this endpoint, as
+   * a chat begun in the folder once bound it, and keep the removal on record so a snapshot that
+   * still lists it does not bind it again. The folder Mesh keeps its tasks. Returns the binding
+   * taken out, if there was one.
+   */
+  releaseFromFolderMesh(endpointId: string, repositoryId: string): BindingValue | undefined {
+    const result = this.transact((): BindingValue | undefined => {
+      const binding = this.state.bindings.find((item) => item.endpointId === endpointId && item.repositoryId === repositoryId);
+      const project = binding && this.state.projects.find((item) => item.projectId === binding.projectId);
+      if (!binding || !folderMeshHoldsRemote(project, repositoryId)) return undefined;
+      this.state.bindings = this.state.bindings.filter((item) => item.bindingId !== binding.bindingId);
+      this.state.removedBindings = [
+        ...this.state.removedBindings.filter((item) => !sameRepository(item, binding)),
+        { projectId: binding.projectId, endpointId, repositoryId, at: this.now() },
+      ].slice(-MAX_REMOVED_BINDINGS);
+      this.state.peers = this.state.peers.filter((item) =>
+        !(item.projectId === binding.projectId && item.repositoryId === repositoryId));
+      return binding;
+    });
+    return result.applied ? result.value : undefined;
   }
 
   /**
