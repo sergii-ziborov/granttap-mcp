@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { guessRisk } from "../../apps/bridge/src/host/adapters";
@@ -32,13 +31,14 @@ test("removing a chat's scratch folder under /tmp is ordinary work, as the owner
 test("any removal that is not a literal path below a temp root still asks", () => {
   const root = scratch();
   const link = join(root, "home-link");
-  symlinkSync(homedir(), link);
+  // The test runner puts HOME in a temp folder, so the link leads to this checkout instead.
+  symlinkSync(process.cwd(), link);
   try {
     for (const command of [
       "rm -rf build", "rm -rf ~/tmp", "rm -rf /tmp", "rm -rf /tmp/", "rm -rf /private/tmp", `rm -rf ${root}/`,
       `rm -rf ${root}/../x`, `rm -rf ${root}/./`, `rm -rf ${root}/*`, `rm -rf $TMPDIR/x`, `rm -rf "${root}/x"`,
       `rm -rf ${root}/x /Users/x/project`, `rm -rf ${root}/shots; rm -rf /Users/x/project`,
-      `find ${root} -name x | xargs rm -rf`, `git rm -rf ${root}/x`, `rm -rf ${link}/Documents`,
+      `find ${root} -name x | xargs rm -rf`, `git rm -rf ${root}/x`, `rm -rf ${link}/apps`,
       `rm -i ${root}/x`, "rm -rf", `rm -rf /tmp/does-not-exist-${Date.now()}/x`, `rm -rf ${root}/x 2>/dev/null`,
     ]) {
       assert.equal(removesOnlyTempPaths(command), false, command);
