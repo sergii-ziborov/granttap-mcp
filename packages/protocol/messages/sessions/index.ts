@@ -4,6 +4,7 @@ import { z } from "zod";
 import { CodingAgent } from "../primitives";
 import { ActivityEntry, McpServerInfo, SkillInfo } from "../capabilities";
 import { SessionContextUsage } from "./context";
+import { SessionWorkingTree } from "./working-tree";
 export { SessionContextUsage } from "./context";
 import {
   AgentId,
@@ -165,6 +166,8 @@ export const SessionInfo = z.object({
    * them (`finished`), those that stopped on an error, those that saved a picture, and the newest one's
    * time. The newest few stay rows of their own.
    */
+  /** The working folder's uncommitted state when it is a Git checkout (`./working-tree.ts`). */
+  workingTree: SessionWorkingTree.optional(),
   startedChildren: z.object({
     finished: z.number().int().nonnegative(), stopped: z.number().int().nonnegative(),
     pictures: z.number().int().nonnegative(), lastAt: z.number().nonnegative(),

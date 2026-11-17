@@ -13,6 +13,8 @@ export { TaskDispatch } from "./task-dispatch";
 import { SessionImageQuery, SessionImageChunk } from './messages/session-images';
 import { SessionWorkspaceQuery, SessionWorkspaceResult } from './messages/sessions/workspace';
 export { SessionWorkspaceQuery, SessionWorkspaceResult } from './messages/sessions/workspace';
+import { SessionChangesQuery, SessionChangesResult, SessionCommit, SessionCommitResult } from './messages/sessions/working-tree';
+export { SessionWorkingTree, SessionChangesQuery, SessionChangesResult, SessionCommit, SessionCommitResult } from './messages/sessions/working-tree';
 export { SessionImageQuery, SessionImageChunk } from './messages/session-images';
 import { ProviderHookTrust, ProviderHookTrustResult } from "./messages/provider-hooks";
 import { SignInRequest, SignInResult } from "./messages/sign-in";
@@ -162,6 +164,10 @@ export const Payload = z.union([
   SessionImageChunk,
   SessionWorkspaceQuery,
   SessionWorkspaceResult,
+  SessionChangesQuery,
+  SessionChangesResult,
+  SessionCommit,
+  SessionCommitResult,
   CapabilityUsageStatus,
   SessionKeyGrant,
   SessionSealed,

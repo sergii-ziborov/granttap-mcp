@@ -37,6 +37,7 @@ import {
 import { handleTaskCreate } from "./task-create";
 import { handleInboundUserMessage } from "../message-delivery";
 import { publishSessionEvents } from "./catalog";
+import { handleWorkingTreeRequest } from "../../working-tree/relay";
 import { publishSessionImage } from '../../session-images';
 import { publishTaskWorkspace } from '../../task-files/relay';
 import { publishHistoryPage } from "../history/pages";
@@ -95,6 +96,10 @@ export async function handleMonitorMessage(
       return handleInboundSubscription(client, payload, subscriptions, publish, input.peerPublicKey);
     } else if (payload.type === "session.events" || payload.type === "session.image.query" || payload.type === "session.workspace.query") {
       return handleSessionRead(client, payload, input.peerPublicKey);
+    } else if (payload.type === "session.changes.query" || payload.type === "session.commit") {
+      const answered = await handleWorkingTreeRequest(client, payload, input.peerPublicKey);
+      if (payload.type === "session.commit") void publish().catch(() => {});
+      return answered;
     } else if (payload.type === "sessions.refresh") {
       return handleInboundRefresh(client, payload, publish, input.peerPublicKey);
     } else if (payload.type === "sessions.history.query") {

@@ -49,6 +49,7 @@ import { publishMonitorMeshes, stopMonitorMeshes } from "../mesh-publication";
 import { publishMonitorCapabilities, stopMonitorCapabilities } from "../capability-publication";
 import { annotateLimitContinuations, scheduleLimitContinuations } from "../../limit-continuation";
 import { keepNotedChatPictures } from "../../helper-runs/pictures/chats";
+import { attachWorkingTrees } from "../../working-tree";
 import { cachedNativeAccountUsage } from "../../provider-account-status";
 
 export type SessionMonitor = {
@@ -169,7 +170,7 @@ async function publishMonitorTick(input: {
   const snapshot = await monitorSnapshot({ includeHistory, forceHistory, subscriptions, history });
   if (!input.active()) return { lastHistoryPublishedAt };
   const observed = decorateTaskOriginCatalog(refreshObservedCatalog(snapshot), client.room);
-  const status = { ...observed, sessions: annotateLimitContinuations(observed.sessions) };
+  const status = { ...observed, sessions: attachWorkingTrees(annotateLimitContinuations(observed.sessions)) };
   rememberPublishedCatalog(client, status);
   await client.send(status, "phone", { ttlMs: INTERVAL_MS * 24, reliable: false });
   // Provider review is independent of task visibility; a hung hook RPC must

@@ -785,6 +785,16 @@ temp folder, a plain folder or one of its parent's checkout is in its parent's
 Mesh and registers no Mesh of its own; one in a checkout of its own keeps that
 checkout's. Details: [`apps/bridge/src/started-by`](apps/bridge/src/started-by/README.md).
 
+### Uncommitted changes of a chat, and committing them from the phone
+
+A chat whose working folder is a Git checkout carries `workingTree { branch?, detached?, ahead?,
+behind?, changed, operation?, observedAt }`, read at most every five seconds per folder. The phone asks
+`session.changes.query` for up to 200 changed paths with Git's status letters and a `treeToken`, and
+sends `session.commit { message ≤ 2000, paths, treeToken, confirmWhileWorking? }`; the computer commits
+exactly those paths (`git add -A -- …`, `git commit -m … -- …`, hooks run, no push) or refuses with
+`changed`, `detached`, `operation`, `working`, `unavailable` or `failed`. Both answers go only to the
+phone that asked. See [working tree](apps/bridge/src/working-tree/README.md).
+
 ### What a run's end says
 
 A Codex turn that ends on Codex's own error instead of an answer says so: the chat's last message is

@@ -26,6 +26,10 @@ the phone does not know is shown by `message`: the provider's own first sentence
 (`resetsAt` from the provider's "try again at …"); `autoContinue` is `false` for any agent this computer
 does not continue by itself (everything but Claude).
 
+`workingTree` (optional, strict) and the `session.changes.query` / `session.changes.result` and
+`session.commit` / `session.commit.result` messages live in `sessions/working-tree.ts`; the contract
+is in `apps/bridge/src/working-tree/README.md`.
+
 `startedChildren` (optional, strict: `{ finished, stopped, pictures, lastAt }`, non-negative integers
 and a time in ms) counts the finished chats this chat started headless that the catalog leaves out as
 rows; the newest three stay rows of their own with `startedBy`.
