@@ -16,7 +16,7 @@ import { abortProcesses, runProcess } from "./process";
 import { routingPrompt } from "./payload/routing";
 import type { DeliveryOptions, ReplyResult } from "./payload/types";
 import { deliveryIntent } from './payload/identity';
-import { queued } from "./in-flight";
+import { phoneMessagesWaiting, queued } from "./in-flight";
 import { withQueueNote } from "../task-dispatch/queue-note";
 import {
   runCursorNew,
@@ -68,9 +68,17 @@ export function deliverToSession(
     return Promise.resolve({ ok: false, error: PAUSED_SESSION_REASON });
   }
   if (session.agent === 'codex') options = { ...options, intentDigest: deliveryIntent(text, attachments, options) };
+  const phone = Boolean(options.messageId);
+  // Read when the prompt is written: the durable queue's count and the phone messages waiting here behind this one.
+  const behind = () => {
+    let count = 0;
+    try { count = typeof options.queuedBehind === 'function' ? options.queuedBehind() : options.queuedBehind ?? 0; }
+    catch { /* An unreadable queue adds no line. */ }
+    return count + (phone ? phoneMessagesWaiting(session.sessionId) : 0);
+  };
   if (/^transfer-[a-f0-9]{48}$/.test(session.sessionId)) {
     return queued(session.sessionId, async () => (await localTaskTransfers().deliver(
-      session.sessionId, text, attachments, options, {
+      session.sessionId, text, attachments, { ...options, queuedBehind: behind() }, {
         start: request => request.provider === "grok"
           ? createGrokSession(projectGuidancePrompt(session.projectId, request.text), request.cwd, timeoutMs, request.attachments,
             request.model, request.operationKey, request.effort, nativeId => {
@@ -87,9 +95,9 @@ export function deliverToSession(
         resume: (native, body, images, settings) => withAttachments(images, body, prepared => runDelivery(native,
           native.agent === "codex" ? prepared.prompt : prepared.claudePrompt, timeoutMs, prepared.images, settings)),
       },
-    )) ?? { ok: false, error: "The prepared transfer is unavailable." });
+    )) ?? { ok: false, error: "The prepared transfer is unavailable." }, phone);
   }
-  return queued(session.sessionId, () => withAttachments(attachments, withQueueNote(text, options.queuedBehind), (prepared) =>
+  return queued(session.sessionId, () => withAttachments(attachments, withQueueNote(text, behind()), (prepared) =>
     runDelivery(
       session,
       session.agent === "codex" ? prepared.prompt : prepared.claudePrompt,
@@ -97,7 +105,7 @@ export function deliverToSession(
       prepared.images,
       options,
     ),
-  ));
+  ), phone);
 }
 
 /** A message from the phone home screen intentionally creates a new task. */

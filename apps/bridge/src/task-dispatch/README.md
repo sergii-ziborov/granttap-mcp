@@ -70,10 +70,18 @@ count covers what the relay has offered; a message scheduled more than five minu
 once it is offered. No line is added when nothing waits or the message is attachments alone. The
 delivery's identity stays the person's text, so a retried Codex delivery is still the same one.
 The transcript views remove the line (`visibleUserText`, Cursor's chat name), so the phone shows
-the person's words. `queuedPhoneMessages` reads the same count from another process without
+the person's words.
+
+Every delivery path carries the line. A message that reaches the computer directly rather than
+through this queue (`monitor/message-delivery`) counts the jobs staged here for its chat, or for a
+new task the follow-ups written for it (`queuedForMessage`), leaving out a queued copy of the same
+message. Phone messages waiting in memory for a chat behind its running turn (`reply/in-flight.ts`,
+`phoneMessagesWaiting`) are added on both paths, read when each prompt is written. A moved Task's
+chat (`transfer-…`) gets the line after its whole opening prompt on the first turn, and after the
+person's words on the next ones. `queuedPhoneMessages` reads the same count from another process without
 writing; the chat's own MCP server reports it in `connection_status`, so an agent can look again
-before a long run. Regression cases: `tests/queue-note.test.ts`, `worker/tests/queue-depth.test.ts`
-and `../monitor/handlers/tests/queue-note.test.ts`.
+before a long run. Regression cases: `tests/queue-note.test.ts`, `worker/tests/queue-depth.test.ts`,
+`../monitor/handlers/tests/queue-note.test.ts` and `../monitor/handlers/tests/queue-note-paths.test.ts`.
 
 Relay queue errors are logged by `worker/failure-report.ts`. A dropped connection,
 a timeout or a relay 5xx is retried on the next two-second pass and is logged only

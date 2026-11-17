@@ -188,7 +188,7 @@ export async function handleUserMessage(
     skill: message.skill,
     model: message.model,
     permissionMode: message.permissionMode,
-    effort: message.effort, queuedBehind: queuedBehind?.(),
+    effort: message.effort, queuedBehind,
   });
   const settle = async (result: ReplyResult, late: boolean) => {
     if (result.ok && result.delivery === 'native') return;

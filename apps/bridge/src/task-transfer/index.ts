@@ -2,6 +2,7 @@ import type { CodingAgent, SessionInfo, UserAttachment } from '../../../../packa
 import type { DeliveryOptions, ReplyResult } from '../reply';
 import { presentableTitle } from '../sessions/support/activity-helpers';
 import { TransferPersistence } from './persistence';
+import { withQueueNote } from '../task-dispatch/queue-note';
 import type { PreparedTransfer } from './records';
 import type { MeshStore } from '../mesh/store';
 export type { PreparedTransfer, TransferPreparation } from './records';
@@ -59,15 +60,18 @@ export class PreparedTaskTransfers extends TransferPersistence {
     if (!/^transfer-[a-f0-9]{48}$/.test(id)) return undefined;
     let row = this.load(id);
     if (!row) return { ok: false, error: 'The prepared transfer is unavailable.' };
+    // The phone messages queued behind this one, counted by the caller as the prompt is written.
+    const queued = typeof options.queuedBehind === 'number' ? options.queuedBehind : undefined;
+    const message = withQueueNote(text, queued);
     if (row.phase === 'active' && row.nativeSessionId) {
-      const result = await provider.resume({ ...this.session(row), sessionId: row.nativeSessionId }, text, attachments, options);
+      const result = await provider.resume({ ...this.session(row), sessionId: row.nativeSessionId }, message, attachments, options);
       return result.ok ? { ...result, sessionId: id } : result;
     }
     if (row.phase === 'uncertain') {
       // The launch that owned this transfer is over, whoever ran it. It used to refuse every later message for good.
       if (row.nativeSessionId) {
         // The agent did open its chat: the person's next message continues it, and nothing is started twice.
-        const result = await provider.resume({ ...this.session(row), sessionId: row.nativeSessionId }, text, attachments, options);
+        const result = await provider.resume({ ...this.session(row), sessionId: row.nativeSessionId }, message, attachments, options);
         if (!result.ok) return result;
         this.update(id, current => current.phase === 'uncertain' ? { ...current, phase: 'active', updatedAt: Date.now() } : current);
         return { ...result, sessionId: id };
@@ -86,7 +90,8 @@ export class PreparedTaskTransfers extends TransferPersistence {
       });
       ownsLaunch = true;
       const result = await provider.start({ provider: row.capsule.targetProvider as CodingAgent,
-        text: this.prompt(row, context, text), cwd: row.workspace, attachments,
+        // The line follows the whole opening prompt, as its own paragraph, so the transcript views can remove it.
+        text: withQueueNote(this.prompt(row, context, text), queued), cwd: row.workspace, attachments,
         model: options.model ?? row.capsule.targetModel, effort: options.effort, operationKey: id,
         onNativeSession: nativeId => {
           if (!/^[a-zA-Z0-9_-]{1,256}$/.test(nativeId)) throw new Error('Invalid native session identity');

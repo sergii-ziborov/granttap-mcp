@@ -7,6 +7,8 @@ import type { ReplyResult } from "./payload/types";
  */
 const inFlight = new Map<string, Promise<ReplyResult | null>>();
 const startedAt = new Map<string, number>();
+/** Phone messages queued under a key that have not started yet: they wait in memory behind the run in progress. */
+const waiting = new Map<string, number>();
 
 export function isDeliveryInFlight(sessionId: string): boolean { return inFlight.has(sessionId); }
 
@@ -21,11 +23,24 @@ export function oldestDeliveryStartedAt(): number | undefined {
   return startedAt.size ? Math.min(...startedAt.values()) : undefined;
 }
 
-/** One run per key at a time; the key stays live until the provider process settles. */
-export function queued(key: string, run: () => Promise<ReplyResult>): Promise<ReplyResult> {
+/** The phone messages queued under `key` that start after the run in progress; read as a prompt is written. */
+export function phoneMessagesWaiting(key: string): number { return waiting.get(key) ?? 0; }
+
+/**
+ * One run per key at a time; the key stays live until the provider process settles. A phone message
+ * (`phone`) counts as waiting from the moment it is queued until its own run starts.
+ */
+export function queued(key: string, run: () => Promise<ReplyResult>, phone = false): Promise<ReplyResult> {
   const previous = inFlight.get(key) ?? Promise.resolve(null);
   if (!inFlight.has(key)) startedAt.set(key, Date.now());
-  const next = previous.then(run);
+  if (phone) waiting.set(key, phoneMessagesWaiting(key) + 1);
+  const next = previous.then(() => {
+    if (phone) {
+      const left = phoneMessagesWaiting(key) - 1;
+      if (left > 0) waiting.set(key, left); else waiting.delete(key);
+    }
+    return run();
+  });
   const settled = next.finally(() => {
     if (inFlight.get(key) !== tracked) return;
     inFlight.delete(key);

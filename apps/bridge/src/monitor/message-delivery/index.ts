@@ -5,6 +5,7 @@ import { abandonDelivery, beginDelivery, completeDelivery,
   rejectCompletedDelivery } from "../../delivery";
 import { sendDeliveryReceipt } from "../handlers/receipts";
 import { handleUserMessage } from "../handlers/user-message";
+import { queuedForMessage } from "../../task-dispatch/worker/queue-depth";
 
 /** Receipts acknowledge durable receipt, while the correlated response is terminal. */
 export async function handleInboundUserMessage(
@@ -39,7 +40,8 @@ export async function handleInboundUserMessage(
       if (!payload.messageId) return;
       rejectCompletedDelivery(payload.messageId, error);
       await sendDeliveryReceipt(client, payload.messageId, 'rejected', error, payload.sessionId, peerPublicKey);
-    });
+    }, () => queuedForMessage(client.room, { sessionId: payload.sessionId, taskOriginId: payload.taskOriginId,
+      peerPublicKey, messageId: payload.messageId }));
     if (payload.messageId && deliveryStarted) {
       if (outcome === "rejected") {
         if (!completedDeliveryFailure(payload.messageId)) abandonDelivery(payload.messageId);

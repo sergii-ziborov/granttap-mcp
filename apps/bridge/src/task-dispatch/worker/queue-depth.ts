@@ -62,7 +62,25 @@ export function queuedBehind(records: StoredTaskDispatch[], delivered: Delivered
  * computer holds for `sessionId`. Reading creates nothing in the queue's directory.
  */
 export function queuedPhoneMessages(sessionId: string, room: string, root = join(configDir(), 'task-dispatch')): number {
+  return queuedForMessage(room, { sessionId }, root);
+}
+
+/**
+ * For a message that reached this computer directly rather than through the queue: the phone messages
+ * the queue holds for its chat, or for a new task the follow-ups written for it. A queued copy of the
+ * same message is not counted.
+ */
+export function queuedForMessage(room: string, target: { sessionId?: string; taskOriginId?: string; peerPublicKey?: string;
+  messageId?: string }, root = join(configDir(), 'task-dispatch')): number {
+  const { sessionId, taskOriginId, peerPublicKey, messageId } = target;
   const origins = localTaskOrigins();
   const keyOf = conversationKeyOf((job, peer) => resolveTaskOriginJob(origins, job, room, peer).job);
-  return waitingFor(waitingDispatchRecords(root, room), record => keyOf(record.job, record.peerPublicKey) === sessionId);
+  const ours = sessionId ? (record: StoredTaskDispatch) => keyOf(record.job, record.peerPublicKey) === sessionId
+    : taskOriginId && peerPublicKey ? (record: StoredTaskDispatch) => record.peerPublicKey === peerPublicKey
+      && record.job.operation.type === 'user.message.continue' && record.job.operation.originMessageId === taskOriginId
+      : undefined;
+  if (!ours) return 0;
+  const records = waitingDispatchRecords(root, room).filter(record => !messageId
+    || !('messageId' in record.job.operation) || record.job.operation.messageId !== messageId);
+  return waitingFor(records, ours);
 }
