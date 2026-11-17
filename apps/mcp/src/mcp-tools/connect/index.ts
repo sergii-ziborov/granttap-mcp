@@ -9,7 +9,7 @@ import { CONNECTION_WIDGET_URI } from "./widget";
 import { resetRelay, relay } from "./relay";
 import { startPasskeyAccountLink } from "../../connection-center/passkey";
 import { registerRuntimeUpdateControl } from "../../connection-center/update-controls";
-import { chatStatusLine } from "../../status/chat-status";
+import { callingChat, chatStatusLine, type CallingChat } from "../../status/chat-status";
 import { phoneSummary } from "../../status/pairing-status";
 
 const widgetMeta = {
@@ -40,15 +40,16 @@ export function registerConnectTool(server: McpServer): void {
     title: "GrantTap connection center",
     description: "Read GrantTap's state on this computer without changing it: the pairing and paired phones with when each "
       + "last reached this computer, any open pairing QR, relay reachability, provider readiness, the runtime version and any "
-      + "newer one waiting to take over, and, for the calling Claude Code chat, how many phone messages are queued to reach "
-      + "it after this turn and whether it continues by itself after a subscription limit. Shows the connection card where "
+      + "newer one waiting to take over and what it waits for, and, for the calling chat (Claude Code, Codex, Grok Build, "
+      + "Cursor), how many phone messages are queued to reach it after this turn and whether it continues by itself after "
+      + "a subscription limit. Shows the connection card where "
       + "the host renders one. Use it to diagnose pairing or phone delivery, and before long repository-wide work. Never "
       + "creates, replaces or removes a pairing.",
     inputSchema: {},
     outputSchema: connectionOutput,
     annotations: { ...changes, readOnlyHint: true, idempotentHint: true },
     _meta: widgetMeta,
-  }, async () => connectionResult(state));
+  }, async (args) => connectionResult(state, callingChat("connection_status", args ?? {})));
   server.registerTool("connect_with_passkey", {
     title: "Link this Mac to a GrantTap account",
     description: "Link this Mac to the person's GrantTap account, so a phone signed in to that account can connect to it "
@@ -142,8 +143,8 @@ async function connect(
   }
 }
 
-function connectionResult(state: ConnectionState): CallToolResult {
-  const snapshot = state.snapshot();
+function connectionResult(state: ConnectionState, caller?: CallingChat): CallToolResult {
+  const snapshot = caller ? state.snapshot(Date.now(), caller) : state.snapshot();
   const { status, computer, relay, version, relayStatus, runtimeUpdates, phones, pendingUpdate, chat } = snapshot.structuredContent;
   const instructions = status === "pairing"
     ? "Use the GrantTap card: tap Add a device if needed, then scan the QR on the card."

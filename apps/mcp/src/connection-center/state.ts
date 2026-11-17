@@ -8,7 +8,7 @@ import { connectionRuntimeStatus } from "../mcp-tools/connect/relay";
 import { beginEnrollment, cancelEnrollment, enrollmentIsOpen } from "./enrollment";
 import { loadAccountLink } from "../../../bridge/src/account-recovery/link";
 import { pendingRuntimeUpdate, runtimeUpdateSettings } from "../../../bridge/src/runtime-updates";
-import { chatStatus } from "../status/chat-status";
+import { chatStatus, serverChat, type CallingChat } from "../status/chat-status";
 
 export const connectionOutput = {
   status: z.enum(["disconnected", "paired", "pairing", "expired", "connected"]),
@@ -37,12 +37,18 @@ export const connectionOutput = {
     detail: z.string(),
   }).nullable().describe("A newer GrantTap runtime on this computer than the one this server runs, and why it is not running yet"),
   chat: z.object({
+    sessionId: z.string().describe("The calling chat's id as its provider names it"),
+    provider: z.enum(["claude", "codex", "grok", "cursor"]).nullable(),
+    identifiedBy: z.enum(["environment", "transcript", "hook"]).describe(
+      "environment: the host named the chat when it started this server (Claude Code, Grok Build); transcript: the Codex "
+        + "process that started this server holds only this chat's rollout open; hook: the provider hook that ran inside "
+        + "the calling chat recorded this call (Cursor, or a server shared by several chats)"),
     queuedPhoneMessages: z.number().int().nonnegative()
       .describe("Phone messages this computer holds for the calling chat; they arrive one by one after the current turn"),
     autoContinue: z.boolean().describe("Whether the chat continues by itself after a subscription limit stopped it"),
     continuation: z.object({ dueAt: z.number(), early: z.boolean() }).nullable()
       .describe("The continuation queued for the chat after a subscription limit; early: another goes at once"),
-  }).nullable().describe("The calling chat, when this server knows it (Claude Code); null elsewhere"),
+  }).nullable().describe("The calling chat, when its host or its provider hook names it; null when neither does"),
   passkeyUrl: z.string().url().optional(),
 };
 
@@ -68,7 +74,7 @@ export class ConnectionState {
     this.pending = { ...code, attemptId: code.attemptId ?? attempt.attemptId };
   }
 
-  snapshot(now = Date.now()) {
+  snapshot(now = Date.now(), caller: CallingChat | undefined = serverChat()) {
     const config = isMachineConfigured() ? loadConfig(readOnlyMachineConfigPath()) : null;
     const runtime = connectionRuntimeStatus(config?.room);
     const phones = listPairedPhones(runtime.phoneLastSeenAt, now);
@@ -100,7 +106,7 @@ export class ConnectionState {
         accountLinkSaved: loadAccountLink() !== null,
         runtimeUpdates: runtimeUpdateSettings(),
         pendingUpdate: pendingRuntimeUpdate(packageVersion()) ?? null,
-        chat: chatStatus(config?.room),
+        chat: chatStatus(config?.room, caller),
       },
       _meta: { granttap: code ? { pairingUri: code.pairingUri, qrDataUrl: code.qrDataUrl } : {} },
     };

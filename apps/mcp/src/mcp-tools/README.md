@@ -23,6 +23,10 @@ allowed MCP calls need not emit `PermissionRequest`. Governed requests retain
 the permission hook's attribution after their decision. Untrusted or disabled
 native hooks cannot establish a caller scope.
 
+Which chat started a server — Claude Code's and Grok Build's environment, a Codex CLI chat's open
+rollout — is decided in [`../chat-identity`](../chat-identity/README.md); `connection_status` is
+attributed by the same hooks for a server shared between chats, as Cursor's is.
+
 `mesh-tools.ts`, `mesh-actions.ts`, and `mesh-relay.ts` serve the separate scoped
 server started by `granttap internal mesh-mcp` for a connected Grok Bot endpoint.
 It exposes only the twelve task-scoped Mesh operations, re-authorizes endpoint,

@@ -607,7 +607,7 @@ trust.
 | Tool | Contract |
 | --- | --- |
 | `set_runtime_auto_update` | When the user asks, turn automatic GrantTap runtime updates on this computer on or off; saves the preference without restarting services or changing pairing, tasks, or provider policy, and returns the connection state |
-| `connection_status` | Read-only: saved pairing and paired phones by when each last reached this computer, QR expiry, relay observations, provider readiness, a newer runtime waiting to take over and why, and for the calling Claude Code chat the phone messages queued behind its turn and its continuation after a subscription limit |
+| `connection_status` | Read-only: saved pairing and paired phones by when each last reached this computer, QR expiry, relay observations, provider readiness, a newer runtime waiting to take over and why, and for the calling chat (Claude Code, Codex, Grok Build, Cursor) the phone messages queued behind its turn and its continuation after a subscription limit |
 | `connect_with_passkey` | Link this computer to the user's GrantTap account so a signed-in phone can connect without a QR; returns a 15-minute granttap.com link, the passkey is entered only there, and existing QR pairings stay unchanged |
 | `connect` | Show the existing pairing on the connection card, or on an unpaired computer create a one-time QR shown only on the card |
 | `reconnect` | After explicit confirmation, show a one-time QR to reconnect or add an independent controller device while retaining the current room |
@@ -745,11 +745,17 @@ question still unanswered — and names the MCP resource `granttap://mesh/map`,
 one page of markdown with the whole Project: Tasks, who edits which module,
 the other side of each repository, dependencies, and what just happened. That
 resource is listed, because Claude Code reads only listed resources, and it is
-scoped without a token: Claude Code starts one MCP server per chat and hands
-it the chat's id in `CLAUDE_CODE_SESSION_ID`, which nothing said over the
-connection can change. `granttap://mesh/current` serves the same chat's scoped
-state there. Other providers keep the tokened `granttap://mesh/{capability}`
-and `…/map` forms from an attributed `notify`. Background runs themselves
+scoped without a token: the host that starts an MCP server for one chat names
+that chat, which nothing said over the connection can change — Claude Code in
+`CLAUDE_CODE_SESSION_ID`, Grok Build in `GROK_SESSION_ID`, and a Codex CLI chat
+by the one rollout its Codex process holds open (Codex gives its servers a bare
+environment). Only the nearest host above the server counts, so a run a chat
+started from its shell is not taken for that chat. `granttap://mesh/current`
+serves the same chat's scoped state there. Cursor shares one server between a
+window's chats; it and a Codex process with several chats open keep the
+tokened `granttap://mesh/{capability}` and `…/map` forms from an attributed
+`notify`, and `connection_status` names their chat from the provider hook's
+record of that call. See [chat identity](apps/mcp/src/chat-identity/README.md). Background runs themselves
 receive nothing from the hook; the journal is kept for the session a person
 is in.
 

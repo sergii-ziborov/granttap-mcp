@@ -14,8 +14,8 @@ import { sessionBindingFromEnvironment, sessionFromEnvironment } from "./session
 
 export const MESH_URI = "granttap://mesh/current";
 export const SCOPE_HINT =
-  "Project Mesh reads are scoped to one execution. In Claude Code, read "
-  + "granttap://mesh/map. Elsewhere, call notify to receive this session's "
+  "Project Mesh reads are scoped to one execution. Where this server knows its chat (Claude Code, "
+  + "Grok Build, a Codex CLI chat), read granttap://mesh/map. Elsewhere, call notify to receive this session's "
   + "granttap://mesh/<capability> URI, then read that URI. A verified Project "
   + "SKILL.md can be read at granttap://mesh/<capability>/skills/<skill-name>.";
 

@@ -18,7 +18,8 @@ export function registerMeshResource(server: McpServer): void {
     {
       title: "GrantTap Project Mesh",
       description: "This chat's Project Mesh state (Project, Task, owners, claims, dependencies and recent events) when this "
-        + "server knows the calling chat, as in Claude Code; elsewhere, a hint naming the scoped URI to read instead. Never "
+        + "server knows the calling chat, as in Claude Code, Grok Build and a Codex CLI chat; elsewhere, a hint naming the scoped "
+        + "URI to read instead. Never "
         + "another chat's Project; transcripts are never included.",
       mimeType: "application/json",
     },
