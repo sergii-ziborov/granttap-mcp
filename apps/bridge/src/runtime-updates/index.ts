@@ -63,26 +63,42 @@ type LoopOptions={root:string;directory:string;idle:()=>boolean;check?:typeof ch
   now?:()=>number;schedule?:typeof setTimeout;report?:()=>void;activate?:()=>void;
   latest?:()=>Promise<unknown>;drain?:UpdateDrain};
 
+/** The registry is asked at most this often while it answers. */
+export const CHECK_EVERY_MS=60*60_000;
+/** After a failed check the next waits 5, 10, 20, 40, then 60 minutes. */
+export const RETRY_FIRST_MS=5*60_000;
+
 /**
- * Check failure never stops sync; timers are owned and cancellation prevents another check. While new work is
- * held for a staged release, a five-second pass only asks whether the running work has ended, and the pass
- * that finds it ended selects the release it already knows instead of asking the registry first.
+ * Check failure never stops sync; timers are owned and cancellation prevents another check. The registry
+ * is asked once an hour; a release it named is reused for that hour, so a busy monitor looking again each
+ * minute for an idle moment sends no further request. A failure waits longer each time, up to the hour.
+ * While new work is held for a staged release, a five-second pass only asks whether the running work has
+ * ended, and the pass that finds it ended selects the release it already knows instead of asking the
+ * registry first.
  */
 export function runtimeUpdateLoop(options:LoopOptions):()=>void {
-  let stopped=false,timer:NodeJS.Timeout|undefined,lastCheck=0,known:unknown;
+  let stopped=false,timer:NodeJS.Timeout|undefined,nextCheck=0,failures=0,known:unknown,knownAt=0;
   const now=options.now??Date.now,schedule=options.schedule??setTimeout,drain=options.drain;
-  const latest=async()=>drain?.holding() && known?known:(known=await (options.latest??latestRelease)());
+  const latest=async()=>{
+    if(known && (drain?.holding() || now()-knownAt<CHECK_EVERY_MS))return known;
+    known=await (options.latest??latestRelease)();knownAt=now();return known;
+  };
   const tick=async()=>{
     if(stopped)return;
     try {
-      if(!automaticUpdatesAllowed(options.directory)){lastCheck=0;drain?.cancel();return;}
+      if(!automaticUpdatesAllowed(options.directory)){nextCheck=0;known=undefined;drain?.cancel();return;}
       removeStaleLock(join(options.directory,'install.lock'),now());
-      if(drain?.holding()?options.idle():now()-lastCheck>=4*60*60_000) {
+      if(drain?.holding()?options.idle():now()>=nextCheck) {
         await (options.check??checkForRuntimeUpdate)({root:options.root,stateDirectory:options.directory,idle:options.idle,
           latest,drain,activate:()=>options.activate?.()});
-        lastCheck=options.idle()?now():0;
+        failures=0;
+        // Busy: look again next minute, from the release already known; idle: the next hour's question.
+        nextCheck=options.idle()?knownAt+CHECK_EVERY_MS:0;
       }
-    } catch {drain?.failed();options.report?.();}
+    } catch {
+      failures++;nextCheck=now()+Math.min(CHECK_EVERY_MS,RETRY_FIRST_MS*2**(failures-1));
+      drain?.failed();options.report?.();
+    }
     finally {if(!stopped){timer=schedule(()=>void tick(),drain?.holding()?HOLD_POLL_MS:60_000);timer.unref();}}
   };
   timer=schedule(()=>void tick(),60_000);timer.unref();

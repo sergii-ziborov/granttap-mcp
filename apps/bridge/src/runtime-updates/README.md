@@ -1,7 +1,10 @@
 # Automatic GrantTap runtime updates
 
 The installed background monitor checks the official `granttap-mcp` npm stable
-release every four hours. New versions are installed in a separate private
+release once an hour: one small, bounded registry request (`/granttap-mcp/latest`, at most
+256 KB, ten-second timeout). A release the registry named is reused for that hour, so a busy monitor that
+looks again each minute for an idle moment sends no further request. A failed check is retried after 5,
+10, 20 and 40 minutes, then hourly. New versions are installed in a separate private
 version directory under `~/.granttap/runtime-updates`, with lifecycle scripts
 disabled, Node engine checks enabled, and registry integrity verified. A failed
 installation leaves the running version in place.
@@ -53,7 +56,7 @@ maintenance action.
 | A release that failed its start check is started again | after 30 minutes |
 
 With phone chats running all day, an update therefore takes over within seconds to minutes of being
-staged, bounded by the ten-minute hold: the update check runs every four hours, and a staged release is
+staged, bounded by the ten-minute hold: the update check runs every hour, and a staged release is
 held for as soon as it is verified. Only work that cannot be handed over can make a hold give up, and
 then the earlier behaviour applies: other chats are delayed once by ten minutes, and the update follows
 within minutes of that work ending.

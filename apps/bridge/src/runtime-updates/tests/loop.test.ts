@@ -9,18 +9,23 @@ import { trackHttpRuntimeWork } from '../http-readiness';
 import express from 'express';
 import { setImmediate } from 'node:timers/promises';
 
-test('offline checks retry, idle checks respect cadence, and expired own locks are reclaimed',async()=>{
-  const directory=mkdtempSync(join(tmpdir(),'granttap-update-loop-'));let callbacks:Array<()=>void>=[],now=20_000_000,calls=0,reports=0,idle=false;
+test('offline checks back off, idle checks ask the registry hourly, busy minutes reuse the release, and expired own locks are reclaimed',async()=>{
+  const directory=mkdtempSync(join(tmpdir(),'granttap-update-loop-'));let callbacks:Array<()=>void>=[],now=20_000_000,calls=0,asked=0,reports=0,idle=false;
   const lock=join(directory,'install.lock');writeFileSync(lock,'');utimesSync(lock,0,0);
-  const stop=runtimeUpdateLoop({root:directory,directory,idle:()=>idle,now:()=>now,
+  const stop=runtimeUpdateLoop({root:directory,directory,idle:()=>idle,now:()=>now,latest:async()=>{asked++;return {};},
     schedule:((cb:()=>void)=>{callbacks.push(cb);return setTimeout(()=>{},100000);}) as typeof setTimeout,
-    report:()=>{reports++;},check:async options=>{calls++;if(calls===1)throw Error('offline');options.activate?.('unused');return undefined;},activate:()=>{}});
-  callbacks.shift()!();await setImmediate();assert.equal(calls,1);assert.equal(reports,1);assert.equal(existsSync(lock),false);
-  callbacks.shift()!();await setImmediate();assert.equal(calls,2);
-  idle=true;callbacks.shift()!();await setImmediate();assert.equal(calls,3);
-  callbacks.shift()!();await setImmediate();assert.equal(calls,3);
-  now+=4*60*60_000;callbacks.shift()!();await setImmediate();assert.equal(calls,4);
-  stop();callbacks.shift()!();await setImmediate();assert.equal(calls,4);
+    report:()=>{reports++;},check:async options=>{calls++;await options.latest!();if(calls<=2)throw Error('offline');return undefined;},activate:()=>{}});
+  const tick=async(after=0)=>{now+=after;callbacks.shift()!();await setImmediate();};
+  await tick();assert.equal(calls,1);assert.equal(reports,1);assert.equal(existsSync(lock),false);
+  await tick(60_000);assert.equal(calls,1,'a failure waits five minutes');
+  await tick(4*60_000);assert.equal(calls,2);
+  await tick(5*60_000);assert.equal(calls,2,'the second failure waits ten');
+  await tick(5*60_000);assert.equal(calls,3);assert.equal(asked,1,'the registry answered; the failures came after it');
+  await tick(60_000);assert.equal(calls,4,'busy: looked at again next minute');assert.equal(asked,1,'from the release already known');
+  idle=true;await tick(60_000);assert.equal(calls,5);assert.equal(asked,1);
+  await tick(30*60_000);assert.equal(calls,5,'idle: nothing more within the hour');
+  await tick(30*60_000);assert.equal(calls,6);assert.equal(asked,2);
+  stop();callbacks.shift()!();await setImmediate();assert.equal(calls,6);
 });
 test('work remains busy through errors and pending human decisions',async()=>{
   let pending=true;const work=runtimeWorkTracker(()=>pending);assert.equal(work.idle(),false);pending=false;
