@@ -125,7 +125,7 @@ function parentOf(folder: string): string | undefined {
 }
 
 /** Whether a folder lies inside a Git checkout: one of the folders above it holds `.git`. */
-function insideCheckout(folder: string): boolean {
+export function insideCheckout(folder: string): boolean {
   let above = parentOf(folder);
   for (let depth = 0; above !== undefined && depth < 48; depth += 1) {
     if (existsSync(`${above === "/" ? "" : above}/.git`)) return true;

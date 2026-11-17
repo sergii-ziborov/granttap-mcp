@@ -279,7 +279,8 @@ export function parseCodexFile(file: string): CodexCandidate | undefined {
 /** Where the chat came from, for `startedBy`: never published itself. A forked agent is no chat. */
 function codexLineage(state: CodexParseState, session: SessionInfo): LineageFact {
   const calls = state.calls.snapshot();
+  const launches = state.calls.launches();
   return { agent: "codex", sessionId: session.sessionId, cwd: session.cwd, startedAt: session.startedAt,
     ...(state.headless ? { headless: true } : {}), ...(state.headless && state.prompt ? { prompt: state.prompt } : {}),
-    ...(calls.length ? { calls } : {}) };
+    ...(calls.length ? { calls } : {}), ...(launches.length ? { launches } : {}) };
 }

@@ -5,12 +5,15 @@
  * to the session it started by provider, folder and start time (or by the id its command gave it);
  * and, for a run whose process was never seen, the parent's transcript: a command that starts the
  * child's provider headless, that carries the opening of the child's first request, and that was
- * running when the child started, on the same computer. A child that more than one chat could have
- * started is left unlinked. A session never names itself, and a link that would close a loop is not made.
+ * running when the child started, on the same computer; failing that, the one chat that started the
+ * child's provider headless naming the child's own folder (`folders/`). A child that more than one chat
+ * could have started is left unlinked. A session never names itself, and a link that would close a loop
+ * is not made.
  */
 import type { SessionInfo } from "../../../../packages/protocol/schema";
 import { plainFolder } from "../helper-runs/kinds";
 import type { LineageFact } from "./facts";
+import { folderParents } from "./folders";
 import {
   rememberStartedLinks,
   startedByKey,
@@ -112,9 +115,11 @@ export function startedByParents(facts: readonly LineageFact[], now = Date.now()
       add(fact, run.parent, "process");
     }
   }
+  const byFolder = folderParents(facts, now);
   for (const fact of facts) {
     if (links.has(startedByKey(fact))) continue;
-    const parent = transcriptParent(fact, facts, now);
+    const parent = transcriptParent(fact, facts, now)
+      ?? (now - fact.startedAt <= TRANSCRIPT_MATCH_MS ? byFolder(fact) : undefined);
     if (parent) add(fact, parent, "transcript");
   }
   if (found.length > 0 || consumed.length > 0) {

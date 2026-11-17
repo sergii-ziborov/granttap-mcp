@@ -4,9 +4,11 @@
  * A session says whether it was started headless and how its first request opened. A chat's
  * transcript says which commands it ran that start another provider's headless session, with the
  * command in `lineageText` spelling and the time it ran: from the call until its result, or, for a
- * Claude command sent to the background, until Claude's notification that it finished. These are
- * read with the transcript the scanner already reads, row by row, and held in memory only.
+ * Claude command sent to the background, until Claude's notification that it finished. Beside them, the
+ * folders those commands named (`launches`), which outlast the commands. These are read with the
+ * transcript the scanner already reads, row by row, and held in memory only.
  */
+import { createFolderLaunches, type FolderLaunch } from "./folders/launches";
 import { headlessTargets, lineageText, type LineageAgent, type PromptLead } from "./headless";
 
 /** A command a chat ran that starts another provider's session headless. */
@@ -29,6 +31,8 @@ export type LineageFact = {
   /** The opening of its first request, for a session long enough to be found in a parent's command. */
   prompt?: PromptLead;
   calls?: LineageCall[];
+  /** The folders the chat started another provider headless in, per folder and provider. */
+  launches?: FolderLaunch[];
   /**
    * The computer the session was read on, when not this one: a provider's history read here is this
    * computer's. A parent on another computer is never matched.
@@ -57,6 +61,7 @@ type OpenCall = LineageCall & { background?: boolean };
 function createCalls() {
   const open = new Map<string, OpenCall>();
   const done: LineageCall[] = [];
+  const launches = createFolderLaunches();
   const finish = (id: string, at: number) => {
     const call = open.get(id);
     if (!call) return;
@@ -67,9 +72,10 @@ function createCalls() {
   return {
     open,
     begin(id: unknown, command: unknown, at: number): void {
-      if (typeof id !== "string" || typeof command !== "string" || !at) return;
+      if (typeof command !== "string" || !at) return;
       const targets = headlessTargets(command);
-      if (targets.length === 0) return;
+      launches.note(command, targets, at);
+      if (typeof id !== "string" || targets.length === 0) return;
       open.set(id, { targets, command: lineageText(command.slice(0, MAX_COMMAND_CHARS * 2)).slice(0, MAX_COMMAND_CHARS), startedAt: at });
       if (open.size > MAX_CALLS) open.delete(open.keys().next().value!);
     },
@@ -78,10 +84,16 @@ function createCalls() {
       return [...done, ...[...open.values()].map(({ targets, command, startedAt }) => ({ targets, command, startedAt }))]
         .sort((left, right) => left.startedAt - right.startedAt).slice(-MAX_CALLS);
     },
+    launches: launches.snapshot,
   };
 }
 
-export type LineageCalls = { add: (row: any) => void; snapshot: () => LineageCall[] };
+export type LineageCalls = {
+  add: (row: any) => void;
+  snapshot: () => LineageCall[];
+  /** The folders this transcript's commands started a provider headless in. */
+  launches: () => FolderLaunch[];
+};
 
 /** Claude: a Bash `tool_use`, its `tool_result`, and for a background command the task notification. */
 export function createClaudeLineageCalls(): LineageCalls {
@@ -111,6 +123,7 @@ export function createClaudeLineageCalls(): LineageCalls {
       }
     },
     snapshot: calls.snapshot,
+    launches: calls.launches,
   };
 }
 
@@ -150,5 +163,6 @@ export function createCodexLineageCalls(): LineageCalls {
       calls.finish(payload.call_id, at);
     },
     snapshot: calls.snapshot,
+    launches: calls.launches,
   };
 }

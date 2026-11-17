@@ -303,7 +303,7 @@ export function* parseClaudeFileSteps(file: string): Generator<void, ClaudeParse
   const observations = progress.capabilities.snapshot();
   const childThreads = yield* readChildren(actualChildPaths, ownSession, progress, observations);
   const session = aggregateChildThreads(ownSession, childThreads);
-  const lineage = claudeLineage(state, ownSession, progress.lineage.snapshot());
+  const lineage = claudeLineage(state, ownSession, progress.lineage.snapshot(), progress.lineage.launches());
   claudeSummaryCache.set(file, {
     mtimeMs: fileStat.mtimeMs,
     size: fileStat.size,
@@ -322,9 +322,10 @@ export function* parseClaudeFileSteps(file: string): Generator<void, ClaudeParse
 }
 
 /** Where the chat came from, for `startedBy`: never published itself. */
-function claudeLineage(state: ClaudeParseState, session: SessionInfo, calls: LineageFact["calls"]): LineageFact {
+function claudeLineage(state: ClaudeParseState, session: SessionInfo, calls: LineageFact["calls"],
+  launches: LineageFact["launches"]): LineageFact {
   const headless = /^sdk-/.test(state.entrypoint ?? "");
   return { agent: "claude", sessionId: session.sessionId, cwd: state.launchCwd ?? session.cwd, startedAt: session.startedAt,
     ...(headless ? { headless } : {}), ...(headless && state.prompt ? { prompt: state.prompt } : {}),
-    ...(calls?.length ? { calls } : {}) };
+    ...(calls?.length ? { calls } : {}), ...(launches?.length ? { launches } : {}) };
 }

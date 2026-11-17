@@ -47,17 +47,21 @@ by the child session (`links`, at most 4,000, six months) and outlives the run,
 its process and the parent's transcript. The first link of a chat stands; a link
 its own process named replaces one read from a transcript.
 
-**After the fact** (`facts.ts`, `attach.ts`). A run whose process was never
-seen (it ran before this runtime, or while the monitor was down) is matched
-from the parent's transcript, conservatively. The scanners already read each
-chat's transcript row by row; while they do, they keep the commands that start
-another provider headless (Claude `Bash` calls, Codex `exec_command`, `shell`
-and code-mode `exec` calls), in one spelling with shell quoting and escapes
-dropped, with the time each ran: from the call to its result, or for a Claude
-command sent to the background, until Claude's notification that it finished.
-At most 32 such commands of 8 KB per chat are held, in memory only. A child is
-linked to a chat when all of these hold, and to none when more than one chat
-qualifies:
+**After the fact** (`facts.ts`, `attach.ts`, `folders/`). A run whose process
+was never seen (it ran before this runtime, while the monitor was down, or for
+less time than one sample takes to come round) is matched from the parent's
+transcript, conservatively: by its request, and failing that by its folder.
+The scanners already read each chat's transcript row by row; while they do,
+they keep the commands that start another provider headless (Claude `Bash`
+calls, Codex `exec_command`, `shell` and code-mode `exec` calls), in one
+spelling with shell quoting and escapes dropped, with the time each ran: from
+the call to its result, or for a Claude command sent to the background, until
+Claude's notification that it finished. At most 32 such commands of 8 KB per
+chat are held, in memory only. A script's argument list starts the provider it
+names (`subprocess.run(["codex", "exec", "-C", "/tmp/art", prompt])`); a
+command line a chat only looks for (`pgrep`, `pkill`, `grep` or `ps` of
+`"codex exec …"`) starts none. By its request, a child is linked to a chat when
+all of these hold, and to none when more than one chat qualifies:
 
 - the child is headless and started in the last 48 hours;
 - its first request has at least 40 characters, and its first 64 (the whole
@@ -69,9 +73,34 @@ qualifies:
 - the parent started before the child, is not the child, and was read on the
   same computer.
 
-A command that runs a script naming no provider (`bash make-pictures.sh`) or
-that builds each request from a file is not matched: the transcript does not
-show the request. Such runs are linked only while their process is alive.
+**By its folder** (`folders/`). A script that builds each request from a file
+(`one.sh <index>` reading `prompts.json`, a Python loop over a queue, run
+detached through `xargs`) leaves no request in the chat's commands, but they
+still name the folder the runs work in. Each command that starts a provider
+headless notes every folder it names: an absolute path (from `/`, `~` or
+`$HOME`) as it is, or the folder of a file it names (`/tmp/art/one.sh`), never
+the system's folders, a temp directory itself, the home folder or one above
+it. Per chat, folder and provider, the time of the first such command is kept,
+and the time of the chat's last command of any kind that named the folder or a
+path inside it: at most 32 per chat, the folder named longest ago let go first,
+in memory only, so a launch long out of the last 32 commands still counts. A
+child its request did not link is linked when all of these hold:
+
+- the child is headless, started in the last 48 hours, on this computer;
+- its folder is one made for runs: gone, or holding no checkout and lying in
+  none (asked once a minute per folder);
+- exactly one chat read on this computer started the child's provider headless
+  in a command naming that folder; when a second chat did, at any time, the
+  folder links nothing;
+- the child started between 3 s before that chat's first such command and
+  12 hours after the chat last named the folder, so a batch left running
+  detached, or waiting out a usage limit, stays its chat's;
+- the parent started before the child and is not the child.
+
+Such a link is written like any other read from a transcript (`source:
+"transcript"`). A run in a checkout or in a folder two chats used, whose
+request a script built from a file, or whose script names no provider and was
+not written by the chat, is linked only while its process is alive.
 
 **Mesh** (`mesh/`). A child whose folder is no checkout of its own (a temp
 folder, a plain folder without Git, one that is gone) is its parent's work: the
@@ -89,6 +118,9 @@ Projects, like a helper run's.
 Tests live in `tests/`: command and session recognition, capture, transcript
 matching (inside and outside a command's window, short requests, another
 computer, two candidate parents), publishing and the stored links, and the
-Mesh rules.
+Mesh rules. `folders/tests/` covers matching by folder on a course's real shapes
+(`lessonart.ts`: a script written then run detached, a Python batch, a Grok
+worker): two chats naming one folder, a checkout or a folder inside one, runs
+outside the window, and the catalog that results.
 
 Licensed under the GrantTap Commercial Source License. See the repository root `LICENSE`.
