@@ -37,9 +37,18 @@ function leaf(word: string): string {
   return (word.replace(/["']/g, "").split(/[\\/]/).pop() ?? "").toLowerCase().replace(/\.(m?js|cjs|exe|cmd)$/, "");
 }
 
+/**
+ * A word as the program receives it: its quotes dropped, and so a list's brackets and comma, so that
+ * `subprocess.run(["codex", "exec", "-C", "/tmp/art", prompt])` reads as the command it runs.
+ */
+function bare(word: string): string {
+  const plain = word.replace(/^[[(]+/, "").replace(/[,\])]+$/, "");
+  return /^(["'])[^"']*\1$/.test(plain) ? plain.slice(1, -1) : plain;
+}
+
 /** The words after the provider's own executable or script, or nothing when the line does not name it. */
 function argumentsAfter(agent: LineageAgent, command: string): string[] | undefined {
-  const words = command.slice(0, 16_384).trim().split(/\s+/);
+  const words = command.slice(0, 16_384).trim().split(/\s+/).map(bare);
   const at = words.findIndex((word) => leaf(word) === agent || (agent === "cursor" && leaf(word) === "cursor-agent"));
   return at < 0 ? undefined : words.slice(at + 1);
 }
@@ -99,9 +108,19 @@ export function headlessRun(agent: LineageAgent, command: string): HeadlessRun {
 /** One command of a shell line: a pipeline stage, a list item, a subshell. */
 const SEGMENTS = /[;&|\n()]|\$\(|`/;
 
+/** Tools that look for or stop processes: a provider's command line quoted to them starts nothing. */
+const SEARCHES = new Set(["pgrep", "pkill", "killall", "grep", "egrep", "fgrep", "rg", "ps", "lsof"]);
+
+/** Whether the quoted text at `at` is an argument of `pgrep -f "codex exec …"` or the like. */
+function searched(text: string, at: number): boolean {
+  const segment = text.slice(Math.max(0, at - 1_024), at).split(SEGMENTS).pop() ?? "";
+  return SEARCHES.has(leaf(segment.trim().split(/\s+/)[0] ?? ""));
+}
+
 /**
  * The providers a shell command starts headless, as a chat wrote it. Only the provider's own word
- * counts (`codex`, `/opt/homebrew/bin/codex`), never a folder that carries its name.
+ * counts (`codex`, `/opt/homebrew/bin/codex`), never a folder that carries its name, nor a command
+ * line a chat looks for (`pgrep -f "codex exec"`).
  */
 export function headlessTargets(command: string): LineageAgent[] {
   const found = new Set<LineageAgent>();
@@ -109,11 +128,12 @@ export function headlessTargets(command: string): LineageAgent[] {
   const quoted = /"(?:[^"\\]|\\.)*"|'[^']*'/g;
   // A quoted request is one word to the shell, however many flags its text mentions; a quoted command
   // (`bash -lc "…"`, a code-mode call's string) is read as the command it is.
-  const inner = [...text.matchAll(quoted)].slice(0, 64).map((match) => match[0].slice(1, -1).replace(/\\(["\\$`])/g, "$1"));
+  const inner = [...text.matchAll(quoted)].slice(0, 64).filter((match) => !searched(text, match.index))
+    .map((match) => match[0].slice(1, -1).replace(/\\(["\\$`])/g, "$1"));
   for (const line of [text, ...inner.filter((item) => /claude|codex|grok|cursor/i.test(item))]) {
     const words = line.replace(quoted, (item) => /\s/.test(item) ? " Q " : item);
     for (const segment of words.split(SEGMENTS)) {
-      if (!/claude|codex|grok|cursor/i.test(segment)) continue;
+      if (!/claude|codex|grok|cursor/i.test(segment) || SEARCHES.has(leaf(segment.trim().split(/\s+/)[0] ?? ""))) continue;
       for (const agent of AGENTS) {
         const run = headlessRun(agent, segment);
         if (run.headless && !run.resume) found.add(agent);

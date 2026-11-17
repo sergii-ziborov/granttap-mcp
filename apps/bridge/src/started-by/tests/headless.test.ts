@@ -44,6 +44,26 @@ test("a shell command names the providers it starts headless, and only by their 
     "a quoted path with a space reads as one word, which keeps the match conservative");
 });
 
+test("a script's argument list starts the provider it names, and a command line looked for starts nothing", () => {
+  // The shapes a chat wrote into `batch.py` and `grok_one.py` before running them detached.
+  const batch = `subprocess.run(["timeout", "1500", "codex", "exec", "-c", 'model_reasoning_effort="low"', "--skip-git-repo-check",
+                    "--sandbox", "workspace-write", "-C", "/tmp/lessonart", prompt], stdin=subprocess.DEVNULL, stdout=fh)`;
+  assert.deepEqual(headlessTargets(batch), ["codex"]);
+  assert.deepEqual(headlessRun("codex", batch.slice(batch.indexOf("["))).folder, "/tmp/lessonart");
+  const grok = `subprocess.run(["timeout", "600", "grok", "--cwd", "/tmp/lessonart", "--always-approve", "--max-turns", "6", "-p",
+                    f"Use your GenerateImage tool to create exactly one landscape image. Prompt: {q['prompt']}"])`;
+  assert.deepEqual(headlessTargets(grok), ["grok"]);
+  assert.deepEqual(headlessTargets(`spawn("codex", ["exec", "--json", prompt])`), ["codex"]);
+  assert.deepEqual(headlessTargets(`subprocess.run(["codex", "exec", "resume", "--last"])`), [], "a resumed run, in a list too");
+
+  assert.deepEqual(headlessTargets(`ls /tmp/lessonart/png | wc -l; pgrep -f "codex exec" | wc -l`), []);
+  assert.deepEqual(headlessTargets(`pkill -f "codex exec --skip-git-repo-check -C /tmp/lessonart"; sleep 2`), []);
+  assert.deepEqual(headlessTargets(`n=$(pgrep -fl 'claude -p' | wc -l); ps -ax | grep "grok -p"`), []);
+  assert.deepEqual(headlessTargets(`pkill -f codex exec`), [], "unquoted too");
+  assert.deepEqual(headlessTargets(`pkill -f "codex exec"; sleep 1; cd /tmp/imgprobe && codex exec -C /tmp/imgprobe 'Answer in one line'`),
+    ["codex"], "the command that follows still starts one");
+});
+
 test("a request and the command that carried it compare in one spelling", () => {
   const prompt = `Use your image_gen tool to generate a "calm" hero image\nfor the article: don't add text.`;
   const command = `codex exec "Use your image_gen tool to generate a \\"calm\\" hero image\nfor the article: don'\\''t add text."`;
