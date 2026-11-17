@@ -39,7 +39,8 @@ export function runGrokNew(
     "-p", text, "--output-format", "streaming-json",
   ];
   return runProcess(grokBin(), args, cwd, timeoutMs, (stdout) => parseGrok(stdout, sessionId),
-    undefined, operationKey, { ...grokAdmission, onConfirmed: () => onNativeSession?.(sessionId) });
+    undefined, operationKey, { ...grokAdmission, onConfirmed: () => onNativeSession?.(sessionId) },
+    { parser: { kind: "grok", sessionId } });
 }
 
 export function runGrokResume(
@@ -62,5 +63,6 @@ export function runGrokResume(
     (stdout) => parseGrok(stdout, session.sessionId),
     undefined, session.sessionId, { ...grokAdmission,
       onConfirmed: () => options.onAgentActivity?.(session.sessionId) },
+    { parser: { kind: "grok", sessionId: session.sessionId } },
   );
 }

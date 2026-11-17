@@ -8,6 +8,7 @@ import { connectionRuntimeStatus } from "../mcp-tools/connect/relay";
 import { beginEnrollment, cancelEnrollment, enrollmentIsOpen } from "./enrollment";
 import { loadAccountLink } from "../../../bridge/src/account-recovery/link";
 import { pendingRuntimeUpdate, runtimeUpdateSettings } from "../../../bridge/src/runtime-updates";
+import { UpdateHold } from "../../../bridge/src/runtime-updates/drain/state";
 import { chatStatus, serverChat, type CallingChat } from "../status/chat-status";
 
 export const connectionOutput = {
@@ -35,6 +36,10 @@ export const connectionOutput = {
     version: z.string(),
     state: z.enum(["selected", "downloaded"]),
     detail: z.string(),
+    hold: UpdateHold.optional().describe("The running monitor's own account of the wait: holding (new phone messages wait "
+      + "for blockers until holdUntil), handing-over, waiting (the last hold gave up; nextAttemptAt), or start-check-failed; "
+      + "blockers lists what cannot be handed over (runs by chat, approvals, answers being sent), survivingRuns the chats "
+      + "that keep going and are taken over by the new version"),
   }).nullable().describe("A newer GrantTap runtime on this computer than the one this server runs, and why it is not running yet"),
   chat: z.object({
     sessionId: z.string().describe("The calling chat's id as its provider names it"),

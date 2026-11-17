@@ -4,7 +4,6 @@ import type { UserMessage } from "../../../../../packages/protocol/schema";
 import { ATTACHMENT_MISSING_ERROR } from "../../../../../packages/protocol/schema";
 import type { RelayClient } from "../../../../../packages/core/relay-client";
 import { takeAttachment } from "../../delivery/attachment-store";
-import { rejectCompletedDelivery } from '../../delivery';
 import { loadRuntimeConfig } from "../../config";
 import { deliveryRoutingError } from "../../capabilities";
 import {
@@ -15,7 +14,6 @@ import {
   deliverToSession,
   type ReplyResult,
 } from "../../reply";
-import { noteDeliveredRun } from "../../mesh/delivery/run-digest";
 import { evaluateCreateTask } from "../../mesh/tasks/create-task";
 import { sendSessionPayload } from "../../host/session-keys";
 import { deliveryTarget } from "../../sessions";
@@ -24,7 +22,9 @@ import { localTaskOrigins, type TaskOriginRegistry, type TaskOriginScope } from 
 import { agentEventForUserMessage, sendDeliveryReceipt } from "./receipts";
 import { resolveMessageAttachments } from "./receipts";
 import { reportMessageAgentActivity } from '../message-delivery/activity';
-import { acceptWhenStarted, PHONE_RUN_LIMIT_MS } from "../message-delivery/acceptance";
+import { ACCEPTANCE_WINDOW_MS, acceptWhenStarted, PHONE_RUN_LIMIT_MS } from "../message-delivery/acceptance";
+import { chatReplyHandle, newTaskHandle, sentMessage, settleChatReply, settleNewTask } from "../message-delivery/late-results";
+import { withSurvivor } from "../../reply/survival";
 
 async function startNewAgentTask(input: {
   client: RelayClient;
@@ -90,9 +90,13 @@ async function startNewAgentTask(input: {
   };
   // Follow-ups written before this chat existed reach it after its first turn.
   const prompt = projectGuidancePrompt(admittedProjectId, withQueueNote(message.text, input.queuedBehind?.()));
+  const outcome = { message: sentMessage(message), peerPublicKey: input.peerPublicKey, displayName,
+    origin: input.origin?.scope };
+  // The run can outlive this monitor; the handle says how its answer reaches the phone then.
+  const handle = newTaskHandle(outcome);
   let run: Promise<ReplyResult>;
   try {
-    run = (agent === 'codex'
+    run = withSurvivor(handle, () => agent === 'codex'
       ? createCodexSession(prompt, requestedCwd, PHONE_RUN_LIMIT_MS, resolved.attachments, message.model, message.messageId,
         message.effort)
       : { claude: createClaudeSession, cursor: createCursorSession, grok: createGrokSession }[agent](prompt, requestedCwd,
@@ -105,19 +109,8 @@ async function startNewAgentTask(input: {
     await say(`Could not create a ${displayName} task on this computer.`, undefined, true);
     return 'rejected';
   }
-  const settle = async (result: ReplyResult, late: boolean) => {
-    input.origin?.registry.complete(input.origin.scope,
-      { ok: result.ok || result.delivery === 'native', sessionId: result.ok ? result.sessionId : undefined });
-    if (!result.ok && message.messageId && result.delivery !== 'native') {
-      if (late) rejectCompletedDelivery(message.messageId, result.error);
-      await sendDeliveryReceipt(client, message.messageId, 'rejected', result.error,
-        undefined, input.peerPublicKey);
-    }
-    return result.ok ? say(result.text, result.sessionId, true)
-      : say(late || result.delivery === 'native' ? `The ${displayName} task stopped: ${result.error}`
-        : `Could not create a ${displayName} task: ${result.error}`, undefined, true);
-  };
-  const early = await acceptWhenStarted(run, (result) => settle(result, true));
+  const settle = (result: ReplyResult, late: boolean) => settleNewTask(client, outcome, result, late);
+  const early = await acceptWhenStarted(run, (result) => settle(result, true), ACCEPTANCE_WINDOW_MS, handle);
   if (early === "started") return "accepted";
   await settle(early, false);
   return early.ok || early.delivery === 'native' ? "accepted" : "rejected";
@@ -179,8 +172,10 @@ export async function handleUserMessage(
   // No "sent, waiting" line from a middleman: the delivery receipt already
   // marks the person's bubble, and the next words in the chat are the answer.
   await onProcessing?.();
-  const startedAt = Date.now();
-  const run = deliverToSession(target, message.text, PHONE_RUN_LIMIT_MS, attachments, {
+  const reply = { message: sentMessage(message), peerPublicKey, target, startedAt: Date.now() };
+  // The run can outlive this monitor; the handle says how its answer reaches the phone then.
+  const handle = chatReplyHandle(reply);
+  const run = withSurvivor(handle, () => deliverToSession(target, message.text, PHONE_RUN_LIMIT_MS, attachments, {
     messageId: native?.messageId ?? message.messageId,
     questionReply: native?.questionReply,
     onAgentActivity: () => reportMessageAgentActivity(client, message, peerPublicKey),
@@ -189,36 +184,9 @@ export async function handleUserMessage(
     model: message.model,
     permissionMode: message.permissionMode,
     effort: message.effort, queuedBehind,
-  });
-  const settle = async (result: ReplyResult, late: boolean) => {
-    if (result.ok && result.delivery === 'native') return;
-    // The run's turns are in the transcript, but a session holding this chat
-    // open never sees them; the journal is how it finds out on its next prompt,
-    // and the Task carries the same digest as progress.
-    const noted = noteDeliveredRun({
-      session: target,
-      prompt: message.text,
-      result,
-      startedAt,
-      endedAt: Date.now(),
-    });
-    if (noted?.event) {
-      await sendSessionPayload(client, noted.event, noted.event.taskId, "phone", { ttlMs: 24 * 60 * 60_000 })
-        .catch(() => {});
-    }
-    if (result.ok) await say(result.text, result.sessionId ?? target.sessionId, true);
-    else {
-      if (result.delivery !== 'native') {
-        if (late && message.messageId) rejectCompletedDelivery(message.messageId, result.error);
-        if (message.messageId) await sendDeliveryReceipt(client, message.messageId, 'rejected',
-          result.error, target.sessionId, peerPublicKey);
-      }
-      await say(late || result.delivery === 'native' ? `The run stopped: ${result.error}`
-        : `Could not deliver the message: ${result.error}`,
-        target.sessionId, true);
-    }
-  };
-  const early = await acceptWhenStarted(run, (result) => settle(result, true));
+  }));
+  const settle = (result: ReplyResult, late: boolean) => settleChatReply(client, reply, result, late);
+  const early = await acceptWhenStarted(run, (result) => settle(result, true), ACCEPTANCE_WINDOW_MS, handle);
   if (early === "started") return "accepted";
   await settle(early, false);
   return early.ok || early.delivery === 'native' ? "accepted" : "rejected";

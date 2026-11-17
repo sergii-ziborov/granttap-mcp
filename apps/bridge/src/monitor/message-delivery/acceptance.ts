@@ -1,3 +1,5 @@
+import { markLate, type SurvivorHandle } from "../../reply/survival";
+
 /**
  * When a message from the phone counts as delivered.
  *
@@ -20,19 +22,29 @@ export const ACCEPTANCE_WINDOW_MS = 3_000;
 /** A safety bound for an unattended turn; the person stops a run with Stop, not with a deadline. */
 export const PHONE_RUN_LIMIT_MS = 6 * 60 * 60_000;
 
-let settling = 0;
+/** Late runs whose answer this monitor still owes, with the handle that could hand each to a newer monitor. */
+const owed = new Set<{ handle?: SurvivorHandle; finishing: boolean }>();
 
 /**
  * True while a run that outlived its acceptance window still owes its chat the answer. The provider
  * process ending is not the end of the turn: the answer is sent after it, and a runtime handoff in
- * between would lose it.
+ * between would lose it. A run a newer monitor can take over (`reply/survival`) owes nothing here
+ * until it ends: its answer is then on disk for whichever monitor is running.
  */
-export function lateRunsSettling(): boolean { return settling > 0; }
+export function lateRunsSettling(): boolean {
+  return [...owed].some(item => item.finishing || !item.handle?.adoptable?.());
+}
+
+/** Late answers being sent to the phone right now, their runs over. */
+export function lateAnswersSending(): boolean {
+  return [...owed].some(item => item.finishing);
+}
 
 export async function acceptWhenStarted<T>(
   run: Promise<T>,
   finish: (result: T) => Promise<unknown>,
   windowMs = ACCEPTANCE_WINDOW_MS,
+  handle?: SurvivorHandle,
 ): Promise<T | "started"> {
   let timer: NodeJS.Timeout | undefined;
   const started = new Promise<"started">((resolve) => {
@@ -41,7 +53,10 @@ export async function acceptWhenStarted<T>(
   const first = await Promise.race([run, started]);
   clearTimeout(timer);
   if (first !== "started") return first;
-  settling += 1;
-  void run.then(finish).catch(() => {}).finally(() => { settling -= 1; });
+  const item = { handle, finishing: false };
+  owed.add(item);
+  markLate(handle);
+  void run.then(result => { item.finishing = true; return finish(result); }).catch(() => {})
+    .finally(() => { owed.delete(item); });
   return "started";
 }

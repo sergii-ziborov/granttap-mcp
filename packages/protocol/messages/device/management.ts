@@ -44,11 +44,32 @@ export const DeviceProviderState = z.object({
   updateSupported: z.boolean().optional(),
   activeRequests: z.number().int().nonnegative(),
 });
+/** Why a newer runtime waits on the computer, as its monitor tells it; see `runtime-updates/drain/state.ts`. */
+export const RuntimeUpdateHold = z.object({
+  version: z.string().min(1).max(80).optional(),
+  phase: z.enum(['holding', 'handing-over', 'waiting', 'start-check-failed']),
+  since: z.number().nonnegative().optional(),
+  holdUntil: z.number().nonnegative().optional(),
+  nextAttemptAt: z.number().nonnegative().optional(),
+  afterRunsEnd: z.boolean().optional(),
+  attempts: z.number().int().nonnegative(),
+  blockers: z.array(z.object({
+    kind: z.enum(['run', 'answer', 'approval', 'sign-in', 'maintenance', 'command']),
+    sessionId: z.string().min(1).max(256).optional(), newTask: z.string().min(1).max(40).optional(),
+    since: z.number().nonnegative().optional(), count: z.number().int().positive().optional(),
+  })).max(32),
+  survivingRuns: z.number().int().nonnegative(),
+  updatedAt: z.number().nonnegative(),
+  /** The same as one readable sentence. */
+  summary: z.string().max(1_000),
+});
 export const DeviceManagementSnapshot = z.object({
   computerId: identifier, computerName: z.string().min(1).max(200), observedAt: z.number().finite(),
   runtimeVersion: z.string().min(1).max(80), selectedRuntimeVersion: z.string().max(80).optional(),
   runtimeEpoch: identifier,
   availableRuntimeVersion: z.string().max(80).optional(),
+  /** Present while a newer runtime waits on this computer: what it waits for, since when, and the next attempt. */
+  runtimeUpdateHold: RuntimeUpdateHold.optional(),
   automaticUpdatesEnabled: z.boolean(), runtimeUpdateSupported: z.boolean(), runtimeRestartSupported: z.boolean(),
   cache: z.array(DeviceCacheCategory).max(12), providers: z.array(DeviceProviderState).max(4),
 });

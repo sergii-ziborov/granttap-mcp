@@ -13,8 +13,15 @@ Explicit update uses the existing verified npm installer and rollback selection.
 It can be requested with automatic updates off without changing that preference.
 Activation waits for work to finish; managed macOS launch agents can then be
 restarted from the phone. With automatic updates on, the monitor holds newly queued
-phone messages for up to ten minutes so that its running work can end and the
-selected version can start. Development checkouts are not replaced remotely.
+phone messages for up to ten minutes so that the work it cannot hand over can end and
+the selected version can start; chats' running turns are handed over to it instead.
+While a newer runtime waits, the status snapshot carries `runtimeUpdateHold`: `phase`
+(`holding`, `handing-over`, `waiting`, `start-check-failed`), `since`, `holdUntil`,
+`nextAttemptAt`, `afterRunsEnd`, `attempts`, `blockers` (each `kind` `run`, `answer`,
+`approval`, `sign-in`, `maintenance` or `command`, with the chat `sessionId` or
+`newTask` provider, `since` and `count` where they apply), `survivingRuns`,
+`updatedAt`, and `summary`, one readable sentence. Older clients ignore it.
+Development checkouts are not replaced remotely.
 
 Cache cleanup is restricted to rebuildable repository indexes and obsolete
 immutable MCP downloads. The running package, selected package and rollback

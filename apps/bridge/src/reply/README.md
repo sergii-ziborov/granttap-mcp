@@ -11,6 +11,10 @@ This module prepares phone attachments, routes selected MCP/skill intent, and ru
 handoff resumes the same Task on another agent or computer. Providers without an
 implemented remote-start path fail closed instead of reporting parity.
 
+A phone delivery's Claude, Codex or Grok run writes to files in a folder of its own and
+survives a monitor restart; the next monitor takes it over and sends its answer
+([`survival/`](survival/README.md)).
+
 On POSIX, a managed provider command owns a process group. Phone pause and
 timeouts signal that group, so local descendants that remain in it are also
 requested to stop. The stop count records accepted signals, not confirmed exit

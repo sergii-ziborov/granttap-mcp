@@ -9,7 +9,10 @@ Terminal responses remain correlated to the original message id.
 has taken it, not when its whole turn ends. Tests live in `tests/acceptance.test.ts`.
 `lateRunsSettling` stays true until the answer of such a run has been sent, so a
 runtime update cannot replace the monitor between the provider exiting and its
-answer reaching the phone.
+answer reaching the phone. A run a newer monitor can take over
+(`reply/survival`) is the exception while it runs: its answer is then sent by
+whichever monitor holds it when it ends. `late-results.ts` sends a delivery's
+outcome the same way from either monitor, from plain data kept with the run.
 
 Integration tests: `tests/delivery/processing-receipt.test.ts`; attachment rejection
 coverage: `tests/attachment/attachment-uploads.test.ts`. See the monitor README.

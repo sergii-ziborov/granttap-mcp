@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { DeviceManagementRequest } from '../../../../../packages/protocol/schema';
 import { handleDeviceManagement } from '../index';
+import { writeHoldState } from '../../runtime-updates/drain/state';
 
 test('only the paired controller on the concrete computer route can manage it; replies stay private', async t => {
   t.mock.timers.enable({ apis: ['Date'], now: Date.now() });
@@ -28,9 +29,15 @@ test('only the paired controller on the concrete computer route can manage it; r
     assert.equal(await handleDeviceManagement(client, { ...request, computerId: 'other-mac' }, 'phone'), false);
     assert.equal(await handleDeviceManagement(client, { ...request, createdAt: Date.now() - 300_000 }, 'phone'), false);
     assert.equal(sent.length, 0);
+    writeHoldState(join(directory, 'runtime-updates'), { version: '9.9.9', phase: 'waiting', nextAttemptAt: Date.UTC(2026, 10, 17, 12),
+      attempts: 1, blockers: [{ kind: 'approval', count: 1 }], survivingRuns: 0, updatedAt: Date.now() });
     assert.equal(await handleDeviceManagement(client, request, 'phone'), true);
     await done;
     assert.equal(sent.at(-1).value.snapshot.computerId, 'qa-mac');
+    assert.deepEqual({ ...sent.at(-1).value.snapshot.runtimeUpdateHold, updatedAt: 0 }, { version: '9.9.9', phase: 'waiting',
+      nextAttemptAt: Date.UTC(2026, 10, 17, 12), attempts: 1, blockers: [{ kind: 'approval', count: 1 }], survivingRuns: 0,
+      updatedAt: 0, summary: 'The last wait gave up; the next one starts at 12:00 UTC. Still going: 1 approval waiting on the phone.' },
+      'the phone is told why a newer runtime waits');
     assert.equal(sent.at(-1).value.snapshot.runtimeVersion,
       JSON.parse(readFileSync(new URL('../../../../../package.json', import.meta.url), 'utf8')).version);
     assert.equal(sent.every(x => x.peer === 'phone' && x.options.reliable === false && x.options.urgent === true && x.options.ttlMs === 60_000), true);

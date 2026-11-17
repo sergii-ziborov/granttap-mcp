@@ -7,7 +7,8 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { SessionInfo, UserAttachment } from "../../../../packages/protocol/schema";
 import type { CodingAgent } from "../../../../packages/protocol/schema";
-import { explainClaudeFailure, resolveClaudeBinary } from "../providers/claude-bin";
+import { resolveClaudeBinary } from "../providers/claude-bin";
+import { parseClaudeResult } from "./payload/claude-result";
 import { runCodex, runCodexNew } from "./process/codex-headless";
 import { providerEffortArgs } from "./process/provider-effort";
 import { configDir, isSessionPaused, loadRuntimeConfig, PAUSED_SESSION_REASON } from "../config";
@@ -17,6 +18,7 @@ import { routingPrompt } from "./payload/routing";
 import type { DeliveryOptions, ReplyResult } from "./payload/types";
 import { deliveryIntent } from './payload/identity';
 import { phoneMessagesWaiting, queued } from "./in-flight";
+import { withoutSurvivor } from "./survival";
 import { withQueueNote } from "../task-dispatch/queue-note";
 import {
   runCursorNew,
@@ -77,7 +79,8 @@ export function deliverToSession(
     return count + (phone ? phoneMessagesWaiting(session.sessionId) : 0);
   };
   if (/^transfer-[a-f0-9]{48}$/.test(session.sessionId)) {
-    return queued(session.sessionId, async () => (await localTaskTransfers().deliver(
+    // A moved Task's turn updates the transfer record when it ends, which only this monitor does.
+    return withoutSurvivor(() => queued(session.sessionId, async () => (await localTaskTransfers().deliver(
       session.sessionId, text, attachments, { ...options, queuedBehind: behind() }, {
         start: request => request.provider === "grok"
           ? createGrokSession(projectGuidancePrompt(session.projectId, request.text), request.cwd, timeoutMs, request.attachments,
@@ -95,7 +98,7 @@ export function deliverToSession(
         resume: (native, body, images, settings) => withAttachments(images, body, prepared => runDelivery(native,
           native.agent === "codex" ? prepared.prompt : prepared.claudePrompt, timeoutMs, prepared.images, settings)),
       },
-    )) ?? { ok: false, error: "The prepared transfer is unavailable." }, phone);
+    )) ?? { ok: false, error: "The prepared transfer is unavailable." }, phone));
   }
   return queued(session.sessionId, () => withAttachments(attachments, withQueueNote(text, behind()), (prepared) =>
     runDelivery(
@@ -210,21 +213,8 @@ function runClaude(
   ];
   // Chosen per delivery: the app may have installed a newer Claude Code since.
   const claude = resolveClaudeBinary();
-  return runProcess(claude.path, args, session.cwd, timeoutMs, (stdout) => {
-    try {
-      const parsed = JSON.parse(stdout) as { result?: string; is_error?: boolean };
-      if (parsed.is_error) {
-        return { ok: false, error: explainClaudeFailure(parsed.result ?? "agent error", claude) };
-      }
-      if (typeof parsed.result === "string") return { ok: true, text: parsed.result };
-    } catch {
-      // Fall through to the plain output fallback.
-    }
-    const trimmed = stdout.trim();
-    return trimmed
-      ? { ok: true, text: trimmed.slice(0, 4000) }
-      : { ok: false, error: "Claude returned an empty response." };
-  }, undefined, session.sessionId);
+  return runProcess(claude.path, args, session.cwd, timeoutMs, (stdout) => parseClaudeResult(stdout, claude),
+    undefined, session.sessionId, undefined, { parser: { kind: "claude" } });
 }
 
 function runClaudeNew(
@@ -238,21 +228,6 @@ function runClaudeNew(
     "--output-format", "json", text];
   const claude = resolveClaudeBinary();
   onNativeSession?.(sessionId);
-  return runProcess(claude.path, args, cwd, timeoutMs, (stdout) => {
-    try {
-      const parsed = JSON.parse(stdout) as { result?: string; is_error?: boolean; session_id?: string };
-      if (parsed.is_error) {
-        return { ok: false, error: explainClaudeFailure(parsed.result ?? "agent error", claude) };
-      }
-      if (typeof parsed.result === "string") {
-        return { ok: true, text: parsed.result.slice(0, 4000), sessionId: parsed.session_id ?? sessionId };
-      }
-    } catch {
-      // Fall through to plain output.
-    }
-    const trimmed = stdout.trim();
-    return trimmed
-      ? { ok: true, text: trimmed.slice(0, 4000) }
-      : { ok: false, error: "Claude returned an empty response." };
-  }, undefined, operationKey);
+  return runProcess(claude.path, args, cwd, timeoutMs, (stdout) => parseClaudeResult(stdout, claude, sessionId),
+    undefined, operationKey, undefined, { parser: { kind: "claude-new", sessionId } });
 }

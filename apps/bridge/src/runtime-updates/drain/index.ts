@@ -11,11 +11,24 @@ export const HOLD_POLL_MS = 5_000;
 /** A staged release that failed its start check is not started again sooner than this. */
 export const VERIFY_RETRY_MS = 30 * 60_000;
 
+import type { UpdateBlocker, UpdateHold } from "./state";
+export { holdSentence, readHoldState, writeHoldState, type UpdateBlocker, type UpdateHold } from "./state";
+
 type Options = {
   now?: () => number;
   log?: (line: string) => void;
-  /** When the longest-running provider run of this monitor began; undefined when none is running. */
+  /** When the longest-running provider run this monitor could not hand over began; undefined when none is running. */
   oldestRun?: () => number | undefined;
+  /** What the update waits for now: runs, answers, approvals and other work that cannot be handed over. */
+  blockers?: () => UpdateBlocker[];
+  /** Runs that keep going through the handover and are taken over by the new version. */
+  survivingRuns?: () => number;
+  /** Told what the hold is, whenever it changes and on each poll while it lasts; `undefined` once nothing waits. */
+  report?: (hold: UpdateHold | undefined) => void;
+  /** The launcher is told to replace this monitor; runs that end from now on leave their answers for the next one. */
+  onHandoff?: () => void;
+  /** The replacement did not come; this monitor delivers those answers itself. */
+  onHandoffLapsed?: () => void;
 };
 
 /**
@@ -37,13 +50,31 @@ export class UpdateDrain {
   private passed?: string;
   /** The release whose start check last failed, and when. */
   private broken?: { version: string; at: number };
+  private publishedAt = -Infinity;
 
   constructor(private readonly options: Options = {}) {}
 
   /** New queued work waits while this is true. It stays staged on this computer and on the relay. */
   holding(): boolean {
     this.expire();
+    if (this.since !== undefined) this.publish(false);
     return this.since !== undefined;
+  }
+
+  /** What the update waits for now, or `undefined` when no update waits in this monitor. */
+  state(): UpdateHold | undefined {
+    const now = this.now();
+    const base = { version: this.version, attempts: this.failures, blockers: this.blockersNow(),
+      survivingRuns: this.options.survivingRuns?.() ?? 0, updatedAt: now };
+    if (this.handoffAt !== undefined) return { ...base, phase: "handing-over", since: this.since };
+    if (this.since !== undefined) return { ...base, phase: "holding", since: this.since, holdUntil: this.since + HOLD_LIMIT_MS };
+    if (this.broken && this.broken.version === this.version && now - this.broken.at < VERIFY_RETRY_MS) {
+      return { ...base, phase: "start-check-failed", nextAttemptAt: this.broken.at + VERIFY_RETRY_MS };
+    }
+    if (this.version !== undefined && (now < this.notBefore || this.outlasting())) {
+      return { ...base, phase: "waiting", nextAttemptAt: this.notBefore, ...(this.outlasting() ? { afterRunsEnd: true } : {}) };
+    }
+    return undefined;
   }
 
   /** A verified newer runtime waits for a busy monitor. Returns whether new work is now held for it. */
@@ -51,13 +82,17 @@ export class UpdateDrain {
     this.expire();
     if (this.since !== undefined) return true;
     const now = this.now();
-    if (now < this.notBefore || this.outlasting()) return false;
+    if (version !== undefined && this.version === undefined) this.version = version;
+    if (now < this.notBefore || this.outlasting()) { this.publish(); return false; }
     if (version !== this.version) this.failures = 0;
     this.since = now;
     this.version = version;
     this.outlastedAt = undefined;
+    const surviving = this.options.survivingRuns?.() ?? 0;
     this.log(`${this.label()} is ready. New phone messages wait for the running work to end, `
-      + `${minutes(HOLD_LIMIT_MS)} min at most.`);
+      + `${minutes(HOLD_LIMIT_MS)} min at most`
+      + (surviving ? `; ${surviving} running chat${surviving === 1 ? '' : 's'} will be taken over by it.` : '.'));
+    this.publish();
     return true;
   }
 
@@ -69,8 +104,10 @@ export class UpdateDrain {
     this.handoffAt = now;
     this.since ??= now;
     this.version = version ?? this.version;
+    this.options.onHandoff?.();
     this.log(`${this.label()} takes over: the monitor restarts with it`
       + (waited > 0 ? `; new phone messages waited ${Math.round(waited / 1000)} s.` : '.'));
+    this.publish();
   }
 
   /** Automatic updates were turned off: nothing is waiting any more. */
@@ -78,6 +115,8 @@ export class UpdateDrain {
     if (this.since === undefined || this.handoffAt !== undefined) return;
     this.log(`${this.label()} no longer waits: automatic updates are off. Phone messages run again.`);
     this.since = undefined;
+    this.version = undefined;
+    this.publish();
   }
 
   /** Selecting the update failed, as on a full disk. The hold ends now instead of at its limit. */
@@ -87,6 +126,7 @@ export class UpdateDrain {
       + `${minutes(HOLD_RETRY_MS)} min.`);
     this.notBefore = this.now() + HOLD_RETRY_MS;
     this.since = undefined;
+    this.publish();
   }
 
   /** Starts a staged release once per version, so a hold is taken only for one that works. */
@@ -94,7 +134,7 @@ export class UpdateDrain {
     if (this.passed === version) return true;
     if (this.broken?.version === version && this.now() - this.broken.at < VERIFY_RETRY_MS) return false;
     try { await verify(); }
-    catch (error) { this.broken = { version, at: this.now() }; throw error; }
+    catch (error) { this.broken = { version, at: this.now() }; this.version ??= version; this.publish(); throw error; }
     this.passed = version;
     this.broken = undefined;
     return true;
@@ -109,6 +149,8 @@ export class UpdateDrain {
       this.log(`${this.label()} was to take over, but the monitor was not restarted in `
         + `${minutes(HANDOFF_LIMIT_MS)} min. Phone messages run again.`);
       this.notBefore = now + HOLD_RETRY_MS;
+      this.handoffAt = undefined;
+      this.options.onHandoffLapsed?.();
     } else {
       if (within(now - this.since, HOLD_LIMIT_MS)) return;
       const running = this.options.oldestRun?.() !== undefined;
@@ -116,13 +158,29 @@ export class UpdateDrain {
       const soon = running && this.failures === 1;
       this.outlastedAt = running ? now : undefined;
       this.notBefore = now + (soon ? HOLD_PAUSE_MS : HOLD_RETRY_MS);
+      const blockers = this.blockersNow();
       this.log(`${this.label()} still waits: the running work did not end in ${minutes(HOLD_LIMIT_MS)} min. `
         + 'Phone messages run again; the update is tried again '
         + (soon ? '' : `in ${minutes(HOLD_RETRY_MS)} min${running ? ' at the earliest, ' : '.'}`)
-        + (running ? 'when the runs still going have ended.' : ''));
+        + (running ? 'when the runs still going have ended.' : '')
+        + (blockers.length ? ` It waited for: ${blockers.map(item => item.kind === 'run'
+          ? `run ${item.newTask ? `of a new ${item.newTask} task` : `in chat ${item.sessionId?.slice(0, 8)}`}` : item.kind).join(', ')}.` : ''));
     }
     this.since = undefined;
     this.handoffAt = undefined;
+    this.publish();
+  }
+
+  private blockersNow(): UpdateBlocker[] {
+    try { return (this.options.blockers?.() ?? []).slice(0, 32); } catch { return []; }
+  }
+
+  /** A change is reported at once; while a hold lasts, its blockers are reported at most every poll. */
+  private publish(changed = true): void {
+    const now = this.now();
+    if (!changed && now - this.publishedAt >= 0 && now - this.publishedAt < HOLD_POLL_MS) return;
+    this.publishedAt = now;
+    try { this.options.report?.(this.state()); } catch { /* A status view shows less; the hold is unaffected. */ }
   }
 
   private outlasting(): boolean {

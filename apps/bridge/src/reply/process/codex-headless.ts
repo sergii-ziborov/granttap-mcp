@@ -6,7 +6,7 @@ import { providerEffortArgs } from "./provider-effort";
 import type { DeliveryOptions, ReplyResult } from "../payload/types";
 import { continueCodexQuestion, deliverToCodexDesktop, nativeQuestionAttachmentEnvelope } from '../../codex-desktop';
 
-function parseCodexJsonl(stdout: string, fallbackSessionId?: string): ReplyResult {
+export function parseCodexJsonl(stdout: string, fallbackSessionId?: string): ReplyResult {
   let lastMessage = "";
   let sessionId = fallbackSessionId;
   let structured = false;
@@ -90,10 +90,27 @@ async function resumeCodex(session: SessionInfo, text: string, timeoutMs: number
     (stdout) => parseCodexJsonl(stdout, session.sessionId),
     text,
     session.sessionId,
+    undefined,
+    { parser: { kind: "codex", sessionId: session.sessionId } },
   );
+  return codexOwnerConflict(result);
+}
+
+/** Codex refuses a second writer for a chat its desktop app holds open. */
+export function codexOwnerConflict(result: ReplyResult): ReplyResult {
   return !result.ok && /thread-store conflict|already has an active writer/i.test(result.error)
     ? { ok: false, error: 'Codex already owns this chat. Keep its window open and retry the message in GrantTap.' }
     : result;
+}
+
+/** Whether Codex reported the end of its turn, as `exec --json` does when it finishes or fails. */
+export function codexFinished(stdout: string): boolean {
+  return stdout.split("\n").some((line) => {
+    try {
+      const type = (JSON.parse(line) as { type?: string }).type;
+      return type === "turn.completed" || type === "turn.failed" || type === "error";
+    } catch { return false; }
+  });
 }
 
 function tomlKey(value: string): string {
@@ -114,5 +131,6 @@ export function runCodexNew(
   const imageArgs = images.flatMap((path) => ["-i", path]);
   const args = ["exec", ...(model ? ["-m", model] : []), ...providerEffortArgs("codex", effort), ...imageArgs,
     "--json", "--skip-git-repo-check", "-"];
-  return runProcess(resolveCodexBinary(), args, cwd, timeoutMs, parseCodexJsonl, text, operationKey);
+  return runProcess(resolveCodexBinary(), args, cwd, timeoutMs, parseCodexJsonl, text, operationKey, undefined,
+    { parser: { kind: "codex" } });
 }

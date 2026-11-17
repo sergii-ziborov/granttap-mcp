@@ -8,6 +8,7 @@ import { connectInMemory, textResult } from '../../../../../tests/support/mcp-cl
 import { createPairing, machineConfigPath, saveConfig } from '../../../../bridge/src/config';
 import { writeLimitContinuationState } from '../../../../bridge/src/limit-continuation/store';
 import { setRuntimeAutoUpdate } from '../../../../bridge/src/runtime-updates';
+import { writeHoldState } from '../../../../bridge/src/runtime-updates/drain/state';
 import { TaskDispatchInbox } from '../../../../bridge/src/task-dispatch';
 import { generateKeyPair } from '../../../../../packages/core/crypto';
 import type { TaskDispatch } from '../../../../../packages/protocol/schema';
@@ -115,7 +116,14 @@ test('status names a newer runtime that waits, and why', async t => {
   const downloaded = await status();
   assert.deepEqual({ ...downloaded.structured.pendingUpdate as object, detail: undefined },
     { version: '999.0.0', state: 'downloaded', detail: undefined });
-  assert.match(downloaded.text, /Runtime 999\.0\.0 is waiting: Downloaded\. It takes over once the monitor's running work has ended; new phone messages wait for that at most 10 min at a time/);
+  assert.match(downloaded.text, /Runtime 999\.0\.0 is waiting: Downloaded\. It takes over once the monitor's work that cannot be handed over has ended; new phone messages wait for that at most 10 min at a time, and running chats are taken over by it\./);
+  const since = Date.UTC(2026, 10, 17, 9, 30);
+  writeHoldState(join(f.root, 'runtime-updates'), { version: '999.0.0', phase: 'holding', since, holdUntil: since + 600_000,
+    attempts: 0, blockers: [{ kind: 'run', sessionId: 'cursor-chat-0001', since }], survivingRuns: 2, updatedAt: since });
+  const held = await status();
+  assert.deepEqual((held.structured.pendingUpdate as { hold?: { phase: string; survivingRuns: number } }).hold?.phase, 'holding');
+  assert.match(held.text, /Runtime 999\.0\.0 is waiting: Downloaded\. New phone messages wait for it since 09:30 UTC, until 09:40 UTC at the latest; it waits for a run in chat cursor-c \(since 09:30 UTC\)\. 2 running chats keep going and are taken over by the new version\./);
+  writeHoldState(join(f.root, 'runtime-updates'), undefined);
   setRuntimeAutoUpdate(false);
   assert.match((await status()).text, /Runtime 999\.0\.0 is waiting: Downloaded, but automatic updates are off/);
   writeFileSync(join(f.root, 'runtime-updates', 'active.json'), JSON.stringify({ root: runtime, version: '999.0.0' }));

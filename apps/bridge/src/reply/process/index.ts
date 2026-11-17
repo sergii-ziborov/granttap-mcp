@@ -7,6 +7,8 @@ import { inspectRepository } from "../../mesh/catalog";
 import { localMeshStore } from "../../mesh/local-remote/local";
 import { environmentProcessEnv, loadEnvironment } from "../../mesh/context/env";
 import type { ReplyResult } from "../payload/types";
+import { survivalEnabled, type RunParser } from "../survival";
+import { prepareSurvivableRun, type SurvivableRun } from "../survival/run";
 
 function projectEnvForCwd(cwd?: string): NodeJS.ProcessEnv {
   if (!cwd) return {};
@@ -96,6 +98,14 @@ export type ProviderAdmission = {
   timeoutMessage: string;
 };
 
+/** How often a run's output files are read while it runs. */
+const OUTPUT_POLL_MS = 100;
+
+type Watched = {
+  command: string; child: ChildProcess; run?: SurvivableRun; timeoutMs: number; parse: (stdout: string) => ReplyResult;
+  stdin?: string; key?: string; admission?: ProviderAdmission;
+};
+
 export function runProcess(
   command: string,
   args: string[],
@@ -105,93 +115,127 @@ export function runProcess(
   stdin?: string,
   key?: string,
   admission?: ProviderAdmission,
+  /** A chat's run, written to files in its own folder so a newer monitor can take it over (`../survival`). */
+  survive?: { parser: RunParser },
 ): Promise<ReplyResult> {
   return new Promise((resolve) => {
     let child: ChildProcess;
+    let run: SurvivableRun | undefined;
     try {
+      run = survive && survivalEnabled() ? prepareSurvivableRun({ command, abortKey: key, parser: survive.parser,
+        timeoutMs, stdin, admission: !!admission }) : undefined;
       child = spawn(command, args, {
         cwd,
         // A delivery is itself a prompt submission; the prompt hook must not
         // hand a background run the journal kept for the live session.
         env: providerProcessEnvironment(cwd),
-        stdio: [stdin == null ? "ignore" : "pipe", "pipe", "pipe"],
+        stdio: run ? run.stdio : [stdin == null ? "ignore" : "pipe", "pipe", "pipe"],
         detached: process.platform !== "win32",
       });
+      run?.spawned(child);
     } catch (error) {
+      run?.abandon();
       resolve({ ok: false, error: `${command} did not start: ${(error as Error).message}` });
       return;
     }
-    const untrack = key ? trackProviderProcess(key, child) : () => {};
-    let stdout = "";
-    let stderr = "";
-    let done = false;
-    let admissionReported = false;
-    const finish = (result: ReplyResult): void => {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      clearTimeout(startupTimer);
-      untrack();
-      resolve(!result.ok && admission?.confirmed(stdout) ? { ...result, delivery: 'native' } : result);
-    };
-    const timer = setTimeout(() => {
-      if (done) return;
-      signalOwnedProcess(child, "SIGKILL");
-      finish({ ok: false, error: `${command} did not respond within ${Math.round(timeoutMs / 1000)}s.` });
-    }, timeoutMs);
-    const startupTimer = admission ? setTimeout(() => {
-      if (done || admission.confirmed(stdout)) return;
-      signalOwnedProcess(child, "SIGKILL");
-      finish({ ok: false, error: admission.timeoutMessage });
-    }, admission.withinMs) : undefined;
-    child.stdout?.setEncoding('utf8');
-    child.stderr?.setEncoding('utf8');
-    child.stdout?.on("data", (chunk) => {
-      stdout += chunk;
-      if (done || admissionReported || !admission?.confirmed(stdout)) return;
-      admissionReported = true;
-      clearTimeout(startupTimer);
-      try { admission.onConfirmed?.(); }
-      catch {
-        signalOwnedProcess(child, "SIGTERM");
-        finish({ ok: false, error: "Provider activity could not be recorded safely.", delivery: "native" });
-      }
-    });
-    child.stderr?.on("data", (chunk) => {
-      stderr += chunk;
-      if (done || (admission && admission.confirmed(stdout))) return;
-      const error = providerSignInFailure(command, stderr);
-      if (error) { providerSignIns.refused(providerAgent(command)); signalOwnedProcess(child, 'SIGKILL'); finish({ ok: false, error }); }
-    });
-    child.on("error", (error) => {
-      finish({ ok: false, error: `${command}: ${error.message}` });
-    });
-    child.on("close", (code) => {
-      if ((child as ChildProcess & { granttapStopped?: boolean }).granttapStopped) {
-        finish({ ok: false, error: STOPPED_ERROR });
-        return;
-      }
-      if (code !== 0) {
-        const error = providerExitFailure(command, stderr, stdout, code);
-        if (isSignInFailure(error)) providerSignIns.refused(providerAgent(command));
-        return finish({ ok: false, error });
-      }
-      providerSignIns.accepted(providerAgent(command));
-      try {
-        finish(parse(stdout));
-      } catch (error) {
-        finish({ ok: false, error: `${command} returned an unreadable result: ${
-          error instanceof Error ? error.message : String(error)
-        }` });
-      }
-    });
-    if (stdin != null) {
-      child.stdin?.on("error", (error: NodeJS.ErrnoException) => {
-        // A CLI can finish with a valid result before it reads the whole prompt.
-        // Its closed pipe must not become an uncaught exception in the bridge.
-        if (error.code !== "EPIPE") finish({ ok: false, error: `${command}: ${error.message}` });
-      });
-      child.stdin?.end(stdin);
-    }
+    watchProvider({ command, child, run, timeoutMs, parse, stdin, key, admission }, resolve);
   });
+}
+
+function watchProvider(watched: Watched, resolve: (result: ReplyResult) => void): void {
+  const { command, child, run, timeoutMs, admission } = watched;
+  const untrack = watched.key ? trackProviderProcess(watched.key, child) : () => {};
+  const state = { stdout: "", stderr: "", done: false, admissionReported: false };
+  const finish = (result: ReplyResult): void => {
+    if (state.done) return;
+    state.done = true;
+    clearTimeout(timer);
+    clearTimeout(startupTimer);
+    clearInterval(poll);
+    untrack();
+    const answer = !result.ok && admission?.confirmed(state.stdout) ? { ...result, delivery: 'native' as const } : result;
+    if (!run) { resolve(answer); return; }
+    // A run another monitor delivers is handed over: this one sends nothing for it.
+    run.ended({ code: child.exitCode, signal: child.signalCode }, owned => resolve(owned ? answer
+      : { ok: true, text: '', delivery: 'handed-over' }));
+  };
+  const timer = setTimeout(() => {
+    if (state.done) return;
+    signalOwnedProcess(child, "SIGKILL");
+    finish({ ok: false, error: `${command} did not respond within ${Math.round(timeoutMs / 1000)}s.` });
+  }, timeoutMs);
+  const startupTimer = admission ? setTimeout(() => {
+    if (state.done || admission.confirmed(state.stdout)) return;
+    signalOwnedProcess(child, "SIGKILL");
+    finish({ ok: false, error: admission.timeoutMessage });
+  }, admission.withinMs) : undefined;
+  const output = providerOutput(watched, state, finish, () => clearTimeout(startupTimer));
+  const poll = run ? setInterval(output.readFiles, OUTPUT_POLL_MS) : undefined;
+  child.stdout?.setEncoding('utf8');
+  child.stderr?.setEncoding('utf8');
+  child.stdout?.on("data", output.stdout);
+  child.stderr?.on("data", output.stderr);
+  child.on("error", (error) => finish({ ok: false, error: `${command}: ${error.message}` }));
+  child.on("close", (code) => {
+    output.readFiles();
+    if (!state.done) finish(closedResult(watched, state, code));
+  });
+  if (watched.stdin != null && !run) {
+    child.stdin?.on("error", (error: NodeJS.ErrnoException) => {
+      // A CLI can finish with a valid result before it reads the whole prompt.
+      // Its closed pipe must not become an uncaught exception in the bridge.
+      if (error.code !== "EPIPE") finish({ ok: false, error: `${command}: ${error.message}` });
+    });
+    child.stdin?.end(watched.stdin);
+  }
+}
+
+/** What the provider writes, read from its pipes or, for a survivable run, from its files. */
+function providerOutput(watched: Watched, state: { stdout: string; stderr: string; done: boolean; admissionReported: boolean },
+  finish: (result: ReplyResult) => void, admitted: () => void) {
+  const { command, child, run, admission } = watched;
+  const stdout = (chunk: string) => {
+    state.stdout += chunk;
+    if (state.done || state.admissionReported || !admission?.confirmed(state.stdout)) return;
+    state.admissionReported = true;
+    admitted();
+    run?.admit();
+    try { admission.onConfirmed?.(); }
+    catch {
+      signalOwnedProcess(child, "SIGTERM");
+      finish({ ok: false, error: "Provider activity could not be recorded safely.", delivery: "native" });
+    }
+  };
+  const stderr = (chunk: string) => {
+    state.stderr += chunk;
+    if (state.done || (admission && admission.confirmed(state.stdout))) return;
+    const error = providerSignInFailure(command, state.stderr);
+    if (error) { providerSignIns.refused(providerAgent(command)); signalOwnedProcess(child, 'SIGKILL'); finish({ ok: false, error }); }
+  };
+  const readFiles = () => {
+    if (!run || state.done) return;
+    const read = run.read();
+    if (read.stdout) stdout(read.stdout);
+    if (read.stderr) stderr(read.stderr);
+  };
+  return { stdout, stderr, readFiles };
+}
+
+/** The answer of a provider process that exited by itself, or was stopped from the phone. */
+function closedResult(watched: Watched, state: { stdout: string; stderr: string }, code: number | null): ReplyResult {
+  const { command, child } = watched;
+  if ((child as ChildProcess & { granttapStopped?: boolean }).granttapStopped) return { ok: false, error: STOPPED_ERROR };
+  if (code !== 0) {
+    const error = providerExitFailure(command, state.stderr, state.stdout, code);
+    if (isSignInFailure(error)) providerSignIns.refused(providerAgent(command));
+    return { ok: false, error };
+  }
+  providerSignIns.accepted(providerAgent(command));
+  try {
+    return watched.parse(state.stdout);
+  } catch (error) {
+    return { ok: false, error: `${command} returned an unreadable result: ${
+      error instanceof Error ? error.message : String(error)
+    }` };
+  }
 }

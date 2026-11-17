@@ -1,7 +1,10 @@
 import { startRuntimeUpdates } from "../../runtime-updates";
 import { runtimeUpdateReadiness } from "../../runtime-updates/readiness";
-import { UpdateDrain } from "../../runtime-updates/drain";
-import { oldestDeliveryStartedAt } from "../../reply";
+import { UpdateDrain, writeHoldState } from "../../runtime-updates/drain";
+import { oldestBlockingDeliveryStartedAt } from "../../reply/in-flight";
+import { freezeSurvivingRuns, liveRunCounts, thawSurvivingRuns } from "../../reply/survival";
+import { adoptSurvivingRuns } from "../../reply/survival/adoption";
+import { registerLateResults } from "../../monitor/message-delivery/late-results";
 /** Persistent, terminal-free task sync for the GrantTap phone app on macOS. */
 import { join } from "node:path";
 import { RelayClient } from "../../../../../packages/core/relay-client";
@@ -35,8 +38,16 @@ let stopEngineRecovery = () => {};
 let stopRuntimeUpdates = () => {};
 let stopUpdateReadiness = () => {};
 const stopWatchdog = startRuntimeWatchdog();
+let stopAdoption = () => {};
+const updateDirectory = join(configDir(), "runtime-updates");
+// What a waiting update waits for is told to status views in other processes; a monitor starts with none.
+writeHoldState(updateDirectory, undefined);
 // Messages keep arriving, so a newer runtime cannot wait for an idle moment: queued work is held for it instead.
-const updateDrain = new UpdateDrain({ oldestRun: oldestDeliveryStartedAt,
+// Chats' runs keep going through the switch and the new monitor takes them over (`reply/survival`).
+const updateDrain = new UpdateDrain({ oldestRun: oldestBlockingDeliveryStartedAt,
+  blockers: () => monitor?.updateBlockers() ?? [], survivingRuns: () => liveRunCounts().survivable,
+  report: hold => writeHoldState(updateDirectory, hold),
+  onHandoff: freezeSurvivingRuns, onHandoffLapsed: thawSurvivingRuns,
   log: line => process.stderr.write(`[monitor] ${line}\n`) });
 
 publishStableNode();
@@ -50,6 +61,10 @@ try {
     peerAllowed: controllerPeerGate(cfg),
   });
   monitor = startSessionMonitor(client, { primary: process.env.GRANTTAP_MONITOR_PRIMARY === "1", config: cfg });
+  // Runs the previous monitor left running hold their chats before any queued message is started.
+  registerLateResults(client);
+  stopAdoption = adoptSurvivingRuns({ connected: () => client.isConnected,
+    log: line => process.stderr.write(`[monitor] ${line}\n`) });
   stopTaskDispatch = startTaskDispatchMonitor({ config: cfg, client,
     isLeader: monitor.isLeader, peerAllowed: controllerPeerGate(cfg), publish: monitor.publish,
     held: () => updateDrain.holding(), track: monitor.track });
@@ -68,6 +83,9 @@ try {
 const stop = (exitCode = 0): void => {
   if (stopping) return;
   stopping = true;
+  // Whatever stops this monitor, a run that ends now leaves its answer for the next one.
+  freezeSurvivingRuns();
+  stopAdoption();
   stopWatchdog();
   stopRuntimeUpdates();
   stopUpdateReadiness();

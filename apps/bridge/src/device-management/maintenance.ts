@@ -12,6 +12,7 @@ import { automaticUpdatesAllowed } from '../runtime-updates/preferences/storage.
 import { newerVersion, readState, runtimeVersion } from '../runtime-updates/selection.mjs';
 import { latestRelease, trustedRelease } from '../runtime-updates/registry';
 import { checkForRuntimeUpdate } from '../runtime-updates';
+import { holdSentence, readHoldState } from '../runtime-updates/drain/state';
 import { binaryVersion } from '../tools/version';
 import { providerCommand, providerAuthentication, installedProvider, providerEnvironment } from './provider-command';
 import { computerCache } from './cache';
@@ -68,9 +69,11 @@ export async function managementSnapshot(): Promise<DeviceManagementSnapshot> {
       updateSupported: installed && inspectTool(agent, providerEnvironment()).update != null,
       activeRequests: ownedProviderProcesses(command).length };
   }));
+  const hold = readHoldState(directory);
   return { computerId: observedComputerId(), computerName: hostname(), observedAt,
     runtimeVersion: runtimeVersion(runtimeRoot), runtimeEpoch, selectedRuntimeVersion: selected.version,
     availableRuntimeVersion: await availableRuntimeVersion(),
+    ...(hold ? { runtimeUpdateHold: { ...hold, summary: holdSentence(hold).slice(0, 1_000) } } : {}),
     automaticUpdatesEnabled: automaticUpdatesAllowed(directory),
     runtimeUpdateSupported: runtimeRoot.includes('/node_modules/'), runtimeRestartSupported: runtimeRestartSupported(),
     cache: (await computerCache(runtimeRoot)).map(({ paths: _paths, ...category }) => category), providers };

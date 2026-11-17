@@ -1,5 +1,9 @@
+/**
+ * `native`: the provider's own owner took the message and its answer arrives through the chat's history.
+ * `handed-over`: the run outlived a monitor that was being replaced; the next monitor delivers its outcome.
+ */
 export type ReplyResult =
-  | { ok: true; text: string; sessionId?: string; delivery?: 'native' }
+  | { ok: true; text: string; sessionId?: string; delivery?: 'native' | 'handed-over' }
   | { ok: false; error: string; delivery?: 'native' };
 
 export type DeliveryOptions = {

@@ -24,7 +24,9 @@ import { recordControllerName } from "../../pairing/presence";
 import { startPublishLoop } from "./publish-loop";
 import { openChatUpdates, OPEN_CHAT_INTERVAL_MS } from "../../session-catalog/open-chat-updates";
 import { refreshObservedCatalog } from "../../session-catalog/observed-state";
-import { hasPendingDeliveries } from "../../reply";
+import { blockingDeliveries } from "../../reply/in-flight";
+import { adoptedRunsSettling } from "../../reply/survival/adoption";
+import type { UpdateBlocker } from "../../runtime-updates/drain";
 import { singleFlightPublisher } from "./single-flight";
 import { publishedCatalog, rememberPublishedCatalog, resumePublishedChats,
   publishCatalogHeads, stopCatalogHeads } from "../../session-catalog";
@@ -34,7 +36,7 @@ import { scanSessionHistoryCooperatively, scanSessionsCooperatively, TOKEN_WINDO
 import { boundedCatalogHistory, INTERVAL_MS, publishSessionEvents } from "../handlers/catalog";
 import { sweepAttachments } from "../handlers/receipts";
 import { handleMonitorMessage } from "../handlers/inbound";
-import { lateRunsSettling } from "../message-delivery/acceptance";
+import { lateAnswersSending, lateRunsSettling } from "../message-delivery/acceptance";
 import { decorateTaskOriginCatalog } from '../../task-origins';
 import { publishCodexQuestions } from '../../codex-questions';
 import { publishClaudeOpenQuestions } from '../../claude-open-questions';
@@ -52,6 +54,8 @@ export type SessionMonitor = {
   publish: () => Promise<void>;
   isLeader: () => boolean;
   canUpdate: () => boolean;
+  /** What a runtime update waits for now; runs a newer monitor can take over are not among it. */
+  updateBlockers: () => UpdateBlocker[];
   /** Counts work started outside the relay listener, such as a queued delivery, against `canUpdate`. */
   track: <T>(work: () => Promise<T>) => Promise<T>;
   close: () => void;
@@ -195,8 +199,7 @@ export function startSessionMonitor(client: RelayClient, options: { primary?: bo
   let historyRead: Promise<SessionsStatus["sessions"]> | undefined;
   let lastHistoryPublishedAt = 0;
   let closed = false;
-  const work = runtimeWorkTracker(() => hasPendingDeliveries() || lateRunsSettling()
-    || approvalsStatus().pending.length > 0 || providerLogins.active() || deviceManagementWorkActive());
+  const work = monitorWork();
   const loadLoop = monitorLoadLoop(client, leadership);
   const stopActivities = options.config ? startTaskActivities({config: options.config,
     catalog: () => publishedCatalog(client), isLeader: () => !closed && client.isConnected && leadership.acquire()}) : () => {};
@@ -268,6 +271,7 @@ export function startSessionMonitor(client: RelayClient, options: { primary?: bo
     publish: () => publish(false),
     isLeader: () => leadership.acquire(),
     canUpdate: work.idle,
+    updateBlockers: () => updateBlockers(work.active()),
     track: work.run,
     close: () => {
       closed = true;
@@ -286,6 +290,29 @@ export function startSessionMonitor(client: RelayClient, options: { primary?: bo
       leadership.release();
     },
   };
+}
+
+/** Work a runtime update waits for. A run a newer monitor can take over is not among it (`reply/survival`). */
+function monitorWork() {
+  return runtimeWorkTracker(() => blockingDeliveries().length > 0 || lateRunsSettling() || adoptedRunsSettling()
+    || approvalsStatus().pending.length > 0 || providerLogins.active() || deviceManagementWorkActive());
+}
+
+const NEW_TASK = /^__new_([a-z]+)_task__/;
+
+function updateBlockers(commands: number): UpdateBlocker[] {
+  const pending = approvalsStatus().pending.length;
+  return [
+    ...blockingDeliveries().map(({ key, since }): UpdateBlocker => {
+      const agent = NEW_TASK.exec(key)?.[1];
+      return agent ? { kind: "run", newTask: agent, since } : { kind: "run", sessionId: key.slice(0, 256), since };
+    }),
+    ...(lateAnswersSending() || adoptedRunsSettling() ? [{ kind: "answer" as const }] : []),
+    ...(pending ? [{ kind: "approval" as const, count: pending }] : []),
+    ...(providerLogins.active() ? [{ kind: "sign-in" as const }] : []),
+    ...(deviceManagementWorkActive() ? [{ kind: "maintenance" as const }] : []),
+    ...(commands ? [{ kind: "command" as const, count: commands }] : []),
+  ];
 }
 
 function startQuestionLoop(client: RelayClient, leadership: { acquire: () => boolean }, subscriptions: Set<string>) {

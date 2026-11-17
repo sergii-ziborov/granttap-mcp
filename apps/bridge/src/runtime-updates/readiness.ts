@@ -21,6 +21,8 @@ export function runtimeWorkTracker(blocked:()=>boolean) {
   let count=0;
   return {
     idle:()=>count===0 && !blocked(),
+    /** Relay commands and queued deliveries whose handler has not returned. */
+    active:()=>count,
     run:async<T>(work:()=>Promise<T>):Promise<T>=>{
       count++;
       try {return await work();} finally {count--;}

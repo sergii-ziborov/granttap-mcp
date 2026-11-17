@@ -31,6 +31,11 @@ export const grokAdmission: ProviderAdmission = {
   timeoutMessage: 'Grok did not confirm receipt within 60s. Open the task before retrying.',
 };
 
+/** Whether Grok reported the end of its turn: its final result, or an error. */
+export function grokFinished(stdout: string): boolean {
+  return events(stdout).some(event => event.type === 'result' || event.type === 'error');
+}
+
 export function parseGrok(stdout: string, fallback: string): ReplyResult {
   let text = '';
   let sessionId = fallback;

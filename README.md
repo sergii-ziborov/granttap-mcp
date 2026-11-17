@@ -978,12 +978,17 @@ Verified updates are staged separately and applied after active requests and pen
 decisions finish. Startup failures restore the previous version. Pairing and task
 policies are retained; source checkouts and running provider processes stay in place.
 
-A computer that always has a chat running is never idle on its own. When an update is
-ready, the background monitor therefore stops starting newly arrived phone messages for
-up to ten minutes, lets the runs already going finish, and then switches. Messages that
-arrive meanwhile are kept and delivered by the new version; none is refused or run
-twice. If a run outlasts the ten minutes, messages run again and the update follows
-when that run has ended.
+A computer that always has a chat running is never idle on its own. A chat's turn started
+from the phone therefore keeps running through the switch: its output goes to a private
+file instead of a pipe, the new version takes the run over by its process, and sends its
+answer when it ends. When an update is ready, the background monitor stops starting newly
+arrived phone messages while the work it cannot hand over ends — usually seconds, ten
+minutes at most — and then switches. Messages that arrive meanwhile are kept and
+delivered by the new version; none is refused or run twice. If such work outlasts the ten
+minutes, messages run again and the update follows when it has ended. `connection_status`
+and the phone's computer status say what a waiting update waits for, since when, and when
+it is tried again. See [runtime updates](apps/bridge/src/runtime-updates/README.md) and
+[runs that outlive their monitor](apps/bridge/src/reply/survival/README.md).
 
 In the plugin's GrantTap connection card, use **Automatic updates: On / Off**.
 The choice is saved for this computer and takes effect without restarting the

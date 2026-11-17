@@ -8,7 +8,12 @@ import { generateKeyPair } from "../../../packages/core/crypto";
 import type { Payload, SessionInfo, TaskDispatch } from "../../../packages/protocol/schema";
 import { saveRuntimeConfig } from "../../../apps/bridge/src/config";
 import { startSessionMonitor } from "../../../apps/bridge/src/monitor";
-import { hasPendingDeliveries, oldestDeliveryStartedAt } from "../../../apps/bridge/src/reply";
+import { hasPendingDeliveries } from "../../../apps/bridge/src/reply";
+import { oldestBlockingDeliveryStartedAt } from "../../../apps/bridge/src/reply/in-flight";
+import { forgetFrozenRuns, freezeSurvivingRuns, thawSurvivingRuns } from "../../../apps/bridge/src/reply/survival";
+import { adoptSurvivingRuns } from "../../../apps/bridge/src/reply/survival/adoption";
+import { runRecords } from "../../../apps/bridge/src/reply/survival/records";
+import { registerLateResults } from "../../../apps/bridge/src/monitor/message-delivery/late-results";
 import { checkForRuntimeUpdate, runtimeUpdateLoop } from "../../../apps/bridge/src/runtime-updates";
 import { UpdateDrain } from "../../../apps/bridge/src/runtime-updates/drain";
 import { selectedRuntime } from "../../../apps/bridge/src/runtime-updates/selection.mjs";
@@ -65,6 +70,7 @@ function computer(t: TestContext) {
   const finish = (chat: string) => writeFileSync(join(root, `finish-${chat}`), "");
   t.after(async () => {
     for (const stop of stops) stop();
+    forgetFrozenRuns();
     finish("chat-a"); finish("chat-b");
     await until(() => !hasPendingDeliveries(), "the fixture runs end");
     for (const name of names) if (prior[name] == null) delete process.env[name]; else process.env[name] = prior[name];
@@ -97,11 +103,19 @@ function computer(t: TestContext) {
     },
     finish: async (job: TaskDispatch, outcome: string) => { queue.state.set(job.jobId, outcome); } };
   /** A monitor process: its own relay link, its own drain, the queue receiver, and the update loop. */
-  const runtime = () => {
+  let takeOver = false;
+  const runtime = (successor = false) => {
+    takeOver = successor;
     const relay = new Relay(true), lines: string[] = [], count = { activations: 0, verifications: 0 };
     rememberPublishedCatalog(relay as never, { type: "sessions.status", machine: "Fixture", sessions: chats, generatedAt: Date.now() });
     const monitor = startSessionMonitor(new Relay(false) as never);
-    const drain = new UpdateDrain({ oldestRun: oldestDeliveryStartedAt, log: line => { lines.push(line); } });
+    // As the monitor wires it: runs that end once the launcher is told to replace it are left for the next one.
+    const drain = new UpdateDrain({ oldestRun: oldestBlockingDeliveryStartedAt, onHandoff: freezeSurvivingRuns,
+      onHandoffLapsed: thawSurvivingRuns, log: line => { lines.push(line); } });
+    registerLateResults(relay as never);
+    // The monitor before this one is this same test process; what it left is taken over as if it had exited.
+    const stopAdoption = adoptSurvivingRuns({ connected: () => true, pollMs: 50, rescanMs: 100,
+      ownerAlive: () => !takeOver, log: line => { lines.push(line); } });
     const stopQueue = startTaskDispatchMonitor({ config, client: relay as never, isLeader: () => true, peerAllowed: () => true,
       publish: async () => {}, remote, held: () => drain.holding(), track: monitor.track });
     let pass = () => {};
@@ -109,7 +123,7 @@ function computer(t: TestContext) {
       latest: async () => release, activate: () => { count.activations++; },
       schedule: ((callback: () => void) => { pass = callback; return setTimeout(() => {}, 100_000); }) as typeof setTimeout,
       check: options => checkForRuntimeUpdate({ ...options, install, verify: async () => { count.verifications++; } }) });
-    const stop = () => { stopUpdates(); stopQueue(); monitor.close(); };
+    const stop = () => { stopAdoption(); stopUpdates(); stopQueue(); monitor.close(); };
     stops.push(stop);
     return { relay, monitor, drain, lines, count, stop, updatePass: async () => { pass(); await turn(); },
       receive: (chat: string) => relay.offer(message(chat), phone.publicKey) };
@@ -119,34 +133,37 @@ function computer(t: TestContext) {
     inbox: () => new TaskDispatchInbox(join(root, "task-dispatch"), ROOM) };
 }
 
-test("an update takes over between two phone messages: the first keeps its answer, the second runs once in the new runtime", async t => {
+test("an update takes over while a chat's turn runs: the turn goes on, its answer comes from the new runtime, and the next message runs once there", async t => {
   const f = computer(t), old = f.runtime();
   old.receive("chat-a");
   await until(() => f.queue.state.get(f.message("chat-a").jobId) === "completed", "the first message is delivered");
-  assert.equal(old.monitor.canUpdate(), false, "its provider run is still going");
+  await until(() => old.monitor.canUpdate(), "a running turn the new runtime can take over does not hold the update back");
+  assert.equal(hasPendingDeliveries(), true, "the provider run is still going");
 
   await old.updatePass();
-  assert.equal(old.drain.holding(), true, "the staged release is valid, so new work waits for it");
-  old.receive("chat-b");
-  await new Promise(resolve => setTimeout(resolve, 500));
-  assert.equal(f.queue.claims.get(f.message("chat-b").jobId), undefined, "the second message is not claimed from the relay");
-  assert.equal(f.inbox().status(f.message("chat-b").jobId)?.phase, "staged", "it is kept on this computer");
-  assert.deepEqual(f.runs(), ["chat-a"]);
-  assert.equal(selectedRuntime(f.bundled, f.updates), f.bundled, "the running work is not cut off");
-
-  f.finish("chat-a");
-  await until(() => old.relay.answered("chat-a"), "the first run's answer reaches the phone from the monitor that started it");
-  await until(() => old.monitor.canUpdate(), "nothing is in flight any more");
-  await old.updatePass();
-  assert.equal(selectedRuntime(f.bundled, f.updates), f.candidate);
+  assert.equal(selectedRuntime(f.bundled, f.updates), f.candidate, "the update is selected while the turn runs");
   assert.equal(old.count.activations, 1);
   assert.equal(old.count.verifications, 1);
-  await new Promise(resolve => setTimeout(resolve, 300));
+  old.receive("chat-b");
+  await new Promise(resolve => setTimeout(resolve, 500));
+  assert.equal(f.queue.claims.get(f.message("chat-b").jobId), undefined, "a message that arrives meanwhile is not claimed");
+  assert.equal(f.inbox().status(f.message("chat-b").jobId)?.phase, "staged", "it is kept on this computer");
   assert.deepEqual(f.runs(), ["chat-a"], "nothing starts in the monitor that is being replaced");
-  assert.deepEqual(old.lines.map(line => line.split(" ").slice(2, 4).join(" ")), ["is ready.", "takes over:"]);
-  old.stop();
+  assert.deepEqual(old.lines.map(line => line.split(" ").slice(2, 4).join(" ")), ["takes over:"]);
 
-  const next = f.runtime();
+  f.finish("chat-a");
+  await until(() => runRecords().some(record => record.key === "chat-a" && record.exit?.code === 0),
+    "the turn ends, and its answer waits on disk");
+  await new Promise(resolve => setTimeout(resolve, 200));
+  assert.equal(old.relay.answered("chat-a"), false, "the monitor being replaced does not start sending it");
+  assert.equal(hasPendingDeliveries(), false, "it lets go of the chat");
+  old.stop();
+  // The launcher replaces the process; this test process stands in for both, so the old one's state goes here.
+  forgetFrozenRuns();
+
+  const next = f.runtime(true);
+  await until(() => next.relay.answered("chat-a"), "the new runtime delivers the answer of the turn it took over");
+  assert.ok(next.lines.some(line => /^Taking over a run the previous monitor started/.test(line)));
   await until(() => f.queue.state.get(f.message("chat-b").jobId) === "completed", "the new runtime delivers the waiting message");
   f.finish("chat-b");
   await until(() => next.relay.answered("chat-b"), "and its answer reaches the phone");
@@ -156,4 +173,6 @@ test("an update takes over between two phone messages: the first keeps its answe
   const refused = [...old.relay.sent, ...next.relay.sent]
     .filter(payload => payload.type === "delivery.receipt" && payload.status === "rejected");
   assert.deepEqual(refused, [], "and no message was refused");
+  assert.equal(next.relay.sent.filter(payload => payload.type === "agent.event" && payload.text === "Fixture answer for chat-a").length, 1,
+    "the answer is sent once");
 });

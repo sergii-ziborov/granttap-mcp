@@ -5,7 +5,7 @@ import { configDir } from '../config/runtime/paths';
 import { latestRelease, trustedRelease, installRelease, verifyRelease, type Release } from './registry';
 import { newerVersion, readState, runtimeVersion, saveState, validRuntime, versionRoot } from './selection.mjs';
 import { automaticUpdatesAllowed } from './preferences/storage.mjs';
-import { HOLD_LIMIT_MS, HOLD_POLL_MS, type UpdateDrain } from './drain';
+import { HOLD_LIMIT_MS, HOLD_POLL_MS, holdSentence, readHoldState, type UpdateDrain, type UpdateHold } from './drain';
 export { runtimeUpdateSettings, setRuntimeAutoUpdate } from './preferences';
 
 type Options={root:string;stateDirectory:string;manual?:boolean;now?:()=>number;latest?:()=>Promise<unknown>;
@@ -89,18 +89,23 @@ export function runtimeUpdateLoop(options:LoopOptions):()=>void {
   return ()=>{stopped=true;if(timer)clearTimeout(timer);};
 }
 
-export type PendingRuntimeUpdate = { version: string; state: 'selected' | 'downloaded'; detail: string };
+export type PendingRuntimeUpdate = { version: string; state: 'selected' | 'downloaded'; detail: string; hold?: UpdateHold };
 
 /**
  * A newer runtime this computer holds while `running` is older: selected and started by GrantTap processes
- * from their next start, or downloaded and not yet selected. Read from the version cache alone, without
- * writing. The cache does not say why a busy monitor's hold gave way; its log does.
+ * from their next start, or downloaded and not yet selected. Read from the version cache and the running
+ * monitor's account of its hold (`drain/state.ts`), without writing: what the wait is for, since when, and
+ * when it is tried again.
  */
 export function pendingRuntimeUpdate(running:string,directory=join(configDir(),'runtime-updates')):PendingRuntimeUpdate|undefined {
   const state=readState(directory);
+  const hold=readHoldState(directory);
+  const told=(version:string)=>hold && (!hold.version || hold.version===version) ? hold : undefined;
   if(state.version && newerVersion(state.version,running) && validRuntime(state.root,directory,state.version)) {
+    const held=told(state.version);
     return {version:state.version,state:'selected',
-      detail:`Selected. GrantTap processes started on ${running}, this MCP server included, run it from their next start.`};
+      detail:`Selected. GrantTap processes started on ${running}, this MCP server included, run it from their next start.`
+        +(held?` ${holdSentence(held)}`:''),...(held?{hold:held}:{})};
   }
   let versions:string[]=[];
   try {versions=readdirSync(join(directory,'versions'));} catch {return undefined;}
@@ -108,10 +113,13 @@ export function pendingRuntimeUpdate(running:string,directory=join(configDir(),'
     && (!state.version || newerVersion(version,state.version)) && validRuntime(versionRoot(directory,version),directory,version))
     .sort((a,b)=>newerVersion(a,b)?-1:1)[0];
   if(!staged)return undefined;
-  return {version:staged,state:'downloaded',detail:automaticUpdatesAllowed(directory)
-    ? 'Downloaded. It takes over once the monitor\'s running work has ended; new phone messages wait for that at most '
-      +`${HOLD_LIMIT_MS/60_000} min at a time, and the monitor log says when a wait gave up.`
-    : 'Downloaded, but automatic updates are off on this computer, so it does not take over.'};
+  const held=told(staged);
+  if(!automaticUpdatesAllowed(directory)) {
+    return {version:staged,state:'downloaded',detail:'Downloaded, but automatic updates are off on this computer, so it does not take over.'};
+  }
+  return {version:staged,state:'downloaded',detail:held?`Downloaded. ${holdSentence(held)}`
+    : 'Downloaded. It takes over once the monitor\'s work that cannot be handed over has ended; new phone messages wait '
+      +`for that at most ${HOLD_LIMIT_MS/60_000} min at a time, and running chats are taken over by it.`,...(held?{hold:held}:{})};
 }
 
 /** Only the owned installed background monitor downloads updates; source checkouts stay fixed. */
