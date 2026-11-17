@@ -20,6 +20,7 @@ import { heartbeatDisplayText } from '../../host-heartbeat';
 import { codexContextReport } from "../../context-usage";
 import { codexRequestTitle } from '../../native-task-titles';
 import { plainPreview } from '../../plain-preview';
+import { createCodexLineageCalls, promptLead, type LineageCalls, type LineageFact, type PromptLead } from '../../../started-by';
 
 type CodexParseState = {
   sessionId: string;
@@ -42,7 +43,17 @@ type CodexParseState = {
   contextUsage?: SessionInfo["contextUsage"];
   workdirs: string[];
   turn: CodexTurnClock;
+  /** `codex exec`: started by a command, not at a terminal. */
+  headless?: boolean;
+  /** The opening of the first request, once it was seen; for finding the chat that started this one. */
+  prompt?: PromptLead | null;
+  calls: LineageCalls;
 };
+
+/** The first visible request is the one a parent's command carried; later ones are not looked at. */
+function notePrompt(state: CodexParseState, text: string | undefined): void {
+  if (state.prompt === undefined && text) state.prompt = promptLead(text) ?? null;
+}
 
 function adoptRequestTitle(state: CodexParseState, text: string | undefined): void {
   const title = codexRequestTitle(text);
@@ -53,6 +64,7 @@ function adoptRequestTitle(state: CodexParseState, text: string | undefined): vo
 
 function applyCodexLine(d: any, state: CodexParseState): void {
   observeCodexTurn(d, state.turn);
+  state.calls.add(d);
   state.workdirs.push(...workdirsFromCodexCall(d));
   state.workdirs = state.workdirs.slice(-64);
   const t = ts(d.timestamp);
@@ -76,6 +88,7 @@ function applyCodexLine(d: any, state: CodexParseState): void {
     if (p?.cwd) state.cwd = String(p.cwd);
     if (p?.model) state.model = String(p.model);
     if (p?.git?.branch) state.branch = String(p.git.branch);
+    state.headless ||= p?.originator === "codex_exec" || p?.source === "exec";
     if (typeof p?.title === "string") {
       const title = codexRequestTitle(p.title);
       if (title && !isProvisionalPageTitle(title)) state.title = title.slice(0, 120);
@@ -93,11 +106,13 @@ function applyCodexLine(d: any, state: CodexParseState): void {
     if (sandbox === "danger-full-access") state.accessLevel = "full";
   }
 
-  if (!state.title && d.type === "event_msg" && d.payload?.type === "user_message") {
-    adoptRequestTitle(state, visibleUserText(d.payload.message ?? d.payload.text));
+  if (d.type === "event_msg" && d.payload?.type === "user_message") {
+    const text = visibleUserText(d.payload.message ?? d.payload.text);
+    notePrompt(state, text);
+    if (!state.title) adoptRequestTitle(state, text);
   }
   if (
-    !state.title &&
+    (!state.title || state.prompt === undefined) &&
     d.type === "response_item" &&
     d.payload?.type === "message" &&
     d.payload?.role === "user" &&
@@ -108,7 +123,8 @@ function applyCodexLine(d: any, state: CodexParseState): void {
       .map((block: any) => visibleUserText(block.text))
       .filter(Boolean)
       .join("\n");
-    if (visible) adoptRequestTitle(state, visible);
+    notePrompt(state, visible);
+    if (visible && !state.title) adoptRequestTitle(state, visible);
   }
 
   if (d.type === "event_msg" && d.payload?.type === "agent_message") {
@@ -158,6 +174,7 @@ export function parseCodexFile(file: string): CodexCandidate | undefined {
       session: { ...cached.session, state: codexTurnState(cached.turn ?? {}, cached.session.lastActivityAt) },
       observations: cached.observations,
       child: cached.child,
+      lineage: cached.lineage,
     };
   }
   let lines: string[];
@@ -168,14 +185,17 @@ export function parseCodexFile(file: string): CodexCandidate | undefined {
   }
   const state: CodexParseState = {
     sessionId: "", startedAt: 0, lastActivityAt: 0, lastMessageAt: 0,
-    tokensSession: 0, tokensLastTurn: 0, workdirs: [], turn: {},
+    tokensSession: 0, tokensLastTurn: 0, workdirs: [], turn: {}, calls: createCodexLineageCalls(),
   };
   for (const line of lines) {
     if (!line) continue;
     const d = safeParse(line);
     if (d) applyCodexLine(d, state);
   }
-  if (!state.title && !state.child) adoptRequestTitle(state, codexHeadRequest(file, true)?.text);
+  const head = (!state.title || (state.headless && state.prompt === undefined)) && !state.child
+    ? codexHeadRequest(file, true)?.text : undefined;
+  if (!state.title && !state.child) adoptRequestTitle(state, head);
+  if (state.headless) notePrompt(state, head);
   if (!state.title && state.child?.agentPath) {
     state.title = childTitle(state.child.agentPath.split('/').filter(Boolean).at(-1)?.replace(/_/g, ' '));
   }
@@ -206,6 +226,7 @@ export function parseCodexFile(file: string): CodexCandidate | undefined {
   };
   const observations = codexCapabilityUsage(session, lines);
   const child = state.child;
+  const lineage = child ? undefined : codexLineage(state, session);
   codexSummaryCache.set(file, {
     mtimeMs: fileStat.mtimeMs,
     size: fileStat.size,
@@ -214,6 +235,15 @@ export function parseCodexFile(file: string): CodexCandidate | undefined {
     observations,
     child,
     turn: state.turn,
+    lineage,
   });
-  return { file, session, observations, child };
+  return { file, session, observations, child, lineage };
+}
+
+/** Where the chat came from, for `startedBy`: never published itself. A forked agent is no chat. */
+function codexLineage(state: CodexParseState, session: SessionInfo): LineageFact {
+  const calls = state.calls.snapshot();
+  return { agent: "codex", sessionId: session.sessionId, cwd: session.cwd, startedAt: session.startedAt,
+    ...(state.headless ? { headless: true } : {}), ...(state.headless && state.prompt ? { prompt: state.prompt } : {}),
+    ...(calls.length ? { calls } : {}) };
 }

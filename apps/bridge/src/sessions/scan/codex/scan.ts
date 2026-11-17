@@ -39,5 +39,6 @@ function* scanCodexCatalog(maxFiles: number): Generator<void, Scan> {
   codexLogPathBySession.clear();
   codexActivitySourcesBySession.clear();
   codexAggregatedObservationsBySession.clear();
-  return { ...assembleCodexScan(candidates), sourceLimited: listed.length > maxFiles };
+  return { ...assembleCodexScan(candidates), sourceLimited: listed.length > maxFiles,
+    lineage: candidates.flatMap((candidate) => candidate.lineage ?? []) };
 }

@@ -8,6 +8,7 @@ import {
 import { parseClaudeFileSteps } from "./parse";
 import { recentLogs, claudeProjectsRoot, MAX_FILES, TOKEN_WINDOW_MS, type Scan } from "../../support/common";
 import type { SessionInfo } from "../../../../../../packages/protocol/schema";
+import type { LineageFact } from "../../../started-by";
 
 export function scanClaude(maxFiles = MAX_FILES): Scan {
   return withCheckoutObservationCache(() => finishScan(scanClaudeCatalog(maxFiles)));
@@ -26,6 +27,7 @@ function* scanClaudeCatalog(maxFiles: number): Generator<void, Scan> {
   const activeFiles = new Set(files);
   const seenSessionIds = new Set<string>();
   const sources: Array<{ sessionId: string; file: string; childPaths: string[] }> = [];
+  const lineage: LineageFact[] = [];
 
   for (const file of files) {
     yield;
@@ -37,6 +39,7 @@ function* scanClaudeCatalog(maxFiles: number): Generator<void, Scan> {
       tokensRecent += parsed.tokensSession;
     }
     sessions.push(parsed.session);
+    if (parsed.lineage) lineage.push(parsed.lineage);
   }
   for (const file of claudeSummaryCache.keys()) {
     if (!activeFiles.has(file)) claudeSummaryCache.delete(file);
@@ -47,5 +50,5 @@ function* scanClaudeCatalog(maxFiles: number): Generator<void, Scan> {
     claudeLogPathBySession.set(source.sessionId, source.file);
     claudeChildLogPathsBySession.set(source.sessionId, source.childPaths);
   }
-  return { sessions, tokensRecent, sourceLimited: listed.length > maxFiles };
+  return { sessions, tokensRecent, sourceLimited: listed.length > maxFiles, lineage };
 }

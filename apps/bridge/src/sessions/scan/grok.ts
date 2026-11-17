@@ -23,6 +23,7 @@ import { grokToolCalls, grokToolCompletions, grokToolSummary, grokRecordedChange
 import { captureGrokConversation, readGrokConversation } from '../../providers/grok-conversation';
 import { GrokCatalogCache, type GrokParsedContext } from '../../providers/grok-catalog-cache';
 import { recognizeHelperRun, type HelperRunSession } from '../../helper-runs';
+import { promptLead, type LineageFact } from '../../started-by';
 
 type Summary = {
   info?: { id?: unknown; cwd?: unknown };
@@ -181,6 +182,7 @@ function parseSummary(path: string): Summary | null {
 export function scanGrok(maxFiles = MAX_FILES): Scan {
   const sessions: SessionInfo[] = [];
   const helperRuns: HelperRunSession[] = [];
+  const lineage: LineageFact[] = [];
   const activities = new Map<string, ActivityEntry[]>();
   const usages = new Map<string, CapabilityObservation[]>();
   let tokensRecent = 0;
@@ -226,7 +228,12 @@ export function scanGrok(maxFiles = MAX_FILES): Scan {
       contextTokensUsed: parsed.tokens,
     };
     if (helper) helperRuns.push({ session, kind: helper.kind, label: helper.label, folder: helper.folder });
-    else sessions.push(session);
+    else {
+      sessions.push(session);
+      const headless = summary.session_kind === "headless";
+      const prompt = headless ? promptLead(parsed.entries.find(entry => entry.kind === "user")?.text) : undefined;
+      lineage.push({ agent: "grok", sessionId, cwd, startedAt, ...(headless ? { headless } : {}), ...(prompt ? { prompt } : {}) });
+    }
     logPaths.set(sessionId, join(directory, "chat_history.jsonl"));
     activities.set(sessionId, parsed.entries);
     usages.set(sessionId, parsed.usage);
@@ -236,7 +243,7 @@ export function scanGrok(maxFiles = MAX_FILES): Scan {
   catalogCache.retain(admitted);
   usageBySession = usages;
   return { sessions, tokensRecent, sourceLimited: listed.length > maxFiles,
-    ...(helperRuns.length > 0 ? { helperRuns } : {}) };
+    ...(helperRuns.length > 0 ? { helperRuns } : {}), lineage };
 }
 
 export function grokActivity(session: SessionInfo, fullText = false): ActivityEntry[] {

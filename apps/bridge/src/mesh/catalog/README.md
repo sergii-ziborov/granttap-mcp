@@ -12,6 +12,11 @@ bound to the parent folder's Mesh as before; one with its own remote is not
 there is taken out with a removal record. Apple clients partition workspace Tasks
 using those observations without moving them between access scopes.
 
+A chat another chat started (`startedBy`) whose folder is no checkout of its
+own is placed in its parent's Mesh and binds nothing for its folder; parents are
+linked first within a batch
+([chats started by another chat](../../started-by/README.md)).
+
 Git facts are shared only within one catalog batch. The next reading refreshes
 the root, origin, worktree, and revision, including a workspace which becomes an
 empty Git repository before its first commit or later gains an origin. Neither

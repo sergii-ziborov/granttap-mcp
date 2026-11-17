@@ -57,6 +57,7 @@ export type CachedCodexSummary = {
   observations: CapabilityObservation[];
   child?: CodexChildSource;
   turn?: import("./turn-state").CodexTurnClock;
+  lineage?: import("../../../started-by").LineageFact;
 };
 
 export type CodexChildSource = {
@@ -71,6 +72,8 @@ export type CodexCandidate = {
   session: SessionInfo;
   observations: CapabilityObservation[];
   child?: CodexChildSource;
+  /** Where the chat came from, for `startedBy`; absent for a forked agent. */
+  lineage?: import("../../../started-by").LineageFact;
 };
 
 export type CodexActivitySource = {

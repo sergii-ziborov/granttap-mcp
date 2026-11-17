@@ -54,6 +54,10 @@ in place of the path line that names them. A phone reads one with
 picture's content, never a path, and only the chat that started the run is
 answered.
 
+A headless run that is a chat in its own right, such as `codex exec` in a folder
+several runs share, is not a helper run: it stays a chat and names the chat that
+started it in `startedBy` ([chats started by another chat](../started-by/README.md)).
+
 **Meshes.** A run is not passed to the Mesh, and a generator's folder never
 registers one. A Mesh without a remote whose folder is a generator's, is
 gone from the temp directory, or lies inside a Git checkout without being a

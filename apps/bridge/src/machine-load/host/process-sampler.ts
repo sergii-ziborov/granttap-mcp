@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { recordCommandProcessSample } from "../command-process/history";
 import { captureHelperRuns, helperRunProcesses } from "../../helper-runs/capture";
+import { captureStartedRuns, startedRunProcesses } from "../../started-by/capture";
 import { sampleProcessRows } from "./ps-reader";
 import { attributeByAncestry, processDetail, processGroupName } from "./process-ownership";
 export { executableOf, processGroupName, processDetail } from "./process-ownership";
@@ -227,6 +228,8 @@ export async function sampleAgentProcesses(): Promise<Record<string, AgentProces
   const ownership = attributeByAncestry(rows);
   // A helper run lives for half a minute; this sample may be the only one that sees its process.
   await captureHelperRuns(helperRunProcesses(rows, ownership, sessions));
+  // So is a chat another chat runs headless: only its live process names the chat that started it.
+  await captureStartedRuns(startedRunProcesses(rows, ownership, sessions, sampledAt));
   recordCommandProcessSample(rows.flatMap((row) => {
     const agent = ownership.agents.get(row.pid);
     if (!agent) return [];

@@ -22,6 +22,7 @@ import { queueProjectBindingSync } from "../../engine/runtime/engine-projects";
 import { isCursorTaskCloneId } from "../../sessions/cursor/catalog";
 import { localTaskTransfers } from '../../task-transfer';
 import { helperRunFolder } from '../../helper-runs';
+import { childrenLast, inheritsParentMesh, parentPlacement, type MeshPlacement } from '../../started-by/mesh';
 import { presentableTitle } from '../../sessions/support/activity-helpers';
 export { inspectRepositoryAsync, inspectWorkingTreeAsync, readRepositoryGit } from "./repository-inspection";
 export { prepareMonitorInspection } from "./monitor-inspection";
@@ -161,16 +162,26 @@ export function linkSessionsToProjects(
     }
     return facts;
   };
-  return visible.map((session) => linkSession({ store, session, computerId, inspect: inspectOnce, inspectWorkingTree }));
+  // A chat another chat started follows its parent into the parent's Mesh, so parents go first.
+  const placed = new Map<string, MeshPlacement>();
+  const linked: SessionInfo[] = [...visible];
+  for (const index of childrenLast(visible)) {
+    linked[index] = linkSession({ store, session: visible[index]!, computerId, inspect: inspectOnce, inspectWorkingTree, placed });
+  }
+  return linked;
 }
 
-function linkSession(input: {
+type LinkInput = {
   store: MeshStore;
   session: SessionInfo;
   computerId: string;
   inspect: (cwd: string) => RepositoryFacts;
   inspectWorkingTree: (cwd: string) => boolean | undefined;
-}): SessionInfo {
+  /** Where this catalog put each chat so far, by provider and session. */
+  placed: Map<string, MeshPlacement>;
+};
+
+function linkSession(input: LinkInput): SessionInfo {
   const { store, session, computerId, inspect } = input;
   const agent = provider(session.agent);
   const cwd = session.cwd?.trim();
@@ -187,6 +198,8 @@ function linkSession(input: {
     if (retained.worktree && retained.revision
       && retained.canonicalRepositoryId === previous.repositoryId) repository = retained;
   }
+  // A child in a folder that is no checkout of its own is its parent's work: no Mesh for its folder.
+  if (inheritsParentMesh(session, repository)) return linkStartedChild(input, agent, cwd, knownTaskId);
   const projectId = (knownTaskId ? store.task(knownTaskId)?.projectId : undefined)
     ?? store.projectIdForRepository(repository.canonicalRepositoryId, computerId)
     ?? projectIdentity(repository.canonicalRepositoryId);
@@ -215,14 +228,16 @@ function linkSession(input: {
     updatedAt: session.lastActivityAt,
   };
   store.upsertTask(task);
+  const repositoryId = repository.worktree ? repository.canonicalRepositoryId
+    : previous?.repositoryId ?? repository.canonicalRepositoryId;
+  input.placed.set(`${session.agent}\0${session.sessionId}`, { projectId, repositoryId });
   store.linkExecution({
     taskId,
     sessionId: session.sessionId,
     provider: agent,
     computerId,
     workspace: cwd,
-    repositoryId: repository.worktree ? repository.canonicalRepositoryId
-      : previous?.repositoryId ?? repository.canonicalRepositoryId,
+    repositoryId,
     activeAt: session.lastActivityAt,
     state: session.state, continuedAt: session.transfer?.continuedAt,
     branch: repository.branch ?? session.branch,
@@ -231,6 +246,32 @@ function linkSession(input: {
     startedAt: session.startedAt,
   });
   return { ...session, projectId, taskId, computerId, worktree: repository.worktree ?? previous?.worktree };
+}
+
+/**
+ * A chat another chat started, in a folder that is no checkout of its own, in its parent's Mesh. The
+ * folder is bound to nothing. Without its parent's Mesh on this computer the child is in none.
+ */
+function linkStartedChild(input: LinkInput, agent: MeshProvider, cwd: string, knownTaskId: string | undefined): SessionInfo {
+  const { store, session, computerId } = input;
+  const parent = parentPlacement(session.startedBy!, input.placed, store, computerId);
+  if (!parent) return session;
+  const known = knownTaskId ? store.task(knownTaskId) : undefined;
+  // A Task an older runtime made in a Mesh of the child's own folder stays there; the chat moves on.
+  const taskId = known?.projectId === parent.projectId ? known.taskId : taskIdentity(parent.projectId, agent, session.sessionId);
+  store.upsertTask({
+    taskId, projectId: parent.projectId, title: meshTaskTitle(session, agent),
+    goal: (session.summary ?? session.title ?? "Continue this coding task").slice(0, 1_000),
+    state: taskState(session), ownerSessionId: session.sessionId, createdAt: session.startedAt, updatedAt: session.lastActivityAt,
+  });
+  store.linkExecution({
+    taskId, sessionId: session.sessionId, provider: agent, computerId, workspace: cwd,
+    ...(parent.repositoryId ? { repositoryId: parent.repositoryId } : {}),
+    activeAt: session.lastActivityAt, state: session.state, continuedAt: session.transfer?.continuedAt,
+    branch: session.branch, startedAt: session.startedAt,
+  });
+  input.placed.set(`${session.agent}\0${session.sessionId}`, parent);
+  return { ...session, projectId: parent.projectId, taskId, computerId };
 }
 
 /**

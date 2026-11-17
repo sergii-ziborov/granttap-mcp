@@ -35,6 +35,7 @@ import {
   projectCapabilityRequests,
 } from "../catalog/project/requests";
 import { helperRunProject } from "../../helper-runs";
+import { startedChildrenProjects } from "../../started-by/mesh";
 import { supersedingProject } from "../local-remote/folder-meshes";
 
 export class MeshStore extends MeshRepositoryStore {
@@ -268,10 +269,12 @@ export class MeshStore extends MeshRepositoryStore {
     return this.state.events.filter((event) => event.projectId === projectId);
   }
 
-  /** One registered for a helper run's throwaway folder, before such runs were recognised, is kept but not listed. */
+  /** One registered for a helper run's or a started chat's folder, before they were recognised, is kept but not listed. */
   projectIds(): string[] {
     this.sync();
-    return this.state.projects.filter((project) => !helperRunProject(project)).map((project) => project.projectId);
+    const children = startedChildrenProjects(this.state.projects, this.state.tasks, this.state.executions);
+    return this.state.projects.filter((project) => !helperRunProject(project) && !children.has(project.projectId))
+      .map((project) => project.projectId);
   }
 
   workspaceForRepository(canonicalRepositoryId: string, computerId?: string): string | undefined {

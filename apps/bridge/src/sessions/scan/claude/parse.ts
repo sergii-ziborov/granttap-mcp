@@ -22,6 +22,7 @@ import {
 
 import { readTranscriptRows } from "./transcript-reading";
 import { readClaudeChild } from "./child-reading";
+import { createClaudeLineageCalls, promptLead, type LineageCalls, type LineageFact, type PromptLead } from "../../../started-by";
 
 type ClaudeParseState = ClaudeTurnClock & {
   sessionId: string;
@@ -47,6 +48,10 @@ type ClaudeParseState = ClaudeTurnClock & {
   repositoryPaths: string[];
   changedPaths: string[];
   turnEnded: boolean;
+  /** How the chat was started: `cli` at a terminal, `sdk-cli` for `claude -p`. The first record says. */
+  entrypoint?: string;
+  /** The opening of the first request, for finding the chat that started this one. */
+  prompt?: PromptLead;
 };
 
 const CLAUDE_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
@@ -71,6 +76,7 @@ function applyClaudeLine(d: any, state: ClaudeParseState): void {
   state.repositoryPaths = state.repositoryPaths.slice(-64);
   state.changedPaths = state.changedPaths.slice(-64);
   if (d.sessionId && !state.sessionId) state.sessionId = String(d.sessionId);
+  if (!state.entrypoint && typeof d.entrypoint === "string") state.entrypoint = d.entrypoint;
   if (d.isSidechain !== true) {
     if (typeof d.cwd === "string" && d.cwd.trim()) {
       state.cwd = d.cwd;
@@ -98,7 +104,10 @@ function applyClaudeLine(d: any, state: ClaudeParseState): void {
             : "";
     // Named by what the person wrote, without the host's wrappers around it.
     const clean = visibleUserText(raw).replace(/\s+/g, " ").trim();
-    if (clean) state.title = clean.slice(0, 120);
+    if (clean) {
+      state.title = clean.slice(0, 120);
+      state.prompt = promptLead(clean);
+    }
   }
   const t = ts(d.timestamp);
   if (t) {
@@ -142,9 +151,12 @@ function applyClaudeLine(d: any, state: ClaudeParseState): void {
   }
 }
 
-type ClaudeParseResult = { session: SessionInfo; tokensSession: number; childPaths: string[] } | undefined;
+type ClaudeParseResult = { session: SessionInfo; tokensSession: number; childPaths: string[]; lineage?: LineageFact } | undefined;
 
-/** What was already read from one growing transcript. It holds summaries, never message text. */
+/**
+ * What was already read from one growing transcript. It holds summaries, never message text, beside
+ * the opening of the first request and the commands that start another provider (`started-by`).
+ */
 export type ClaudeParseProgress = {
   device: number;
   inode: number;
@@ -153,6 +165,8 @@ export type ClaudeParseProgress = {
   tail: Buffer;
   state: ClaudeParseState;
   capabilities: ReturnType<typeof createClaudeCapabilityCollector>;
+  /** Commands the chat ran that start another provider's chat headless. */
+  lineage: LineageCalls;
   children: Map<string, { fingerprint: string; summary: ChildThreadInfo; observations: ReturnType<typeof claudeCapabilityUsage> }>;
 };
 
@@ -161,7 +175,7 @@ function newProgress(device: number, inode: number, fallbackSessionId: string): 
     sessionId: "", startedAt: 0, lastActivityAt: 0, lastMessageAt: 0,
     tokensSession: 0, tokensLastTurn: 0, repositoryPaths: [], changedPaths: [], turnEnded: false,
   };
-  return { device, inode, offset: 0, tail: Buffer.alloc(0), state, children: new Map(),
+  return { device, inode, offset: 0, tail: Buffer.alloc(0), state, children: new Map(), lineage: createClaudeLineageCalls(),
     capabilities: createClaudeCapabilityCollector(() => ({ sessionId: state.sessionId || fallbackSessionId,
       lastActivityAt: state.lastActivityAt, cwd: state.cwd })) };
 }
@@ -178,6 +192,7 @@ function applyRow(line: string, progress: ClaudeParseProgress): boolean {
   if (!row) return false;
   applyClaudeLine(row, progress.state);
   progress.capabilities.add(row);
+  progress.lineage.add(row);
   return true;
 }
 
@@ -237,7 +252,7 @@ export function* parseClaudeFileSteps(file: string): Generator<void, ClaudeParse
         state: stateFor(child.lastActivityAt),
       })),
     };
-    return { session, tokensSession: cached.tokensSession, childPaths };
+    return { session, tokensSession: cached.tokensSession, childPaths, lineage: cached.lineage };
   }
   // Taken out of the cache while in use: a parallel reader starts its own pass
   // instead of applying the same rows to this one between our slices.
@@ -288,6 +303,7 @@ export function* parseClaudeFileSteps(file: string): Generator<void, ClaudeParse
   const observations = progress.capabilities.snapshot();
   const childThreads = yield* readChildren(actualChildPaths, ownSession, progress, observations);
   const session = aggregateChildThreads(ownSession, childThreads);
+  const lineage = claudeLineage(state, ownSession, progress.lineage.snapshot());
   claudeSummaryCache.set(file, {
     mtimeMs: fileStat.mtimeMs,
     size: fileStat.size,
@@ -298,8 +314,17 @@ export function* parseClaudeFileSteps(file: string): Generator<void, ClaudeParse
     observations,
     turnEnded: state.turnEnded,
     waits: { background: state.background, limit: state.limit },
+    lineage,
     // A chat that has gone quiet gives its memory back and is read again if it returns.
     progress: Date.now() - session.lastActivityAt <= LIVE_MS ? progress : undefined,
   });
-  return { session, tokensSession: session.tokensSession, childPaths: actualChildPaths };
+  return { session, tokensSession: session.tokensSession, childPaths: actualChildPaths, lineage };
+}
+
+/** Where the chat came from, for `startedBy`: never published itself. */
+function claudeLineage(state: ClaudeParseState, session: SessionInfo, calls: LineageFact["calls"]): LineageFact {
+  const headless = /^sdk-/.test(state.entrypoint ?? "");
+  return { agent: "claude", sessionId: session.sessionId, cwd: state.launchCwd ?? session.cwd, startedAt: session.startedAt,
+    ...(headless ? { headless } : {}), ...(headless && state.prompt ? { prompt: state.prompt } : {}),
+    ...(calls?.length ? { calls } : {}) };
 }

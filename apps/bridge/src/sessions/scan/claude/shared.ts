@@ -61,6 +61,8 @@ export type CachedClaudeSummary = {
   waits?: ClaudeWaits;
   /** Where a growing transcript was last read to; see `ClaudeParseProgress`. */
   progress?: unknown;
+  /** Where the chat came from, kept after `progress` is let go. */
+  lineage?: import("../../../started-by").LineageFact;
 };
 
 export const claudeSummaryCache = new Map<string, CachedClaudeSummary>();

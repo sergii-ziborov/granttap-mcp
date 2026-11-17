@@ -87,9 +87,21 @@ export const SessionUsageLimit = z.object({
 });
 export type SessionUsageLimit = z.infer<typeof SessionUsageLimit>;
 
+/**
+ * The chat that started this one, when this chat is one another chat ran headless from its shell
+ * (`codex exec`, `claude -p`, a headless Grok run) and is a chat in its own right. The parent may be
+ * on another computer, or gone; the phone decides how to show it.
+ */
+export const SessionStartedBy = z.object({
+  agent: CodingAgent,
+  sessionId: z.string().regex(/^[A-Za-z0-9._-]{8,128}$/),
+}).strict();
+export type SessionStartedBy = z.infer<typeof SessionStartedBy>;
+
 export const SessionInfo = z.object({
   creationOrigins: z.array(z.object({ originId: z.string().min(1).max(180),
     controllerPublicKey: z.string().min(1).max(180) }).strict()).max(32).optional(),
+  startedBy: SessionStartedBy.optional(),
   transfer: TaskTransferNotice.optional(),
   sessionId: z.string(),
   agent: AgentId,

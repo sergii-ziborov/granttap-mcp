@@ -10,6 +10,13 @@ Grok Bot endpoint, its one-time invite, credential, actors, and revocable policy
 Both are strict schemas: unknown fields are rejected, and transcripts or hidden
 model reasoning are outside the contract.
 
+`sessions/index.ts` carries the session record. `startedBy` (optional, strict:
+`{ agent: "claude" | "codex" | "grok" | "cursor", sessionId }`, the id 8–128 of
+`A–Z a–z 0–9 . _ -`, no other field) names the chat that started this one, when
+another chat ran it headless and it is a chat in its own right. The parent may be
+on another computer or gone. Short helper runs stay in the parent's
+`childThreads` instead. See `apps/bridge/src/started-by/README.md`.
+
 `capabilities.ts` keeps resource evidence optional and bounded. CPU, RAM, I/O,
 and process counters carry an explicit measured, attributed, estimated, or
 unknown provenance instead of implying ownership the runtime cannot prove.

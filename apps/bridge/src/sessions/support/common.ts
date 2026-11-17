@@ -27,6 +27,8 @@ export type Scan = {
   sourceLimited?: boolean;
   /** Short runs a chat started, kept out of `sessions`: they are shown under that chat. */
   helperRuns?: import("../../helper-runs").HelperRunSession[];
+  /** Where each session came from, for naming the chat that started it; never published. */
+  lineage?: import("../../started-by").LineageFact[];
 };
 
 /**

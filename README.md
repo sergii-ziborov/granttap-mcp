@@ -757,6 +757,34 @@ A shell call is fingerprinted for Project policy by the command it runs —
 instead of deciding about the shell as a whole; a line with no command word
 is still plain `Shell`.
 
+### Chats started by another chat
+
+A chat that runs another provider headless from its shell — `codex exec "…"`,
+`claude -p "…"`, `grok -p "…"` — starts a chat in its own right. Its session
+record names the chat that started it:
+
+```ts
+startedBy?: { agent: "claude" | "codex" | "grok" | "cursor"; sessionId: string }
+```
+
+The field is strict on the wire (no other key; the id is 8–128 characters of
+`A–Z a–z 0–9 . _ -`) and is published even when the parent is on another
+computer or gone; the phone decides how to draw the tree. Short picture runs in
+a folder made for them stay nested conversations in their chat's
+`childThreads`, as before.
+
+The link is read from the run's live process — Claude Code and Codex hand every
+command a chat runs that chat's id, and the run inherits it; only that variable
+is read, only for headless provider processes this monitor did not start
+itself — and written to `started-by.json`. A run whose process was never seen is
+matched after the fact from the parent's transcript: a command that starts the
+child's provider, carries the opening of its first request, and was running
+when it started, on the same computer; a child two chats could have started
+stays unlinked. Interactive sessions are never children. A child working in a
+temp folder, a plain folder or one of its parent's checkout is in its parent's
+Mesh and registers no Mesh of its own; one in a checkout of its own keeps that
+checkout's. Details: [`apps/bridge/src/started-by`](apps/bridge/src/started-by/README.md).
+
 ### One computer, whatever the network calls it
 
 The Mesh keys a computer by an identity written down once, on first use, in

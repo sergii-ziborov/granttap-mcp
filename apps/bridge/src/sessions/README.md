@@ -39,6 +39,12 @@ the scanner records that mapping. Parent and sibling logs are not reparsed for
 each child request. Old records outside that recent window are not included in
 the child snapshot. Root chat pagination remains in `TranscriptHistory`.
 
+Each scan also reports, per session and never published, whether it was
+started headless, how its first request opened, and the commands it ran that
+start another provider headless (`Scan.lineage`). The catalog uses them to name
+the chat that started a chat (`startedBy`,
+[chats started by another chat](../started-by/README.md)).
+
 Feature tests live in `tests/`; the reusable multi-provider conversation harness
 lives in the repository `tests/thread/` directory.
 
