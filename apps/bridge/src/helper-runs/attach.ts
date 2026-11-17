@@ -30,19 +30,22 @@ let attached = new Map<string, { session: SessionInfo; folder: string }>();
 type MessageImage = NonNullable<ActivityEntry["images"]>[number];
 
 /** The `/var` and `/private/var` spellings of a macOS temp path name one folder. */
-function samePath(text: string): string {
+export function samePath(text: string): string {
   return text.replace(/\\/g, "/").replace(/^\/private\/(var|tmp)\//, "/$1/");
 }
 
 /**
  * A kept picture as a phone shows it. When a line of the message is the path
- * the run wrote the picture to, the picture takes that line's place.
+ * the picture was written to, the picture takes that line's place.
  */
-function pictureImage(folder: string, picture: RunPicture, text = ""): MessageImage {
-  const id = helperRunImageId(folder, picture.hash);
+export function pictureAttachment(id: string, picture: RunPicture, text = ""): MessageImage {
   const line = text.split("\n").map((item) => item.trim().replace(/^(?:[-*+] |\d+\. )/, ""))
     .find((item) => samePath(item.replace(/^`(.*)`$/, "$1")) === samePath(picture.source));
   return { id, name: picture.name, markdown: line && line.length <= 2_400 ? line : `![${picture.name}](granttap-image:${id})` };
+}
+
+function pictureImage(folder: string, picture: RunPicture, text = ""): MessageImage {
+  return pictureAttachment(helperRunImageId(folder, picture.hash), picture, text);
 }
 
 function childOf(parent: SessionInfo, run: HelperRunSession): ChildThreadInfo {

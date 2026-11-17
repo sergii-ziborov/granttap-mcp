@@ -8,12 +8,14 @@ import { cachedSessionActivity } from '../monitor/support/session-activity';
 import { findSessionCooperatively } from '../sessions';
 import { sessionImageChunk, transcriptImages } from '../../../mcp/src/desktop/image';
 import { helperRunPictureChunk, isHelperRunImageId } from '../helper-runs/pictures/store';
+import { withChatPictures } from '../helper-runs/pictures/chats';
 
-export function activityWithImages(activity: SessionActivity): SessionActivity {
-  return { ...activity, entries: activity.entries.map((entry: ActivityEntry) => {
+/** Pictures a message links to in its workspace, and those the computer kept from the chat's own answers. */
+export function activityWithImages(activity: SessionActivity, session?: SessionInfo): SessionActivity {
+  return withChatPictures({ ...activity, entries: activity.entries.map((entry: ActivityEntry) => {
     const images = transcriptImages(entry);
     return images.length ? { ...entry, images } : entry;
-  }) };
+  }) }, session);
 }
 
 /** Exact advertised row only. No request-supplied filesystem path is accepted. */

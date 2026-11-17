@@ -29,7 +29,7 @@ function fixture(t: TestContext) {
     : { root: cwd, canonicalRepositoryId: `local:${cwd}` };
   let clock = now;
   const store = new MeshStore(join(root, "mesh.json"), () => clock++);
-  const chat = (sessionId: string, cwd: string, extra: Partial<SessionInfo> = {}): SessionInfo => ({ sessionId, agent: "claude", cwd,
+  const chat = (sessionId: string, cwd: string, extra: Partial<SessionInfo> = {}): SessionInfo => ({ sessionId, agent: "claude", cwd, title: "Fix the app",
     state: "working", startedAt: now, lastActivityAt: now + 1, tokensSession: 0, tokensLastTurn: 0, ...extra });
   const link = (...sessions: SessionInfo[]) => linkSessionsToProjects(store, sessions, "mac", inspect, []);
   return { root, dev, app, store, chat, link, devProject: projectIdentity(`local:${dev}`), ownProject: projectIdentity(remote) };

@@ -20,7 +20,8 @@ test("History reaches older native chats beyond the live catalog scan", async ()
       await writeFile(path, `${JSON.stringify({
         type: "session_meta", timestamp: now - index * 1_000,
         payload: { id, cwd: root },
-      })}\n`);
+      })}\n${JSON.stringify({ type: "event_msg", timestamp: now - index * 1_000,
+        payload: { type: "user_message", message: "Archive fixture." } })}\n`);
       const time = new Date(now - index * 1_000);
       await utimes(path, time, time);
     }

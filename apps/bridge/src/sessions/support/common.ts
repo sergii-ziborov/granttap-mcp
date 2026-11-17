@@ -29,6 +29,8 @@ export type Scan = {
   helperRuns?: import("../../helper-runs").HelperRunSession[];
   /** Where each session came from, for naming the chat that started it; never published. */
   lineage?: import("../../started-by").LineageFact[];
+  /** Pictures each chat's newest answer saved in its working folder, for the monitor to keep; never published. */
+  pictures?: import("../../helper-runs/pictures/chats").ChatPictureHint[];
 };
 
 /**

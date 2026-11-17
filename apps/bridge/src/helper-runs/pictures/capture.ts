@@ -25,7 +25,8 @@ import {
 const run = promisify(execFile);
 
 const PICTURE_NAME = /\.(?:png|jpe?g|webp)$/i;
-const MAX_SOURCE_BYTES = 48 * 1024 * 1024;
+/** The largest picture file read at all; a bigger one is left alone. */
+export const MAX_SOURCE_BYTES = 48 * 1024 * 1024;
 const MAX_ENTRIES = 200;
 const LOOK_EVERY_MS = 200;
 /** A picture this small is kept as it is. */

@@ -16,7 +16,7 @@ test("Claude's current root conversation folder replaces its original parent wor
   mkdirSync(memory);
   execFileSync("git", ["init", "-q", repository]);
   const rows = [
-    { type: "user", cwd: root },
+    { type: "user", cwd: root, message: { role: "user", content: "Tidy the notes." } },
     { type: "assistant", cwd: repository, gitBranch: "current", message: {
       role: "assistant", content: Array.from({ length: 12 }, (_, index) => ({
         type: "tool_use", name: "Write", input: { file_path: join(memory, `note-${index}.md`) },
@@ -82,7 +82,7 @@ test("a chat launched outside any repository belongs to the repository it last c
     return parseClaudeFile(file)!.session;
   };
   const session = parse([
-    { type: "user", cwd: dev },
+    { type: "user", cwd: dev, message: { role: "user", content: "Tidy the notes." } },
     { type: "assistant", cwd: dev, message: { role: "assistant", content: [
       { type: "tool_use", name: "Bash", input: { command: `cd ${donor} && ls` } }] } },
     edit("Edit", { file_path: join(target, "src", "app.py") }),

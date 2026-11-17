@@ -54,6 +54,22 @@ in place of the path line that names them. A phone reads one with
 picture's content, never a path, and only the chat that started the run is
 answered.
 
+### Pictures a chat saved
+
+The same store keeps pictures a chat's own answer saved (`pictures/chats.ts`): today the final answer
+of a Codex chat, typically a headless image run started by another chat (`startedBy`) that answers with
+the path it saved. A picture is an image file (`.png`, `.jpg`, `.jpeg`, `.webp`) the answer names,
+bare, in backticks, as a Markdown link or `file://` URL, absolute or relative to the chat's working
+folder; it must lie inside that folder when both are read as real paths (a link out of it does not
+count), be a regular file, and have been written since the turn began. A working folder that is `/`
+or the home folder holds none. Only the monitor keeps them, one at a time and once per file size and
+time, for answers seen in the last two days: the first 12 bytes must announce an image before the file
+is read further, at most 48 MB is read, and the copy is reduced as above. They are kept under the chat
+(`owner { agent, sessionId }` in `index.json`), at most 12 per chat, within the same store bounds.
+The session carries them as `images`; the transcript puts each on the answer that names it, in place
+of its path line. `session.image.query` answers the chat itself and the chat that started it, no other.
+Other providers' scanners can pass hints the same way; Claude, Cursor and Grok do not yet.
+
 A headless run that is a chat in its own right, such as `codex exec` in a folder
 several runs share, is not a helper run: it stays a chat and names the chat that
 started it in `startedBy` ([chats started by another chat](../started-by/README.md)).

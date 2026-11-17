@@ -18,6 +18,13 @@ export type SessionState = z.infer<typeof SessionState>;
 export const AgentAccess = z.enum(["read-only", "workspace", "full"]);
 export type AgentAccess = z.infer<typeof AgentAccess>;
 
+/** A picture the computer kept for a chat or a helper run, read with `session.image.query`. */
+export const KeptPicture = z.object({
+  id: z.string().min(1).max(512), name: z.string().min(1).max(256),
+  markdown: z.string().min(1).max(2400),
+});
+export type KeptPicture = z.infer<typeof KeptPicture>;
+
 export const ChildThreadInfo = z.object({
   threadId: z.string().max(256),
   parentThreadId: z.string().max(256),
@@ -32,10 +39,7 @@ export const ChildThreadInfo = z.object({
    * Pictures a helper run made, kept by the computer after the run's folder is gone.
    * Read with `session.image.query` on the parent chat, like a message's pictures.
    */
-  images: z.array(z.object({
-    id: z.string().min(1).max(512), name: z.string().min(1).max(256),
-    markdown: z.string().min(1).max(2400),
-  })).max(12).optional(),
+  images: z.array(KeptPicture).max(12).optional(),
   depth: z.number().int().min(1).max(16),
   state: SessionState,
   startedAt: z.number(),
@@ -88,6 +92,19 @@ export const SessionUsageLimit = z.object({
 export type SessionUsageLimit = z.infer<typeof SessionUsageLimit>;
 
 /**
+ * The chat's last turn ended on the provider's error instead of an answer. `reason` is for the phone
+ * to word and may take values this reader does not know: `usage_limit`, `rate_limit`,
+ * `context_window`, `sign_in`, `service`, `error`. `message` is the provider's own sentence without
+ * links. A new turn clears it.
+ */
+export const SessionStopped = z.object({
+  reason: z.string().regex(/^[a-z][a-z_]{0,39}$/),
+  message: z.string().min(1).max(300).optional(),
+  at: z.number().int().positive(),
+}).strict();
+export type SessionStopped = z.infer<typeof SessionStopped>;
+
+/**
  * The chat that started this one, when this chat is one another chat ran headless from its shell
  * (`codex exec`, `claude -p`, a headless Grok run) and is a chat in its own right. The parent may be
  * on another computer, or gone; the phone decides how to show it.
@@ -137,6 +154,12 @@ export const SessionInfo = z.object({
   backgroundTasks: z.number().int().min(1).max(32).optional(),
   /** The subscription refused the chat's last request until `resetsAt`. */
   usageLimit: SessionUsageLimit.optional(),
+  stopped: SessionStopped.optional(),
+  /**
+   * Pictures the chat's own answer saved in its working folder, kept by the computer. Read with
+   * `session.image.query` on this chat or on the chat that started it (`startedBy`).
+   */
+  images: z.array(KeptPicture).max(12).optional(),
 });
 export type SessionInfo = z.infer<typeof SessionInfo>;
 

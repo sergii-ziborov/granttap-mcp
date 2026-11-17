@@ -6,12 +6,24 @@ import {
 import { isTerminalTaskState } from "../admin/convergence";
 
 const MAX_SNAPSHOT_TASKS = 64;
+/** The goal earlier runtimes gave a Task whose chat had neither a request nor an answer. */
+const NO_GOAL = "Continue this coding task";
+const NO_TITLE = /^(?:claude|codex|cursor|grok) task$/;
+
+/**
+ * A Task an earlier runtime made for a chat nobody had asked anything: titled `<agent> task`, with
+ * that goal. Today such a chat names no Task, so the leftover is kept in the store and shown nowhere.
+ */
+export function requestlessTask(task: Pick<TaskValue, "title" | "goal">): boolean {
+  return task.goal === NO_GOAL && NO_TITLE.test(task.title);
+}
 
 /** Keep the newest window, plus older work that is still live. */
-export function selectSnapshotTasks(all: TaskValue[]): {
+export function selectSnapshotTasks(listed: TaskValue[]): {
   tasks: TaskValue[];
   incomplete: boolean;
 } {
+  const all = listed.filter((task) => !requestlessTask(task));
   const ordered = [...all].sort((left, right) =>
     left.updatedAt - right.updatedAt || left.taskId.localeCompare(right.taskId));
   const recent = ordered.slice(-MAX_SNAPSHOT_TASKS);

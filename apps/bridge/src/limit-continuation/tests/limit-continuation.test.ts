@@ -99,3 +99,11 @@ test('a chat left idle past the live list is still continued when its weekly lim
   await scheduleLimitContinuations([], relay, now + 60_000);
   assert.deepEqual(relay.cancelled, [], 'a publication without history keeps what history queued');
 });
+
+test('a Codex chat at its limit says it is not continued, and nothing is queued for it', async t => {
+  isolated(t);
+  const relay = queue(), codex = chat(now + 3_600_000, {agent: 'codex'});
+  assert.equal(annotateLimitContinuations([codex])[0]?.usageLimit?.autoContinue, false);
+  await scheduleLimitContinuations([codex], relay, now);
+  assert.equal(relay.submitted.length, 0);
+});

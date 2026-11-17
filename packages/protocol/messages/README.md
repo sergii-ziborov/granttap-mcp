@@ -17,6 +17,21 @@ another chat ran it headless and it is a chat in its own right. The parent may b
 on another computer or gone. Short helper runs stay in the parent's
 `childThreads` instead. See `apps/bridge/src/started-by/README.md`.
 
+`stopped` (optional, strict: `{ reason, message?, at }`) says the chat's last turn ended on the
+provider's error instead of an answer. `reason` matches `^[a-z][a-z_]{0,39}$` and is for the phone to
+word; today `usage_limit`, `rate_limit`, `context_window`, `sign_in`, `service` and `error`, and a value
+the phone does not know is shown by `message`: the provider's own first sentence without links, at most
+300 characters. `at` is the stop's time in ms. The session's `summary` says the same in English
+(`Codex stopped: …`), and a new turn clears both. A used-up subscription window also sets `usageLimit`
+(`resetsAt` from the provider's "try again at …"); `autoContinue` is `false` for any agent this computer
+does not continue by itself (everything but Claude).
+
+`images` (optional, at most 12 of `{ id, name, markdown }`, the same shape as a helper run's
+`childThreads[].images`) lists pictures the chat's own answer saved in its working folder, kept by the
+computer. Ids start `helper-image:` and are read with `session.image.query` on this chat or on its
+`startedBy` parent. The transcript carries the same picture on the answer that names it, as an
+`ActivityEntry.images` item whose `markdown` is that answer's path line.
+
 `capabilities.ts` keeps resource evidence optional and bounded. CPU, RAM, I/O,
 and process counters carry an explicit measured, attributed, estimated, or
 unknown provenance instead of implying ownership the runtime cannot prove.

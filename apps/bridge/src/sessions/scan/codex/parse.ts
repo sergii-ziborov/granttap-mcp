@@ -21,6 +21,8 @@ import { codexContextReport } from "../../context-usage";
 import { codexRequestTitle } from '../../native-task-titles';
 import { plainPreview } from '../../plain-preview';
 import { createCodexLineageCalls, promptLead, type LineageCalls, type LineageFact, type PromptLead } from '../../../started-by';
+import { observeCodexOutcome, stoppedFields, stoppedText, withCurrentLimit, type CodexOutcome } from './outcome';
+import { pictureSavedText, savedPictures } from '../../../helper-runs/pictures/chats';
 
 type CodexParseState = {
   sessionId: string;
@@ -48,7 +50,32 @@ type CodexParseState = {
   /** The opening of the first request, once it was seen; for finding the chat that started this one. */
   prompt?: PromptLead | null;
   calls: LineageCalls;
+  /** How the newest turn ended, from the rows newer Codex versions write. */
+  outcome: CodexOutcome;
 };
+
+/** An answer or a stop that only the newer rows carry becomes the chat's newest message. */
+function noteOutcome(d: any, state: CodexParseState): void {
+  const shown = observeCodexOutcome(d, state.outcome);
+  if (!shown) return;
+  state.summary = plainPreview(heartbeatDisplayText(shown, 'message') ?? shown);
+  const t = ts(d.timestamp);
+  if (t) state.lastMessageAt = Math.max(state.lastMessageAt, t);
+}
+
+/**
+ * A request only an item carried names the chat when nothing else did. A stopped turn ends on the
+ * stop; a headless run's picture is named by the file it saved.
+ */
+function finishOutcome(state: CodexParseState) {
+  const request = visibleUserText(state.outcome.itemRequest);
+  if (!state.title && !state.child) adoptRequestTitle(state, request);
+  if (state.headless) notePrompt(state, request);
+  const pictures = state.child ? [] : savedPictures(state.outcome.answer, state.cwd, state.outcome.since ?? state.startedAt);
+  if (state.outcome.stopped) state.summary = plainPreview(stoppedText(state.outcome.stopped));
+  else if (state.headless) state.summary = pictureSavedText(pictures, state.outcome.generated) ?? state.summary;
+  return pictures;
+}
 
 /** The first visible request is the one a parent's command carried; later ones are not looked at. */
 function notePrompt(state: CodexParseState, text: string | undefined): void {
@@ -171,10 +198,12 @@ export function parseCodexFile(file: string): CodexCandidate | undefined {
   if (cached && cached.mtimeMs === fileStat.mtimeMs && cached.size === fileStat.size) {
     return {
       file,
-      session: { ...cached.session, state: codexTurnState(cached.turn ?? {}, cached.session.lastActivityAt) },
+      session: withCurrentLimit({ ...cached.session, state: codexTurnState(cached.turn ?? {}, cached.session.lastActivityAt) }),
       observations: cached.observations,
       child: cached.child,
       lineage: cached.lineage,
+      pictures: cached.pictures,
+      requested: cached.requested,
     };
   }
   let lines: string[];
@@ -185,17 +214,21 @@ export function parseCodexFile(file: string): CodexCandidate | undefined {
   }
   const state: CodexParseState = {
     sessionId: "", startedAt: 0, lastActivityAt: 0, lastMessageAt: 0,
-    tokensSession: 0, tokensLastTurn: 0, workdirs: [], turn: {}, calls: createCodexLineageCalls(),
+    tokensSession: 0, tokensLastTurn: 0, workdirs: [], turn: {}, calls: createCodexLineageCalls(), outcome: {},
   };
   for (const line of lines) {
     if (!line) continue;
     const d = safeParse(line);
-    if (d) applyCodexLine(d, state);
+    if (d) { applyCodexLine(d, state); noteOutcome(d, state); }
   }
   const head = (!state.title || (state.headless && state.prompt === undefined)) && !state.child
     ? codexHeadRequest(file, true)?.text : undefined;
   if (!state.title && !state.child) adoptRequestTitle(state, head);
   if (state.headless) notePrompt(state, head);
+  const pictures = finishOutcome(state);
+  // Any words of the person's, even ones that cannot name the chat, are a request.
+  const requested = Boolean(state.title || state.provisionalTitle || head || state.prompt !== undefined
+    || state.outcome.itemRequest);
   if (!state.title && state.child?.agentPath) {
     state.title = childTitle(state.child.agentPath.split('/').filter(Boolean).at(-1)?.replace(/_/g, ' '));
   }
@@ -223,6 +256,7 @@ export function parseCodexFile(file: string): CodexCandidate | undefined {
     contextTokensUsed: state.contextTokensUsed,
     contextWindow: state.contextWindow,
     ...(state.contextUsage ? { contextUsage: state.contextUsage } : {}),
+    ...stoppedFields(state.outcome),
   };
   const observations = codexCapabilityUsage(session, lines);
   const child = state.child;
@@ -236,8 +270,10 @@ export function parseCodexFile(file: string): CodexCandidate | undefined {
     child,
     turn: state.turn,
     lineage,
+    pictures,
+    requested,
   });
-  return { file, session, observations, child, lineage };
+  return { file, session, observations, child, lineage, pictures, requested };
 }
 
 /** Where the chat came from, for `startedBy`: never published itself. A forked agent is no chat. */

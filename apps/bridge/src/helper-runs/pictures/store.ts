@@ -1,10 +1,12 @@
 /**
- * The pictures kept from helper runs, after the runs' folders are gone.
+ * The pictures kept from helper runs, after the runs' folders are gone, and the
+ * pictures a chat's own answer saved in its working folder.
  *
  * Each picture a run made is kept once, reduced, under the config directory,
  * next to one index that says which run made it and where the run wrote it.
- * A picture is offered only to the chat that started its run, by an id that
- * names the run and the picture's content and never a path.
+ * A helper run's picture is offered only to the chat that started its run; a
+ * chat's own picture to that chat and to the chat that started it. The id names
+ * the run or chat and the picture's content, never a path.
  */
 import { createHash } from "node:crypto";
 import { closeSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, rmSync, statSync } from "node:fs";
@@ -12,7 +14,13 @@ import { join } from "node:path";
 import { writePrivateFile } from "../../config/access/write-private";
 import { configDir } from "../../config/runtime/paths";
 import { HISTORY_RETENTION_MS } from "../../sessions/support/common";
+import { startedByLink } from "../../started-by/links";
 import { helperRunLink, type HelperRunLink } from "../links";
+
+/** A chat whose own answer saved the pictures, as its provider names it. */
+export type PictureOwner = { agent: "claude" | "codex" | "cursor" | "grok"; sessionId: string };
+/** The chat that started an owner's chat, when one is known. */
+export type ParentOf = (owner: PictureOwner) => { sessionId: string } | undefined;
 
 export type PictureMime = "image/png" | "image/jpeg" | "image/webp";
 
@@ -29,8 +37,11 @@ export type RunPicture = {
   capturedAt: number;
 };
 
-type StoredRun = { folder: string; pictures: RunPicture[] };
+/** A helper run, by its folder; or a chat, by `owner`, with the folder it works in. */
+type StoredRun = { folder: string; owner?: PictureOwner; pictures: RunPicture[] };
 type Index = Map<string, StoredRun>;
+const AGENTS = new Set(["claude", "codex", "cursor", "grok"]);
+const SESSION_ID = /^[A-Za-z0-9._-]{8,128}$/;
 
 export const MAX_KEPT_BYTES = 8 * 1024 * 1024;
 const MAX_PICTURES_PER_RUN = 12;
@@ -53,6 +64,22 @@ export function runKey(folder: string): string {
   return createHash("sha256").update(folder).digest("hex").slice(0, 24);
 }
 
+/** A chat's own pictures are keyed by the chat; a folder path never starts this way. */
+function ownerKey(owner: PictureOwner): string {
+  return runKey(`chat:${owner.agent}:${owner.sessionId}`);
+}
+
+function storedKey(run: Pick<StoredRun, "folder" | "owner">): string {
+  return run.owner ? ownerKey(run.owner) : runKey(run.folder);
+}
+
+function validOwner(value: unknown): PictureOwner | undefined {
+  const owner = value as Record<string, unknown> | undefined;
+  return owner && typeof owner.agent === "string" && AGENTS.has(owner.agent)
+    && typeof owner.sessionId === "string" && SESSION_ID.test(owner.sessionId)
+    ? { agent: owner.agent as PictureOwner["agent"], sessionId: owner.sessionId } : undefined;
+}
+
 export function pictureHash(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex").slice(0, 24);
 }
@@ -63,6 +90,10 @@ function keptFile(key: string, picture: Pick<RunPicture, "hash" | "mime">): stri
 
 export function helperRunImageId(folder: string, hash: string): string {
   return `helper-image:${runKey(folder)}:${hash}`;
+}
+
+export function chatPictureImageId(owner: PictureOwner, hash: string): string {
+  return `helper-image:${ownerKey(owner)}:${hash}`;
 }
 
 export function isHelperRunImageId(id: string): boolean {
@@ -113,9 +144,12 @@ function parseIndex(text: string): Index {
     if (!value || typeof value !== "object") continue;
     const run = value as Record<string, unknown>;
     if (typeof run.folder !== "string" || !run.folder || run.folder.length > 1_024) continue;
+    const owner = run.owner === undefined ? undefined : validOwner(run.owner);
+    if (run.owner !== undefined && !owner) continue;
     const pictures = (Array.isArray(run.pictures) ? run.pictures : []).map(validPicture)
       .filter((item): item is RunPicture => item !== undefined).slice(0, MAX_PICTURES_PER_RUN);
-    if (pictures.length > 0) index.set(runKey(run.folder), { folder: run.folder, pictures });
+    const stored = { folder: run.folder, ...(owner ? { owner } : {}), pictures };
+    if (pictures.length > 0) index.set(storedKey(stored), stored);
   }
   return index;
 }
@@ -147,6 +181,17 @@ export function hasHelperRunPicture(folder: string, hash: string): boolean {
   return helperRunPictures(folder).some((picture) => picture.hash === hash);
 }
 
+/** The pictures kept from a chat's own answers, oldest first. */
+export function chatPictures(owner: PictureOwner): RunPicture[] {
+  return readIndex().get(ownerKey(owner))?.pictures ?? [];
+}
+
+/** The same for many chats from one reading of the index; a catalog asks about every chat. */
+export function chatPictureLookup(): (owner: PictureOwner) => RunPicture[] {
+  const index = readIndex();
+  return (owner) => index.size === 0 ? [] : index.get(ownerKey(owner))?.pictures ?? [];
+}
+
 /** Drop runs older than history, then the oldest, until the store is within its bounds. */
 function bounded(index: Index, now: number): { kept: Index; dropped: string[] } {
   const runs = [...index.entries()].sort((left, right) =>
@@ -167,37 +212,50 @@ function bounded(index: Index, now: number): { kept: Index; dropped: string[] } 
   return { kept: new Map(runs), dropped };
 }
 
-/** Keep one reduced picture from the run in this folder. Returns whether it was new. */
+/**
+ * Keep one reduced picture from the run in this folder, or with `owner` from that chat's own
+ * answer in the folder it works in. Returns whether it was new.
+ */
 export function keepHelperRunPicture(folder: string, picture: Omit<RunPicture, "bytes">,
-  bytes: Uint8Array, now = Date.now()): boolean {
+  bytes: Uint8Array, now = Date.now(), owner?: PictureOwner): boolean {
   if (!HASH.test(picture.hash) || bytes.length === 0 || bytes.length > MAX_KEPT_BYTES) return false;
   if (pictureMime(bytes.subarray(0, 12)) !== picture.mime) return false;
+  if (owner && !validOwner(owner)) return false;
   let index: Index = new Map();
   try { index = parseIndex(readFileSync(indexPath(), "utf8")); } catch { /* Nothing kept yet. */ }
-  const key = runKey(folder);
-  const run = index.get(key) ?? { folder, pictures: [] };
+  const key = storedKey({ folder, owner });
+  const run = index.get(key) ?? { folder, ...(owner ? { owner } : {}), pictures: [] };
   if (run.pictures.some((item) => item.hash === picture.hash) || run.pictures.length >= MAX_PICTURES_PER_RUN) return false;
   mkdirSync(picturesDirectory(), { recursive: true, mode: 0o700 });
   const kept: RunPicture = { ...picture, bytes: bytes.length };
   writePrivateFile(keptFile(key, kept), bytes);
-  index.set(key, { folder, pictures: [...run.pictures, kept] });
+  index.set(key, { ...run, pictures: [...run.pictures, kept] });
   const { kept: stored, dropped } = bounded(index, now);
-  writePrivateFile(indexPath(), JSON.stringify({ version: 1,
-    runs: [...stored.values()].map((item) => ({ folder: item.folder, pictures: item.pictures })) }));
+  writePrivateFile(indexPath(), JSON.stringify({ version: 1, runs: [...stored.values()].map((item) =>
+    ({ folder: item.folder, ...(item.owner ? { owner: item.owner } : {}), pictures: item.pictures })) }));
   for (const file of dropped) rmSync(file, { force: true });
   cached = undefined;
   return stored.get(key)?.pictures.some((item) => item.hash === picture.hash) === true;
 }
 
-/** Read one bounded chunk of a kept picture for the chat that started its run, and for no other. */
+const startedByParent: ParentOf = (owner) => startedByLink(owner)?.parent;
+
+/** The chat that started a helper run may read its pictures; a chat's own, that chat and the one that started it. */
+function mayRead(run: StoredRun, chatId: string, link: (folder: string) => HelperRunLink | undefined,
+  parentOf: ParentOf): boolean {
+  if (!run.owner) return link(run.folder)?.parentSessionId === chatId;
+  return run.owner.sessionId === chatId || parentOf(run.owner)?.sessionId === chatId;
+}
+
+/** Read one bounded chunk of a kept picture for a chat allowed to see it, and for no other. */
 export function helperRunPictureChunk(chatId: string, imageId: string, offset: number,
-  link: (folder: string) => HelperRunLink | undefined = helperRunLink) {
+  link: (folder: string) => HelperRunLink | undefined = helperRunLink, parentOf: ParentOf = startedByParent) {
   const match = IMAGE_ID.exec(imageId);
   if (!match || !Number.isSafeInteger(offset) || offset < 0) return undefined;
   const [, key, hash] = match as unknown as [string, string, string];
   const run = readIndex().get(key);
   const picture = run?.pictures.find((item) => item.hash === hash);
-  if (!run || !picture || link(run.folder)?.parentSessionId !== chatId) return undefined;
+  if (!run || !picture || !mayRead(run, chatId, link, parentOf)) return undefined;
   let fd: number | undefined;
   try {
     fd = openSync(keptFile(key, picture), "r");

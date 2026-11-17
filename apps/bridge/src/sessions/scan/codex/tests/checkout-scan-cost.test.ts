@@ -25,6 +25,7 @@ test("one catalog scan verifies each repeated checkout once and rechecks on the 
   const writeLogs = (revision: number) => {
     for (let i = 0; i < 3; i++) {
       const rows = [{ type: "session_meta", payload: { id: `fixture-${i}`, cwd: original } },
+        { type: "event_msg", payload: { type: "user_message", message: "Show the working folder." } },
         ...Array.from({ length: 3 }, (_, j) => ({ type: "response_item", payload: {
           type: "function_call", name: "exec_command", call_id: `call-${revision}-${j}`,
           arguments: JSON.stringify({ cmd: "pwd", workdir: observed }),

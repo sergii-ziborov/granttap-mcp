@@ -85,7 +85,7 @@ test("a computer removes only its own binding, and never a Mesh's last repositor
 test("a removed repository stays out through chats in it and snapshots that still list it, until it is added back", () => {
   const { store, path } = freshStore();
   const root = gitRepository();
-  const chat: SessionInfo = { sessionId: "chat-1", agent: "codex", cwd: root, state: "idle",
+  const chat: SessionInfo = { sessionId: "chat-1", agent: "codex", cwd: root, title: "Fix the app", state: "idle",
     startedAt: now - 1_000, lastActivityAt: now, tokensSession: 0, tokensLastTurn: 0 };
   const [linked] = linkSessionsToProjects(store, [chat], "mac", inspectRepository, []);
   const projectId = linked!.projectId!;

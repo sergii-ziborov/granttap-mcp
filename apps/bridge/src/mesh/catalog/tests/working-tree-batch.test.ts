@@ -23,7 +23,7 @@ test('one catalog shares a checkout reading across chats and the next catalog re
   t.after(() => { process.env.PATH = prior; rmSync(root, { recursive: true, force: true }); });
   const store = new MeshStore(join(root, 'mesh.json'), () => 20);
   const sessions: SessionInfo[] = Array.from({ length: 6 }, (_, n) => ({ sessionId: `chat-${n}`,
-    agent: 'codex', cwd: repo, state: 'idle', startedAt: 1, lastActivityAt: 10,
+    agent: 'codex', cwd: repo, title: 'Fix the app', state: 'idle', startedAt: 1, lastActivityAt: 10,
     tokensSession: 0, tokensLastTurn: 0 }));
   const first = linkSessionsToProjects(store, sessions, 'mac');
   assert.equal(store.snapshot(first[0]!.projectId!)?.executions.every(row => row.uncommitted === false), true);

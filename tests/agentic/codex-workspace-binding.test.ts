@@ -41,7 +41,7 @@ test("one catalog snapshot reads consistent Git facts and the next refresh sees 
   const root = mkdtempSync(join(tmpdir(), "granttap-catalog-refresh-"));
   const store = new MeshStore(join(root, "mesh.json"), () => 1_800_000_000_000);
   const sessions: SessionInfo[] = ["a", "b"].map((id) => ({
-    sessionId: id, agent: "codex", cwd: root, state: "working", startedAt: 1_800_000_000_000,
+    sessionId: id, agent: "codex", cwd: root, title: "Build app", state: "working", startedAt: 1_800_000_000_000,
     lastActivityAt: 1_800_000_001_000, tokensSession: 0, tokensLastTurn: 0,
   }));
   let revision = 0;

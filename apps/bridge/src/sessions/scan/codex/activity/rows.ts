@@ -9,6 +9,7 @@ import { activityTelemetry, pendingCapabilityObservation, type CapabilityObserva
 import type { RecordedFileChange } from "../../../../transcript-history/changes";
 import type { ToolCallDetail } from "../../../../transcript-history/tool-details";
 import { codexQuestionText } from '../../../../codex-questions';
+import { appendCodexOutcomeRow, noteCodexMessage } from '../outcome/rows';
 
 function codexToolInput(payload: any): unknown {
   const input = payload.arguments ?? payload.input ?? payload.action;
@@ -45,6 +46,8 @@ export function appendCodexActivity(input: {
         toolName: "apply_patch", outcome: "success", fileChanges: files, ...childFields });
       return;
     }
+    if (appendCodexOutcomeRow({ out, seen, sessionId: session.sessionId, thread: sourceThreadId, row: d, createdAt,
+      entryId, extras: childFields, fullText: input.fullText })) return;
     if (d.type === "event_msg" && p.type === "user_message") {
       pushEntry({ out: out, seen: seen, sessionId: session.sessionId, kind: "user", text: p.message ?? p.text, createdAt: createdAt, ordinal: index, extras: childFields, idOverride: entryId(createdAt, 0) });
       return;
@@ -54,6 +57,7 @@ export function appendCodexActivity(input: {
         kind: p.phase === "final" || p.phase === "final_answer" ? "final" : "message",
         text: p.message ?? p.text, createdAt, ordinal: index, extras: childFields,
         idOverride: entryId(createdAt, 0) });
+      noteCodexMessage(seen, sourceThreadId, p, p.message ?? p.text);
       return;
     }
     if (d.type !== "response_item") return;
@@ -70,14 +74,8 @@ export function appendCodexActivity(input: {
         }
       });
     } else if (p.type === "message" && p.role === "assistant" && Array.isArray(p.content)) {
-      p.content.forEach((block: any, blockIndex: number) => {
-        if (block?.type === "output_text" || block?.type === "text") {
-          const ordinal = index * 100 + blockIndex;
-          pushEntry({ out: out, seen: seen, sessionId: session.sessionId,
-            kind: p.channel === "final" || p.phase === "final_answer" || p.phase === "final" ? "final" : "message",
-            text: block.text, createdAt, ordinal, extras: childFields, idOverride: entryId(createdAt, ordinal) });
-        }
-      });
+      appendAssistantMessage({ pushEntry, seen, sessionId: session.sessionId, thread: sourceThreadId, payload: p,
+        index, createdAt, extras: childFields, entryId, out });
     } else if (["function_call", "custom_tool_call", "local_shell_call"].includes(p.type)) {
       const args = codexToolInput(p);
       const toolName = String(p.name ?? p.type);
@@ -112,6 +110,23 @@ export function appendCodexActivity(input: {
         }, idOverride: sourceId });
     }
   });
+}
+
+/** An older-style assistant message, block by block; its id and text are noted for the newer rows. */
+function appendAssistantMessage(input: { pushEntry: (entry: PushEntryInput) => void; out: ActivityEntry[];
+  seen: Set<string>; sessionId: string; thread: string; payload: any; index: number; createdAt: number;
+  extras: Record<string, unknown>; entryId: (at: number, block: number) => string }): void {
+  const { payload: p, index, createdAt } = input;
+  const texts: string[] = [];
+  p.content.forEach((block: any, blockIndex: number) => {
+    if (block?.type !== "output_text" && block?.type !== "text") return;
+    const ordinal = index * 100 + blockIndex;
+    input.pushEntry({ out: input.out, seen: input.seen, sessionId: input.sessionId,
+      kind: p.channel === "final" || p.phase === "final_answer" || p.phase === "final" ? "final" : "message",
+      text: block.text, createdAt, ordinal, extras: input.extras, idOverride: input.entryId(createdAt, ordinal) });
+    if (typeof block.text === "string") texts.push(block.text);
+  });
+  noteCodexMessage(input.seen, input.thread, p, texts.join("\n"));
 }
 
 function appendQuestionIfPresent(input: Parameters<typeof appendCodexActivity>[0], toolName: string,

@@ -3,6 +3,7 @@ import { localTaskTransfers, localTransferContinuations } from "../task-transfer
 import { MAX_FILES, MAX_HISTORY, MAX_LIVE, TOKEN_WINDOW_MS } from "./support/common";
 import { providerScans, cooperativeProviderScans, type ProviderScan } from "./provider-discovery";
 import { attachHelperRuns } from "../helper-runs";
+import { attachChatPictures, noteChatPictureHints } from "../helper-runs/pictures/chats";
 import { attachStartedBy } from "../started-by";
 
 function sessionKey(session: SessionInfo): string {
@@ -52,8 +53,10 @@ function pickWithReserve(
 function catalogFromScans(scans: ProviderScan[]) {
   // A helper run is a conversation of the chat that started it, never a chat in these lists.
   // A chat another chat ran headless stays a chat, and names the chat that started it.
-  const native = attachStartedBy(attachHelperRuns(sortedUniqueSessions(scans.flatMap((scan) => scan.sessions)),
-    scans.flatMap((scan) => scan.helperRuns ?? [])), scans.flatMap((scan) => scan.lineage ?? []));
+  const native = attachChatPictures(attachStartedBy(attachHelperRuns(sortedUniqueSessions(scans.flatMap((scan) => scan.sessions)),
+    scans.flatMap((scan) => scan.helperRuns ?? [])), scans.flatMap((scan) => scan.lineage ?? [])));
+  // Pictures a chat's own answer saved are kept by the monitor (`keepNotedChatPictures`).
+  noteChatPictureHints(scans.flatMap((scan) => scan.pictures ?? []));
   // Prepared transfers replace native ids; rank their native activity before
   // the bounded live/history windows, rather than appending them after older chats.
   const sessions = sortedUniqueSessions(localTaskTransfers().catalog(native));

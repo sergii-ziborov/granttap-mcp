@@ -37,12 +37,15 @@ export function setAutoContinue(sessionId: string, enabled: boolean): void {
   writeLimitContinuationState(state);
 }
 
-/** The phone shows whether a limited chat will go on by itself; that is the default. */
+/**
+ * The phone shows whether a limited chat will go on by itself; that is the default for Claude. Only
+ * Claude chats are continued (`wanted`), so another agent's limited chat says it will not be.
+ */
 export function annotateLimitContinuations(sessions: SessionInfo[]): SessionInfo[] {
   if (!sessions.some(session => session.usageLimit)) return sessions;
   const off = new Set(readLimitContinuationState().off);
-  return sessions.map(session => session.usageLimit
-    ? { ...session, usageLimit: { ...session.usageLimit, autoContinue: !off.has(session.sessionId) } } : session);
+  return sessions.map(session => session.usageLimit ? { ...session, usageLimit: { ...session.usageLimit,
+    autoContinue: session.agent === 'claude' && !off.has(session.sessionId) } } : session);
 }
 
 /**

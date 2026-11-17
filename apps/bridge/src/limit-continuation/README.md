@@ -17,6 +17,10 @@ and missing readings never go early. The early continuation is tried once per ch
 The one due at the reset stays queued until the chat goes on; a chat refused again for the same
 reset keeps it and gets no second early try.
 
+Only Claude chats are continued. A Codex chat stopped by its usage limit carries `usageLimit
+{ resetsAt, autoContinue: false }` (`resetsAt` from Codex's "try again at …"), so the phone says
+"Limit reached" and when it resets; nothing is queued for it.
+
 The phone turns it off or on per chat with `session.autocontinue.set`. It is on by default.
 Turning it off takes the queued copies back from the relay. A copy the relay still offers afterwards
 is refused at delivery. The same happens when the chat went on by itself first. A limit that reset

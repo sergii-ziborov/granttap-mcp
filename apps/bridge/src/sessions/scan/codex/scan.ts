@@ -29,7 +29,7 @@ function* scanCodexCatalog(maxFiles: number): Generator<void, Scan> {
   for (const file of files) {
     yield;
     const candidate = parseCodexFile(file);
-    if (!candidate || seenSessionIds.has(candidate.session.sessionId)) continue;
+    if (!candidate || seenSessionIds.has(candidate.session.sessionId) || requestless(candidate)) continue;
     seenSessionIds.add(candidate.session.sessionId);
     candidates.push(candidate);
   }
@@ -40,5 +40,17 @@ function* scanCodexCatalog(maxFiles: number): Generator<void, Scan> {
   codexActivitySourcesBySession.clear();
   codexAggregatedObservationsBySession.clear();
   return { ...assembleCodexScan(candidates), sourceLimited: listed.length > maxFiles,
-    lineage: candidates.flatMap((candidate) => candidate.lineage ?? []) };
+    lineage: candidates.flatMap((candidate) => candidate.lineage ?? []),
+    pictures: candidates.flatMap(({ session, child, pictures }) => !child && session.cwd && pictures?.length
+      ? [{ agent: "codex" as const, sessionId: session.sessionId, cwd: session.cwd, at: session.lastActivityAt, pictures }]
+      : []) };
+}
+
+/**
+ * A chat nobody has asked anything yet: no request, no answer. It is no chat on the phone and no Mesh
+ * Task until its request appears; a run whose request never came stays out. A forked agent belongs
+ * to its parent's chat and is kept.
+ */
+function requestless(candidate: CodexCandidate): boolean {
+  return !candidate.child && candidate.requested === false && !candidate.session.summary;
 }

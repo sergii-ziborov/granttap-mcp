@@ -44,6 +44,11 @@ function ownedRun(session:SessionInfo,nativeId:string):SessionInfo {
   return isDeliveryInFlight(session.sessionId)||isDeliveryInFlight(nativeId)?{...session,state:'working'}:session;
 }
 
+function withoutStop(session:SessionInfo):SessionInfo {
+  const {stopped:_stopped,usageLimit:_limit,...rest}=session;
+  return rest;
+}
+
 function observeNativeTail(input:SessionInfo,native:SessionInfo):SessionObservation|undefined {
   if(native.agent==='cursor'){
     const current=cursorConversationSession(native.sessionId);
@@ -80,7 +85,9 @@ function observeNativeTail(input:SessionInfo,native:SessionInfo):SessionObservat
     const at=Math.max(input.lastActivityAt,clock!.lastActivityAt);
     const state=native.agent==='claude'?claudeTurnState(clock!.claude,at,input.state)
       :clock!.codex.startedAt||clock!.codex.endedAt?codexTurnState(clock!.codex,at):input.state;
-    if(native.agent!=='claude')return {session:{...input,state,lastActivityAt:at},revision:`${revision}:${state}`};
+    // A Codex chat that went on after a stopped turn no longer shows that stop.
+    if(native.agent!=='claude')return {session:state==='working'?withoutStop({...input,state,lastActivityAt:at})
+      :{...input,state,lastActivityAt:at},revision:`${revision}:${state}`};
     const waits=claudeWaits(clock!.claude,clock!.claude.turnEnded);
     return {session:withClaudeWaits({...input,state,lastActivityAt:at},waits),
       revision:`${revision}:${state}:${waits.backgroundTasks??0}:${waits.usageLimit?.resetsAt??0}`};

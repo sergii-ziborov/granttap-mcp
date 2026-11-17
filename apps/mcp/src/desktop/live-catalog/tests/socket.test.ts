@@ -29,6 +29,7 @@ test("the private desktop socket returns native turn state through the parsing w
   await writeFile(join(roots.GRANTTAP_CODEX_SESSIONS_DIR, "rollout-test.jsonl"), [
     { timestamp: now - 1_000, type: "session_meta", payload: { id: "test-session", cwd: directory } },
     { timestamp: now, type: "event_msg", payload: { type: "task_started" } },
+    { timestamp: now, type: "event_msg", payload: { type: "user_message", message: "Run the check." } },
   ].map(row => JSON.stringify(row)).join("\n") + "\n");
   const storePath = join(directory, "project-mesh.json");
   await writeFile(storePath, JSON.stringify({ version: 1,

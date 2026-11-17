@@ -785,6 +785,23 @@ temp folder, a plain folder or one of its parent's checkout is in its parent's
 Mesh and registers no Mesh of its own; one in a checkout of its own keeps that
 checkout's. Details: [`apps/bridge/src/started-by`](apps/bridge/src/started-by/README.md).
 
+### What a run's end says
+
+A Codex turn that ends on Codex's own error instead of an answer says so: the chat's last message is
+`Codex stopped: You’ve hit your usage limit.` (Codex's first sentence, without its links), its
+transcript ends with that sentence, and the session carries `stopped { reason, message?, at }`
+(`reason`: `usage_limit`, `rate_limit`, `context_window`, `sign_in`, `service`, `error`). A used-up
+limit adds `usageLimit { resetsAt, autoContinue: false }`, read from Codex's "try again at …". An answer
+Codex writes only in its newer `item_completed` or `task_complete` rows is shown like any other.
+
+A headless run whose answer names a picture it saved inside its working folder shows `Picture saved:
+<file name>` as its last message; the computer keeps a reduced copy and publishes it as the session's
+`images` and on the answer that names it, readable with `session.image.query` by that chat and the chat
+that started it. A Codex run nobody has asked anything yet is no chat and no Mesh Task until its request
+appears, and Tasks an earlier runtime made for such chats (`codex task`, "Continue this coding task")
+are left out of what the phone is sent. See [Codex outcomes](apps/bridge/src/sessions/scan/codex/README.md)
+and [chat pictures](apps/bridge/src/helper-runs/README.md#pictures-a-chat-saved).
+
 ### One computer, whatever the network calls it
 
 The Mesh keys a computer by an identity written down once, on first use, in
@@ -1032,7 +1049,9 @@ See the [runtime watchdog](apps/bridge/src/runtime-watchdog/README.md).
 
 ## Automatic runtime updates
 
-Installed GrantTap background services check for stable MCP updates automatically.
+Installed GrantTap background services check for stable MCP updates automatically, once an
+hour with one small registry request; a failed check is retried after 5, 10, 20 and 40 minutes,
+then hourly.
 Verified updates are staged separately and applied after active requests and pending
 decisions finish. Startup failures restore the previous version. Pairing and task
 policies are retained; source checkouts and running provider processes stay in place.

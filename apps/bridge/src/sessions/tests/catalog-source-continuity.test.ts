@@ -24,7 +24,9 @@ for (const provider of ["claude", "codex"] as const) {
       ? { type: "user", sessionId: "continuity", timestamp,
           message: { role: "user", content: "synthetic fixture" } }
       : { type: "session_meta", timestamp, payload: { id: "continuity" } };
-    writeFileSync(path, JSON.stringify(row) + "\n");
+    // A Codex chat is published once the person has asked it something.
+    const request = { type: "event_msg", timestamp, payload: { type: "user_message", message: "synthetic fixture" } };
+    writeFileSync(path, JSON.stringify(row) + "\n" + (provider === "claude" ? "" : JSON.stringify(request) + "\n"));
     const read = provider === "claude" ? scanClaude : scanCodex;
     const refresh = provider === "claude" ? scanClaudeCooperatively : scanCodexCooperatively;
     const session = read(1).sessions[0]!;
@@ -52,7 +54,7 @@ test("cached catalog discovery is not delayed by a background turn for every unc
   for (let index = 0; index < 200; index++) {
     writeFileSync(join(root, `rollout-${index}.jsonl`), JSON.stringify({
       type: "session_meta", timestamp, payload: { id: `cached-${index}` },
-    }) + "\n");
+    }) + "\n" + JSON.stringify({ type: "event_msg", timestamp, payload: { type: "user_message", message: "Go on." } }) + "\n");
   }
   scanCodex(200);
   let backgroundTurns = 0, stopped = false;

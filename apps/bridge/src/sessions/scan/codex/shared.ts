@@ -58,6 +58,8 @@ export type CachedCodexSummary = {
   child?: CodexChildSource;
   turn?: import("./turn-state").CodexTurnClock;
   lineage?: import("../../../started-by").LineageFact;
+  pictures?: import("../../../helper-runs/pictures/chats").NamedPicture[];
+  requested?: boolean;
 };
 
 export type CodexChildSource = {
@@ -74,6 +76,10 @@ export type CodexCandidate = {
   child?: CodexChildSource;
   /** Where the chat came from, for `startedBy`; absent for a forked agent. */
   lineage?: import("../../../started-by").LineageFact;
+  /** Pictures its newest answer saved in its working folder; never published. */
+  pictures?: import("../../../helper-runs/pictures/chats").NamedPicture[];
+  /** Whether the person's words appear in it at all; a chat without them is not published. */
+  requested?: boolean;
 };
 
 export type CodexActivitySource = {

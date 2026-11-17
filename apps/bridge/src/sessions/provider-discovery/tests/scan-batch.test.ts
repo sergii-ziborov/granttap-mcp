@@ -32,6 +32,7 @@ test('concurrent live and history consumers share a native provider scan, while 
   const write = (revision: number) => {
     for (let index = 0; index < 3; index++) {
       const rows = [{ type: 'session_meta', payload: { id: `batch-${index}`, cwd: original } },
+        { type: 'event_msg', payload: { type: 'user_message', message: 'Show the working folder.' } },
         ...Array.from({ length: 3 }, (_, call) => ({ type: 'response_item', payload: {
           type: 'function_call', name: 'exec_command', call_id: `call-${revision}-${call}`,
           arguments: JSON.stringify({ cmd: 'pwd', workdir: observed }) } }))];

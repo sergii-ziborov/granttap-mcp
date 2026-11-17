@@ -90,7 +90,7 @@ async function sendTranscript(
   const activity = threadId ? scanThreadActivity(session, threadId)
     : (history?.history ? readTranscriptHistory(session, history.historyCursor) : undefined)
       ?? cachedSessionActivity(session, false, observation?.revision);
-  await sendSessionPayload(client, activityWithImages(activity), sessionId, "phone", {
+  await sendSessionPayload(client, activityWithImages(activity, session), sessionId, "phone", {
     ttlMs: INTERVAL_MS * 24,
     reliable: false,
     peerPublicKey: history?.peerPublicKey,

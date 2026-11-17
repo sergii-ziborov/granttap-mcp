@@ -48,6 +48,7 @@ const resumedHeads = new WeakSet<RelayClient>();
 import { publishMonitorMeshes, stopMonitorMeshes } from "../mesh-publication";
 import { publishMonitorCapabilities, stopMonitorCapabilities } from "../capability-publication";
 import { annotateLimitContinuations, scheduleLimitContinuations } from "../../limit-continuation";
+import { keepNotedChatPictures } from "../../helper-runs/pictures/chats";
 import { cachedNativeAccountUsage } from "../../provider-account-status";
 
 export type SessionMonitor = {
@@ -180,6 +181,7 @@ async function publishMonitorTick(input: {
   // A weekly limit resets long after its chat has left the live list, so history is looked at too.
   void scheduleLimitContinuations([...status.sessions, ...(status.history ?? [])], undefined, Date.now(),
     cachedNativeAccountUsage).catch(() => {});
+  void keepNotedChatPictures().catch(() => {});
   publishCatalogHeads(client, status, subscriptions, publishSessionEvents);
   if (loadRuntimeConfig().meshEnabled) publishMonitorMeshes(client, status);
   publishMonitorCapabilities(client, status, () => history(false));

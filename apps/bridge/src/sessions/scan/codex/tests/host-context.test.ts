@@ -56,11 +56,12 @@ test("Codex ordinary JSON requests remain visible and can name a chat", t => {
   assert.ok(readTranscriptHistory(session)!.entries.every(entry => entry.text === request));
 });
 
-test("Codex context-only conversations do not expose a synthetic user message", t => {
-  const session = fixture(t, "context-only", [pageContext]);
-  assert.equal(session.title, undefined);
+test("Codex context-only conversations are no chat and expose no synthetic user message", t => {
+  assert.equal(fixture(t, "context-only", [pageContext]), undefined, "nobody has asked it anything yet");
+  const session = { sessionId: "context-only", agent: "codex", state: "idle" as const, startedAt: 1000,
+    lastActivityAt: 2000, tokensSession: 0, tokensLastTurn: 0 };
   assert.deepEqual(codexActivity(session), []);
-  assert.deepEqual(readTranscriptHistory(session)!.entries, []);
+  assert.deepEqual(readTranscriptHistory(session)?.entries ?? [], []);
 });
 
 test("Codex wrapped metadata titles fall back to the real request", t => {

@@ -117,9 +117,25 @@ export function meshTaskTitle(session: SessionInfo, agent: string): string {
   return (opening ?? `${agent} task`).slice(0, 160);
 }
 
+/**
+ * A chat with no request and no answer yet names no Task: it is not linked until one appears.
+ * Earlier runtimes made such Tasks anyway; snapshots leave them out (`requestlessTask`).
+ */
+export function hasTaskSubject(session: SessionInfo): boolean {
+  return Boolean(presentableTitle(session.title) || session.summary?.trim());
+}
+
+/** The chat's newest message, else its request; `hasTaskSubject` holds, so one of them has words. */
+function taskGoal(session: SessionInfo): string {
+  const goal = session.summary?.trim() ? session.summary : presentableTitle(session.title) ? session.title : undefined;
+  return (goal ?? "").slice(0, 1_000);
+}
+
 function taskState(session: SessionInfo): TaskState {
   if (session.state === "waiting") return "needs_user";
   if (session.state === "working") return "working";
+  // Its turn ended on the provider's error (a used-up limit): nothing goes on until something changes.
+  if (session.stopped) return "blocked";
   return "planned";
 }
 
@@ -186,7 +202,7 @@ function linkSession(input: LinkInput): SessionInfo {
   const agent = provider(session.agent);
   const cwd = session.cwd?.trim();
   // A generator's throwaway folder is not a workspace: registering it minted a Mesh per run.
-  if (!agent || !cwd || helperRunFolder(cwd)) return session;
+  if (!agent || !cwd || helperRunFolder(cwd) || !hasTaskSubject(session)) return session;
   const knownTaskId = store.taskForExecution(computerId, agent, session.sessionId);
   const knownProjectId = knownTaskId ? store.task(knownTaskId)?.projectId : undefined;
   const previous = knownProjectId ? store.snapshot(knownProjectId)?.executions.find(row =>
@@ -221,7 +237,7 @@ function linkSession(input: LinkInput): SessionInfo {
     taskId,
     projectId,
     title: meshTaskTitle(session, agent),
-    goal: (session.summary ?? session.title ?? "Continue this coding task").slice(0, 1_000),
+    goal: taskGoal(session),
     state: taskState(session),
     ownerSessionId: session.sessionId,
     createdAt: session.startedAt,
@@ -260,8 +276,7 @@ function linkStartedChild(input: LinkInput, agent: MeshProvider, cwd: string, kn
   // A Task an older runtime made in a Mesh of the child's own folder stays there; the chat moves on.
   const taskId = known?.projectId === parent.projectId ? known.taskId : taskIdentity(parent.projectId, agent, session.sessionId);
   store.upsertTask({
-    taskId, projectId: parent.projectId, title: meshTaskTitle(session, agent),
-    goal: (session.summary ?? session.title ?? "Continue this coding task").slice(0, 1_000),
+    taskId, projectId: parent.projectId, title: meshTaskTitle(session, agent), goal: taskGoal(session),
     state: taskState(session), ownerSessionId: session.sessionId, createdAt: session.startedAt, updatedAt: session.lastActivityAt,
   });
   store.linkExecution({

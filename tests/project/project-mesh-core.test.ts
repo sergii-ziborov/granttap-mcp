@@ -248,7 +248,7 @@ test("catalog honors existing multi-repository logical Project bindings", async 
 
 function session(sessionId: string, cwd: string) {
   return {
-    sessionId, agent: "codex", cwd, state: "working" as const,
+    sessionId, agent: "codex", cwd, title: "Pairing work", state: "working" as const,
     startedAt: now, lastActivityAt: now, tokensSession: 0, tokensLastTurn: 0,
   };
 }
