@@ -1,9 +1,37 @@
 # Connection center
 
-`../mcp-tools/connect.ts` registers the public `connection_status`, `connect`,
+`../mcp-tools/connect` registers the public `connection_status`, `connect`,
 and confirmed `reconnect` tools. `state.ts` owns the process-local pending QR
-and sanitized connection snapshot. `../mcp-tools/connection-widget.ts` serves
-`widget.html`, `bridge.js`, and `view.js` as a self-contained MCP Apps resource.
+and sanitized connection snapshot. `../mcp-tools/connect/widget.ts` serves the card in `card/` as one
+self-contained MCP Apps resource (`ui://granttap/connection/v6.html`): `widget.html` with `card.css` and the
+scripts `bridge.js`, `phones.js`, `phones-view.js` and `view.js` inlined, in that order (`CARD_SCRIPTS`).
+
+## The card
+
+From the top: the status line (Connected · iPhone is active now, Paired · last phone activity 3 h ago, Not
+paired, a QR waiting or expired) with Refresh; the QR panel when there is one to show; **This computer**: its
+name, the GrantTap MCP version and a newer one waiting (in a line of the card's own, the server's sentence as
+its tooltip), the Automatic updates switch and the account passkey; **Phones**; **Pairing**: Add another
+phone and Reconnect a phone (each confirmed in place) and how to unpair this computer, which only
+`granttap reset` in Terminal does; then connection details and help.
+
+**Phones** (`phones.js` holds the rules, `phones-view.js` the rows) follows the phone app's Devices → a
+computer → Phones: one row per phone with its name, or `Phone <label>` / `First pairing`, **Active now** for
+a phone heard from in the last minute or **Last active** for the one heard from most recently, and Last seen
+… or Never seen (· added … when known). The list is sorted most recent first; from eight phones it shows five
+and **Show all N phones**. A callout above it says how many phones were not seen for 30 days, from the
+server's `stale` mark, with **Remove N**. Each row has **Remove**, except when only one phone is paired. Both
+confirm in place (Cancel focused, Escape cancels) and then call `remove_phones` (`phoneIds: [id]` or
+`notSeenForDays: 30`) through the same bridge, which asks for a yes on a phone: the confirmation says so, and
+for the phone heard from most recently that the phone that answers stays. While the phone is asked (up to
+about three minutes; the card waits 200 s) the confirmation's buttons give way to a line of the same height,
+which takes focus, and nothing else starts. The answer is shown at the row, or under the list for a removal,
+and announced; a refusal shows the server's reason in words for a person; if the host gives up waiting, the
+card says a yes may still have removed it. The list is then read again with `connection_status`.
+
+The card follows the host's MCP Apps `hostContext` theme and style variables (only `--` custom properties,
+one by one), at initialization and on `ui/notifications/host-context-changed`, with its own light and dark
+fallbacks. It reports its content's own height, so it shrinks after a removal.
 
 Opening the center does not create keys, start a relay connection, or install
 hooks. Connect preserves an existing machine identity, including when the local
@@ -52,7 +80,9 @@ saves do not optimistically change the switch. Pairing and capability policy are
 stored separately and preserved.
 
 Tests in `tests/` exercise isolated keys, a loopback encrypted phone connection,
-expiry, non-mutating status, and actual DOM button/host-message behavior.
+expiry, non-mutating status, and actual DOM button/host-message behavior; `tests/phones-card.test.ts` covers
+the phone rules and the Phones section (rows, collapse, the 30-day action, confirmation, waiting, each
+answer, focus, theme).
 
 License: this module is distributed under the GrantTap Commercial Source License
 in the repository-root `LICENSE` file.

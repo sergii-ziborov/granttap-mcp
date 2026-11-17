@@ -1,4 +1,5 @@
 // MCP Apps bridge. Pairing secrets stay in this iframe; never persist UI state.
+const CALL_WAIT_MS = 20_000;
 let nextId = 0;
 const requests = new Map();
 let hostOrigin = null;
@@ -7,16 +8,31 @@ let legacyBridge = false;
 function post(message) {
   window.parent.postMessage({ jsonrpc: "2.0", ...message }, hostOrigin || "*");
 }
-function request(method, params) {
+function request(method, params, waitMs = CALL_WAIT_MS) {
   const id = ++nextId;
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       requests.delete(id);
       reject(new Error("No response. Refresh status before retrying."));
-    }, 20000);
+    }, waitMs);
     requests.set(id, { resolve, reject, timer });
     post({ id, method, params });
   });
+}
+// The host's theme and style variables (MCP Apps hostContext). Only custom properties are taken, one by one.
+function applyHostContext(context) {
+  if (!context || typeof context !== "object") return;
+  const root = document.documentElement;
+  if (context.theme === "light" || context.theme === "dark") {
+    root.dataset.theme = context.theme;
+    root.style.colorScheme = context.theme;
+  }
+  const variables = context.styles?.variables;
+  if (variables && typeof variables === "object") {
+    for (const [name, value] of Object.entries(variables)) {
+      if (/^--[a-z0-9-]{1,64}$/.test(name) && typeof value === "string" && value.length <= 300) root.style.setProperty(name, value);
+    }
+  }
 }
 window.addEventListener("message", event => {
   if (event.source !== window.parent || event.data?.jsonrpc !== "2.0") return;
@@ -33,15 +49,18 @@ window.addEventListener("message", event => {
     render(data.params);
   } else if (data.method === "ui/notifications/tool-cancelled") {
     message("Request cancelled. Refresh status to check the current state.");
+  } else if (data.method === "ui/notifications/host-context-changed") {
+    applyHostContext(data.params);
   }
 });
 async function initializeBridge() {
   try {
     const initialized = await request("ui/initialize", {
-      appInfo: { name: "GrantTap connection center", version: "2.0.0" },
+      appInfo: { name: "GrantTap connection center", version: "3.0.0" },
       appCapabilities: {}, protocolVersion: "2026-01-26",
     });
     if (initialized?.protocolVersion !== "2026-01-26") throw new Error("Unsupported UI protocol");
+    applyHostContext(initialized.hostContext);
     post({ method: "ui/notifications/initialized" });
     // The compatibility API is an explicit tool-call capability. In Codex it
     // avoids an iframe proxy that can initialize but time out on tools/call.
@@ -62,30 +81,14 @@ async function initializeBridge() {
   setBusy(false);
   await call("connection_status");
 }
-async function call(name, args = {}) {
-  if (!bridgeReady || busy) return;
-  setBusy(true);
-  message("Checking…");
-  try {
-    const result = legacyBridge
-      ? await legacyCall(name, args)
-      : await request("tools/call", { name, arguments: args });
-    if (result?.isError) message("Could not complete the request. Refresh status before retrying.");
-    else { render(result); message("Status updated."); }
-    return result;
-  } catch {
-    message("No successful response. Refresh status before retrying.");
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function legacyCall(name, args) {
+/** One GrantTap tool call through the host; rejects when no answer came within `waitMs`. */
+async function callTool(name, args = {}, waitMs = CALL_WAIT_MS) {
+  if (!legacyBridge) return request("tools/call", { name, arguments: args }, waitMs);
   let timer;
   try {
     return await Promise.race([
       window.openai.callTool(name, args),
-      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("No response")), 20000); }),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("No response")), waitMs); }),
     ]);
   } finally { clearTimeout(timer); }
 }

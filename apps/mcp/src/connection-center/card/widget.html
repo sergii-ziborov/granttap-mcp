@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>GrantTap connection</title>
+<style>{{STYLE}}</style>
+</head>
+<body>
+<main class="card" id="card" aria-labelledby="title">
+  <header class="top">
+    <div class="logo" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+      <rect width="64" height="64" rx="14" fill="#f47f42"/>
+      <path d="M11 31.5 24.5 45 42 19" fill="none" stroke="#1d130e" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M45.5 29v10M52 25v18M58.5 29v10" fill="none" stroke="#1d130e" stroke-width="5" stroke-linecap="round"/>
+    </svg></div>
+    <div class="top-text">
+      <h1 id="title">GrantTap</h1>
+      <p class="status-line"><span class="dot" id="dot" aria-hidden="true"></span><span id="status">Checking connection…</span></p>
+    </div>
+    <button id="refresh" class="quiet" aria-label="Refresh status" title="Refresh status"><svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M16 10a6 6 0 1 1-1.8-4.3M16 3.5v3.7h-3.7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="refresh-text">Refresh</span></button>
+  </header>
+  <p class="message" id="message" role="status"></p>
+  <p class="sr-only" id="announce" role="status"></p>
+
+  <section id="pairing" class="pairing hidden" aria-labelledby="heading">
+    <div class="pairing-copy">
+      <h2 id="heading">Pair a phone</h2>
+      <p id="detail" class="muted">The pairing QR appears here, never in chat.</p>
+      <div class="actions" id="pairing-actions"><button class="primary" id="connect">Add a phone</button><button id="new-qr" class="hidden">Create a new QR</button><button id="copy" class="hidden">Copy pairing link</button></div>
+      <p id="expiry" class="small muted" aria-live="polite"></p>
+    </div>
+    <img id="qr" class="hidden" alt="GrantTap pairing QR" />
+  </section>
+
+  <section class="section" aria-labelledby="computer-title">
+    <h2 class="section-title" id="computer-title">This computer</h2>
+    <dl class="facts">
+      <div><dt>Name</dt><dd id="computer">—</dd></div>
+      <div><dt>GrantTap MCP</dt><dd><span id="version">—</span><span id="update-badge" class="badge warn hidden"></span><span id="update-none" class="muted small hidden">No update waiting</span></dd></div>
+    </dl>
+    <p id="update-detail" class="small muted hidden"></p>
+    <div class="setting">
+      <div class="setting-text"><span id="updates-label" class="setting-label">Automatic updates</span><span id="updates-detail" class="small muted">Checking update settings…</span></div>
+      <button id="automatic-updates" class="switch" role="switch" aria-checked="false" aria-labelledby="updates-label" aria-describedby="updates-detail" disabled><span class="track" aria-hidden="true"><span class="knob"></span></span><span id="updates-state" class="switch-state">…</span></button>
+    </div>
+    <div class="setting">
+      <div class="setting-text"><span class="setting-label" id="account-label">GrantTap account</span><span id="account-status" class="small muted">Checking account link…</span></div>
+      <div class="setting-actions"><button id="passkey" aria-describedby="account-status">Link with passkey</button><a id="passkey-link" class="button-link hidden" target="_blank" rel="noopener noreferrer">Continue on granttap.com</a></div>
+    </div>
+  </section>
+
+  <section id="phones-section" class="section hidden" aria-labelledby="phones-title">
+    <div class="section-head">
+      <h2 class="section-title" id="phones-title" tabindex="-1">Phones</h2><span class="count" id="phones-count"></span>
+      <span class="summary" id="phones-summary"></span>
+    </div>
+    <div class="stale hidden" id="stale">
+      <div class="stale-row"><p id="stale-text" class="stale-text"></p><button id="remove-stale" class="danger-outline">Remove…</button></div>
+    </div>
+    <ul class="phones" id="phones" aria-labelledby="phones-title"></ul>
+    <p class="empty muted" id="phones-empty">No phone is paired with this computer yet.</p>
+    <button id="phones-toggle" class="link hidden" aria-controls="phones" aria-expanded="false">Show all</button>
+    <p class="note" id="phones-message" role="status"></p>
+    <p class="small muted" id="phones-note">You confirm every removal on your phone. The phone you answer on, and the last phone, always stay. A removed phone needs a new QR to pair again.</p>
+  </section>
+
+  <section id="actions-section" class="section hidden" aria-labelledby="actions-title">
+    <h2 class="section-title" id="actions-title">Pairing</h2>
+    <div class="actions" id="pairing-tools"><button id="add-device">Add another phone</button><button id="reconnect">Reconnect a phone</button><button id="unpair" class="link" aria-expanded="false" aria-controls="unpair-help">How to unpair this computer</button></div>
+    <div id="unpair-help" class="confirm neutral hidden">
+      <p><strong>Unpairing removes every phone from this computer at once.</strong> For safety, it only runs in Terminal on this computer, never from a chat:</p>
+      <div class="command"><code id="reset-command">granttap reset</code><button id="copy-reset">Copy</button></div>
+      <p class="small muted">It asks you to type RESET and keeps a backup. Afterwards, pair again with a new QR. To remove only some phones, use Remove above.</p>
+    </div>
+  </section>
+
+  <section id="confirm" class="confirm hidden" role="group" aria-labelledby="confirm-copy"><p id="confirm-copy">Show a new QR.</p><div class="actions"><button class="primary" id="confirm-reconnect">Show QR</button><button id="cancel">Cancel</button></div></section>
+
+  <details class="section">
+    <summary>Connection details &amp; help</summary>
+    <dl class="facts">
+      <div><dt>Relay seen by this chat</dt><dd id="relay">Not checked</dd></div>
+      <div><dt>Last message from a phone</dt><dd id="phone">Not observed</dd></div>
+    </dl>
+    <h3>Coding apps</h3><ul id="providers" class="providers"></ul>
+    <p class="small muted">A QR pairs a phone with this computer directly. A passkey links this computer to your GrantTap account, so your signed-in phone can find it. Signing in to a coding app is separate.</p>
+    <p class="small muted">Missing hooks or background sync? Run <code>npm install -g granttap-mcp</code> and <code>granttap setup</code> in Terminal. A saved pairing alone does not prove your phone or the background helper is online.</p>
+    <p class="small"><a href="https://granttap.com" target="_blank" rel="noopener noreferrer">Website</a> · <a href="https://granttap.com/privacy" target="_blank" rel="noopener noreferrer">Privacy</a> · <a href="mailto:support@granttap.com">Support</a></p>
+  </details>
+</main>
+<script type="module">{{SCRIPT}}</script>
+</body>
+</html>

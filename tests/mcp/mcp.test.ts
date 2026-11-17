@@ -82,7 +82,7 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   const connectTool = tools.tools.find((tool) => tool.name === "connect");
   assert.deepEqual(Object.keys(connectTool?.inputSchema.properties ?? {}), []);
   const connectMeta = connectTool?._meta as { ui?: { resourceUri?: string } } | undefined;
-  assert.equal(connectMeta?.ui?.resourceUri, "ui://granttap/connection/v5.html");
+  assert.equal(connectMeta?.ui?.resourceUri, "ui://granttap/connection/v6.html");
   const reconnectTool = tools.tools.find((tool) => tool.name === "reconnect");
   assert.deepEqual(Object.keys(reconnectTool?.inputSchema.properties ?? {}), ["confirmed", "mode"]);
   const removePhones = tools.tools.find((tool) => tool.name === "remove_phones");
@@ -98,9 +98,9 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   assert.deepEqual(resources.resources.map((resource) => resource.uri), [
     "granttap://mesh/current",
     "granttap://mesh/map",
-    "ui://granttap/connection/v5.html",
+    "ui://granttap/connection/v6.html",
   ]);
-  const widget = await client.readResource({ uri: "ui://granttap/connection/v5.html" });
+  const widget = await client.readResource({ uri: "ui://granttap/connection/v6.html" });
   const widgetResource = widget.contents[0] as {
     mimeType?: string;
     text?: string;
@@ -108,7 +108,7 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   };
   assert.equal(widgetResource.mimeType, "text/html;profile=mcp-app");
   assert.equal(widgetResource._meta?.ui?.prefersBorder, true);
-  assert.match(widgetResource.text ?? "", /Add a device/);
+  assert.match(widgetResource.text ?? "", /Add a phone/);
   assert.match(widgetResource.text ?? "", /GrantTap pairing QR/);
   const templates = await client.listResourceTemplates();
   assert.deepEqual(templates.resourceTemplates.map((template) => template.uriTemplate), [

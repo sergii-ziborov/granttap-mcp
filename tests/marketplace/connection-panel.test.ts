@@ -34,14 +34,14 @@ test("Codex, Claude Code, Grok Build, and Cursor ship the same connection panel 
     const updates = tools.tools.find((tool) => tool.name === "set_runtime_auto_update");
     for (const tool of [status, add, reconnect, passkey, updates]) {
       assert.equal((tool?._meta as { ui?: { resourceUri?: string } })?.ui?.resourceUri,
-        "ui://granttap/connection/v5.html");
+        "ui://granttap/connection/v6.html");
     }
     const result = await client.callTool({ name: "connection_status", arguments: {} });
     assert.equal((result.structuredContent as { status: string }).status, "disconnected");
-    const resource = await client.readResource({ uri: "ui://granttap/connection/v5.html" });
+    const resource = await client.readResource({ uri: "ui://granttap/connection/v6.html" });
     const panel = resource.contents[0] as { mimeType?: string; text?: string };
     assert.equal(panel.mimeType, "text/html;profile=mcp-app");
-    assert.match(panel.text ?? "", /Add another device/);
+    assert.match(panel.text ?? "", /Add another phone/);
     assert.match(panel.text ?? "", /Refresh status/);
   } finally {
     await client.close();

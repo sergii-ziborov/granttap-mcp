@@ -4,8 +4,9 @@ import { fileURLToPath } from "node:url";
 import { Script } from "node:vm";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { CARD_SCRIPTS } from "../../mcp-tools/connect/widget";
 
-const asset = (name: string) => readFileSync(new URL(`../${name}`, import.meta.url), "utf8");
+const asset = (name: string) => readFileSync(new URL(`../card/${name}`, import.meta.url), "utf8");
 async function fixture(t: { after: (fn: () => void) => void }, silent = false) {
   const dom = new JSDOM(asset("widget.html"), { runScripts: "outside-only", url: "https://widget.example" });
   t.after(() => dom.window.close());
@@ -36,8 +37,8 @@ async function fixture(t: { after: (fn: () => void) => void }, silent = false) {
       source: window as unknown as Window, origin: "https://host.example", data: failure ? { jsonrpc: "2.0", id: data.id, error: { message: "failed" } } : { jsonrpc: "2.0", id: data.id, result },
     })));
   }) as typeof window.postMessage;
-  for (const name of ["bridge.js", "view.js"]) {
-    new Script(asset(name), { filename: fileURLToPath(new URL(`../${name}`, import.meta.url)) })
+  for (const name of CARD_SCRIPTS) {
+    new Script(asset(name), { filename: fileURLToPath(new URL(`../card/${name}`, import.meta.url)) })
       .runInContext(dom.getInternalVMContext());
   }
   const settle = () => new Promise<void>(resolve => setImmediate(resolve));
@@ -51,7 +52,7 @@ test("widget initializes, checks status, and requires explicit reconnect confirm
   const ui = await fixture(t);
   assert.deepEqual(ui.calls.map(x => x.name), ["connection_status"]);
   assert.equal(ui.el("status").textContent, "Not paired");
-  assert.equal(ui.el("connect").textContent, "Add a device");
+  assert.equal(ui.el("connect").textContent, "Add a phone");
   ui.button("connect").click();
   await ui.settle();
   assert.equal(ui.calls.at(-1)?.name, "connect");
@@ -59,16 +60,17 @@ test("widget initializes, checks status, and requires explicit reconnect confirm
   ui.button("refresh").click();
   await ui.settle();
   assert.match(ui.el("phones").textContent || "", /iPhone/);
-  assert.equal(ui.el("connect").textContent, "Add another device");
+  assert.equal(ui.el("connect").classList.contains("hidden"), true);
+  assert.equal(ui.el("add-device").textContent, "Add another phone");
   assert.equal(ui.el("reconnect").classList.contains("hidden"), false);
-  ui.button("connect").click();
+  ui.button("add-device").click();
   assert.equal(ui.el("confirm").classList.contains("hidden"), false);
   ui.button("confirm-reconnect").click();
   await ui.settle();
   assert.equal(ui.calls.at(-1)?.name, "reconnect");
   assert.equal((ui.calls.at(-1)?.arguments as { confirmed: boolean }).confirmed, true);
   assert.equal((ui.calls.at(-1)?.arguments as { mode: string }).mode, "add_device");
-  ui.button("connect").click();
+  ui.button("add-device").click();
   ui.button("cancel").click();
   assert.equal(ui.el("confirm").classList.contains("hidden"), true);
   ui.button("reconnect").click();
@@ -122,7 +124,7 @@ test("widget clears secrets when paired or expired and ignores foreign messages"
   ui.window.dispatchEvent(new ui.window.MessageEvent("message", {
     source: null, data: { jsonrpc: "2.0", method: "ui/notifications/tool-result", params: { structuredContent: { status: "connected" } } },
   }));
-  assert.equal(ui.el("status").textContent, "Waiting for a device");
+  assert.equal(ui.el("status").textContent, "Waiting for a phone to scan the QR");
   ui.set({ status: "paired", providers: [{ id: "codex", detail: "<script>attack</script>" }] });
   ui.button("refresh").click();
   await ui.settle();
@@ -200,8 +202,8 @@ test("compatibility tool calls remain usable when the host also initializes MCP 
       data: { jsonrpc: "2.0", id: data.id, result: { protocolVersion: "2026-01-26", hostCapabilities: { serverTools: {} } } },
     })));
   }) as typeof dom.window.postMessage;
-  for (const name of ["bridge.js", "view.js"]) {
-    new Script(asset(name), { filename: fileURLToPath(new URL(`../${name}`, import.meta.url)) })
+  for (const name of CARD_SCRIPTS) {
+    new Script(asset(name), { filename: fileURLToPath(new URL(`../card/${name}`, import.meta.url)) })
       .runInContext(dom.getInternalVMContext());
   }
   await new Promise<void>(resolve => setImmediate(resolve));
@@ -228,9 +230,9 @@ test("pending pairing refreshes while visible and host notifications update the 
     source: ui.window as unknown as Window, origin, data: { jsonrpc: "2.0", method, params },
   }));
   notify("ui/notifications/tool-result", { structuredContent: { status: "connected", phoneLastSeenAt: Date.now() } }, "https://foreign.example");
-  assert.equal(ui.el("status").textContent, "Waiting for a device");
+  assert.equal(ui.el("status").textContent, "Waiting for a phone to scan the QR");
   notify("ui/notifications/tool-result", { structuredContent: { status: "connected", phoneLastSeenAt: Date.now(), phones: [{ name: "iPhone", status: "seen", lastSeenAt: Date.now() }] } });
-  assert.equal(ui.el("status").textContent, "Last confirmed activity");
+  assert.equal(ui.el("status").textContent, "Connected · iPhone is active now");
   assert.match(ui.el("phones").textContent || "", /iPhone/);
   assert.equal(ui.el("phones-empty").classList.contains("hidden"), true);
   const connectedCount = ui.calls.length;
@@ -259,7 +261,7 @@ test("service-disabled updates remain disabled after refresh restores the other 
   ui.set({ status: "paired", providers: [], runtimeUpdates: { enabled: false, lockedByEnvironment: true } });
   ui.button("refresh").click(); await ui.settle();
   assert.equal(ui.el("automatic-updates").hasAttribute("disabled"), true);
-  assert.match(ui.el("updates-detail").textContent || "", /Disabled by service configuration/);
+  assert.match(ui.el("updates-detail").textContent || "", /Turned off by this computer.s service settings/);
   const before = ui.calls.length; ui.button("automatic-updates").click(); await ui.settle();
   assert.equal(ui.calls.length, before);
   assert.equal(ui.el("refresh").hasAttribute("disabled"), false);

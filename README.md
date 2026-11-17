@@ -150,7 +150,9 @@ Every phone or iPad that scanned a QR for a computer keeps a key there until som
 debug installs pile up. In the app, **Devices → a computer → Phones** lists each phone with its name or label,
 **This iPhone**, and when it last reached the computer, and removes one (swipe or context menu), several, or
 every phone not seen for 30 days. Removing the phone in use is its own confirmed action, **Unpair this
-phone**, and the last phone always stays. A removed phone stops receiving from the computer at once, in every
+phone**, and the last phone always stays. On the computer, the GrantTap connection card in Claude, Codex, Grok
+Build or Cursor (`connection_status`) lists the same phones with **Remove** on each and **Remove N** for those
+not seen for 30 days; a removal there is confirmed on the card and then with a yes on a phone (`remove_phones`). A removed phone stops receiving from the computer at once, in every
 running GrantTap process, without a restart; it needs a new QR to pair again. Removing the first pairing hands
 its place to the phone heard from most recently.
 
