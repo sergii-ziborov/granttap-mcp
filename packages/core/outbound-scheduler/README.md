@@ -41,8 +41,11 @@ a requester retain the complete authorized recipient set. Every explicit target
 passes the pairing and controller authorization checks. Routing never deletes a
 pairing or changes approval policy.
 
-Requested image chunks retain their local scheduling priority through task
-encryption and precede background transcript backfill. The local `urgent` send
+Answers a phone waits on (image chunks, a chat's changes, a commit's result)
+retain their local scheduling priority through task encryption and precede
+background transcript backfill. Queued behind a backed-up upload, a chat's
+changes once arrived after the phone had stopped waiting, or were dropped as a
+superseded snapshot without a word. The local `urgent` send
 hint is never serialized into relay routing metadata and does not request APNs.
 The image-priority test receives and decrypts both layers and verifies ordering
 while preserving every background frame and the existing six-millisecond pace.

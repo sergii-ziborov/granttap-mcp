@@ -33,6 +33,13 @@ not send `confirmWhileWorking: true`. Otherwise the paths not yet staged are add
 staged work stays staged and out of the commit. The repository's hooks run; a hook's refusal is
 `failed`. Nothing is pushed, and no option bypasses hooks or signing.
 
-Tests live in `tests/`, against real temporary repositories.
+Both answers travel in the relay queue's control lane, like a picture's chunks, ahead of catalogs,
+Mesh snapshots and load reports. In 0.8.190 they waited among those replaceable snapshots: on a
+computer whose upload was backed up they reached the phone after it had stopped waiting, or were
+dropped for newer traffic, and the phone's sheet only spun.
+
+Tests live in `tests/`, against real temporary repositories. `phone-round-trip.test.ts` carries a
+listing and a commit from a phone-role client through a loopback relay, both encryption layers and
+the monitor's routing, while the computer's upload is backed up with load reports.
 
 Licensed under the GrantTap Commercial Source License. See the repository root `LICENSE`.

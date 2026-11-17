@@ -110,8 +110,14 @@ export class OutboundFrameQueue {
   }
 }
 
-export const priorityControlPayload = (type: Payload["type"]) => type === "hello" || type === "session.image.chunk" || type.startsWith("approval.")
-  || type.startsWith("config.") || type.startsWith("pairing.") || type === "session.key.grant"
+/**
+ * Answers a phone waits on go here, never among replaceable snapshots: a snapshot can be dropped for
+ * newer traffic, and an answer behind a backed-up upload arrives after the phone stopped waiting.
+ */
+const PHONE_ANSWERS = new Set<Payload["type"]>(["session.image.chunk", "session.changes.result", "session.commit.result"]);
+
+export const priorityControlPayload = (type: Payload["type"]) => type === "hello" || PHONE_ANSWERS.has(type)
+  || type.startsWith("approval.") || type.startsWith("config.") || type.startsWith("pairing.") || type === "session.key.grant"
   || type === "delivery.receipt" || type === "sessions.status" || type === "machine.heartbeat" || type === "approvals.status";
 
 export async function sendEncryptedPayload(queue: OutboundFrameQueue, config: PeerConfig,
