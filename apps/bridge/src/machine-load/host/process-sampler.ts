@@ -221,6 +221,17 @@ export function resetSessionResolver(read?: EnvironmentReader, now?: () => numbe
   resolveSessions = createSessionResolver(read, now);
 }
 
+/**
+ * One listing for headless runs alone, nothing reported: a run a usage limit stops lives three or
+ * four seconds, so a new transcript asks for this at once (`started-by/live`).
+ */
+export async function captureStartedRunsNow(): Promise<number> {
+  const rows = await sampleProcessRows();
+  const sampledAt = Date.now();
+  const sessions = await resolveSessions(rows);
+  return captureStartedRuns(startedRunProcesses(rows, attributeByAncestry(rows), sessions, sampledAt));
+}
+
 export async function sampleAgentProcesses(): Promise<Record<string, AgentProcessLoad>> {
   const rows = await sampleProcessRows();
   const sampledAt = Date.now();

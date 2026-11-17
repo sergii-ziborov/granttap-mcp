@@ -32,6 +32,8 @@ import { publishedCatalog, rememberPublishedCatalog, resumePublishedChats,
   publishCatalogHeads, stopCatalogHeads } from "../../session-catalog";
 import { createMachineLoadPublisher } from "../../machine-load";
 import { startMachineLoadLoop } from "../../machine-load/host/loop";
+import { captureStartedRunsNow } from "../../machine-load/host/process-sampler";
+import { watchHeadlessRuns } from "../../started-by";
 import { scanSessionHistoryCooperatively, scanSessionsCooperatively, TOKEN_WINDOW_HOURS } from "../../sessions";
 import { boundedCatalogHistory, INTERVAL_MS, publishSessionEvents } from "../handlers/catalog";
 import { sweepAttachments } from "../handlers/receipts";
@@ -353,18 +355,23 @@ function monitorLoadLoop(client: RelayClient, leadership: ReturnType<typeof moni
   const publishMachineLoad = createMachineLoadPublisher({
     log: (line) => process.stderr.write(`[monitor] ${line}\n`),
   });
-  return startMachineLoadLoop({
+  // A headless run that lives seconds is looked at when its transcript appears, by the leader alone.
+  const runWatch = watchHeadlessRuns(captureStartedRunsNow);
+  const loop = startMachineLoadLoop({
     connected: () => client.isConnected,
     // Only the leader reports load. Every MCP server used to run this loop
     // too, each with the code of the day it started, and the phone flickered
     // between their answers.
-    publish: (status, intervalMs) => (leadership.acquire()
-      ? publishMachineLoad(client, status, intervalMs)
-      : Promise.resolve(undefined)),
+    publish: (status, intervalMs) => {
+      if (!leadership.acquire()) { runWatch.stop(); return Promise.resolve(undefined); }
+      runWatch.start();
+      return publishMachineLoad(client, status, intervalMs);
+    },
     onError: (error) => {
       process.stderr.write(
         `[monitor] load report failed: ${error instanceof Error ? error.message : String(error)}\n`,
       );
     },
   });
+  return { ...loop, stop: () => { runWatch.stop(); loop.stop(); } };
 }

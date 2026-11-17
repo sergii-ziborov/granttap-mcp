@@ -5,6 +5,9 @@ catalogs. `index.ts` assembles and publishes the bounded wire payload,
 `host/process-sampler.ts` owns agent ancestry, `host/ps-reader.ts` reads operating-system
 CPU time and RSS, `mcp/scan-cost.ts` retains provider discovery cost, and `host/loop.ts`
 runs a two-second active / thirty-second idle cadence from cached session status.
+`captureStartedRunsNow` lists processes once for headless runs alone and reports
+nothing; a new provider transcript asks for it, since a run a usage limit stops can
+end between two samples ([chats started by another chat](../started-by/README.md)).
 
 `command-process/history.ts` hashes process command fingerprints and uses
 the provider's existing call/result timestamps to match one newly started

@@ -3,5 +3,7 @@ export { headlessRun, headlessTargets, lineageAgent, lineageText, promptLead, ty
 export { createClaudeLineageCalls, createCodexLineageCalls, type LineageCall, type LineageCalls, type LineageFact } from "./facts";
 export { attachStartedBy, startedByParents, transcriptParent } from "./attach";
 export { captureStartedRuns, startedRunProcesses } from "./capture";
+export { folderParents } from "./folders";
+export { watchHeadlessRuns, type HeadlessRunWatch } from "./live";
 export { startedByLink, startedChildSessionIds, type StartedBy, type StartedByLink } from "./links";
 export { childrenLast, inheritsParentMesh, parentPlacement, startedChildrenProjects, type MeshPlacement } from "./mesh";

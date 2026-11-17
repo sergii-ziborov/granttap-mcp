@@ -37,6 +37,19 @@ inherited from a chat further up started that provider, not this run. A run
 with no provider above it counts when exactly one chat is named. Nothing else
 read from a process is logged or kept.
 
+**Short runs** (`live/`). A run a usage limit stops lives three or four
+seconds, less than samples take to come round (every 2 s while chats work,
+every 30 s while none does). On macOS the leading monitor also watches the
+providers' session folders, in one stream per folder tree: a new transcript (a
+Codex `rollout-*.jsonl`, a Claude chat's `<id>.jsonl` but no subagent's, a Grok
+session's `chat_history.jsonl`) made in the last minute asks at once for one
+listing of the provider processes, which captures runs as above and reports
+nothing. A provider writes it about a second after its run starts. Listings are
+single-flight: transcripts that appear during one ask for one more after it,
+however many they are, so a batch of hundreds of runs costs at most one listing
+per run and nothing while no transcript appears. Only file names and creation
+times are read. A monitor that stops leading stops watching.
+
 **Joined** (`attach.ts`, `links.ts`). The run's process does not say which
 session it writes, so the run waits in `started-by.json` in the config
 directory (`runs`, at most 256, a day at most) until the catalog shows a
@@ -121,6 +134,8 @@ computer, two candidate parents), publishing and the stored links, and the
 Mesh rules. `folders/tests/` covers matching by folder on a course's real shapes
 (`lessonart.ts`: a script written then run detached, a Python batch, a Grok
 worker): two chats naming one folder, a checkout or a folder inside one, runs
-outside the window, and the catalog that results.
+outside the window, and the catalog that results. `live/tests/` covers the
+watch, and on macOS a real run that lives 1.6 s, caught while it lives and
+joined to its session.
 
 Licensed under the GrantTap Commercial Source License. See the repository root `LICENSE`.
