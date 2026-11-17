@@ -230,7 +230,9 @@ export class RelayClient {
     }
     const peers = this.cfg.extraPeerPublicKeys ?? [];
     if (peerPublicKey !== this.cfg.peerPublicKey && !peers.includes(peerPublicKey)) {
-      if (peers.length >= 16) throw new Error("controller device limit reached");
+      // A phone removed or evicted on disk no longer holds one of the sixteen places; the gate already
+      // keeps it from every send, so it is only left out of the count.
+      if (peers.filter(key => this.peerIsAllowed(key)).length >= 16) throw new Error("controller device limit reached");
       this.cfg.extraPeerPublicKeys = [...peers, peerPublicKey];
       // The relay holds no state for the new phone yet.
       this.retainedSent.forget();

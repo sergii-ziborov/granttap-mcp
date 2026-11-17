@@ -52,20 +52,44 @@ export function confirmPendingController(room: string, peerPublicKey: string, no
   return true;
 }
 
-/** Every machine-side RelayClient uses this before parsing or sending a payload. */
+function liveRoomConfig(config: PeerConfig): PeerConfig | null {
+  try {
+    const live = JSON.parse(readFileSync(machineConfigPath(), "utf8")) as PeerConfig;
+    return live.room === config.room && live.myPublicKey === config.myPublicKey ? live : null;
+  } catch { return null; }
+}
+
+/**
+ * Every machine-side RelayClient uses this before parsing or sending a payload. The file is read on each
+ * call, so a phone removed on disk stops receiving at once, the first pairing included: the primary this
+ * process started with stays trusted until this room's file names another primary and no longer lists it.
+ */
 export function controllerPeerGate(config: PeerConfig, now = Date.now): (peerPublicKey: string) => boolean {
   return (peerPublicKey) => {
-    if (config.role !== "machine" || peerPublicKey === config.peerPublicKey) return true;
-    try {
-      const live = JSON.parse(readFileSync(machineConfigPath(), "utf8")) as PeerConfig;
-      if (live.room !== config.room || live.myPublicKey !== config.myPublicKey
-        || !live.extraPeerPublicKeys?.includes(peerPublicKey)) return false;
-    } catch { return false; }
+    if (config.role !== "machine") return true;
+    const live = liveRoomConfig(config);
+    if (!live) return peerPublicKey === config.peerPublicKey;
+    if (peerPublicKey === live.peerPublicKey) return true;
+    if (!live.extraPeerPublicKeys?.includes(peerPublicKey)) return false;
     const pending = loadStrict();
     if (pending === null) return false;
     const record = pending.find((item) => item.room === config.room && item.peerPublicKey === peerPublicKey);
     return record === undefined || record.expiresAt > now();
   };
+}
+
+/** A QR shown for this key is still open: its phone may not have scanned it yet. */
+export function pendingControllerOpen(room: string, peerPublicKey: string, now = Date.now()): boolean {
+  return loadStrict()?.some((item) => item.room === room && item.peerPublicKey === peerPublicKey
+    && item.expiresAt > now) === true;
+}
+
+/** Removed keys leave the enrollment journal too; the journal itself stays, so extras remain verifiable. */
+export function forgetPendingControllers(room: string, peerPublicKeys: readonly string[]): void {
+  const pending = loadStrict();
+  if (pending === null) return;
+  const remaining = pending.filter((item) => item.room !== room || !peerPublicKeys.includes(item.peerPublicKey));
+  if (remaining.length !== pending.length) save(remaining);
 }
 
 /** Expired, unclaimed QR keys cannot consume every controller slot forever. */

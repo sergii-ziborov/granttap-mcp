@@ -2,9 +2,13 @@ import { z } from 'zod';
 import { CodingAgent } from '../primitives';
 
 const identifier = z.string().trim().min(1).max(160);
+/** sha256 of the phone's public key, hex: names a phone without sending its key. */
+export const PairedPhoneId = z.string().regex(/^[a-f0-9]{64}$/);
+export const PHONE_ACTIONS = ['phones-remove', 'phones-remove-stale', 'phones-unpair-self'] as const;
 export const DeviceManagementAction = z.enum([
   'status', 'clear-cache', 'runtime-update', 'runtime-install', 'runtime-restart',
   'provider-login', 'provider-login-code', 'provider-login-cancel', 'provider-restart', 'provider-update',
+  ...PHONE_ACTIONS,
 ]);
 export const DeviceManagementRequest = z.object({
   type: z.literal('device.manage'),
@@ -16,8 +20,18 @@ export const DeviceManagementRequest = z.object({
   interruptActiveTasks: z.boolean().optional(),
   // An authorization code is ephemeral input to the native CLI, never a chat message.
   code: z.string().min(1).max(4_096).optional(),
+  /** `phones-remove`: the other phones to remove. */
+  phoneIds: z.array(PairedPhoneId).min(1).max(32).optional(),
+  /** `phones-remove-stale`: remove the other phones idle for at least this many days. */
+  notSeenForDays: z.number().int().min(1).max(3_650).optional(),
   createdAt: z.number().finite(),
 }).strict().superRefine((value, ctx) => {
+  if ((value.action === 'phones-remove') !== (value.phoneIds != null)) {
+    ctx.addIssue({ code: 'custom', path: ['phoneIds'], message: 'phones-remove names its phones, and only it does' });
+  }
+  if ((value.action === 'phones-remove-stale') !== (value.notSeenForDays != null)) {
+    ctx.addIssue({ code: 'custom', path: ['notSeenForDays'], message: 'phones-remove-stale names its days, and only it does' });
+  }
   if (value.action !== 'status' && !value.computerId) {
     ctx.addIssue({ code: 'custom', path: ['computerId'], message: 'A mutation requires the observed computer identity' });
   }
@@ -63,6 +77,18 @@ export const RuntimeUpdateHold = z.object({
   /** The same as one readable sentence. */
   summary: z.string().max(1_000),
 });
+/** One phone or iPad key this computer accepts. Times are milliseconds; absent means unknown. */
+export const PairedPhoneEntry = z.object({
+  id: PairedPhoneId,
+  label: z.string().regex(/^[a-f0-9]{6}$/),
+  name: z.string().min(1).max(80).optional(),
+  thisPhone: z.boolean(),
+  primary: z.boolean(),
+  addedAt: z.number().finite().optional(),
+  lastSeenAt: z.number().finite().optional(),
+}).strict();
+export type PairedPhoneEntry = z.infer<typeof PairedPhoneEntry>;
+
 export const DeviceManagementSnapshot = z.object({
   computerId: identifier, computerName: z.string().min(1).max(200), observedAt: z.number().finite(),
   runtimeVersion: z.string().min(1).max(80), selectedRuntimeVersion: z.string().max(80).optional(),
@@ -72,6 +98,8 @@ export const DeviceManagementSnapshot = z.object({
   runtimeUpdateHold: RuntimeUpdateHold.optional(),
   automaticUpdatesEnabled: z.boolean(), runtimeUpdateSupported: z.boolean(), runtimeRestartSupported: z.boolean(),
   cache: z.array(DeviceCacheCategory).max(12), providers: z.array(DeviceProviderState).max(4),
+  /** Absent from a computer whose MCP predates phone management (0.8.187 and older). */
+  phones: z.array(PairedPhoneEntry).max(32).optional(),
 });
 export type DeviceManagementSnapshot = z.infer<typeof DeviceManagementSnapshot>;
 
@@ -91,5 +119,6 @@ export const DeviceManagementResult = z.object({
   phase: z.enum(['running', 'completed', 'failed', 'waiting']),
   message: z.string().max(512), createdAt: z.number().finite(),
   snapshot: DeviceManagementSnapshot.optional(), login: ProviderLoginProgress.optional(),
+  removedPhoneIds: z.array(PairedPhoneId).max(32).optional(),
 });
 export type DeviceManagementResult = z.infer<typeof DeviceManagementResult>;

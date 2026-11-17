@@ -7,6 +7,8 @@ type PresenceState = {
   phoneLastSeenAt?: number;
   controllers?: Record<string, number>;
   names?: Record<string, string>;
+  /** When this computer authorized each phone key; unknown for keys added before this was recorded. */
+  added?: Record<string, number>;
 };
 
 function presencePath(): string {
@@ -50,6 +52,28 @@ export function recordControllerName(peerPublicKey: string, value: string): bool
   const bounded = Object.fromEntries(Object.entries(names).slice(-32));
   writePrivateFile(presencePath(), JSON.stringify({ ...previous, names: bounded }));
   return true;
+}
+
+export function readControllerAddedAt(peerPublicKey: string): number | null {
+  const at = readPresence().added?.[peerPublicKey];
+  return typeof at === "number" && Number.isFinite(at) ? at : null;
+}
+
+/** Remember when a phone key was authorized, so a phone that has not spoken yet is not taken for an old one. */
+export function recordControllerAdded(peerPublicKey: string, at = Date.now()): void {
+  const previous = readPresence();
+  const added = Object.fromEntries(Object.entries({ ...previous.added, [peerPublicKey]: at }).slice(-32));
+  writePrivateFile(presencePath(), JSON.stringify({ ...previous, added }));
+}
+
+/** A removed phone leaves no name, time or activity behind. */
+export function forgetControllers(peerPublicKeys: readonly string[]): void {
+  if (peerPublicKeys.length === 0) return;
+  const previous = readPresence();
+  const without = <T>(map: Record<string, T> | undefined) => map
+    && Object.fromEntries(Object.entries(map).filter(([key]) => !peerPublicKeys.includes(key)));
+  writePrivateFile(presencePath(), JSON.stringify({ ...previous, controllers: without(previous.controllers),
+    names: without(previous.names), added: without(previous.added) }));
 }
 
 export function hasControllerPresence(): boolean {

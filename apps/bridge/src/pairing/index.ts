@@ -17,9 +17,10 @@ import {
 } from "../config";
 import type { PeerConfig } from "../../../../packages/core/relay-client";
 import type { PairingJoin } from "../../../../packages/protocol/messages/pairing-join";
-import { clearPhoneSeen } from "./presence";
-import { prunePendingControllers, rememberPendingController } from "./controllers";
+import { clearPhoneSeen, recordControllerAdded } from "./presence";
+import { prunePendingControllers } from "./controllers";
 import { applyNetworkRoute } from "../device-network/settings";
+import { admitPhoneKey, evictionFor } from "../paired-phones";
 
 export const DEFAULT_RELAY = DEFAULT_RELAY_URL;
 export const PAIRING_CODE_TTL_MINUTES = 15;
@@ -180,6 +181,7 @@ export function applyPairingJoin(payload: PairingJoin): PairingJoinResult {
     peerPublicKey: nextMachine.myPublicKey,
   });
   clearPhoneSeen();
+  recordControllerAdded(payload.phonePublicKey);
   return "adopted";
 }
 export async function createOneTimePairing(
@@ -194,17 +196,20 @@ export async function createOneTimePairing(
   }
   let { machineCfg, phoneCfg } = existing ?? createPairing(relayUrl);
   if (existing) machineCfg = prunePendingControllers(machineCfg);
-  if (existing && options.addController) {
-    const extra = machineCfg.extraPeerPublicKeys ?? [];
-    if (extra.length >= 16) throw new Error("This computer has reached its controller device limit.");
+  // The saved phone half stops being the first pairing once that phone is removed; offering it again would
+  // pair a phone this computer no longer accepts, so a reconnect then enrolls a new key instead.
+  const addController = existing != null
+    && (options.addController === true || phoneCfg.myPublicKey !== machineCfg.peerPublicKey);
+  if (addController) {
+    evictionFor(machineCfg);
     const keys = generateKeyPair();
     phoneCfg = {
       ...phoneCfg,
+      peerPublicKey: machineCfg.myPublicKey,
       senderId: randomId(8),
       myPublicKey: keys.publicKey,
       mySecretKey: keys.secretKey,
     };
-    machineCfg = { ...machineCfg, extraPeerPublicKeys: [...extra, keys.publicKey] };
   }
   const mailboxId = randomId(16);
   const transferKey = generateTransferKey();
@@ -239,10 +244,10 @@ export async function createOneTimePairing(
     saveConfig(machineConfigPath(), machineCfg);
     saveConfig(phonePairingPath(), phoneCfg);
     clearPhoneSeen();
-  } else if (options.addController) {
-    rememberPendingController(machineCfg.room, phoneCfg.myPublicKey,
+    recordControllerAdded(phoneCfg.myPublicKey);
+  } else if (addController) {
+    machineCfg = admitPhoneKey(machineCfg.room, phoneCfg.myPublicKey,
       Date.now() + PAIRING_CODE_TTL_MINUTES * 60_000);
-    saveConfig(machineConfigPath(), machineCfg);
   }
 
   const installHooks = options.installHooks ?? process.env.GRANTTAP_SKIP_HOOKS !== "1";

@@ -21,6 +21,7 @@ import { ownedProviderProcesses } from '../reply/process';
 import { prepareRuntimeRestart, stopOwnedChildren } from './runtime-restart';
 import { approvalsStatus } from '../approvals/state';
 import { inspectTool, updateTool } from '../tools/updater';
+import { phonesFor } from '../paired-phones';
 
 export const runtimeRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 const runtimeEpoch = randomUUID();
@@ -58,7 +59,8 @@ async function availableRuntimeVersion(): Promise<string | undefined> {
   return version && newerVersion(version, runtimeVersion(runtimeRoot)) ? version : undefined;
 }
 
-export async function managementSnapshot(): Promise<DeviceManagementSnapshot> {
+/** `requester` is the phone asking; the phones it is shown mark it as "this phone". */
+export async function managementSnapshot(requester?: string): Promise<DeviceManagementSnapshot> {
   const observedAt = Date.now();
   const directory = join(configDir(), 'runtime-updates');
   const selected = readState(directory);
@@ -76,7 +78,12 @@ export async function managementSnapshot(): Promise<DeviceManagementSnapshot> {
     ...(hold ? { runtimeUpdateHold: { ...hold, summary: holdSentence(hold).slice(0, 1_000) } } : {}),
     automaticUpdatesEnabled: automaticUpdatesAllowed(directory),
     runtimeUpdateSupported: runtimeRoot.includes('/node_modules/'), runtimeRestartSupported: runtimeRestartSupported(),
-    cache: (await computerCache(runtimeRoot)).map(({ paths: _paths, ...category }) => category), providers };
+    cache: (await computerCache(runtimeRoot)).map(({ paths: _paths, ...category }) => category), providers,
+    ...(requester ? { phones: readPhones(requester) } : {}) };
+}
+
+function readPhones(requester: string): DeviceManagementSnapshot['phones'] {
+  try { return phonesFor(requester); } catch { return []; }
 }
 
 export async function updateRuntime(): Promise<string> {

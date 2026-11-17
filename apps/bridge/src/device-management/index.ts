@@ -6,6 +6,7 @@ import { observedComputerId } from '../mesh/identity/computer';
 import { clearComputerCache } from './cache';
 import { providerLogins } from './login';
 import { managementSnapshot, maintenanceIdle, prepareRestart, restartProvider, restartRuntime, runtimeRoot, updateRuntime, updateProvider } from './maintenance';
+import { isPhoneAction, planPhoneChange } from '../paired-phones';
 
 type Send = (result: DeviceManagementResult) => Promise<void>;
 type Entry = { fingerprint: string; result?: DeviceManagementResult; pending?: Promise<void>; at: number; ttl: number };
@@ -42,14 +43,16 @@ export async function handleDeviceManagement(client: RelayClient, request: Devic
   const entry: Entry = { fingerprint, at: Date.now(), ttl: request.action === 'status' ? 60_000 : 15 * 60_000 };
   requests.set(key, entry);
   const report: Send = async result => { entry.result = result; await send(result); };
-  entry.pending = execute(request, client.room + ':' + peer, computerId, report)
+  entry.pending = execute(request, { room: client.room, peer }, computerId, report)
     .catch(async () => { /* disconnected phones recover with a new status request */ })
     .finally(() => { entry.pending = undefined; });
   // Commands run independently of message delivery; repeated taps reuse their operation.
   return true;
 }
 
-async function execute(request: DeviceManagementRequest, scope: string, computerId: string, send: Send): Promise<void> {
+async function execute(request: DeviceManagementRequest, origin: { room: string; peer: string }, computerId: string,
+  send: Send): Promise<void> {
+  const scope = origin.room + ':' + origin.peer;
   const base = { type: 'device.manage.result' as const, requestId: request.requestId, computerId,
     action: request.action, agent: request.agent };
   const result = (phase: DeviceManagementResult['phase'], message: string): DeviceManagementResult =>
@@ -72,7 +75,16 @@ async function execute(request: DeviceManagementRequest, scope: string, computer
     await send(result('running', request.action === 'status' ? 'Reading this computer…' : 'Working on this computer…'));
     if (request.action === 'status') providerLogins.replay(scope);
     let message = 'Computer status refreshed.';
-    if (request.action === 'clear-cache') {
+    let removedPhoneIds: string[] | undefined;
+    if (isPhoneAction(request.action)) {
+      const change = planPhoneChange(request, origin.peer, origin.room);
+      if (change.selfOutcome) {
+        // Once its key is gone this phone can no longer be answered, so it hears first and the key goes after.
+        await send({ ...result('completed', change.selfOutcome.message), removedPhoneIds: change.selfOutcome.removedPhoneIds });
+        change.commit(); return;
+      }
+      ({ message, removedPhoneIds } = change.commit());
+    } else if (request.action === 'clear-cache') {
       if (!maintenanceIdle()) throw Error('Finish active requests and sign-in before clearing computer caches.');
       const bytes = await clearComputerCache(runtimeRoot);
       message = `Cleared ${(bytes / 1024 / 1024).toFixed(1)} MB of disposable cache.`;
@@ -88,7 +100,8 @@ async function execute(request: DeviceManagementRequest, scope: string, computer
       await send(result('waiting', 'Restart requested. Waiting for MCP to reconnect…'));
       restartRuntime(); return;
     }
-    await send({ ...result('completed', message), snapshot: await managementSnapshot() });
+    await send({ ...result('completed', message), snapshot: await managementSnapshot(origin.peer),
+      ...(removedPhoneIds ? { removedPhoneIds } : {}) });
   } catch (error) {
     await send(result('failed', error instanceof Error ? error.message.slice(0, 512) : 'This action failed on the computer.'));
   } finally { if (exclusive) mutating = false; }

@@ -23,6 +23,10 @@ claim a provider can block an action when it cannot.
 `device/controller-pairing.ts` lets an authenticated controller ask its linked
 computer for another one-time controller credential. The reply is sealed only
 to the requester. It is device-network pairing, not Project membership.
+`device/management.ts` carries `device.manage` and its `device.manage.result`, the phone's controls for
+one computer. Its status snapshot lists the computer's paired phones (`phones`, by `id` = sha256 of the
+key, never the key), and `phones-remove`, `phones-remove-stale` and `phones-unpair-self` remove them;
+see `apps/bridge/src/paired-phones/README.md`.
 `mesh/knowledge/write.ts` carries a Task-bound human decision or correction and a
 separate Engine-confirmed result.
 `mesh/repositories/index.ts` carries `mesh.repository.query` and its

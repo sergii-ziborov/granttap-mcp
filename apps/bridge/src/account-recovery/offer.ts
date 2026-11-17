@@ -5,7 +5,9 @@ import { createPairing, DEFAULT_RELAY_URL, machineConfigPath, phonePairingPath,
 import { applyNetworkRoute } from "../device-network/settings";
 import { readNetworkSettings } from "../device-network/settings";
 import { parkedPairingHalves } from "../pairing";
-import { prunePendingControllers, rememberPendingController } from "../pairing/controllers";
+import { prunePendingControllers } from "../pairing/controllers";
+import { recordControllerAdded } from "../pairing/presence";
+import { admitPhoneKey, evictionFor } from "../paired-phones";
 
 export type RecoveryRequest = { id: string; phonePublicKey: string; expiresAt: number };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -27,13 +29,11 @@ export function createRecoveryOffer(request: RecoveryRequest, machineId: string)
   let { machineCfg, phoneCfg } = existing ?? createPairing(relayUrl);
   if (existing) {
     machineCfg = prunePendingControllers(machineCfg);
-    const extra = machineCfg.extraPeerPublicKeys ?? [];
-    if (extra.length >= 16) throw new Error("This computer has reached its controller device limit.");
+    evictionFor(machineCfg);
     const keys = generateKeyPair();
     phoneCfg = { ...phoneCfg, peerPublicKey: machineCfg.myPublicKey,
       senderId: randomId(8), myPublicKey: keys.publicKey,
       mySecretKey: keys.secretKey };
-    machineCfg = { ...machineCfg, extraPeerPublicKeys: [...extra, keys.publicKey] };
   }
   const routedPhone = applyNetworkRoute(phoneCfg);
   const ephemeral = generateKeyPair();
@@ -45,9 +45,9 @@ export function createRecoveryOffer(request: RecoveryRequest, machineId: string)
   if (!existing) {
     saveConfig(machineConfigPath(), machineCfg);
     saveConfig(phonePairingPath(), phoneCfg);
+    recordControllerAdded(phoneCfg.myPublicKey);
   } else {
-    rememberPendingController(machineCfg.room, phoneCfg.myPublicKey, request.expiresAt);
-    saveConfig(machineConfigPath(), machineCfg);
+    admitPhoneKey(machineCfg.room, phoneCfg.myPublicKey, request.expiresAt);
   }
   return JSON.stringify({ senderPublicKey: ephemeral.publicKey, ...box });
 }
