@@ -198,7 +198,7 @@ test("attachment transport budget accounts for double-sealed Cloudflare frames",
 });
 
 test("agent adapters preserve ids, classify risk, and map decisions", () => {
-  assert.equal(guessRisk("Bash", "rm -rf /tmp/example"), "high");
+  assert.equal(guessRisk("Bash", "rm -rf /Users/example/project"), "high");
   assert.equal(guessRisk("Read", undefined), "low");
   const claude = claudeToRequest({ tool_name: "Bash", tool_input: { command: "npm test" } });
   const codex = codexToRequest({
