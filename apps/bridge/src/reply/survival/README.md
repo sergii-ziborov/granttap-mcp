@@ -63,7 +63,8 @@ Task's turn (its transfer record is updated by the monitor that started it), a C
 live connection to the agent), a Codex desktop delivery in progress, a phone message waiting in memory
 behind a running turn of its chat, a pending approval or provider sign-in, a maintenance action, and an
 answer being sent. Windows keeps pipes and does not hand runs over. `GRANTTAP_RUN_SURVIVAL=0` on the
-service turns handing over off.
+service turns handing over off. A run that cannot be handed over stops holding the update once its process is gone or it
+showed no sign of work for thirty minutes (`../run-watch.ts`).
 
 Tests: `tests/adoption.test.ts` (a run left by a monitor that exited is taken over, delivered once,
 paused, cut off at its deadline; a run that ended while no monitor ran; a live monitor's run is left

@@ -1,4 +1,5 @@
 import type { ReplyResult } from "./payload/types";
+import { forgetDelivery, stalledDelivery, withinDelivery } from "./run-watch";
 import { currentSurvivor, survivableKey } from "./survival";
 
 /**
@@ -20,11 +21,15 @@ export function hasPendingDeliveries(): boolean { return inFlight.size > 0; }
 
 /**
  * The keys whose work a newer monitor could not take over: anything but one run another monitor can
- * adopt, with nothing queued in memory behind it (`../survival`). Each with when its wait began.
+ * adopt, with nothing queued in memory behind it (`../survival`). Each with when its wait began. Work
+ * whose provider process is gone, or that showed no sign of work for long (`run-watch.ts`), is left out:
+ * it would hold the update until its deadline, hours away, and never ends in this monitor otherwise.
  */
-export function blockingDeliveries(survivable: (key: string) => boolean = survivableKey): Array<{ key: string; since: number }> {
+export function blockingDeliveries(survivable: (key: string) => boolean = survivableKey,
+  stalled: (key: string, since: number) => string | undefined = stalledDelivery): Array<{ key: string; since: number }> {
   return [...inFlight.keys()].filter(key => !(depth.get(key) === 1 && survivable(key)))
-    .map(key => ({ key, since: startedAt.get(key) ?? Date.now() }));
+    .map(key => ({ key, since: startedAt.get(key) ?? Date.now() }))
+    .filter(({ key, since }) => stalled(key, since) === undefined);
 }
 
 export function hasBlockingDeliveries(): boolean { return blockingDeliveries().length > 0; }
@@ -50,12 +55,13 @@ function enqueue(key: string, start: () => Promise<ReplyResult | null>, since = 
   const previous = inFlight.get(key) ?? Promise.resolve(null);
   if (!inFlight.has(key)) startedAt.set(key, since);
   depth.set(key, (depth.get(key) ?? 0) + 1);
-  const settled = previous.then(start).finally(() => {
+  const settled = previous.then(() => withinDelivery(key, start)).finally(() => {
     const left = (depth.get(key) ?? 1) - 1;
     if (left > 0) depth.set(key, left); else depth.delete(key);
     if (inFlight.get(key) !== tracked) return;
     inFlight.delete(key);
     startedAt.delete(key);
+    forgetDelivery(key);
   });
   const tracked = settled.catch(() => null);
   inFlight.set(key, tracked);

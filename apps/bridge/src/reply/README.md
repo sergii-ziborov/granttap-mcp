@@ -15,6 +15,19 @@ A phone delivery's Claude, Codex or Grok run writes to files in a folder of its 
 survives a monitor restart; the next monitor takes it over and sends its answer
 ([`survival/`](survival/README.md)).
 
+`in-flight.ts` holds a chat's key until its run settles, which is when this monitor sees the provider
+process end or at the run's deadline (six hours for a phone run). `run-watch.ts` watches the provider
+processes started under each key (the key and any key around it, such as a moved Task's `transfer-…`
+around its provider's new-task key) and looks at the process table once a minute while any run. A
+runtime update stops counting a run (`blockingDeliveries`) whose process is gone, a zombie or its pid
+reused for two minutes, whose process exited without the run ending for two minutes, whose work is still
+pending ten minutes after its process ended, or whose process group wrote nothing and used under a second
+of processor time a minute for thirty minutes. The monitor log says so once per run: `A runtime update no
+longer waits for the run in chat … that started … min ago: <why>.` The run itself is left alone, and work
+that never started a provider process, such as a Codex desktop delivery, is never judged. Before this a
+moved Task's turn whose process went without its end being seen kept every update waiting until its
+deadline. Tests: [`tests/run-watch/stalled-run.test.ts`](tests/run-watch/stalled-run.test.ts).
+
 On POSIX, a managed provider command owns a process group. Phone pause and
 timeouts signal that group, so local descendants that remain in it are also
 requested to stop. The stop count records accepted signals, not confirmed exit

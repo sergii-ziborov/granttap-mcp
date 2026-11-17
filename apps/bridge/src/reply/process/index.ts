@@ -9,6 +9,7 @@ import { environmentProcessEnv, loadEnvironment } from "../../mesh/context/env";
 import type { ReplyResult } from "../payload/types";
 import { survivalEnabled, type RunParser } from "../survival";
 import { prepareSurvivableRun, type SurvivableRun } from "../survival/run";
+import { watchRunProcess, type RunWatch } from "../run-watch";
 
 function projectEnvForCwd(cwd?: string): NodeJS.ProcessEnv {
   if (!cwd) return {};
@@ -145,6 +146,8 @@ export function runProcess(
 function watchProvider(watched: Watched, resolve: (result: ReplyResult) => void): void {
   const { command, child, run, timeoutMs, admission } = watched;
   const untrack = watched.key ? trackProviderProcess(watched.key, child) : () => {};
+  // Lets a runtime update stop waiting for this run if its process goes without its end being seen here.
+  const watch = watchRunProcess(child.pid);
   const state = { stdout: "", stderr: "", done: false, admissionReported: false };
   const finish = (result: ReplyResult): void => {
     if (state.done) return;
@@ -153,6 +156,7 @@ function watchProvider(watched: Watched, resolve: (result: ReplyResult) => void)
     clearTimeout(startupTimer);
     clearInterval(poll);
     untrack();
+    watch.release();
     const answer = !result.ok && admission?.confirmed(state.stdout) ? { ...result, delivery: 'native' as const } : result;
     if (!run) { resolve(answer); return; }
     // A run another monitor delivers is handed over: this one sends nothing for it.
@@ -169,13 +173,14 @@ function watchProvider(watched: Watched, resolve: (result: ReplyResult) => void)
     signalOwnedProcess(child, "SIGKILL");
     finish({ ok: false, error: admission.timeoutMessage });
   }, admission.withinMs) : undefined;
-  const output = providerOutput(watched, state, finish, () => clearTimeout(startupTimer));
+  const output = providerOutput(watched, state, finish, () => clearTimeout(startupTimer), watch);
   const poll = run ? setInterval(output.readFiles, OUTPUT_POLL_MS) : undefined;
   child.stdout?.setEncoding('utf8');
   child.stderr?.setEncoding('utf8');
   child.stdout?.on("data", output.stdout);
   child.stderr?.on("data", output.stderr);
   child.on("error", (error) => finish({ ok: false, error: `${command}: ${error.message}` }));
+  child.on("exit", () => watch.exited());
   child.on("close", (code) => {
     output.readFiles();
     if (!state.done) finish(closedResult(watched, state, code));
@@ -192,10 +197,11 @@ function watchProvider(watched: Watched, resolve: (result: ReplyResult) => void)
 
 /** What the provider writes, read from its pipes or, for a survivable run, from its files. */
 function providerOutput(watched: Watched, state: { stdout: string; stderr: string; done: boolean; admissionReported: boolean },
-  finish: (result: ReplyResult) => void, admitted: () => void) {
+  finish: (result: ReplyResult) => void, admitted: () => void, watch: RunWatch) {
   const { command, child, run, admission } = watched;
   const stdout = (chunk: string) => {
     state.stdout += chunk;
+    watch.output();
     if (state.done || state.admissionReported || !admission?.confirmed(state.stdout)) return;
     state.admissionReported = true;
     admitted();
@@ -208,6 +214,7 @@ function providerOutput(watched: Watched, state: { stdout: string; stderr: strin
   };
   const stderr = (chunk: string) => {
     state.stderr += chunk;
+    watch.output();
     if (state.done || (admission && admission.confirmed(state.stdout))) return;
     const error = providerSignInFailure(command, state.stderr);
     if (error) { providerSignIns.refused(providerAgent(command)); signalOwnedProcess(child, 'SIGKILL'); finish({ ok: false, error }); }

@@ -45,6 +45,8 @@ provider run that cannot be handed over (a moved Task's turn, a Cursor conversat
 delivery, a turn not yet past acceptance or not yet confirmed by Grok), a phone message waiting in memory
 behind a running turn of its chat, an answer being sent, a pending approval, a provider sign-in, or a
 maintenance action.
+A run whose provider process is gone, or that showed no sign of work for thirty minutes, stops holding
+an update back, and the monitor log says so ([`../reply/run-watch.ts`](../reply/README.md)).
 
 | Bound | Value |
 | --- | --- |
