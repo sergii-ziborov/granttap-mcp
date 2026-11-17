@@ -4,6 +4,7 @@ import { registerConnectTool } from "../mcp-tools/connect";
 import { registerConnectionWidget } from "../mcp-tools/connect/widget";
 import { registerInteractionTools } from "../mcp-tools/interaction";
 import { registerMeshResource } from "../mcp-tools/mesh/resource";
+import { registerPhonesTool } from "../mcp-tools/phones";
 import { registerRoutingTool } from '../mcp-tools/routing';
 import { registerSignInTool } from "../mcp-tools/sign-in";
 import { packageVersion } from "../status/package-version";
@@ -22,6 +23,7 @@ export function createGrantTapServer(): McpServer {
   registerInteractionTools(server);
   registerSignInTool(server);
   registerRoutingTool(server);
+  registerPhonesTool(server);
   registerMeshResource(server);
   registerConnectionWidget(server);
   return server;

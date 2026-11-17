@@ -27,7 +27,14 @@ test("status is read-only; pending codes expire without exposing or rotating key
   assert.equal(state.snapshot().structuredContent.status, "paired");
   assert.equal(state.snapshot().structuredContent.roomPrefix, pair.machineCfg.room.slice(0, 8));
   assert.equal(JSON.stringify(state.snapshot().structuredContent).includes(pair.machineCfg.room), false);
-  assert.deepEqual(state.snapshot().structuredContent.phones, [{ name: "iPhone", status: "paired", lastSeenAt: null }]);
+  const [phone, ...others] = state.snapshot().structuredContent.phones;
+  assert.deepEqual(others, []);
+  assert.deepEqual({ ...phone, id: undefined, label: undefined },
+    { id: undefined, label: undefined, name: "iPhone", primary: true, status: "paired", lastSeenAt: null, addedAt: null });
+  assert.match(phone!.id, /^[a-f0-9]{64}$/);
+  assert.equal(phone!.label, phone!.id.slice(0, 6));
+  assert.equal(JSON.stringify(state.snapshot().structuredContent).includes(pair.machineCfg.peerPublicKey), false,
+    "a phone is named by a hash of its key, never the key");
   state.remember({ room: pair.machineCfg.room, expiresAt: 1000, pairingUri: "secret-test-uri", qrDataUrl: "secret-test-qr" });
   assert.equal(currentEnrollment()?.room, pair.machineCfg.room);
   const pending = state.snapshot(900);

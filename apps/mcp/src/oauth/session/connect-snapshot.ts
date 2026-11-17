@@ -9,7 +9,8 @@ import { computerId } from "../../../../bridge/src/mesh/identity/computer";
 import { isTerminalTaskState } from "../../../../bridge/src/mesh/admin/convergence";
 import { localMeshStore } from "../../../../bridge/src/mesh/local-remote/local";
 import { connectionRuntimeStatus } from "../../mcp-tools/connect/relay";
-import { isMachineConfigured, listPairedPhones, readOnlyMachineConfigPath } from "../../status/pairing-status";
+import { isMachineConfigured, listPairedPhones, readOnlyMachineConfigPath, type PhonePresence }
+  from "../../status/pairing-status";
 import { loadAccountLink } from "../../../../bridge/src/account-recovery/link";
 
 export type ConnectProvider = {
@@ -33,7 +34,7 @@ export type ConnectSnapshot = {
   machineId?: string;
   /** First 8 hex chars of the pairing room. Never the full id. */
   roomPrefix: string;
-  phones: ReturnType<typeof listPairedPhones>;
+  phones: PhonePresence[];
   providers: ConnectProvider[];
   relayStatus: "online" | "offline" | "unknown";
   mesh: ConnectMesh;
@@ -54,7 +55,7 @@ export function buildConnectSnapshot(clientName?: string): ConnectSnapshot {
     passkeyCapable: true,
     machineId: loadAccountLink()?.machineId,
     roomPrefix: room ? room.slice(0, 8) : "",
-    phones: listPairedPhones(runtime.phoneLastSeenAt),
+    phones: listPairedPhones(runtime.phoneLastSeenAt).map(({ name, status, lastSeenAt }) => ({ name, status, lastSeenAt })),
     providers: inspectAgentIntegrations()
       .filter((item): item is typeof item & { agent: ConnectProvider["id"] } =>
         item.agent === "codex" || item.agent === "claude" || item.agent === "cursor")

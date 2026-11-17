@@ -144,6 +144,36 @@ The Mac app can join the Account Mesh before the helper is present and links it
 when the installed helper becomes available. A one-time QR still provides direct
 device pairing without a passkey account.
 
+## Phones paired with a computer
+
+Every phone or iPad that scanned a QR for a computer keeps a key there until someone removes it, so test and
+debug installs pile up. In the app, **Devices → a computer → Phones** lists each phone with its name or label,
+**This iPhone**, and when it last reached the computer, and removes one (swipe or context menu), several, or
+every phone not seen for 30 days. Removing the phone in use is its own confirmed action, **Unpair this
+phone**, and the last phone always stays. A removed phone stops receiving from the computer at once, in every
+running GrantTap process, without a restart; it needs a new QR to pair again. Removing the first pairing hands
+its place to the phone heard from most recently.
+
+A computer accepts its first pairing plus 16 added phones. At the limit a new phone takes the place of the
+added phone idle longest, provided that phone has not reached the computer, and was not added, for 30 days;
+the first pairing, a phone used in the last 30 days and an open QR are never taken. When every place is in
+use the new phone is refused with a pointer to the Phones screen.
+
+The phone asks over the encrypted `device.manage` request it already uses for the computer's MCP and agent
+controls, and the answer goes only to the phone that asked:
+
+| Request | Fields | Answer |
+| --- | --- | --- |
+| `status` | — | `snapshot.phones`: `id` (sha256 of the phone key, 64 hex), `label` (its first 6 hex), `name` when the phone reported one, `thisPhone`, `primary`, `addedAt` and `lastSeenAt` in ms (absent when unknown). Absent from MCP 0.8.187 and older. |
+| `phones-remove` | `computerId`, `phoneIds` (1–32) | Removes those other phones; refused when the list holds the phone asking. |
+| `phones-remove-stale` | `computerId`, `notSeenForDays` (1–3650) | Removes every other phone not seen, and not added, for that many days. |
+| `phones-unpair-self` | `computerId` | Removes the phone asking, answered before its key goes; refused for the only phone. |
+
+A removal answers `device.manage.result` with `phase: "completed"`, `removedPhoneIds` and the updated
+`snapshot` (none after `phones-unpair-self`); a refusal answers `phase: "failed"` with the reason in
+`message`. An agent uses `remove_phones` instead, confirmed by the person on a phone. See
+[paired phones](apps/bridge/src/paired-phones/README.md).
+
 ## Mac, iPhone, iPad, and Apple Watch
 
 <p align="center">
@@ -610,15 +640,16 @@ trust.
 
 ## MCP contract
 
-`tools/list` returns exactly ten public tools:
+`tools/list` returns exactly eleven public tools:
 
 | Tool | Contract |
 | --- | --- |
 | `set_runtime_auto_update` | When the user asks, turn automatic GrantTap runtime updates on this computer on or off; saves the preference without restarting services or changing pairing, tasks, or provider policy, and returns the connection state |
-| `connection_status` | Read-only: saved pairing and paired phones by when each last reached this computer, QR expiry, relay observations, provider readiness, a newer runtime waiting to take over and why, and for the calling chat (Claude Code, Codex, Grok Build, Cursor) the phone messages queued behind its turn and its continuation after a subscription limit |
+| `connection_status` | Read-only: saved pairing and every paired phone with its id and when it last reached this computer, QR expiry, relay observations, provider readiness, a newer runtime waiting to take over and why, and for the calling chat (Claude Code, Codex, Grok Build, Cursor) the phone messages queued behind its turn and its continuation after a subscription limit |
 | `connect_with_passkey` | Link this computer to the user's GrantTap account so a signed-in phone can connect without a QR; returns a 15-minute granttap.com link, the passkey is entered only there, and existing QR pairings stay unchanged |
 | `connect` | Show the existing pairing on the connection card, or on an unpaired computer create a one-time QR shown only on the card |
 | `reconnect` | After explicit confirmation, show a one-time QR to reconnect or add an independent controller device while retaining the current room |
+| `remove_phones` | Ask the person to remove paired phones that are no longer used, by `notSeenForDays` and/or `phoneIds` from `connection_status`; nothing is removed without a yes on a phone, and the phone that answers, any phone heard from while the question is open, and the last phone stay |
 | `notify` | Send a non-blocking status of at most 2,000 characters that nobody answers, and/or one task-scoped Mesh event |
 | `ask_yes_no` | Ask a yes/no question and wait about three minutes for the explicit answer; a timeout is neither yes nor no |
 | `ask` | Ask an open question and wait about three minutes for typed or spoken text |

@@ -141,8 +141,8 @@ export async function askYesNoOutcome(
   question: string,
   timeoutMs = ASK_TIMEOUT_MS,
   scope?: TaskInteractionScope,
+  requestId = randomId(6),
 ): Promise<YesNoOutcome> {
-  const requestId = randomId(6);
   const decision = await requestApproval(
     loadConfig(machineConfigPath()),
     {

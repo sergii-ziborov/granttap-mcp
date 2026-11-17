@@ -70,13 +70,13 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   const tools = await client.listTools();
   assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
     "ask", "ask_yes_no", "connect", "connect_with_passkey", "connection_status", "notify", "offload_task", "reconnect",
-    "request_sign_in", "set_runtime_auto_update",
+    "remove_phones", "request_sign_in", "set_runtime_auto_update",
   ]);
   for (const tool of tools.tools) {
     assert.equal(tool.annotations?.readOnlyHint, tool.name === "connection_status");
     // A sign-in page is on the internet; everything else stays between this computer and the phone.
     assert.equal(tool.annotations?.openWorldHint, tool.name === "request_sign_in");
-    assert.equal(tool.annotations?.destructiveHint, tool.name === "reconnect");
+    assert.equal(tool.annotations?.destructiveHint, ["reconnect", "remove_phones"].includes(tool.name));
     assert.equal(tool.annotations?.idempotentHint, ["connection_status", "set_runtime_auto_update"].includes(tool.name));
   }
   const connectTool = tools.tools.find((tool) => tool.name === "connect");
@@ -85,6 +85,9 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   assert.equal(connectMeta?.ui?.resourceUri, "ui://granttap/connection/v5.html");
   const reconnectTool = tools.tools.find((tool) => tool.name === "reconnect");
   assert.deepEqual(Object.keys(reconnectTool?.inputSchema.properties ?? {}), ["confirmed", "mode"]);
+  const removePhones = tools.tools.find((tool) => tool.name === "remove_phones");
+  assert.deepEqual(Object.keys(removePhones?.inputSchema.properties ?? {}).sort(), ["notSeenForDays", "phoneIds"]);
+  assert.match(removePhones?.description ?? "", /answers yes on a phone/);
   const notifyTool = tools.tools.find((tool) => tool.name === "notify");
   assert.equal(
     (notifyTool?.inputSchema.properties?.message as { maxLength?: number })?.maxLength,

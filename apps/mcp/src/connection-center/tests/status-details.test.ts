@@ -6,6 +6,8 @@ import test, { type TestContext } from 'node:test';
 import { createGrantTapServer } from '../../http/create-server';
 import { connectInMemory, textResult } from '../../../../../tests/support/mcp-client';
 import { createPairing, machineConfigPath, saveConfig } from '../../../../bridge/src/config';
+import { recordPhoneSeen } from '../../../../bridge/src/pairing/presence';
+import { phoneId } from '../../../../bridge/src/paired-phones';
 import { writeLimitContinuationState } from '../../../../bridge/src/limit-continuation/store';
 import { setRuntimeAutoUpdate } from '../../../../bridge/src/runtime-updates';
 import { writeHoldState } from '../../../../bridge/src/runtime-updates/drain/state';
@@ -134,6 +136,21 @@ test('status names a newer runtime that waits, and why', async t => {
   assert.equal((await status()).structured.pendingUpdate, null, 'a release rolled back after a failed start is not offered');
 });
 
+test('status lists each phone with the id remove_phones takes, and says which ones look unused', async t => {
+  const f = fixture(t);
+  const extra = generateKeyPair().publicKey;
+  writeFileSync(join(f.root, 'pending-controllers.json'), '[]\n');
+  saveConfig(machineConfigPath(), { ...createPairing('ws://127.0.0.1:1').machineCfg, room: f.room, extraPeerPublicKeys: [extra] });
+  recordPhoneSeen(Date.now() - 5 * 60_000, extra);
+  const { structured, text } = await status();
+  const phones = structured.phones as Array<{ id: string; label: string; primary: boolean; addedAt: number | null }>;
+  assert.equal(phones[1]?.id, phoneId(extra));
+  assert.deepEqual(phones.map(phone => phone.primary), [true, false]);
+  assert.match(text, new RegExp(`- iPhone \\(first pairing\\) · id ${phones[0]!.label} · never seen`));
+  assert.match(text, new RegExp(`- Controller 2 · ${phones[1]!.label} · id ${phones[1]!.label} · last seen 5 min ago`));
+  assert.match(text, /1 not seen for 30 days or never; remove_phones asks the person on a phone to remove them\./);
+});
+
 test('the tool descriptions say what each tool does and returns', async t => {
   fixture(t);
   const server = createGrantTapServer(), client = await connectInMemory(server);
@@ -144,6 +161,8 @@ test('the tool descriptions say what each tool does and returns', async t => {
     assert.match(tools.get('connection_status')!, /Never creates, replaces or removes a pairing\./);
     assert.match(tools.get('connect')!, /Returns the same state as connection_status/);
     assert.match(tools.get('reconnect')!, /mode=add_device enrolls one more phone or iPad/);
+    assert.match(tools.get('connection_status')!, /pass ids of unused ones to remove_phones/);
+    assert.match(tools.get('remove_phones')!, /The phone that answers, any phone that reaches this computer while the question is open, and the last phone always stay/);
     assert.match(tools.get('connect_with_passkey')!, /Returns passkeyUrl/);
     assert.match(tools.get('set_runtime_auto_update')!, /only when the person asks/);
     assert.match(tools.get('notify')!, /Nobody answers a status: use ask or ask_yes_no/);

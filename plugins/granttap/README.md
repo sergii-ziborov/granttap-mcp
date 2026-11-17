@@ -110,6 +110,7 @@ healthy pairing merely to display a new QR.
 - `set_runtime_auto_update` saves this computer's automatic runtime update setting.
 - `connect` pairs the computer or reuses its current pairing.
 - `reconnect` creates a fresh pairing only after explicit confirmation.
+- `remove_phones` asks the person on a phone to remove paired phones that are no longer used.
 - `connect_with_passkey` starts a one-time browser passkey request to link this Mac to an account.
 - `notify` sends a task update to GrantTap.
 - `ask_yes_no` asks for an explicit yes or no decision.

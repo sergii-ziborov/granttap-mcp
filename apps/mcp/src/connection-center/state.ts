@@ -19,13 +19,18 @@ export const connectionOutput = {
   relayStatus: z.enum(["online", "offline", "unknown"]),
   phoneLastSeenAt: z.number().nullable(),
   phones: z.array(z.object({
-    name: z.string(),
+    id: z.string().describe("Names this phone to remove_phones; label is its first six characters"),
+    label: z.string(),
+    name: z.string().describe("The name the phone reported, or a generated one with its label"),
+    primary: z.boolean().describe("The first pairing on this computer"),
     status: z.enum(["paired", "seen"]).describe("seen: an authenticated message from this phone arrived in the last minute"),
     lastSeenAt: z.number().nullable().describe(
       "When this computer last received an authenticated message from this phone key; null: never. A key stays "
-        + "paired until the pairing is replaced, so a test install that was deleted keeps its row with an old or null time",
+        + "paired until someone removes it, so a test install that was deleted keeps its row with an old or null time",
     ),
-  })).describe("Every phone or iPad key allowed to control this computer: the first pairing, then added devices"),
+    addedAt: z.number().nullable().describe("When this computer authorized the key; null when it was added before this was recorded"),
+  })).describe("Every phone or iPad key allowed to control this computer: the first pairing, then added devices. "
+    + "At most 17; at the limit a new phone takes the place of an added phone not seen for 30 days"),
   expiresAt: z.number().nullable(),
   expiresInMinutes: z.number().int().positive().nullable(),
   providers: z.array(z.object({ id: z.string(), status: z.string(), detail: z.string() })),

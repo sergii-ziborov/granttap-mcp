@@ -49,7 +49,7 @@ function canonical(value: unknown): unknown {
 export function grantTapToolName(rawToolName: unknown): string | undefined {
   const raw = String(rawToolName ?? "").trim();
   const tool = raw.includes("__") ? raw.split("__").at(-1)! : raw;
-  return ["notify", "connect", "ask", "ask_yes_no", "offload_task", "request_sign_in", "connection_status"].includes(tool)
+  return ["notify", "connect", "ask", "ask_yes_no", "offload_task", "request_sign_in", "connection_status", "remove_phones"].includes(tool)
     ? tool : undefined;
 }
 

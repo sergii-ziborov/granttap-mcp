@@ -1,7 +1,7 @@
 # MCP tools
 
 The Personal MCP surface is an exact allowlist: `connection_status`, `connect`,
-`connect_with_passkey`, `reconnect`, `set_runtime_auto_update`, `notify`,
+`connect_with_passkey`, `reconnect`, `remove_phones`, `set_runtime_auto_update`, `notify`,
 `ask_yes_no`, `ask`, `request_sign_in`, and `offload_task`. Context compilation belongs
 inside Project Mesh, not as extra tools. `relay.ts` owns one shared encrypted relay connection
 and the durable question lifecycle. Machine setup, custom relay selection, and
@@ -47,6 +47,12 @@ The connection center lives in `../connection-center`. Status requests are
 read-only. Saved pairing, a connected relay socket, and recent encrypted phone
 activity are separate observations. Only explicit connect/reconnect requests
 create codes; transfer material is carried in UI metadata and a user-facing QR.
+
+`phones/` owns `remove_phones`: `removal.ts` picks phones by `notSeenForDays` and/or ids or six-character
+labels from `connection_status`, asks the person with the same yes/no question `ask_yes_no` sends, and
+removes nothing on no or silence. After a yes it reads the pairing again and keeps the phone that answered,
+any phone heard from while the question was open, and the last phone. Removal goes through
+`../../bridge/src/paired-phones`. The tool is declared destructive. Tests live in `phones/tests/`.
 
 `set_runtime_auto_update` saves the user’s computer-wide runtime update choice
 from the connection card. It preserves pairing and capability policy, and cannot

@@ -38,11 +38,11 @@ export function registerConnectTool(server: McpServer): void {
   };
   server.registerTool("connection_status", {
     title: "GrantTap connection center",
-    description: "Read GrantTap's state on this computer without changing it: the pairing and paired phones with when each "
-      + "last reached this computer, any open pairing QR, relay reachability, provider readiness, the runtime version and any "
-      + "newer one waiting to take over and what it waits for, and, for the calling chat (Claude Code, Codex, Grok Build, "
-      + "Cursor), how many phone messages are queued to reach it after this turn and whether it continues by itself after "
-      + "a subscription limit. Shows the connection card where "
+    description: "Read GrantTap's state on this computer without changing it: the pairing and every paired phone with its "
+      + "id and when it last reached this computer (pass ids of unused ones to remove_phones), any open pairing QR, relay "
+      + "reachability, provider readiness, the runtime version and any newer one waiting to take over and what it waits for, "
+      + "and, for the calling chat (Claude Code, Codex, Grok Build, Cursor), how many phone messages are queued to reach it "
+      + "after this turn and whether it continues by itself after a subscription limit. Shows the connection card where "
       + "the host renders one. Use it to diagnose pairing or phone delivery, and before long repository-wide work. Never "
       + "creates, replaces or removes a pairing.",
     inputSchema: {},
@@ -91,8 +91,9 @@ export function registerConnectTool(server: McpServer): void {
     {
       description: "After the person confirms, show a new one-time pairing QR, valid 15 minutes, on the connection card. "
         + "mode=reconnect offers this computer's existing phone pairing again, for a phone that lost it; mode=add_device "
-        + "enrolls one more phone or iPad with its own key (at most 16 added keys; a scanned key stays paired until the "
-        + "pairing is replaced, one never scanned is dropped). The current room and paired phones keep working. Pass "
+        + "enrolls one more phone or iPad with its own key (at most 16 added keys; at the limit the added phone longest "
+        + "unseen, if unseen for 30 days, gives its place; one never scanned is dropped). The current room and paired phones "
+        + "keep working. Pass "
         + "confirmed=true only after the person agreed.",
       inputSchema: {
         confirmed: z.boolean().describe("True only after the user confirms showing a new QR"),

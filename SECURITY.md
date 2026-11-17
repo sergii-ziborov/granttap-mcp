@@ -102,8 +102,15 @@ report the observation as read-only instead of implying enforcement.
 
 `setup` is CLI-only because it writes local provider configuration and installs
 background services. The public MCP server can only connect an existing or new
-phone pairing, notify, and ask bounded questions; it cannot reconfigure the
+phone pairing, remove phones the person confirms, notify, and ask bounded questions; it cannot reconfigure the
 machine or select a custom relay.
+
+A phone key stays authorized until someone removes it. The phone app removes phones from **Devices → a
+computer → Phones**; `remove_phones` lets an agent ask, and removes nothing until the person answers yes on a
+phone, never the phone that answered, any phone heard from while the question was open, or the last phone.
+Every relay link rereads the pairing file before each send and each received message, so a removed key gets
+no new ciphertext at once. Ciphertext the relay already holds for it, such as a bounded read cache, is not
+recalled. At the 17-phone limit only an added phone idle for 30 days gives its place to a new one.
 
 `request_sign_in` sends an https page to the phone and may deliver one loopback
 redirect back. That delivery is a single `GET` to `127.0.0.1` or `::1` on the

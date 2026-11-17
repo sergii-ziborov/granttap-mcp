@@ -1,22 +1,28 @@
 import { existsSync } from "node:fs";
-import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { loadConfig } from "../../../bridge/src/config";
-import { hasControllerPresence, readControllerLastSeenAt, readControllerName,
-  readPhoneLastSeenAt } from "../../../bridge/src/pairing/presence";
-import { controllerPeerGate } from "../../../bridge/src/pairing/controllers";
+import { DAY_MS, idleFor, phoneRoster } from "../../../bridge/src/paired-phones";
 
 export type PairedPhone = {
+  /** sha256 of the phone key, hex; what `remove_phones` takes. `label` is its first six characters. */
+  id: string;
+  label: string;
   name: string;
+  /** The first pairing on this computer. */
+  primary: boolean;
   status: "paired" | "seen";
   lastSeenAt: number | null;
+  addedAt: number | null;
 };
+
+/** What a page outside this computer's own MCP tools is shown about a phone. */
+export type PhonePresence = Pick<PairedPhone, "name" | "status" | "lastSeenAt">;
 
 export type PhoneReachability = "live" | "offline" | "unknown";
 
 /** healthz must not stay "unknown" when this Mac already has a pairing slot. */
-export function phoneReachability(phones: PairedPhone[] = listPairedPhones()): PhoneReachability {
+export function phoneReachability(phones: readonly PhonePresence[] = listPairedPhones()): PhoneReachability {
   if (phones.length === 0) return "unknown";
   return phones.some((phone) => phone.status === "seen") ? "live" : "offline";
 }
@@ -42,43 +48,45 @@ export function isMachineConfigured(): boolean {
   }
 }
 
+function parkedPhoneName(machinePath: string, primaryKey: string): string | null {
+  try {
+    const phonePath = join(dirname(machinePath), "phone.pairing.json");
+    if (!existsSync(phonePath)) return null;
+    const parked = loadConfig(phonePath);
+    const labeled = parked.deviceName?.trim();
+    return parked.myPublicKey === primaryKey && labeled && labeled !== "phone" ? labeled.slice(0, 80) : null;
+  } catch { return null; }
+}
+
 /** Authorized controller keys for this computer; activity is per authenticated key. */
 export function listPairedPhones(phoneLastSeenAt: number | null = null, now = Date.now()): PairedPhone[] {
   if (!isMachineConfigured()) return [];
   const machine = loadConfig(readOnlyMachineConfigPath());
-  let name = "iPhone";
-  try {
-    const phonePath = join(dirname(readOnlyMachineConfigPath()), "phone.pairing.json");
-    if (existsSync(phonePath)) {
-      const labeled = loadConfig(phonePath).deviceName?.trim();
-      if (labeled && labeled !== "phone") name = labeled.slice(0, 80);
-    }
-  } catch { /* keep iPhone */ }
-  const primarySeen = readControllerLastSeenAt(machine.peerPublicKey);
-  const recorded = hasControllerPresence() ? primarySeen : readPhoneLastSeenAt();
-  const lastSeenAt = [hasControllerPresence() ? null : phoneLastSeenAt, recorded].reduce<number | null>((best, value) => (
-    value != null && (best == null || value > best) ? value : best
-  ), null);
-  const seen = lastSeenAt != null && now - lastSeenAt < 60_000;
-  const primary: PairedPhone = { name: readControllerName(machine.peerPublicKey) ?? name,
-    status: seen ? "seen" : "paired", lastSeenAt };
-  const allowed = controllerPeerGate(machine);
-  const additional = (machine.extraPeerPublicKeys ?? [])
-    .filter((key) => key && key !== machine.peerPublicKey && allowed(key))
-    .map((key, index): PairedPhone => {
-      const at = readControllerLastSeenAt(key);
-      const suffix = createHash("sha256").update(key).digest("hex").slice(0, 6);
-      return { name: readControllerName(key) ?? `Controller ${index + 2} · ${suffix}`,
-        status: at != null && now - at < 60_000 ? "seen" : "paired", lastSeenAt: at };
-    });
-  return [primary, ...additional];
+  return phoneRoster(machine, { legacySeenAt: phoneLastSeenAt, now }).map((phone, index): PairedPhone => ({
+    id: phone.id, label: phone.label, primary: phone.primary,
+    name: phone.name ?? (phone.primary
+      ? parkedPhoneName(readOnlyMachineConfigPath(), phone.key) ?? "iPhone"
+      : `Controller ${index + 1} · ${phone.label}`),
+    status: phone.lastSeenAt != null && now - phone.lastSeenAt < 60_000 ? "seen" : "paired",
+    lastSeenAt: phone.lastSeenAt, addedAt: phone.addedAt,
+  }));
 }
 
-const RECENT_MS = 7 * 86_400_000;
+const RECENT_MS = 7 * DAY_MS;
+/** The idle time after which connection_status suggests `remove_phones`, as the phone's own action does. */
+export const STALE_PHONE_DAYS = 30;
+
+function age(at: number | null, now: number): string {
+  if (at == null) return "never seen";
+  const minutes = Math.max(0, Math.round((now - at) / 60_000));
+  if (minutes < 60) return `last seen ${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  return hours < 48 ? `last seen ${hours} h ago` : `last seen ${Math.round(hours / 24)} days ago`;
+}
 
 /**
- * The paired phones by how recently each spoke to this computer. Keys stay paired until the pairing is
- * replaced, so test installs and deleted apps pile up; this tells the ones in use from the rest.
+ * The paired phones by how recently each spoke to this computer, one line each. Keys stay paired until
+ * someone removes them, so test installs and deleted apps pile up; this tells the ones in use from the rest.
  */
 export function phoneSummary(phones: PairedPhone[], now = Date.now()): string | undefined {
   if (phones.length === 0) return undefined;
@@ -86,6 +94,12 @@ export function phoneSummary(phones: PairedPhone[], now = Date.now()): string | 
   const recent = phones.filter((phone) => phone.status !== "seen" && phone.lastSeenAt != null
     && now - phone.lastSeenAt < RECENT_MS).length;
   const rest = phones.length - seen - recent;
-  return `Paired phones: ${phones.length} — ${seen} active in the last minute, ${recent} more seen in the last 7 days, `
-    + `${rest} not seen for 7 days or never.`;
+  const stale = phones.filter((phone) => idleFor({ ...phone, key: "", pending: false }, STALE_PHONE_DAYS, now)).length;
+  const lines = phones.map((phone) => `- ${phone.name}${phone.primary ? " (first pairing)" : ""} · id ${phone.label} · `
+    + age(phone.lastSeenAt, now));
+  return [`Paired phones: ${phones.length} — ${seen} active in the last minute, ${recent} more seen in the last 7 days, `
+    + `${rest} not seen for 7 days or never.`, ...lines,
+  ...(stale > 0 && stale < phones.length
+    ? [`${stale} not seen for ${STALE_PHONE_DAYS} days or never; remove_phones asks the person on a phone to remove them.`]
+    : [])].join("\n");
 }

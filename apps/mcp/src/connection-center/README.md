@@ -11,9 +11,10 @@ phone export is absent. Reconnect requires explicit confirmation. A pending QR
 is reusable until expiry in this MCP process; restarting the process loses the
 transfer code but preserves the pairing. It never persists transfer secrets.
 
-Status also carries, read without writing: a text line sorting the paired phones by when each
-last reached this computer (keys stay paired until the pairing is replaced, so old test installs
-stay listed); `pendingUpdate`, a newer runtime this computer holds and why it is not running yet;
+Status also carries, read without writing: a summary sorting the paired phones by when each
+last reached this computer, then one line per phone with its label and last-seen time, and how many
+were not seen for 30 days, the cue for `remove_phones` (keys stay paired until someone removes them, so
+old test installs stay listed). Each structured phone carries `id`, `label`, `primary` and `addedAt`; `pendingUpdate`, a newer runtime this computer holds and why it is not running yet;
 and `chat`, for the chat named in this server's environment (Claude Code's
 `CLAUDE_CODE_SESSION_ID`), the phone messages queued to reach it after its turn and whether it
 continues by itself after a subscription limit. Hosts that name no chat get `chat: null`; none is
