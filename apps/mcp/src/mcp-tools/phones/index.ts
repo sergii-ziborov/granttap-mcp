@@ -33,8 +33,9 @@ export function registerPhonesTool(server: McpServer): void {
     title: "Remove phones paired with this computer",
     description: "Ask the person to remove phones or iPads paired with this computer that are no longer used: test "
       + "installs, deleted apps, old devices. connection_status lists them with ids and when each last reached this "
-      + "computer. Choose with notSeenForDays (not heard from, and not added, for that many days), phoneIds (ids or "
-      + "their six-character labels), or both. Nothing is removed until the person answers yes on a phone, within "
+      + "computer. Choose with notSeenForDays (not heard from, and not added, for that many days, never the phone heard "
+      + "from most recently; connection_status marks the 30-day ones stale), phoneIds (ids or their six-character "
+      + "labels), or both. Nothing is removed until the person answers yes on a phone, within "
       + "about three minutes; no answer removes nothing. The phone that answers, any phone that reaches this computer "
       + "while the question is open, and the last phone always stay. A removed phone stops receiving from this "
       + "computer at once and needs a new QR to pair again.",
@@ -52,6 +53,8 @@ export function registerPhonesTool(server: McpServer): void {
       remaining: z.number().int().nonnegative().describe("Phones still paired with this computer"),
     },
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    // The connection card's Remove buttons call it too; the yes on a phone is still required.
+    _meta: { ui: { visibility: ["model", "app"] }, "openai/widgetAccessible": true },
   }, async ({ notSeenForDays, phoneIds }) => {
     const client = await relay();
     if (!client) return notPaired();

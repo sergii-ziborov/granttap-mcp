@@ -649,7 +649,7 @@ trust.
 | `connect_with_passkey` | Link this computer to the user's GrantTap account so a signed-in phone can connect without a QR; returns a 15-minute granttap.com link, the passkey is entered only there, and existing QR pairings stay unchanged |
 | `connect` | Show the existing pairing on the connection card, or on an unpaired computer create a one-time QR shown only on the card |
 | `reconnect` | After explicit confirmation, show a one-time QR to reconnect or add an independent controller device while retaining the current room |
-| `remove_phones` | Ask the person to remove paired phones that are no longer used, by `notSeenForDays` and/or `phoneIds` from `connection_status`; nothing is removed without a yes on a phone, and the phone that answers, any phone heard from while the question is open, and the last phone stay |
+| `remove_phones` | Ask the person to remove paired phones that are no longer used, by `notSeenForDays` (never the phone heard from most recently; `connection_status` marks the 30-day ones `stale`) and/or `phoneIds` from `connection_status`; nothing is removed without a yes on a phone, and the phone that answers, any phone heard from while the question is open, and the last phone stay |
 | `notify` | Send a non-blocking status of at most 2,000 characters that nobody answers, and/or one task-scoped Mesh event |
 | `ask_yes_no` | Ask a yes/no question and wait about three minutes for the explicit answer; a timeout is neither yes nor no |
 | `ask` | Ask an open question and wait about three minutes for typed or spoken text |

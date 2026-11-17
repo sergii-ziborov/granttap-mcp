@@ -66,6 +66,28 @@ export function idleFor(phone: PhoneRecord, days: number, now = Date.now()): boo
   return at == null || now - at >= days * DAY_MS;
 }
 
+/**
+ * The phone heard from most recently: the one in use, or the likeliest to be. Without any last-seen time the
+ * latest activity decides, and among equals the earlier one in the roster (the first pairing first).
+ */
+export function mostRecentPhone(phones: readonly PhoneRecord[]): PhoneRecord | undefined {
+  const rank = (phone: PhoneRecord): [number, number] => [phone.lastSeenAt ?? -1, lastActivity(phone) ?? -1];
+  return phones.reduce<PhoneRecord | undefined>((best, phone) => {
+    if (best === undefined) return phone;
+    const [seen, active] = rank(phone), [bestSeen, bestActive] = rank(best);
+    return seen > bestSeen || (seen === bestSeen && active > bestActive) ? phone : best;
+  }, undefined);
+}
+
+/**
+ * The phones a "not seen for `days`" removal takes: idle that long, and never the phone heard from most
+ * recently, so the phone in use stays even when every phone has been away.
+ */
+export function stalePhones(phones: readonly PhoneRecord[], days: number, now = Date.now()): PhoneRecord[] {
+  const latest = mostRecentPhone(phones);
+  return phones.filter((phone) => phone !== latest && idleFor(phone, days, now));
+}
+
 /** The longest idle first; unknown counts as oldest, and among equals the earlier-added phone goes first. */
 export function longestIdle(phones: readonly PhoneRecord[]): PhoneRecord | undefined {
   return phones.reduce<PhoneRecord | undefined>((oldest, phone) =>

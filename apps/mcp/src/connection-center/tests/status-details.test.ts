@@ -143,12 +143,29 @@ test('status lists each phone with the id remove_phones takes, and says which on
   saveConfig(machineConfigPath(), { ...createPairing('ws://127.0.0.1:1').machineCfg, room: f.room, extraPeerPublicKeys: [extra] });
   recordPhoneSeen(Date.now() - 5 * 60_000, extra);
   const { structured, text } = await status();
-  const phones = structured.phones as Array<{ id: string; label: string; primary: boolean; addedAt: number | null }>;
+  const phones = structured.phones as Array<{ id: string; label: string; primary: boolean; addedAt: number | null;
+    mostRecent: boolean; stale: boolean }>;
   assert.equal(phones[1]?.id, phoneId(extra));
   assert.deepEqual(phones.map(phone => phone.primary), [true, false]);
-  assert.match(text, new RegExp(`- iPhone \\(first pairing\\) · id ${phones[0]!.label} · never seen`));
-  assert.match(text, new RegExp(`- Controller 2 · ${phones[1]!.label} · id ${phones[1]!.label} · last seen 5 min ago`));
-  assert.match(text, /1 not seen for 30 days or never; remove_phones asks the person on a phone to remove them\./);
+  assert.deepEqual(phones.map(phone => phone.mostRecent), [false, true]);
+  assert.deepEqual(phones.map(phone => phone.stale), [true, false]);
+  assert.match(text, new RegExp(`- First pairing · id ${phones[0]!.label} · never seen`));
+  assert.match(text, new RegExp(`- Phone ${phones[1]!.label} · id ${phones[1]!.label} · last seen 5 min ago`));
+  assert.match(text, /1 not seen for 30 days or never; remove_phones with notSeenForDays 30 asks the person on a phone to remove them\./);
+});
+
+test('every phone away for 30 days still keeps the most recent one out of the stale count', async t => {
+  const f = fixture(t);
+  const extras = [generateKeyPair().publicKey, generateKeyPair().publicKey];
+  writeFileSync(join(f.root, 'pending-controllers.json'), '[]\n');
+  saveConfig(machineConfigPath(), { ...createPairing('ws://127.0.0.1:1').machineCfg, room: f.room, extraPeerPublicKeys: extras });
+  recordPhoneSeen(Date.now() - 40 * 86_400_000, extras[0]);
+  recordPhoneSeen(Date.now() - 90 * 86_400_000, extras[1]);
+  const { structured, text } = await status();
+  const phones = structured.phones as Array<{ mostRecent: boolean; stale: boolean }>;
+  assert.deepEqual(phones.map(phone => phone.mostRecent), [false, true, false]);
+  assert.deepEqual(phones.map(phone => phone.stale), [true, false, true]);
+  assert.match(text, /^2 not seen for 30 days or never;/m);
 });
 
 test('the tool descriptions say what each tool does and returns', async t => {

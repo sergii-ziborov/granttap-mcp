@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { loadConfig } from "../../../bridge/src/config";
-import { DAY_MS, idleFor, phoneRoster } from "../../../bridge/src/paired-phones";
+import { DAY_MS, mostRecentPhone, phoneRoster, stalePhones } from "../../../bridge/src/paired-phones";
 
 export type PairedPhone = {
   /** sha256 of the phone key, hex; what `remove_phones` takes. `label` is its first six characters. */
@@ -14,6 +14,10 @@ export type PairedPhone = {
   status: "paired" | "seen";
   lastSeenAt: number | null;
   addedAt: number | null;
+  /** The phone heard from most recently; a `notSeenForDays` removal never takes it. */
+  mostRecent: boolean;
+  /** What `remove_phones` with `notSeenForDays: 30` takes: idle 30 days and not `mostRecent`. */
+  stale: boolean;
 };
 
 /** What a page outside this computer's own MCP tools is shown about a phone. */
@@ -58,23 +62,31 @@ function parkedPhoneName(machinePath: string, primaryKey: string): string | null
   } catch { return null; }
 }
 
+/** The idle time after which connection_status suggests `remove_phones`, as the phone's own action does. */
+export const STALE_PHONE_DAYS = 30;
+/** What a phone that never reported a name is called, as the phone app calls it. */
+export const FIRST_PAIRING = "First pairing";
+export const unnamedPhone = (label: string) => `Phone ${label}`;
+
 /** Authorized controller keys for this computer; activity is per authenticated key. */
 export function listPairedPhones(phoneLastSeenAt: number | null = null, now = Date.now()): PairedPhone[] {
   if (!isMachineConfigured()) return [];
   const machine = loadConfig(readOnlyMachineConfigPath());
-  return phoneRoster(machine, { legacySeenAt: phoneLastSeenAt, now }).map((phone, index): PairedPhone => ({
+  const roster = phoneRoster(machine, { legacySeenAt: phoneLastSeenAt, now });
+  const latest = mostRecentPhone(roster);
+  const stale = new Set(stalePhones(roster, STALE_PHONE_DAYS, now));
+  return roster.map((phone): PairedPhone => ({
     id: phone.id, label: phone.label, primary: phone.primary,
     name: phone.name ?? (phone.primary
-      ? parkedPhoneName(readOnlyMachineConfigPath(), phone.key) ?? "iPhone"
-      : `Controller ${index + 1} · ${phone.label}`),
+      ? parkedPhoneName(readOnlyMachineConfigPath(), phone.key) ?? FIRST_PAIRING
+      : unnamedPhone(phone.label)),
     status: phone.lastSeenAt != null && now - phone.lastSeenAt < 60_000 ? "seen" : "paired",
     lastSeenAt: phone.lastSeenAt, addedAt: phone.addedAt,
+    mostRecent: phone === latest, stale: stale.has(phone),
   }));
 }
 
 const RECENT_MS = 7 * DAY_MS;
-/** The idle time after which connection_status suggests `remove_phones`, as the phone's own action does. */
-export const STALE_PHONE_DAYS = 30;
 
 function age(at: number | null, now: number): string {
   if (at == null) return "never seen";
@@ -94,12 +106,13 @@ export function phoneSummary(phones: PairedPhone[], now = Date.now()): string | 
   const recent = phones.filter((phone) => phone.status !== "seen" && phone.lastSeenAt != null
     && now - phone.lastSeenAt < RECENT_MS).length;
   const rest = phones.length - seen - recent;
-  const stale = phones.filter((phone) => idleFor({ ...phone, key: "", pending: false }, STALE_PHONE_DAYS, now)).length;
-  const lines = phones.map((phone) => `- ${phone.name}${phone.primary ? " (first pairing)" : ""} · id ${phone.label} · `
-    + age(phone.lastSeenAt, now));
+  const stale = phones.filter((phone) => phone.stale).length;
+  const lines = phones.map((phone) => `- ${phone.name}${phone.primary && phone.name !== FIRST_PAIRING ? " (first pairing)" : ""}`
+    + ` · id ${phone.label} · ${age(phone.lastSeenAt, now)}`);
   return [`Paired phones: ${phones.length} — ${seen} active in the last minute, ${recent} more seen in the last 7 days, `
     + `${rest} not seen for 7 days or never.`, ...lines,
-  ...(stale > 0 && stale < phones.length
-    ? [`${stale} not seen for ${STALE_PHONE_DAYS} days or never; remove_phones asks the person on a phone to remove them.`]
+  ...(stale > 0
+    ? [`${stale} not seen for ${STALE_PHONE_DAYS} days or never; remove_phones with notSeenForDays ${STALE_PHONE_DAYS} `
+      + "asks the person on a phone to remove them."]
     : [])].join("\n");
 }

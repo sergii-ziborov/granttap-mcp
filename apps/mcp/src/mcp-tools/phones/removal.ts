@@ -1,5 +1,5 @@
 import { loadConfig, machineConfigPath } from "../../../../bridge/src/config";
-import { idleFor, PhoneChangeRefused, phoneRoster, removePhoneKeys, type PhoneRecord }
+import { PhoneChangeRefused, phoneRoster, removePhoneKeys, stalePhones, type PhoneRecord }
   from "../../../../bridge/src/paired-phones";
 import { listPairedPhones } from "../../status/pairing-status";
 import type { YesNoOutcome } from "../connect/relay";
@@ -43,7 +43,9 @@ export function selectPhones(roster: readonly PhoneRecord[], selection: PhoneSel
     targets = targets.filter((phone) => picked.has(phone));
   }
   if (selection.notSeenForDays != null) {
-    targets = targets.filter((phone) => idleFor(phone, selection.notSeenForDays!, now));
+    // Never the phone heard from most recently: the one in use stays even when every phone has been away.
+    const stale = new Set(stalePhones(roster, selection.notSeenForDays, now));
+    targets = targets.filter((phone) => stale.has(phone));
   }
   if (targets.length > 0 && targets.length === roster.length) {
     return { error: `That is every phone paired with this computer (${roster.length}). The phone that answers always stays, `
@@ -60,7 +62,8 @@ function age(at: number | null, now: number): string {
 
 function question(phones: readonly Shown[], computer: string, now: number): string {
   const count = `${phones.length} ${phones.length === 1 ? "phone" : "phones"}`;
-  const lines = phones.map((phone) => `• ${phone.name} · ${phone.label} · ${age(phone.lastSeenAt, now)}`);
+  const lines = phones.map((phone) => `• ${phone.name}${phone.name.includes(phone.label) ? "" : ` · ${phone.label}`}`
+    + ` · ${age(phone.lastSeenAt, now)}`);
   return [`Remove ${count} from ${computer}? A removed phone stops receiving from this computer at once and needs a new `
     + "QR to pair again. The phone you answer on stays.", ...lines].join("\n").slice(0, 2_000);
 }

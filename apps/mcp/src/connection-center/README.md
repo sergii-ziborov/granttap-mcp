@@ -14,7 +14,10 @@ transfer code but preserves the pairing. It never persists transfer secrets.
 Status also carries, read without writing: a summary sorting the paired phones by when each
 last reached this computer, then one line per phone with its label and last-seen time, and how many
 were not seen for 30 days, the cue for `remove_phones` (keys stay paired until someone removes them, so
-old test installs stay listed). Each structured phone carries `id`, `label`, `primary` and `addedAt`; `pendingUpdate`, a newer runtime this computer holds and why it is not running yet;
+old test installs stay listed). Each structured phone carries `id`, `label`, `primary`, `addedAt`, `mostRecent`
+(the phone heard from most recently) and `stale` (idle 30 days and not `mostRecent`: what `remove_phones` with
+`notSeenForDays: 30` takes). A phone that never reported a name is `Phone <label>`, or `First pairing`, as the
+phone app names it. Also `pendingUpdate`, a newer runtime this computer holds and why it is not running yet;
 and `chat`, for the chat named in this server's environment (Claude Code's
 `CLAUDE_CODE_SESSION_ID`), the phone messages queued to reach it after its turn and whether it
 continues by itself after a subscription limit. Hosts that name no chat get `chat: null`; none is

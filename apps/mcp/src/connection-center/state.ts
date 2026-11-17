@@ -21,7 +21,8 @@ export const connectionOutput = {
   phones: z.array(z.object({
     id: z.string().describe("Names this phone to remove_phones; label is its first six characters"),
     label: z.string(),
-    name: z.string().describe("The name the phone reported, or a generated one with its label"),
+    name: z.string().describe("The name the phone reported; otherwise \"Phone <label>\", or \"First pairing\" for the "
+      + "first pairing, as the phone app names them"),
     primary: z.boolean().describe("The first pairing on this computer"),
     status: z.enum(["paired", "seen"]).describe("seen: an authenticated message from this phone arrived in the last minute"),
     lastSeenAt: z.number().nullable().describe(
@@ -29,6 +30,9 @@ export const connectionOutput = {
         + "paired until someone removes it, so a test install that was deleted keeps its row with an old or null time",
     ),
     addedAt: z.number().nullable().describe("When this computer authorized the key; null when it was added before this was recorded"),
+    mostRecent: z.boolean().describe("The phone heard from most recently; remove_phones by notSeenForDays never takes it"),
+    stale: z.boolean().describe("Not heard from, and not added, for 30 days, and not mostRecent: what remove_phones with "
+      + "notSeenForDays 30 would ask to remove"),
   })).describe("Every phone or iPad key allowed to control this computer: the first pairing, then added devices. "
     + "At most 17; at the limit a new phone takes the place of an added phone not seen for 30 days"),
   expiresAt: z.number().nullable(),

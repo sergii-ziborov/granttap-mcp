@@ -30,7 +30,8 @@ test("status is read-only; pending codes expire without exposing or rotating key
   const [phone, ...others] = state.snapshot().structuredContent.phones;
   assert.deepEqual(others, []);
   assert.deepEqual({ ...phone, id: undefined, label: undefined },
-    { id: undefined, label: undefined, name: "iPhone", primary: true, status: "paired", lastSeenAt: null, addedAt: null });
+    { id: undefined, label: undefined, name: "First pairing", primary: true, status: "paired", lastSeenAt: null, addedAt: null,
+      mostRecent: true, stale: false }, "the only phone is never stale");
   assert.match(phone!.id, /^[a-f0-9]{64}$/);
   assert.equal(phone!.label, phone!.id.slice(0, 6));
   assert.equal(JSON.stringify(state.snapshot().structuredContent).includes(pair.machineCfg.peerPublicKey), false,
@@ -89,7 +90,7 @@ test("only an encrypted phone message confirms activity; relay online is distinc
   const joined = state.snapshot();
   assert.equal(joined.structuredContent.status, "connected");
   assert.equal(joined.structuredContent.phones.length, 2);
-  assert.match(joined.structuredContent.phones[1]!.name, /Controller 2/);
+  assert.equal(joined.structuredContent.phones[1]!.name, `Phone ${joined.structuredContent.phones[1]!.label}`);
   assert.equal(joined.structuredContent.phones[1]!.status, "seen");
   assert.deepEqual(joined._meta.granttap, {});
 });

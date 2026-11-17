@@ -48,7 +48,8 @@ read-only. Saved pairing, a connected relay socket, and recent encrypted phone
 activity are separate observations. Only explicit connect/reconnect requests
 create codes; transfer material is carried in UI metadata and a user-facing QR.
 
-`phones/` owns `remove_phones`: `removal.ts` picks phones by `notSeenForDays` and/or ids or six-character
+`phones/` owns `remove_phones`: `removal.ts` picks phones by `notSeenForDays` (never the phone heard from most
+recently, the same rule that marks phones `stale` in `connection_status`) and/or ids or six-character
 labels from `connection_status`, asks the person with the same yes/no question `ask_yes_no` sends, and
 removes nothing on no or silence. After a yes it reads the pairing again and keeps the phone that answered,
 any phone heard from while the question was open, and the last phone. Removal goes through

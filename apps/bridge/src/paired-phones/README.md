@@ -8,6 +8,10 @@ removing them, and the place a new phone takes when the computer is full.
   public key in hex, and `label`, the first six characters of the id; its key never leaves the computer. Names,
   last-seen and added-at times come from `presence.json`. Added-at is recorded only for keys added since phone
   management shipped, so older keys have none. An unscanned key whose QR expired is not accepted and is not listed.
+  `mostRecentPhone` is the phone heard from most recently (by last-seen, then latest activity, then roster order),
+  and `stalePhones(days)` the phones idle that long except that one: what `remove_phones` with `notSeenForDays`
+  and the connection card's "Remove phones not seen for 30 days" take, so the phone in use stays even when every
+  phone has been away.
 - `removal.ts` removes keys in one write under the `machine.json` lock, through the existing config writer.
   `controllerPeerGate` rereads `machine.json` before every send and every received message, so a removed phone
   stops receiving sealed broadcasts at once in every running process, the first pairing included. Removing the

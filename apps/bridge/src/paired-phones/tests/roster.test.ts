@@ -5,7 +5,8 @@ import { DeviceManagementSnapshot, PairedPhoneEntry } from "../../../../../packa
 import { machineConfigPath, saveConfig } from "../../config";
 import { rememberPendingController } from "../../pairing/controllers";
 import { recordControllerName } from "../../pairing/presence";
-import { idleFor, lastActivity, longestIdle, phoneEntries, phoneId, phoneRoster } from "..";
+import { idleFor, lastActivity, longestIdle, mostRecentPhone, phoneEntries, phoneId, phoneRoster, stalePhones }
+  from "..";
 import { DAY, isolatedConfig, live, NOW, pairedComputer } from "./support";
 
 test("each phone is named by a hash of its key, never the key, with its first pairing, names and times", (t) => {
@@ -53,4 +54,25 @@ test("a QR key that expired unscanned is not a phone; the first pairing is alway
   saveConfig(machineConfigPath(), { ...live(), extraPeerPublicKeys: [...f.extras, expired, f.primary] });
   const roster = phoneRoster(live(), { now: NOW });
   assert.deepEqual(roster.map((phone) => phone.key), [f.primary, f.extras[0]], "expired and duplicate keys are left out");
+});
+
+test("a stale choice never takes the phone heard from most recently, even when every phone has been away", (t) => {
+  isolatedConfig(t);
+  const f = pairedComputer(3, [45, 40, null, 90]);
+  const roster = phoneRoster(live(), { now: NOW });
+  assert.equal(mostRecentPhone(roster)?.key, f.extras[0], "40 days ago is the most recent");
+  assert.deepEqual(stalePhones(roster, 30, NOW).map((phone) => phone.key), [f.primary, f.extras[1], f.extras[2]]);
+  assert.deepEqual(stalePhones(roster, 60, NOW).map((phone) => phone.key), [f.extras[1], f.extras[2]],
+    "45 days is not 60; never seen but added 400 days ago is");
+  assert.equal(mostRecentPhone([]), undefined);
+  assert.deepEqual(stalePhones([], 30, NOW), []);
+});
+
+test("without any last-seen time the latest added phone counts as most recent, the first pairing among equals", (t) => {
+  isolatedConfig(t);
+  const f = pairedComputer(2, []);
+  const roster = phoneRoster(live(), { now: NOW });
+  assert.equal(mostRecentPhone(roster)?.key, f.extras[0], "added 400 days ago beats no time at all");
+  assert.equal(mostRecentPhone([roster[1]!, roster[2]!])?.key, f.extras[0], "equal times keep roster order");
+  assert.equal(stalePhones(roster.slice(0, 1), 30, NOW).length, 0, "the only phone is never stale");
 });

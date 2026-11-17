@@ -28,7 +28,7 @@ test("an agent's removal waits for a yes on a phone and never takes the phone th
   const result = answer.structuredContent as Structured;
   assert.equal(result.status, "removed");
   assert.deepEqual(result.removed.map((phone) => phone.id), f.extras.slice(1).map(id));
-  assert.deepEqual(result.kept, [{ id: id(f.primary), label: id(f.primary).slice(0, 6), name: "iPhone",
+  assert.deepEqual(result.kept, [{ id: id(f.primary), label: id(f.primary).slice(0, 6), name: "First pairing",
     lastSeenAt: NOW - 400 * 86_400_000, reason: "the person answered on this phone" }]);
   assert.equal(result.remaining, 2);
   assert.deepEqual([live().peerPublicKey, ...live().extraPeerPublicKeys ?? []], [f.primary, f.extras[0]]);
@@ -79,4 +79,17 @@ test("phone ids must name exactly one phone each", (t) => {
   }
   assert.deepEqual((selectPhones(roster, { phoneIds: [id(f.extras[0]!)], notSeenForDays: 365 }, NOW) as
     { targets: unknown[] }).targets, [], "both together take only phones matching both");
+});
+
+test("when every phone has been away, a stale removal still asks, keeping the phone heard from most recently", async (t) => {
+  const { f, questions, run, id } = owner(t, [40, 90, null]);
+  const answer = await run({ notSeenForDays: 30 }, () => yes(f.extras[0]));
+  const result = answer.structuredContent as Structured;
+  assert.equal(result.status, "removed");
+  assert.deepEqual(result.removed.map((phone) => phone.id), [id(f.extras[1]!)]);
+  assert.deepEqual(result.kept.map((phone) => phone.reason), ["the person answered on this phone"]);
+  assert.equal(result.remaining, 2);
+  assert.match(questions[0]!, /^Remove 2 phones from QA MacBook\?/, "the first pairing, seen 40 days ago, is not asked about");
+  assert.match(questions[0]!, new RegExp(`• Phone ${id(f.extras[1]!).slice(0, 6)} · never seen`),
+    "an unnamed phone is named by its label once");
 });
