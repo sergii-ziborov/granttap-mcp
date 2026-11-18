@@ -1,5 +1,5 @@
-import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { readFileSync, unlinkSync } from "node:fs";
+import { join } from "node:path";
 import { configDir } from "../config/runtime/paths";
 import { writePrivateFile } from "../config/access/write-private";
 
@@ -80,17 +80,37 @@ export function hasControllerPresence(): boolean {
   return Object.keys(readPresence().controllers ?? {}).length > 0;
 }
 
-export function recordPhoneSeen(at = Date.now(), peerPublicKey?: string): void {
-  const path = presencePath();
-  mkdirSync(dirname(path), { recursive: true });
-  const tmp = `${path}.tmp`;
-  const previous = readPresence();
-  writeFileSync(tmp, JSON.stringify({ ...previous, phoneLastSeenAt: at,
-    controllers: peerPublicKey
-      ? { ...previous.controllers, [peerPublicKey]: at }
-      : previous.controllers,
-  }), { mode: 0o600 });
-  renameSync(tmp, path);
+const SEEN_WRITE_INTERVAL_MS = 5_000;
+const lastSeenWrites = new Map<string, number>();
+
+/**
+ * Remember the last encrypted phone payload. The monitor and every MCP server in an open chat write this
+ * file; a shared temporary name let one process rename another's file away, and the ENOENT that followed
+ * dropped the phone's request (chat events, subscriptions, pictures, settings, device management). The
+ * write now uses its own temporary file, happens at most every few seconds per phone, and never throws:
+ * presence is advisory and must not cost the phone its answer.
+ */
+export function recordPhoneSeen(at = Date.now(), peerPublicKey?: string): boolean {
+  const key = peerPublicKey ?? "";
+  const last = lastSeenWrites.get(key);
+  if (last !== undefined && at >= last && at - last < SEEN_WRITE_INTERVAL_MS) return true;
+  try {
+    const previous = readPresence();
+    writePrivateFile(presencePath(), JSON.stringify({ ...previous, phoneLastSeenAt: at,
+      controllers: peerPublicKey
+        ? { ...previous.controllers, [peerPublicKey]: at }
+        : previous.controllers,
+    }));
+    lastSeenWrites.set(key, at);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Tests start each case from a clean throttle. */
+export function resetPhoneSeenThrottle(): void {
+  lastSeenWrites.clear();
 }
 
 export function clearPhoneSeen(): void {
