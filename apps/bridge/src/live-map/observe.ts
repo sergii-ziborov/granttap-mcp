@@ -34,11 +34,29 @@ function recentChildren(path: string, sessionId: string, now: number): string[] 
   }).slice(0, MAX_CHILDREN);
 }
 
+/**
+ * A Claude chat discovery has not indexed is looked for across every project folder; that walk is
+ * done at most once a minute for a chat found, and every ten seconds for one not written yet.
+ */
+const LOOKUP_MS = 60_000;
+const MISS_MS = 10_000;
+const lookups = new Map<string, { path?: string; at: number }>();
+
+function claudeFallback(sessionId: string, now: number): string | undefined {
+  const known = lookups.get(sessionId);
+  if (known && now - known.at < (known.path ? LOOKUP_MS : MISS_MS)) return known.path;
+  const path = claudeLogPath(sessionId);
+  lookups.delete(sessionId);
+  lookups.set(sessionId, { path, at: now });
+  while (lookups.size > 16) lookups.delete(lookups.keys().next().value!);
+  return path;
+}
+
 /** Where a chat's work is recorded, and the cheap revision that says whether it changed. */
 function sourceFor(session: SessionInfo, now: number): Source | undefined {
   const native = localTaskTransfers().nativeSession(session);
   if (native.agent === "claude" || native.agent === "codex") {
-    const path = nativeTranscriptSource(native) ?? (native.agent === "claude" ? claudeLogPath(native.sessionId) : undefined);
+    const path = nativeTranscriptSource(native) ?? (native.agent === "claude" ? claudeFallback(native.sessionId, now) : undefined);
     if (!path) return undefined;
     const children = native.agent === "claude" ? recentChildren(path, native.sessionId, now) : [];
     return {
