@@ -14,6 +14,14 @@ export type Risk = z.infer<typeof Risk>;
 export const DangerLevel = z.enum(["safe", "caution", "dangerous", "destructive"]);
 export type DangerLevel = z.infer<typeof DangerLevel>;
 
+/**
+ * A question whose waiting agent accepts an explicit "I won't answer" and goes on
+ * without an answer. The computer names it on the question; a controller sends it
+ * back on its reply only then, so an older computer is never sent one.
+ */
+export const QuestionDecline = z.literal("decline-v1");
+export type QuestionDecline = z.infer<typeof QuestionDecline>;
+
 export const AutoAcceptLevel = z.enum([
   "ask",
   "safe",

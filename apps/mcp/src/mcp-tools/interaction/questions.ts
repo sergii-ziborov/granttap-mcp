@@ -3,8 +3,8 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { argumentsDigest } from "../operation-ledger";
 import { notPaired } from "./answers";
 import {
+  askDeclinableYesNo,
   askOpenQuestionOutcome,
-  askYesNoOutcome,
   openAnswerText,
   relay,
   yesNoText,
@@ -25,13 +25,16 @@ export function registerQuestionTools(server: McpServer, once: Once): void {
       description:
         "Ask the person a yes/no question on their phone or watch and wait for the tap, about three minutes by default. "
         + "Use it when the work needs their decision and they may be away from this computer. Returns 'yes' or 'no' "
-        + "when they answered, or 'no-answer (timeout)' when nobody answered in time. A timeout is not a "
-        + "refusal: do not treat it as 'no', and do not treat it as permission. With an operationId, a retry "
-        + "returns the answer already given instead of asking again.",
+        + "when they answered, 'declined (the person chose not to answer)' when they declined to decide, or "
+        + "'no-answer (timeout)' when nobody answered in time. Neither a decline nor a timeout is a "
+        + "refusal: do not treat it as 'no', and do not treat it as permission; go on without that decision. "
+        + "With an operationId, a retry returns the answer already given instead of asking again.",
       inputSchema: { question: question.describe("A question answerable with yes/no"), operationId },
       outputSchema: {
-        status: z.enum(["answered", "timed_out"]).describe("timed_out: nobody answered before the wait ended"),
-        decision: z.enum(["yes", "no"]).nullable().describe("The person's answer; null when nobody answered. A timeout is not a refusal."),
+        status: z.enum(["answered", "declined", "timed_out"])
+          .describe("declined: the person chose not to answer; timed_out: nobody answered before the wait ended"),
+        decision: z.enum(["yes", "no"]).nullable()
+          .describe("The person's answer; null when they declined or nobody answered. Neither is a refusal."),
         replayed: z.boolean().optional().describe("This answer repeats an earlier call with the same operationId"),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
@@ -42,7 +45,7 @@ export function registerQuestionTools(server: McpServer, once: Once): void {
       const scope = interactionScope("ask_yes_no", text, operation);
       const digest = argumentsDigest({ question: text });
       return once(scope?.sessionId ?? "unattributed", "ask_yes_no", operation, digest, async () => {
-        const outcome = await askYesNoOutcome(client, text, undefined, scope);
+        const outcome = await askDeclinableYesNo(client, text, undefined, scope);
         return { at: Date.now(), tool: "ask_yes_no", digest, text: yesNoText(outcome), outcome };
       });
     },
@@ -53,12 +56,14 @@ export function registerQuestionTools(server: McpServer, once: Once): void {
       description:
         "Ask the person an open question on their phone or watch and wait for their spoken or typed reply, about three "
         + "minutes by default. Use it when the work needs their words, such as a name or a choice among more than two options. "
-        + "Returns their answer text, or 'no-answer (timeout)' when nobody answered in time; a timeout is "
-        + "not an answer. With an operationId, a retry returns the answer already given instead of asking again.",
+        + "Returns their answer text, 'declined (the person chose not to answer)' when they declined to answer, or "
+        + "'no-answer (timeout)' when nobody answered in time; neither is an answer, so go on without one. "
+        + "With an operationId, a retry returns the answer already given instead of asking again.",
       inputSchema: { question, operationId },
       outputSchema: {
-        status: z.enum(["answered", "timed_out"]).describe("timed_out: nobody answered before the wait ended"),
-        answer: z.string().nullable().describe("The person's words; null when nobody answered"),
+        status: z.enum(["answered", "declined", "timed_out"])
+          .describe("declined: the person chose not to answer; timed_out: nobody answered before the wait ended"),
+        answer: z.string().nullable().describe("The person's words; null when they declined or nobody answered"),
         replayed: z.boolean().optional().describe("This answer repeats an earlier call with the same operationId"),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },

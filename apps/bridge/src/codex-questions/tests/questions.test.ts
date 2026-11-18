@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import type { Payload, SessionInfo, UserMessage } from '../../../../../packages/protocol/schema';
 import { codexLogPathBySession } from '../../sessions/scan/codex/shared';
-import { publishCodexQuestions, handleCodexQuestionReply } from '../index';
+import { DECLINED_ANSWER, publishCodexQuestions, handleCodexQuestionReply } from '../index';
 import type { RelayClient } from '../../../../../packages/core/relay-client';
 
 function fixture(t: test.TestContext) {
@@ -144,4 +144,32 @@ test('native question expiry is explicit and does not claim the native card was 
     requestId: first.requestId, sessionId: f.session.sessionId, text: 'Simulator', createdAt: Date.now() },
   async () => {}, 'phone'), true);
   assert.ok(f.sent.some(x => x.payload.type === 'delivery.receipt' && x.payload.status === 'rejected'));
+});
+
+test('a declined native question answers Codex with the fixed decline, never the phone text or files', async t => {
+  const f = fixture(t);
+  await publishCodexQuestions(f.client, [f.session]);
+  const first = f.sent[0]!.payload;
+  assert.equal(first.type, 'agent.event');
+  if (first.type !== 'agent.event') return;
+  assert.equal(first.questionDecline, 'decline-v1');
+  const decline: UserMessage = { type: 'user.message', messageId: 'phone-decline', requestId: first.requestId,
+    sessionId: f.session.sessionId, text: 'Words on the phone', questionDecline: 'decline-v1', createdAt: Date.now() };
+  let forwarded: UserMessage | undefined;
+  const deliver = async (_client: RelayClient, message: UserMessage, _publish: () => Promise<void>, _peer?: string,
+    native?: { messageId: string; questionReply: true }) => {
+    forwarded = message;
+    assert.equal(native?.messageId, first.requestId);
+    return true;
+  };
+  assert.equal(await handleCodexQuestionReply(f.client, decline, async () => {}, 'phone', deliver), true);
+  assert.equal(forwarded?.messageId, 'phone-decline');
+  assert.equal(forwarded?.questionDecline, undefined);
+  assert.ok(forwarded?.text.includes(DECLINED_ANSWER));
+  assert.ok(!forwarded?.text.includes('Words on the phone'));
+  forwarded = undefined;
+  assert.equal(await handleCodexQuestionReply(f.client, { ...decline, text: '' }, async () => {}, 'phone', deliver), true,
+    'A decline needs no words of the person.');
+  assert.equal(await handleCodexQuestionReply(f.client, { ...decline,
+    attachments: [{ name: 'a.txt', mimeType: 'text/plain', data: 'YQ==' }] }, async () => {}, 'phone', deliver), false);
 });

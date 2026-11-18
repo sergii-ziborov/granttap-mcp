@@ -9,6 +9,8 @@ import { observedQuestions } from './source';
 export { codexQuestionText } from './observations';
 
 const RETENTION_MS = 24 * 60 * 60_000;
+/** What Codex is told when the person declines: the native question still needs an answer to go on. */
+export const DECLINED_ANSWER = 'The person chose not to answer this question. Continue without their answer.';
 
 /** Phone questions travel as device-encrypted control events, independently of task-key grants. */
 export async function publishCodexQuestions(client: RelayClient, sessions: SessionInfo[],
@@ -54,7 +56,7 @@ export async function publishCodexQuestions(client: RelayClient, sessions: Sessi
       } else if (!record.announced || options.replay) {
         const text = [record.question, ...record.options.map(value => '• ' + value)].join('\n');
         await client.send({ type: 'agent.event', kind: 'question', requestId: record.requestId,
-          questionReplyFormat: 'attachments-v1',
+          questionReplyFormat: 'attachments-v1', questionDecline: 'decline-v1',
           sessionId: session.sessionId, agent: 'codex', projectId: session.projectId,
           taskId: session.taskId, computerId: session.computerId, text, createdAt: record.createdAt },
         'phone', { ttlMs: Math.max(1, record.createdAt + RETENTION_MS - Date.now()),
@@ -103,11 +105,13 @@ export async function handleCodexQuestionReply(client: RelayClient, message: Use
     return true;
   }
   const hasAttachments = !!(message.attachments?.length || message.attachmentRefs?.length);
-  if (!message.text.trim() || message.text.length > 4_000
+  // A decline carries no words or files of the person's; Codex gets the fixed answer instead.
+  const declined = message.questionDecline === 'decline-v1';
+  if (declined ? hasAttachments : !message.text.trim() || message.text.length > 4_000
     || (hasAttachments && message.questionReplyFormat !== 'attachments-v1')) return false;
-  return deliver(client, { ...message, requestId: undefined,
+  return deliver(client, { ...message, requestId: undefined, questionDecline: undefined,
     messageId: message.messageId ?? 'codex-answer-' + record.requestId,
-    text: nativeAnswerEnvelope(record, message.text) }, publish, peerPublicKey,
+    text: nativeAnswerEnvelope(record, declined ? DECLINED_ANSWER : message.text) }, publish, peerPublicKey,
   { messageId: record.requestId, questionReply: true });
 }
 

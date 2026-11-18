@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CodingAgent } from "../primitives";
+import { CodingAgent, QuestionDecline } from "../primitives";
 
 export const UserAttachment = z.object({
   name: z.string().min(1).max(180),
@@ -51,6 +51,8 @@ export const UserMessage = z.object({
   requestId: z.string().optional(),
   /** Explicit compatible opt-in for native question file/image replies. */
   questionReplyFormat: z.literal("attachments-v1").optional(),
+  /** Not an answer: the person declines the correlated question; its text is never given to the agent. */
+  questionDecline: QuestionDecline.optional(),
   sessionId: z.string().optional(),
   attachments: z.array(UserAttachment).max(MAX_USER_ATTACHMENTS).optional(),
   /** Attachments that came ahead of this message, by id. */
@@ -138,6 +140,8 @@ export const AgentEvent = z.object({
   requestId: z.string().optional(),
   /** Explicit compatible opt-in for native question file/image replies. */
   questionReplyFormat: z.literal("attachments-v1").optional(),
+  /** The waiting agent accepts a declining reply to this question. */
+  questionDecline: QuestionDecline.optional(),
   kind: z.enum(["question", "status", "response"]).optional(),
   sessionId: z.string().optional(),
   agent: CodingAgent.optional(),

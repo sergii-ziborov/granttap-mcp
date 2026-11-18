@@ -10,6 +10,12 @@ Grok Bot endpoint, its one-time invite, credential, actors, and revocable policy
 Both are strict schemas: unknown fields are rejected, and transcripts or hidden
 model reasoning are outside the contract.
 
+`questionDecline` (optional, `"decline-v1"`) on an `agent.event` question or an
+`approval.request` says its waiting agent accepts a decline; on a `user.message` with
+the same `requestId` it is the person's decline, whose `text` is never given to the
+agent. A controller sends it only to a question that advertised it, so a computer
+from before the field never receives one.
+
 `sessions/index.ts` carries the session record. `startedBy` (optional, strict:
 `{ agent: "claude" | "codex" | "grok" | "cursor", sessionId }`, the id 8–128 of
 `A–Z a–z 0–9 . _ -`, no other field) names the chat that started this one, when

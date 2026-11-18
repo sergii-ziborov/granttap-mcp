@@ -12,6 +12,10 @@ trailing `• ` choices; desktop app actions (commit, merge…) are left out bec
 only the desktop app runs them. The answer is an ordinary message to that chat,
 so current provider, pause, Task policy, the queue and receipts all apply.
 
+These cards do not advertise a decline: the chat has already ended its turn, so
+no agent waits for one. A phone may hide the card for itself; the chat still
+holds the question until the person answers it.
+
 A later message from the person closes the card on every device: typed at the
 computer, a desktop button, or the phone reply itself. A newer question replaces
 an older one. Records survive monitor restart and are replayed when a phone

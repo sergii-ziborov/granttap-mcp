@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { questionRequest, claudeQuestionOutput } from "..";
+import { questionRequest, claudeQuestionOutput, deferredQuestionOutput } from "..";
 import { registerPendingApproval, acceptApprovalDecision, resolvedApprovalOutcome } from "../../approvals/state";
 
 test("Claude questions preserve all options and return selection, multi-select and Other to the original tool", t => {
@@ -37,4 +37,17 @@ test("Claude questions preserve all options and return selection, multi-select a
   assert.deepEqual(output?.hookSpecificOutput.updatedInput, { ...input.tool_input, answers });
   assert.equal(claudeQuestionOutput(input, base), undefined);
   assert.equal(questionRequest({ ...input, tool_input: { questions: [] } }), undefined);
+});
+
+test("a phone's Deny on a Claude question declines it rather than deferring it to the end of the turn", () => {
+  const input = { session_id: "chat", tool_use_id: "declined", tool_name: "AskUserQuestion",
+    tool_input: { questions: [{ question: "Which platform?", header: "Platform", options: [
+      { label: "App Store", description: "" }, { label: "Website", description: "" }], multiSelect: false }] } };
+  const request = questionRequest(input)!;
+  const deny = { type: "approval.decision" as const, requestId: request.requestId, sessionId: "chat",
+    decision: "deny" as const, decidedBy: "phone", decidedAt: Date.now() };
+  // The hook then answers Claude "The user declined to answer this question".
+  assert.equal(claudeQuestionOutput(input, deny, request), undefined);
+  assert.equal(deferredQuestionOutput(deny), undefined);
+  assert.equal(deferredQuestionOutput({ ...deny, decidedBy: "expired" })?.hookSpecificOutput.permissionDecision, "deny");
 });

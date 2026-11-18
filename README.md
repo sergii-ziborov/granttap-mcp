@@ -744,8 +744,8 @@ trust.
 | `reconnect` | After explicit confirmation, show a one-time QR to reconnect or add an independent controller device while retaining the current room |
 | `remove_phones` | Ask the person to remove paired phones that are no longer used, by `notSeenForDays` (never the phone heard from most recently; `connection_status` marks the 30-day ones `stale`) and/or `phoneIds` from `connection_status`; nothing is removed without a yes on a phone, and the phone that answers, any phone heard from while the question is open, and the last phone stay |
 | `notify` | Send a non-blocking status of at most 2,000 characters that nobody answers, and/or one task-scoped Mesh event |
-| `ask_yes_no` | Ask a yes/no question and wait about three minutes for the explicit answer; a timeout is neither yes nor no |
-| `ask` | Ask an open question and wait about three minutes for typed or spoken text |
+| `ask_yes_no` | Ask a yes/no question and wait about three minutes for the explicit answer; a timeout, or the person declining to answer, is neither yes nor no |
+| `ask` | Ask an open question and wait about three minutes for typed or spoken text; the person may decline, and the agent hears so at once |
 | `request_sign_in` | Send an https sign-in page to the phone, wait for the person, and deliver the browser's loopback redirect once to the port the CLI listens on; returns `completed`, `cancelled` or `timed_out`, never the page or the redirect's contents |
 | `offload_task` | Request moving the calling Task to a compatible computer in its Mesh, keeping provider, model, effort and visible conversation; requires Automatic computer transfers, and `action=status` or `action=cancel` acts only on the caller's own request |
 

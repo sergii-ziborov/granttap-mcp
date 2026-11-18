@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ApprovalQuestions } from "./approval-questions";
-import { AgentId, DangerLevel, Risk } from "./primitives";
+import { AgentId, DangerLevel, QuestionDecline, Risk } from "./primitives";
 
 export const ApprovalRequest = z.object({
   type: z.literal("approval.request"),
@@ -8,6 +8,8 @@ export const ApprovalRequest = z.object({
   agent: AgentId,
   kind: z.enum(["permission", "question"]),
   questions: ApprovalQuestions.optional(),
+  /** This yes/no question also accepts a declining `user.message` reply. */
+  questionDecline: QuestionDecline.optional(),
   tool: z.string(),
   title: z.string(),
   command: z.string().optional(),

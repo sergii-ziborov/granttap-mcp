@@ -1,6 +1,6 @@
 import { RelayClient } from "../../../../../packages/core/relay-client";
 import { randomId } from "../../../../../packages/core/crypto";
-import type { Payload } from "../../../../../packages/protocol/schema";
+import type { ApprovalDecision, Payload } from "../../../../../packages/protocol/schema";
 import { isUnanswered, requestApproval } from "../../../../bridge/src/approvals";
 import { sendApprovalResolved, terminalApproval } from "../../../../bridge/src/approvals/state";
 import { loadConfig, machineConfigPath } from "../../../../bridge/src/config";
@@ -113,17 +113,24 @@ export function connectionRuntimeStatus(room?: string): {
 export type YesNoOutcome =
   | { status: "answered"; decision: "yes" | "no" }
   | { status: "timed_out"; decision: null };
+/** The person chose not to answer: neither yes nor no, and not a timeout. */
+export type DeclinedYesNo = { status: "declined"; decision: null };
 export type OpenOutcome =
   | { status: "answered"; answer: string }
-  | { status: "timed_out"; answer: null };
+  | { status: "timed_out"; answer: null }
+  | { status: "declined"; answer: null };
 
 export const NO_ANSWER = "no-answer (timeout)";
+export const DECLINED = "declined (the person chose not to answer)";
+const QUESTION_DECLINE = "decline-v1" as const;
 
-export function yesNoText(outcome: YesNoOutcome): string {
+export function yesNoText(outcome: YesNoOutcome | DeclinedYesNo): string {
+  if (outcome.status === "declined") return DECLINED;
   return outcome.status === "answered" ? outcome.decision : NO_ANSWER;
 }
 
 export function openAnswerText(outcome: OpenOutcome): string {
+  if (outcome.status === "declined") return DECLINED;
   return outcome.status === "answered" ? outcome.answer : NO_ANSWER;
 }
 
@@ -143,7 +150,55 @@ export async function askYesNoOutcome(
   scope?: TaskInteractionScope,
   requestId = randomId(6),
 ): Promise<YesNoOutcome> {
-  const decision = await requestApproval(
+  return yesNoOutcome(await yesNoDecision(client, question, timeoutMs, scope, requestId));
+}
+
+/**
+ * `ask_yes_no`, which the phone may also decline. The decline cancels the
+ * waiting request, so the agent hears at once that no answer is coming. Only a
+ * decline that actually ended the wait counts: an answer that won first stands.
+ */
+export async function askDeclinableYesNo(
+  client: RelayClient,
+  question: string,
+  timeoutMs = ASK_TIMEOUT_MS,
+  scope?: TaskInteractionScope,
+): Promise<YesNoOutcome | DeclinedYesNo> {
+  const requestId = randomId(6);
+  const stop = new AbortController();
+  const off = client.onMessage(async (payload: Payload) => {
+    if (stop.signal.aborted || !isDecline(payload, requestId, scope?.sessionId)) return false;
+    try {
+      if (payload.messageId) await sendReceipt(client, payload.messageId);
+    } catch {
+      return false;
+    }
+    stop.abort("The person declined to answer on the phone.");
+    return true;
+  });
+  try {
+    const decision = await yesNoDecision(client, question, timeoutMs, scope, requestId, stop.signal);
+    if (stop.signal.aborted && decision.decidedBy === "cancelled") return { status: "declined", decision: null };
+    return yesNoOutcome(decision);
+  } finally {
+    off();
+  }
+}
+
+function yesNoOutcome(decision: ApprovalDecision): YesNoOutcome {
+  if (isUnanswered(decision)) return { status: "timed_out", decision: null };
+  return { status: "answered", decision: decision.decision === "allow" ? "yes" : "no" };
+}
+
+function yesNoDecision(
+  client: RelayClient,
+  question: string,
+  timeoutMs: number,
+  scope: TaskInteractionScope | undefined,
+  requestId: string,
+  signal?: AbortSignal,
+): Promise<ApprovalDecision> {
+  return requestApproval(
     loadConfig(machineConfigPath()),
     {
       type: "approval.request",
@@ -152,6 +207,7 @@ export async function askYesNoOutcome(
       kind: "permission",
       tool: "ask_yes_no",
       title: question,
+      ...(signal ? { questionDecline: QUESTION_DECLINE } : {}),
       sessionId: scope?.sessionId,
       projectId: scope?.projectId,
       taskId: scope?.taskId,
@@ -159,10 +215,13 @@ export async function askYesNoOutcome(
       risk: "low",
       createdAt: Date.now(),
     },
-    { client, timeoutMs },
+    { client, timeoutMs, signal },
   );
-  if (isUnanswered(decision)) return { status: "timed_out", decision: null };
-  return { status: "answered", decision: decision.decision === "allow" ? "yes" : "no" };
+}
+
+function isDecline(payload: Payload, requestId: string, sessionId: string | undefined): payload is Reply {
+  return payload.type === "user.message" && payload.requestId === requestId
+    && (payload.sessionId?.trim() || undefined) === sessionId && payload.questionDecline === QUESTION_DECLINE;
 }
 
 export async function askOpenQuestion(
@@ -188,6 +247,7 @@ export async function askOpenQuestionOutcome(
     })).catch(() => {});
     return { status: "timed_out", answer: null };
   }
+  if (reply.questionDecline === QUESTION_DECLINE) return { status: "declined", answer: null };
   return { status: "answered", answer: reply.text };
 }
 
@@ -205,7 +265,7 @@ async function waitForReply(
   try {
     const payload = {
       type: "agent.event" as const, text: question, requestId, kind: "question" as const,
-      sessionId: scope?.sessionId, agent: scope?.provider, projectId: scope?.projectId,
+      questionDecline: QUESTION_DECLINE, sessionId: scope?.sessionId, agent: scope?.provider, projectId: scope?.projectId,
       taskId: scope?.taskId, computerId: scope?.computerId, createdAt: Date.now(),
     };
     const options = { ttlMs: timeoutMs, wake: true };
@@ -249,7 +309,9 @@ function listenForReply(
         || handling
       ) return false;
       handling = true;
-      appliedTerminal ??= terminalApproval(requestId, "applied", { note: "Open question answered" });
+      appliedTerminal ??= terminalApproval(requestId, "applied", {
+        note: payload.questionDecline === QUESTION_DECLINE ? "Open question declined" : "Open question answered",
+      });
       try {
         await sendApprovalResolved(client, appliedTerminal);
         if (payload.messageId) {

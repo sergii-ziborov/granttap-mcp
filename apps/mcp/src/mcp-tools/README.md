@@ -4,7 +4,11 @@ The Personal MCP surface is an exact allowlist: `connection_status`, `connect`,
 `connect_with_passkey`, `reconnect`, `remove_phones`, `set_runtime_auto_update`, `notify`,
 `ask_yes_no`, `ask`, `request_sign_in`, and `offload_task`. Context compilation belongs
 inside Project Mesh, not as extra tools. `relay.ts` owns one shared encrypted relay connection
-and the durable question lifecycle. Machine setup, custom relay selection, and
+and the durable question lifecycle. `ask` and `ask_yes_no` mark their cards
+`questionDecline: decline-v1`; a phone reply carrying that marker ends the wait at once with
+`status: declined`, which is neither an answer nor a refusal, and its text never reaches the
+agent. An answer that arrived first stands. `remove_phones` asks without the marker, so its
+consent can only be yes, no or silence. Machine setup, custom relay selection, and
 pairing reset remains an explicit CLI operation. The narrower `reconnect` MCP
 tool can replace only the current pairing, is declared destructive, and requires
 explicit confirmation before it creates a new one-time QR.

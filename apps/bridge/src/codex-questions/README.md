@@ -13,6 +13,12 @@ wake notification. A native answer clears the corresponding card across devices.
 After a day, a GrantTap card expires without claiming the native question was
 answered. The Codex conversation remains the source of truth.
 
+Cards advertise `questionDecline: decline-v1`. A phone that declines sends that
+marker on its reply; Codex then receives a fixed answer saying the person chose
+not to answer, through the same native item and delivery, never the phone's own
+text or files. An older phone never sends the marker; an older computer never
+advertises it, so the phone offers only its local hide.
+
 Replies use the original host question item ID and normal scoped phone delivery,
 including current provider, pause and Task policy. Native admission uses one
 stable delivery ID per question, so concurrent controllers cannot submit two
