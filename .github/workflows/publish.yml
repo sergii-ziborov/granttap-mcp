@@ -12,7 +12,7 @@ jobs:
     # macOS: `prepublishOnly` enforces the coverage contract, and the helper,
     # OAuth service, and installer paths only execute on this platform.
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       # V8's runner default heap is too small for the complete coverage merge.
       # Match the qualified sequential local gate and retain every check.
