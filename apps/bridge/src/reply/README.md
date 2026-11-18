@@ -48,6 +48,18 @@ effort that message carries, else the capsule's `targetModel`. Grok Build is
 resolved with `providers/grok-bin.ts`. Tests:
 [`tests/model-effort-args.test.ts`](tests/model-effort-args.test.ts).
 
+A resumed headless Claude or Codex turn that names no effort keeps the chat's own: the
+one its latest request used, as its catalog row reports it (`resumedEffort`). Without
+the flag the CLI starts at its own default instead. On the owner's Mac, Claude Code ran
+phone follow-ups at medium in chats begun from the phone at xhigh, though its settings
+said xhigh, and a Codex resume takes config.toml's level. Codex levels differ by model,
+so a turn that switches the Codex model keeps nothing it did not choose; Claude Code
+retries a level a model refuses without it. A chat that reported no effort, or a level
+the provider does not have, resumes as before. The model is not carried this way: a
+Claude chat reports the resolved model id, which cannot say whether a 1M-context
+variant was chosen. Tests: [`tests/turn/phone-task-controls.test.ts`](../../../../tests/turn/phone-task-controls.test.ts)
+drives phone-shaped messages through the monitor to the exact Claude and Codex command lines.
+
 Explicit Cursor task turns pass `--trust` for the selected workspace so an
 updated CLI cannot wait for an invisible desktop trust prompt. Resumes without
 a reported workspace are refused. Tool approvals and global action bans remain

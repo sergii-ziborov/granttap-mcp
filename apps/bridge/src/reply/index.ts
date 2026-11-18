@@ -10,7 +10,7 @@ import type { CodingAgent } from "../../../../packages/protocol/schema";
 import { resolveClaudeBinary } from "../providers/claude-bin";
 import { parseClaudeResult } from "./payload/claude-result";
 import { runCodex, runCodexNew } from "./process/codex-headless";
-import { providerEffortArgs } from "./process/provider-effort";
+import { providerEffortArgs, resumedEffort } from "./process/provider-effort";
 import { configDir, isSessionPaused, loadRuntimeConfig, PAUSED_SESSION_REASON } from "../config";
 import { withAttachments } from "./payload/attachments";
 import { abortProcesses, runProcess } from "./process";
@@ -205,7 +205,7 @@ function runClaude(
   const modeArgs = options.permissionMode
     ? ["--permission-mode", options.permissionMode]
     : [];
-  const effortArgs = providerEffortArgs("claude", options.effort);
+  const effortArgs = providerEffortArgs("claude", resumedEffort("claude", session, options));
   const args = [
     "-p", "--resume", session.sessionId, ...mcpArgs, ...modelArgs,
     ...modeArgs, ...effortArgs,

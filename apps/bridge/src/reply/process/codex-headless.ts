@@ -2,7 +2,7 @@ import type { SessionInfo } from "../../../../../packages/protocol/schema";
 import { loadRuntimeConfig } from "../../config";
 import { resolveCodexBinary } from "../../providers/codex-bin";
 import { runProcess } from ".";
-import { providerEffortArgs } from "./provider-effort";
+import { providerEffortArgs, resumedEffort } from "./provider-effort";
 import type { DeliveryOptions, ReplyResult } from "../payload/types";
 import { continueCodexQuestion, deliverToCodexDesktop, nativeQuestionAttachmentEnvelope } from '../../codex-desktop';
 
@@ -79,7 +79,8 @@ async function resumeCodex(session: SessionInfo, text: string, timeoutMs: number
   const modelArgs = options.model ? ["-m", options.model] : [];
   const imageArgs = images.flatMap((path) => ["-i", path]);
   const args = [
-    "exec", "resume", ...accessArgs, ...mcpArgs, ...modelArgs, ...providerEffortArgs("codex", options.effort), ...imageArgs,
+    "exec", "resume", ...accessArgs, ...mcpArgs, ...modelArgs,
+    ...providerEffortArgs("codex", resumedEffort("codex", session, options)), ...imageArgs,
     session.sessionId, "--json", "--skip-git-repo-check", "-",
   ];
   const result = await runProcess(
