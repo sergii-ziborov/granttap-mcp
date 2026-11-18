@@ -29,6 +29,19 @@ including `mcport` (MIT), `blazingly-json` (MIT), `serde` (MIT OR Apache-2.0), a
 BlindPlane crates (MIT OR Apache-2.0). Binary distributions must retain the
 complete license texts required by the exact dependency versions they contain.
 
+## Ported source: lot-map
+
+The live map's ten stations and the rules that read a tool call or a shell
+command line for its station are ported from
+[lot-map](https://github.com/alexeyw/lot-map) by Aleksei Volodin (MIT,
+commit `340b985`), a Claude Code mod that draws the same map in a pane beside
+the chat. The ported code is in `apps/bridge/src/live-map/classification/`
+and the station list in `packages/protocol/messages/live-map/`; each file
+names its origin, and `THIRD_PARTY_LICENSES.txt` keeps lot-map's copyright and
+license text. Those portions remain under the MIT license; the GrantTap
+first-party license does not apply to them. GrantTap does not ship or run the
+mod itself.
+
 ## Optional SweepLoom integration
 
 Provider storage inspection may invoke a separately installed SweepLoom CLI

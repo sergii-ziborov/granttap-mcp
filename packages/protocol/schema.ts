@@ -11,6 +11,8 @@ export * from "./task-transfer";
 import { TaskDispatch } from "./task-dispatch";
 export { TaskDispatch } from "./task-dispatch";
 import { SessionImageQuery, SessionImageChunk } from './messages/session-images';
+import { SessionPulses, SessionPulsesSubscription } from './messages/live-map';
+export * from './messages/live-map';
 import { SessionWorkspaceQuery, SessionWorkspaceResult } from './messages/sessions/workspace';
 export { SessionWorkspaceQuery, SessionWorkspaceResult } from './messages/sessions/workspace';
 import { SessionChangesQuery, SessionChangesResult, SessionCommit, SessionCommitResult } from './messages/sessions/working-tree';
@@ -161,6 +163,8 @@ export const Payload = z.union([
   SessionEventsRequest,
   SessionsRefresh,
   SessionActivity,
+  SessionPulses,
+  SessionPulsesSubscription,
   SessionImageQuery,
   SessionImageChunk,
   SessionWorkspaceQuery,

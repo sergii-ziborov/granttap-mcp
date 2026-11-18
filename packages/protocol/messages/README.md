@@ -81,6 +81,13 @@ listens on; `signin.result` says `completed` or `cancelled` and may carry the
 path and query of the loopback redirect, bounded and free of characters that
 could end a request line. Tests live in `sign-in/tests/`.
 
+`live-map/index.ts` carries a chat's live map: `session.pulses.subscribe { sessionId, active }`
+from the phone, renewed while the map is open, and `session.pulses` (strict) from the computer, at
+most one frame a second with at most 48 pulses and 12 KB. A pulse names a station (the ten of
+[lot-map](https://github.com/alexeyw/lot-map), MIT), a tool, skill, agent type or model name, its
+phase, status, time, duration, a subagent digest and a parallel count, never an argument, path,
+command or result. The contract is in `apps/bridge/src/live-map/README.md`.
+
 Tests are discoverable in `tests/core.test.ts` and the feature-level bridge and MCP suites.
 
 License: this module is distributed under the GrantTap Commercial Source License in the repository-root `LICENSE` file.

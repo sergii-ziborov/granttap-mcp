@@ -55,6 +55,7 @@ import { annotateLimitContinuations, scheduleLimitContinuations } from "../../li
 import { keepNotedChatPictures } from "../../helper-runs/pictures/chats";
 import { attachWorkingTrees } from "../../working-tree";
 import { cachedNativeAccountUsage } from "../../provider-account-status";
+import { stopLiveMap } from "../../live-map";
 
 export type SessionMonitor = {
   publish: () => Promise<void>;
@@ -278,6 +279,7 @@ export function startSessionMonitor(client: RelayClient, options: { primary?: bo
       offConnected?.();
       stopCatalog();
       stopCatalogHeads(client);
+      stopLiveMap(client);
       stopMonitorCapabilities(client);
       stopMonitorMeshes(client);
       stopHeartbeat();

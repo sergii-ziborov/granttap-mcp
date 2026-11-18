@@ -50,6 +50,7 @@ import { handleCodexQuestionReply, publishCodexQuestions, replayCodexQuestion } 
 import { handleClaudeOpenQuestionReply, publishClaudeOpenQuestions, replayClaudeOpenQuestion }
   from '../../claude-open-questions';
 import { publishedCatalog } from '../../session-catalog';
+import { handleLiveMapSubscription } from '../../live-map';
 
 export async function handleMonitorMessage(
   client: RelayClient,
@@ -94,6 +95,8 @@ export async function handleMonitorMessage(
       return true;
     } else if (payload.type === "session.subscribe") {
       return handleInboundSubscription(client, payload, subscriptions, publish, input.peerPublicKey);
+    } else if (payload.type === "session.pulses.subscribe") {
+      return handleLiveMapSubscription(client, payload, input.peerPublicKey);
     } else if (payload.type === "session.events" || payload.type === "session.image.query" || payload.type === "session.workspace.query") {
       return handleSessionRead(client, payload, input.peerPublicKey);
     } else if (payload.type === "session.changes.query" || payload.type === "session.commit") {
