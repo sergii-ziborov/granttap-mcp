@@ -1,5 +1,13 @@
 # GrantTap Cursor plugin
 
+Approve, answer and steer your Cursor agents from iPhone, iPad and Apple Watch.
+GrantTap for iPhone and iPad is a free download on the
+[App Store](https://apps.apple.com/app/id6809739366); Apple Watch is a companion
+to the iPhone app. Cursor support is Beta: GrantTap shows Cursor chats and the
+local controls Cursor's integration supports.
+
+<a href="https://apps.apple.com/app/id6809739366"><img src="https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-app-store/black/en-us" alt="Download GrantTap on the App Store" height="40"></a>
+
 GrantTap connects Cursor to the GrantTap phone app. The Marketplace plugin
 ships stdio MCP. Pair and change settings in the plugin connection card and
 the GrantTap app. Do not add GrantTap in Cursor Customize → MCPs. GrantTap
@@ -33,8 +41,8 @@ user Customize → MCPs row or an old plugin `mcp.json`. The current plugin is
 stdio (`node -e`) so Cloud never fetches loopback.
 
 On Windows, `granttap setup` registers the local helper and phone monitor as
-least-privileged jobs under your signed-in account. Install Node.js 20+ and the
-current `granttap-mcp` package on that same Windows computer. The jobs restart
+least-privileged jobs under your signed-in account. Install Node.js 22.13.0 or
+newer and the current `granttap-mcp` package on that same Windows computer. The jobs restart
 after a crash and keep running when Cursor closes.
 
 The plugin `mcp.json` starts GrantTap with `node -e` so Cursor's cwd=`$HOME`
@@ -89,5 +97,5 @@ Troubleshooting details live in
 
 ## License
 
-The plugin is distributed under the [GrantTap Commercial Source License](LICENSE). The GrantTap iPhone
-and Apple Watch app and hosted service have separate terms.
+The plugin is distributed under the [GrantTap Commercial Source License](LICENSE). The GrantTap iPhone,
+iPad and Apple Watch app and hosted service have separate terms.

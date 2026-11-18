@@ -2,6 +2,13 @@
 
 ![GrantTap](assets/logo.png)
 
+Approve, answer and steer your coding agents from iPhone, iPad and Apple Watch.
+GrantTap for iPhone and iPad is a free download on the
+[App Store](https://apps.apple.com/app/id6809739366); Apple Watch is a companion
+to the iPhone app, and GrantTap for Mac is in TestFlight until Apple approves it.
+
+<a href="https://apps.apple.com/app/id6809739366"><img src="https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-app-store/black/en-us" alt="Download GrantTap on the App Store" height="40"></a>
+
 GrantTap links local coding agents to an Account Mesh that can hold many
 computers and Project Meshes. Each Task uses its selected computer route while
 you approve requests, answer questions, inspect work, and steer tasks from
@@ -118,9 +125,9 @@ healthy pairing merely to display a new QR.
 - `request_sign_in` sends a browser sign-in to the phone and waits for it.
 
 Codex, Claude Code, Cursor, and Grok Build use the persistent local HTTP
-service installed by `granttap setup`. See
-[granttap.com](https://granttap.com) for the iPhone and Apple Watch app,
-privacy policy, and terms.
+service installed by `granttap setup`. Get the iPhone and iPad app on the
+[App Store](https://apps.apple.com/app/id6809739366); see
+[granttap.com](https://granttap.com) for the privacy policy and terms.
 
 The connection card has an **Automatic updates: On / Off** switch. The saved
 choice applies to this computer's GrantTap runtime and is read by the running
@@ -129,4 +136,4 @@ and activation. Service configuration can lock updates off. This switch controls
 the GrantTap runtime; marketplace plugin updates remain managed by the coding app.
 
 The plugin and local MCP runtime are distributed under the [GrantTap Commercial Source License](LICENSE).
-The GrantTap iPhone and Apple Watch app and hosted service have separate terms.
+The GrantTap iPhone, iPad and Apple Watch app and hosted service have separate terms.

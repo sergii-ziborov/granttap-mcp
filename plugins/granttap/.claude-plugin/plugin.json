@@ -2,7 +2,7 @@
   "name": "granttap",
   "displayName": "GrantTap",
   "version": "0.1.55",
-  "description": "Pair Claude Code with GrantTap and approve, answer, or steer local agent work from iPhone and Apple Watch.",
+  "description": "Approve, answer and steer Claude Code from iPhone, iPad and Apple Watch with the GrantTap app, a free download on the App Store. The connection card pairs this computer and manages its phones.",
   "author": {
     "name": "GrantTap",
     "email": "support@granttap.com"
