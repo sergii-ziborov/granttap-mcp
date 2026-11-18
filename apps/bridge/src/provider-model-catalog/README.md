@@ -5,8 +5,10 @@ installed Codex account's visible model-picker metadata from `models_cache.json`
 It reads fresh data each catalog cycle so new models do not require a GrantTap
 release. `CODEX_HOME` and GrantTap's existing Codex directory overrides are honored.
 
-Hidden/internal models are excluded. Labels, descriptions, ordering and the
-provider's fetch timestamp are preserved. Prompt instructions, account identity
+Hidden/internal models are excluded. Labels, descriptions, ordering, each model's
+accepted reasoning levels (`supported_reasoning_levels`, as `supportedEfforts`: the
+luna models list no `ultra`) and the provider's fetch timestamp are preserved, as the
+live app-server catalog already did; without them the phone offered every Codex level. Prompt instructions, account identity
 and the rest of the native payload never cross the wire. Reads are bounded to
 2 MB and 64 model rows. Cache data older than 24 hours, malformed data, and
 future timestamps beyond the clock allowance remain unavailable/stale. GrantTap

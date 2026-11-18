@@ -10,6 +10,16 @@ import { cachedNativeAccountUsage, cachedProviderAccount } from "../provider-acc
 const MAX_BYTES = 2_000_000;
 const MAX_AGE = 24 * 60 * 60_000;
 const MODEL_ID = /^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,159}$/;
+const EFFORTS = ["low", "medium", "high", "xhigh", "max", "ultra"] as const;
+type Effort = typeof EFFORTS[number];
+
+/** The levels a cached model accepts (its luna models have no ultra); unknown when it lists none. */
+function cachedEfforts(value: unknown): { supportedEfforts?: Effort[] } {
+  if (!Array.isArray(value)) return {};
+  const levels = value.map(level => (level as { effort?: unknown } | null)?.effort)
+    .filter((effort): effort is Effort => EFFORTS.includes(effort as Effort));
+  return { supportedEfforts: [...new Set(levels)] };
+}
 
 function shortText(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
@@ -25,6 +35,7 @@ function row(value: unknown, endpointId: string, observedAt: number): Advertised
     label: shortText(native.display_name), description: shortText(native.description),
     ...(Number.isInteger(native.priority) && Number(native.priority) >= 0 && Number(native.priority) <= 10_000
       ? { priority: Number(native.priority) } : {}),
+    ...cachedEfforts(native.supported_reasoning_levels),
   };
 }
 

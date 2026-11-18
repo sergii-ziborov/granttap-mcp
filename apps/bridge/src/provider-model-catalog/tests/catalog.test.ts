@@ -37,6 +37,23 @@ test("native Codex metadata discovers future visible models and excludes hidden/
   } finally { file.remove(); }
 });
 
+test("each cached Codex model carries the reasoning levels it accepts, so the phone offers no other", () => {
+  const levels = (...efforts: string[]) => efforts.map(effort => ({ effort, description: `${effort} reasoning` }));
+  const file = cache({ fetched_at: new Date(now).toISOString(), models: [
+    { ...visible("gpt-6-sol"), supported_reasoning_levels: levels("low", "medium", "high", "xhigh", "max", "ultra") },
+    { ...visible("gpt-6-luna"), supported_reasoning_levels: [...levels("low", "medium", "xhigh", "max"), { effort: "minimal" }, "high"] },
+    visible("future-coding-model"),
+  ] });
+  try {
+    const rows = readCodexModelCatalog("mac-a", { path: file.path, now }).models;
+    assert.deepEqual(rows.map(row => [row.modelId, row.supportedEfforts]), [
+      ["gpt-6-sol", ["low", "medium", "high", "xhigh", "max", "ultra"]],
+      ["gpt-6-luna", ["low", "medium", "xhigh", "max"]],
+      ["future-coding-model", undefined],
+    ], "Codex's luna models have no ultra; a level outside the wire's set, or a malformed one, is not offered");
+  } finally { file.remove(); }
+});
+
 test("old, future-dated and malformed native catalogs cannot claim current availability", () => {
   for (const fetched_at of [new Date(now - 25 * 60 * 60_000).toISOString(),
     new Date(now + 10 * 60_000).toISOString(), "invalid"]) {
