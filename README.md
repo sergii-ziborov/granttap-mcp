@@ -73,7 +73,7 @@ service need a durable path, not npm's temporary `npx` cache.
 
 ## What's new
 
-Available now, with GrantTap MCP 0.8.197 on npm and GrantTap 1.0.2 on the App Store:
+Available now, with GrantTap MCP 0.8.198 on npm and GrantTap 1.0.2 on the App Store:
 
 - **Phones on the connection card.** In Claude (including the Claude desktop app),
   Codex, Cursor and Grok Build, the GrantTap card lists every phone paired with
