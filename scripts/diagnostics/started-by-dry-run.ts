@@ -8,10 +8,11 @@
  * state is never read or written: the config folder is a fresh temporary one, removed at the end, so
  * no link is remembered between runs. Ids and folders are printed; requests and transcripts are not.
  *
- *   node --import tsx scripts/diagnostics/started-by-dry-run.ts [--source <tree>] [--catalog-only]
+ *   node --import tsx scripts/diagnostics/started-by-dry-run.ts [--source <tree>] [--catalog-only] [--window-only]
  *
  * `--source` reads the runtime from another tree: an older release, to compare (one without matching by
- * folder matches by request alone); `--catalog-only` skips the rules.
+ * folder matches by request alone); `--catalog-only` skips the rules; `--window-only` measures the catalog
+ * before the pass that reads runs past its window (a monitor runs that pass within its first minute).
  */
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -77,8 +78,19 @@ async function rules(): Promise<void> {
     [...launchers.entries()].filter(([, chats]) => chats.size > 1).map(([at, chats]) => [`${at}: ${[...chats].join(", ")}`, chats.size]));
 }
 
+/** As a leading monitor does within its first minute: read the runs past the catalog's window. */
+async function beyondWindow(sessions: { scanSessions: () => unknown }): Promise<void> {
+  const children = await load("apps/bridge/src/session-catalog/started-children/index.ts").catch(() => undefined);
+  if (!children?.settleRunsBeyondWindow) return console.log("Runs past the window: this tree does not read them");
+  sessions.scanSessions();
+  const started = Date.now();
+  const counted = await children.settleRunsBeyondWindow({ force: true });
+  console.log(`Runs past the window: ${counted} linked and counted in ${Date.now() - started} ms`);
+}
+
 async function catalog(): Promise<void> {
   const sessions = await load("apps/bridge/src/sessions/index.ts");
+  if (!args.includes("--window-only")) await beyondWindow(sessions);
   const live: Row[] = sessions.scanSessions().sessions;
   // As the monitor bounds it with nothing pinned: the 40 first, newest first.
   const history: Row[] = (sessions.scanSessionHistory() as Row[]).slice(0, 40).sort((a, b) => b.lastActivityAt - a.lastActivityAt);
@@ -93,6 +105,13 @@ async function catalog(): Promise<void> {
     console.log(`  ${name}: ${children.length} rows name a parent (${bytes(children)} bytes); `
       + `${orphans.length} finished Codex rows in /tmp name none (${bytes(orphans)} bytes)`);
     for (const parent of parents) console.log(`    ${key(parent)} startedChildren ${JSON.stringify(parent.startedChildren)}`);
+  }
+  const children = await load("apps/bridge/src/session-catalog/started-children/index.ts").catch(() => undefined);
+  for (const parent of children?.startedChildIds ? [...live, ...history].filter((row) => row.startedChildren) : []) {
+    const { ids, total } = children.startedChildIds({ agent: parent.agent, sessionId: parent.sessionId });
+    const message = { type: "sessions.children", parent: { agent: parent.agent, sessionId: parent.sessionId }, children: ids, total,
+      generatedAt: NOW };
+    console.log(`  sessions.children for ${key(parent)}: ${ids.length} of ${total} ids, ${bytes(message)} bytes`);
   }
   console.log(`  bulk transcript heads a refresh may send: ${live.filter((row) => !(row.startedBy && row.state === "idle")).length} of ${live.length} live rows`);
   const paged: Row[] = sessions.scanSessionHistoryForPaging().sessions;

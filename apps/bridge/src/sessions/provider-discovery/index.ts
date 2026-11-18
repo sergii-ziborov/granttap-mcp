@@ -18,22 +18,32 @@ function emptyScan(): ProviderScan {
  * Explicit provider roots isolate fixtures and diagnostics from real user logs.
  * In normal operation (no overrides) every installed provider is scanned.
  */
-function providerReaders(maxFiles: number) {
-  const enabled = loadRuntimeConfig().providerSettings;
-  const explicit = {
+function explicitRoots() {
+  return {
     claude: Boolean(process.env.GRANTTAP_CLAUDE_PROJECTS_DIR || process.env.NODVOX_CLAUDE_PROJECTS_DIR),
     codex: Boolean(process.env.GRANTTAP_CODEX_SESSIONS_DIR || process.env.NODVOX_CODEX_SESSIONS_DIR),
     cursor: Boolean(process.env.GRANTTAP_CURSOR_TRANSCRIPTS_DIR || process.env.GRANTTAP_CURSOR_STATE_DB),
     grok: Boolean(process.env.GRANTTAP_GROK_SESSIONS_DIR || process.env.GROK_HOME),
   };
+}
+
+/** Whether the catalog reads this provider: it is on, and no other provider's root alone is set. */
+export function providerScanEnabled(agent: keyof ReturnType<typeof explicitRoots>,
+  settings = loadRuntimeConfig().providerSettings, explicit = explicitRoots()): boolean {
   const isolated = Object.values(explicit).some(Boolean);
+  return settings[agent] && (!isolated || explicit[agent]);
+}
+
+function providerReaders(maxFiles: number) {
+  const settings = loadRuntimeConfig().providerSettings;
+  const explicit = explicitRoots();
   const cooperative = { claude: scanClaudeCooperatively, codex: scanCodexCooperatively,
     cursor: async (limit: number) => scanCursor(limit), grok: async (limit: number) => scanGrok(limit) };
   return Object.entries({ claude: scanClaude, codex: scanCodex, cursor: scanCursor, grok: scanGrok })
     .map(([agent, read]) => {
-      const key = agent as keyof typeof explicit;
+      const key = agent as keyof typeof cooperative;
       return { agent, read: () => read(maxFiles), cooperative: () => cooperative[key](maxFiles),
-        enabled: enabled[key] && (!isolated || explicit[key]) };
+        enabled: providerScanEnabled(key, settings, explicit) };
     });
 }
 

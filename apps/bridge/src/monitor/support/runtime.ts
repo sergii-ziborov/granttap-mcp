@@ -30,6 +30,7 @@ import type { UpdateBlocker } from "../../runtime-updates/drain";
 import { singleFlightPublisher } from "./single-flight";
 import { publishedCatalog, rememberPublishedCatalog, resumePublishedChats,
   publishCatalogHeads, stopCatalogHeads } from "../../session-catalog";
+import { publishStartedChildren, settleRunsBeyondWindow } from "../../session-catalog/started-children";
 import { createMachineLoadPublisher } from "../../machine-load";
 import { startMachineLoadLoop } from "../../machine-load/host/loop";
 import { captureStartedRunsNow } from "../../machine-load/host/process-sampler";
@@ -187,6 +188,9 @@ async function publishMonitorTick(input: {
     cachedNativeAccountUsage).catch(() => {});
   void keepNotedChatPictures().catch(() => {});
   publishCatalogHeads(client, status, subscriptions, publishSessionEvents);
+  // Which chats each listed chat started, for chats the phone keeps from before; then runs past the window.
+  void publishStartedChildren(client, status, Date.now(), INTERVAL_MS * 24).catch(() => {});
+  void settleRunsBeyondWindow().catch(() => {});
   if (loadRuntimeConfig().meshEnabled) publishMonitorMeshes(client, status);
   publishMonitorCapabilities(client, status, () => history(false));
   return { lastHistoryPublishedAt };

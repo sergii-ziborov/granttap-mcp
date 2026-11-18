@@ -161,15 +161,17 @@ export const SessionInfo = z.object({
    * `session.image.query` on this chat or on the chat that started it (`startedBy`).
    */
   images: z.array(KeptPicture).max(12).optional(),
-  /**
-   * Finished chats this one started headless that the catalog counts here instead of listing: all of
-   * them (`finished`), those that stopped on an error, those that saved a picture, and the newest one's
-   * time. The newest few stay rows of their own.
-   */
   /** The working folder's uncommitted state when it is a Git checkout (`./working-tree.ts`). */
   workingTree: SessionWorkingTree.optional(),
+  /**
+   * Every finished chat this one started headless, however long ago, counted here instead of listed:
+   * all of them (`finished`), those that stopped on an error (`stopped`, a limit among them), those a
+   * usage or rate limit stopped (`limited`, added after MCP 0.8.193), those that saved a picture, and the newest
+   * one's time. The newest few stay rows of their own, and are counted here too.
+   */
   startedChildren: z.object({
     finished: z.number().int().nonnegative(), stopped: z.number().int().nonnegative(),
+    limited: z.number().int().nonnegative().optional(),
     pictures: z.number().int().nonnegative(), lastAt: z.number().nonnegative(),
   }).strict().optional(),
 });
@@ -259,6 +261,21 @@ export const SessionsHistoryPage = z.object({
   generatedAt: z.number(),
 }).strict();
 export type SessionsHistoryPage = z.infer<typeof SessionsHistoryPage>;
+
+/**
+ * Every chat this computer knows one chat started headless, newest first, so a phone can hang beneath
+ * it, or leave out, a chat it keeps from before it knew: an older catalog's row or a Mesh Task. Sent
+ * when the list changes, and again now and then for a phone that was away. `total` counts them all
+ * when there are more than the list holds.
+ */
+export const SessionsChildren = z.object({
+  type: z.literal("sessions.children"),
+  parent: SessionStartedBy,
+  children: z.array(z.string().regex(/^[A-Za-z0-9._-]{8,128}$/)).max(4_000),
+  total: z.number().int().nonnegative(),
+  generatedAt: z.number(),
+}).strict();
+export type SessionsChildren = z.infer<typeof SessionsChildren>;
 
 export { ConfigSet, ConfigCommandResult, CortexIntegrationSet } from "./configuration";
 

@@ -5,7 +5,7 @@ import { providerScans, cooperativeProviderScans, type ProviderScan } from "./pr
 import { attachHelperRuns } from "../helper-runs";
 import { attachChatPictures, noteChatPictureHints } from "../helper-runs/pictures/chats";
 import { attachStartedBy } from "../started-by";
-import { compactStartedChildren } from "../session-catalog/started-children";
+import { compactStartedChildren, countStartedChildren, noteCatalogParents, recordStartedChildren } from "../session-catalog/started-children";
 
 function sessionKey(session: SessionInfo): string {
   return `${session.agent}\0${session.sessionId}`;
@@ -54,8 +54,12 @@ function pickWithReserve(
 function catalogFromScans(scans: ProviderScan[]) {
   // A helper run is a conversation of the chat that started it, never a chat in these lists.
   // A chat another chat ran headless stays a chat, and names the chat that started it.
+  const lineage = scans.flatMap((scan) => scan.lineage ?? []);
   const native = attachChatPictures(attachStartedBy(attachHelperRuns(sortedUniqueSessions(scans.flatMap((scan) => scan.sessions)),
-    scans.flatMap((scan) => scan.helperRuns ?? [])), scans.flatMap((scan) => scan.lineage ?? [])));
+    scans.flatMap((scan) => scan.helperRuns ?? [])), lineage));
+  // Each finished run is counted on its parent for good; runs past the window are read by a slower pass.
+  recordStartedChildren(native);
+  noteCatalogParents(lineage);
   // Pictures a chat's own answer saved are kept by the monitor (`keepNotedChatPictures`).
   noteChatPictureHints(scans.flatMap((scan) => scan.pictures ?? []));
   // Prepared transfers replace native ids; rank their native activity before
@@ -125,7 +129,7 @@ function historyCatalog(sessions: SessionInfo[]): SessionInfo[] {
 export function scanSessionHistoryForPaging(maxFiles = MAX_FILES): { sessions: SessionInfo[]; sourceLimited: boolean } {
   const scan = scanCatalog(maxFiles);
   return {
-    sessions: scan.all.sort((left, right) =>
+    sessions: countStartedChildren(scan.all).sort((left, right) =>
       right.lastActivityAt - left.lastActivityAt
       || left.agent.localeCompare(right.agent)
       || left.sessionId.localeCompare(right.sessionId)

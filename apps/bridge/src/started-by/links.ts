@@ -126,6 +126,13 @@ export function startedChildSessionIds(): ReadonlySet<string> {
   return ids;
 }
 
+/** Every chat known to have been started by this one, newest link first. */
+export function startedChildLinks(parent: StartedBy): StartedByLink[] {
+  const key = startedByKey(parent);
+  return [...startedByState().links.values()].filter((link) => startedByKey(link.parent) === key)
+    .sort((left, right) => right.at - left.at);
+}
+
 const sameRun = (left: StartedRun, right: StartedRun) => left.agent === right.agent && left.pid === right.pid
   && Math.abs(left.startedAt - right.startedAt) <= 2_000;
 

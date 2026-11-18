@@ -87,6 +87,7 @@ import {
   SessionsStatus,
   SessionsHistoryQuery,
   SessionsHistoryPage,
+  SessionsChildren,
 } from "./messages/sessions";
 
 export * from "./messages/provider-hooks";
@@ -174,6 +175,7 @@ export const Payload = z.union([
   SessionsStatus,
   SessionsHistoryQuery,
   SessionsHistoryPage,
+  SessionsChildren,
   ConfigSet,
   ConfigCommandResult,
   SessionAccessSet,

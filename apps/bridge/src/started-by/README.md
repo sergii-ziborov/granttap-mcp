@@ -111,7 +111,9 @@ child its request did not link is linked when all of these hold:
 - the parent started before the child and is not the child.
 
 Such a link is written like any other read from a transcript (`source:
-"transcript"`). A run in a checkout or in a folder two chats used, whose
+"transcript"`). Runs past the catalog's window of 200 transcripts are linked by
+the same rules, at most once a minute, by the [catalog's slower
+pass](../session-catalog/started-children/README.md). A run in a checkout or in a folder two chats used, whose
 request a script built from a file, or whose script names no provider and was
 not written by the chat, is linked only while its process is alive.
 

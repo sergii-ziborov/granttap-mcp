@@ -30,9 +30,18 @@ does not continue by itself (everything but Claude).
 `session.commit` / `session.commit.result` messages live in `sessions/working-tree.ts`; the contract
 is in `apps/bridge/src/working-tree/README.md`.
 
-`startedChildren` (optional, strict: `{ finished, stopped, pictures, lastAt }`, non-negative integers
-and a time in ms) counts the finished chats this chat started headless that the catalog leaves out as
-rows; the newest three stay rows of their own with `startedBy`.
+`startedChildren` (optional, strict: `{ finished, stopped, limited?, pictures, lastAt }`, non-negative
+integers and a time in ms) counts every finished chat this chat started headless, however long ago, the
+newest three included, which stay rows of their own with `startedBy`: all of them, those that stopped on
+an error (a limit among them), those a usage or rate limit stopped (`limited`, added after MCP 0.8.193;
+absent from older runtimes), and those that saved a picture. MCP 0.8.190–0.8.193 counted only the runs within
+the catalog's window of 200 transcripts.
+
+`sessions.children` (strict: `{ parent, children, total, generatedAt }`) lists, newest first and at most
+4,000, the session ids of every chat this computer knows `parent` started, and `total` of them, so a
+phone can hang beneath their parent, or leave out, rows and Mesh Tasks it keeps from before it knew.
+A phone that does not know the message ignores it. See
+`apps/bridge/src/session-catalog/started-children/README.md`.
 
 `images` (optional, at most 12 of `{ id, name, markdown }`, the same shape as a helper run's
 `childThreads[].images`) lists pictures the chat's own answer saved in its working folder, kept by the

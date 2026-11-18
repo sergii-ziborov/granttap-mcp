@@ -15,14 +15,10 @@ in the background. Fresh discovery replaces that saved state. Closed-history
 discovery runs separately from the first live publication. The phone continues
 its durable historical backfill independently.
 
-**Runs another chat started** (`started-children.ts`). A chat that starts hundreds of short headless
-runs (`codex exec` per picture) does not get hundreds of catalog rows. Among the finished runs one
-listed chat started, the newest three stay rows; the parent carries `startedChildren { finished,
-stopped, pictures, lastAt }` for all of them. Running children and children whose parent is not listed
-stay rows, and the full catalog still finds every child for a phone that opens it or a message for it.
-Finished children are not refreshed as bulk transcript heads either; an open one still is. With 600
-finished runs a catalog went from 635 rows (about 0.3 MB, sealed per phone each refresh) to 38 rows
-under 20 KB (`tests/started-children/`).
+**Runs another chat started** ([`started-children/`](started-children/README.md)). Among the finished
+runs one listed chat started, the newest three stay rows; the parent carries `startedChildren`, counted
+over every run it is known to have started, also those past the catalog's window, and the phone is told
+the ids of all of them (`sessions.children`).
 
 Tests live in `tests/`. This runtime module uses the repository GrantTap Commercial Source License.
 
