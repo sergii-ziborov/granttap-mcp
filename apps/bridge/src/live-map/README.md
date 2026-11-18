@@ -13,8 +13,9 @@ provider and the phone draws the map. See `THIRD_PARTY_NOTICES.md`.
 
 The phone sends `session.pulses.subscribe { sessionId, active }` in its device
 box when the map opens and renews it every few seconds; `active: false` or
-twenty seconds without a renewal ends it. At most four maps are fed at once, a
-fifth taking the place of the oldest. Only the routing monitor answers.
+twenty seconds without a renewal ends it. A renewal after more than ten seconds
+of silence is a map opened again whose close was lost, and starts from a replay.
+At most four maps are fed at once, a fifth taking the place of the oldest. Only the routing monitor answers.
 
 Each open map gets at most one `session.pulses` frame a second, and one every
 five seconds when nothing happens, so the phone can tell the map is live. A

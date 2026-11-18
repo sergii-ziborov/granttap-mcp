@@ -14,6 +14,8 @@ export const TICK_MS = 1_000;
 export const KEEPALIVE_MS = 5_000;
 /** A frame the phone has not read by then is of no use to it; the relay drops it. */
 export const FRAME_TTL_MS = 10_000;
+/** The phone renews every five seconds; a renewal after a longer silence is a map opened again. */
+export const REOPEN_GAP_MS = 10_000;
 
 type Subscription = { key: string; sessionId: string; peer?: string; expiresAt: number; lastSentAt: number;
   granted: boolean; tracker?: PulseTracker };
@@ -55,7 +57,14 @@ export class LiveMapStream {
     const existing = this.subscriptions.get(key);
     const expiresAt = this.now() + SUBSCRIPTION_TTL_MS;
     if (existing) {
+      // Its close was lost: the map opened again starts from a replay, like a new one.
+      const reopened = expiresAt - existing.expiresAt > REOPEN_GAP_MS;
       existing.expiresAt = expiresAt;
+      if (reopened) {
+        existing.tracker = undefined;
+        existing.granted = false;
+        void this.tick();
+      }
       return true;
     }
     while (this.subscriptions.size >= MAX_SUBSCRIPTIONS) this.subscriptions.delete(this.subscriptions.keys().next().value!);

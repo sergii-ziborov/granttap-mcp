@@ -7,7 +7,7 @@ import { OutboundFrameQueue, priorityControlPayload } from "../../../../../packa
 import type { Payload, SessionInfo } from "../../../../../packages/protocol/schema";
 import type { SendOptions } from "../../../../../packages/core/relay-client";
 import { LiveMapStream } from "..";
-import { FRAME_TTL_MS, KEEPALIVE_MS, MAX_SUBSCRIPTIONS, SUBSCRIPTION_TTL_MS, TICK_MS } from "../stream";
+import { FRAME_TTL_MS, KEEPALIVE_MS, MAX_SUBSCRIPTIONS, REOPEN_GAP_MS, SUBSCRIPTION_TTL_MS, TICK_MS } from "../stream";
 import type { Observation } from "../readers/shared";
 
 class FakeClient {
@@ -79,6 +79,12 @@ test("frames are batched once a second, with a keepalive when nothing happens", 
   assert.equal(subscribe("a"), true);
   await settle();
   assert.equal(client.frames().length, 3, "a renewal is not a frame");
+  clock.now += REOPEN_GAP_MS + 1;
+  subscribe("a");
+  await settle();
+  const reopened = client.frames().at(-1)!.payload;
+  assert.equal(reopened.type === "session.pulses" && reopened.replay, true, "a map opened again after its close was lost replays");
+  assert.equal(client.grants().length, 2);
 });
 
 test("a map the phone stops renewing ends, and so does the computer's reading", async (t) => {
