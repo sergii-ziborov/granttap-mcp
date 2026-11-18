@@ -6,11 +6,120 @@
 
 > **See what your coding agents are doing. Step in when they need you.**
 
-GrantTap connects local Claude Code and Codex work to a live control center on
-Mac, iPhone, iPad, and Apple Watch. See the Task and its latest activity, answer
-an approval or question with context, and continue the same goal as sessions or
-computers change. Cursor and Grok Build join the view where their local
-integrations support it.
+GrantTap puts the coding agents running on your computer in your pocket. Approve
+a tool call, answer a question, read the latest reply and send the next message
+from iPhone, iPad or Apple Watch, while the agents and your provider sign-ins
+stay on the computer. Claude Code and Codex have the full control path;
+Cursor (Beta) and Grok Build join where their local integrations support it.
+
+`granttap-mcp` is the part that runs on the computer: the `granttap` CLI, the MCP
+server and connection card, provider hooks and a background helper. Pair it with
+the GrantTap app, a free download on the App Store for iPhone and iPad.
+
+<a href="https://apps.apple.com/app/id6809739366"><img src="https://toolbox.marketingtools.apple.com/api/v2/badges/download-on-the-app-store/black/en-us" alt="Download GrantTap on the App Store" height="40"></a>
+
+**iPhone and iPad:** on the App Store, version 1.0.2. Plans are bought in the
+app through Apple. **Apple Watch:** a companion to the iPhone app. **Mac:**
+TestFlight now; on the Mac App Store after Apple approves it.
+
+[Website](https://granttap.com) ·
+[App Store](https://apps.apple.com/app/id6809739366) ·
+[npm](https://www.npmjs.com/package/granttap-mcp) ·
+[Security model](SECURITY.md) ·
+[Relay source](https://github.com/sergii-ziborov/granttap-relay)
+
+## Quick start
+
+On the computer where your agents run, with Node.js 22.13.0 or newer:
+
+```bash
+npm install -g granttap-mcp
+granttap setup
+```
+
+1. `granttap setup` finds Claude Code, Codex, Cursor and Grok Build on this
+   computer, installs or repairs their GrantTap hooks, starts the background
+   helper and, in an interactive terminal, shows a one-time pairing QR.
+2. Install [GrantTap from the App Store](https://apps.apple.com/app/id6809739366)
+   and scan that QR in **Devices → Add a device → Scan QR**. QR pairing needs no
+   account. With a GrantTap account, sign in with your passkey instead and use
+   **Connect with passkey** on the connection card to link this computer.
+3. Add the plugin for your coding app (see [Install](#install)) to get the
+   connection card and the tools in chat, and run `granttap status` at any time
+   for a read-only readiness check.
+
+`npx granttap-mcp` only starts the stdio MCP server that the plugins launch. Run
+`granttap setup` from the global install: the background helper and the local MCP
+service need a durable path, not npm's temporary `npx` cache.
+
+## How the pieces fit
+
+```text
+ Your computer                         GrantTap Relay              Your devices
+ Claude Code · Codex · Cursor ·  <=>   ciphertext only:     <=>    GrantTap for iPhone and iPad
+ Grok Build + granttap-mcp             routes, queues, wakes        Apple Watch through iPhone
+```
+
+- **GrantTap app** — where you see the work and decide: Now, Tasks, chats,
+  approvals, questions, Mesh and usage. iPhone and iPad on the App Store, Apple
+  Watch through iPhone, Mac in TestFlight.
+- **GrantTap MCP** (this package) — runs beside your agents. It reads their
+  native sessions, enforces approvals in their hooks, delivers your messages and
+  answers, and serves the MCP tools and connection card.
+- **[GrantTap Relay](https://github.com/sergii-ziborov/granttap-relay)** —
+  carries end-to-end encrypted traffic between the two and keeps it while a
+  device is asleep or offline. It sees routing metadata and ciphertext, never the
+  content. Its source is public.
+
+## What's new
+
+Available now, with GrantTap MCP 0.8.195 on npm and GrantTap 1.0.2 on the App Store:
+
+- **Phones on the connection card.** In Claude (including the Claude desktop app),
+  Codex, Cursor and Grok Build, the GrantTap card lists every phone paired with
+  this computer and when it last reached it, and removes unused ones after a yes
+  on a phone.
+- **Runs linked to the chat that started them.** A `codex exec`, `claude -p` or
+  `grok -p` run that a chat starts, directly or from a script such as an image
+  job, names that chat, and its end is spelled out: `Codex stopped: …` with
+  Codex's reason, such as a usage limit, or `Picture saved: …`.
+- **Passkey link.** `connect_with_passkey` links this computer to your GrantTap
+  account through granttap.com; existing QR pairings stay as they are.
+- **Automatic runtime updates.** The helper checks for a new version every hour
+  and switches when running work allows, usually taking a chat's running turn
+  along and never dropping a waiting message. Switch it off on the connection
+  card.
+- **End-to-end encrypted relay.** Messages, approvals and catalogs travel as
+  ciphertext; a relay wake carries no task content.
+- **In the app (1.0.2):** rename, star and flag chats; edit a Mesh's
+  repositories from the phone; choose a New Task's Mesh from a searchable list;
+  see a chat's reasoning effort on the model button.
+
+Coming in the next iPhone and iPad update (1.0.3), after Apple approves it. This
+package already supports the computer side:
+
+- runs a chat started hang beneath it in Now, Tasks and History, with how each ended;
+- review a chat's uncommitted changes and commit chosen files from the phone;
+- **Devices** lists every phone a computer accepts and everything signed in to
+  your account, with Remove and Sign out;
+- passkey sign-in on the app's first screen, and sign-in on granttap.com by
+  scanning the QR on its account page.
+
+## Start here
+
+- [What the runtime does](#what-the-runtime-does)
+- [Connect your computer and devices](#account-mesh-and-devices)
+- [Choose a connection mode and plan](#plans-and-what-you-pay-for)
+- [Provider support](#supported-providers)
+- [Install provider integrations](#install)
+- [Messages, queues and decisions](#messages-queues-and-decisions)
+- [Project Mesh and task transfer](#project-mesh-and-task-handoff)
+- [Approvals and questions](#decisions-and-claude-questions)
+- [Security and relay boundary](#relay-boundary)
+- [Troubleshooting and help](#troubleshooting-and-help)
+- [License](#license)
+
+## What the runtime does
 
 This repository supplies the local runtime: CLI, MCP server, provider hooks,
 adapters, and wire contracts. It powers Project Mesh, Governance, and observed
@@ -43,28 +152,9 @@ Managed service use requires authorized GrantTap account access; official TestFl
 access remains free. Earlier releases through 0.8.75 retain their Apache-2.0
 permissions. The Apple apps, Engine, relay, and website have their own terms.
 
-[Website](https://granttap.com) ·
-[App Store](https://apps.apple.com/app/id6809739366) ·
-[npm](https://www.npmjs.com/package/granttap-mcp) ·
-[Security model](SECURITY.md) ·
-[Relay source](https://github.com/sergii-ziborov/granttap-relay)
-
-## Start here
-
-- [Connect your computer and devices](#account-mesh-and-devices)
-- [Choose a connection mode and plan](#plans-and-what-you-pay-for)
-- [Provider support](#supported-providers)
-- [Install provider integrations](#install)
-- [Messages, queues and decisions](#messages-queues-and-decisions)
-- [Project Mesh and task transfer](#project-mesh-and-task-handoff)
-- [Approvals and questions](#decisions-and-claude-questions)
-- [Security and relay boundary](#relay-boundary)
-- [Troubleshooting and help](#troubleshooting-and-help)
-- [License](#license)
-
 ## Plans and what you pay for
 
-Planned US prices for the first commercial release:
+US prices, sold through Apple in GrantTap for iPhone and iPad:
 
 | Plan | Monthly price | Managed publishing computers |
 | --- | ---: | ---: |
@@ -83,16 +173,17 @@ monthly at the price shown by Apple. To avoid renewal, cancel at least 24 hours
 before the trial ends in Apple's subscription settings.
 A local cache is not deleted when managed access ends.
 
-**GrantTap for iPhone and iPad is on the
-[App Store](https://apps.apple.com/app/id6809739366)** as a free download;
-subscriptions and Mac Local are sold through Apple. The Mac app is available by
-TestFlight invitation. Official TestFlight builds include all features without a
-purchase or subscription; a trial and TestFlight access are different forms of
-access. The App Store purchase sheet determines availability, localized prices,
-eligibility and terms.
+**GrantTap for iPhone and iPad is a free download on the
+[App Store](https://apps.apple.com/app/id6809739366)**; subscriptions are bought
+in the app through Apple. GrantTap for Mac is in TestFlight now and comes to the
+Mac App Store after Apple approves it. Official TestFlight builds include all
+features without a purchase or subscription; a trial and TestFlight access are
+different forms of access. The App Store purchase sheet determines availability,
+localized prices, eligibility and terms.
 Models, AI tokens and coding-provider plans are purchased separately.
 
-**Mac Local is a separate $39.99 one-time purchase** for local control and an
+**Mac Local is a separate $39.99 one-time purchase** in the Mac app, offered once
+the Mac app is on the App Store, for local control and an
 own relay. Hosted managed delivery is not included in that purchase. An active
 Personal subscription already covers a managed Mac client; both purchases are
 not required for the same managed mode. npm distributes the computer runtime;
@@ -982,8 +1073,10 @@ complete boundary and reporting instructions.
 - **Health has no current architecture:** check the reported checkout and Engine
   on the publishing computer, then request a rebuild. An old or partial report
   remains inspectable and must not be treated as verified current architecture.
-- **No purchase shown:** the product may not be released in that storefront.
-  TestFlight does not require a purchase. Use Restore Purchases for an existing
+- **No purchase shown:** plans are sold in the iPhone and iPad app; Mac Local
+  appears in the Mac app once it is on the App Store. A storefront where
+  GrantTap is not offered shows no purchase, and TestFlight does not require
+  one. Use Restore Purchases for an existing
   Apple purchase and the same GrantTap passkey for account access.
 
 Update the helper with `npm install -g granttap-mcp@latest`, then reopen the
