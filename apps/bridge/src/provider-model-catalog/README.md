@@ -51,31 +51,49 @@ without Grok's installer directory no longer hides it.
 
 Claude Code exposes its picker metadata in the `initialize` control response
 ([official API reference](https://code.claude.com/docs/en/agent-sdk/typescript#sdkcontrolinitializeresponse)).
-`claude-models.ts` requests that metadata without a user message, tools, hooks,
+`claude/claude-models.ts` requests that metadata without a user message, tools, hooks,
 MCP servers or saved conversation. It preserves exact CLI values, versioned labels,
 order and supported effort levels. The Default row is represented by Automatic in
-the client. Account identity is discarded. Live rows win. While Claude Code is
-installed (`GRANTTAP_CLAUDE_BIN`, `PATH`, the native installer or the Claude app's
-copy) but the query has not answered, failed, timed out, overflowed or listed no
-usable model, the catalog advertises the CLI's documented aliases (`opus`,
-`sonnet`, `haiku`, `fable`, in that order), which the installed CLI resolves itself,
-so the phone always has a list. Their descriptions are the phone's localization
-keys. A Mac without Claude Code advertises no Claude rows and starts nothing.
-The query may take 30 s: by hand it answered in 2–7 s on an idle Mac, and the
-monitor runs several Claude Code processes beside it. Each new failure reason,
-with the end of the CLI's stderr, is written once to the process's stderr (the
-monitor log) as `[granttap] Claude Code model list unavailable, …`. The shared
-cache refreshes successful metadata every ten minutes, failures after two,
-expires after fifteen, and never blocks catalog polling.
-Tests: [`tests/claude-models.test.ts`](tests/claude-models.test.ts),
-[`tests/claude-aliases.test.ts`](tests/claude-aliases.test.ts).
+the client. Account identity is discarded. The query may take 60 s: by hand it
+answered in 0.2–7 s, and on 2–3 November the monitor's own query ran out of 30 s
+twice beside 89–140 Codex processes. A deadline reached while the monitor's event
+loop was held reads an answer already waiting in the pipe before it gives up.
+
+`claude/claude-model-cache.ts` shares one bounded query at a time among all catalog
+readers and never blocks catalog polling. Live rows win. A good answer is asked
+again after ten minutes and stays offered for an hour, so a failed refresh never
+empties the list; a failed query is retried after 15 s, then every two minutes.
+Changed settings keep the answer until the new one arrives; another Claude Code,
+config directory or account (an opaque digest, see below) starts with none.
+`claude/claude-model-memory.ts` keeps the last answer of each Claude Code and account in
+`~/.granttap/claude-models.json` (projected rows and opaque digests only, at most
+four answers and 256 KB), so a restarted monitor publishes it at once instead of
+four unnamed aliases; the phone shows the newest report it holds, and on
+18 November it listed "Opus" two minutes after a monitor restart. While Claude
+Code is installed (`GRANTTAP_CLAUDE_BIN`, `PATH`, the native installer or the
+Claude app's copy) but no answer is current, the catalog advertises the CLI's
+documented aliases (`opus`, `sonnet`, `haiku`, `fable`, in that order), which the
+installed CLI resolves itself, so the phone always has a list. Each alias carries
+the name, description and effort levels that the same Claude Code and account
+gave it in their last answer (`Opus 5.5`); without one it stays `Opus` with the
+phone's localization key as its description, and no version is invented. A Mac
+without Claude Code advertises no Claude rows and starts nothing. Every failed
+query, and every catalog read that offers the aliases, writes one line to the
+process's stderr (the monitor log): `[granttap] Claude Code model list query
+failed (…)` and `[granttap] Claude Code model list unavailable, offering its
+aliases as …: why`.
+Tests: [`claude/tests/claude-models.test.ts`](claude/tests/claude-models.test.ts),
+[`claude/tests/claude-aliases.test.ts`](claude/tests/claude-aliases.test.ts),
+[`claude/tests/claude-model-cache.test.ts`](claude/tests/claude-model-cache.test.ts).
 
 Claude account invalidation uses an opaque digest of account, organization and
 model-entitlement fields, rather than the modification time of `.claude.json`.
 CLI initialization updates startup counters and profile refresh dates in that
 file; those writes must not discard its own reply or repeatedly launch the CLI.
-Credential and settings-file changes still invalidate their own scope. The
-account reader is bounded to 4 MiB and 16 cached file signatures, retaining only
+Credential and settings-file changes still start a new query for their own scope
+(`claude/claude-account-scope.ts`), while the same account's answer stays offered
+until it arrives. A read that catches `.claude.json` half-written keeps the last
+readable account digest instead of counting as another account. The account reader is bounded to 4 MiB and 16 cached file signatures, retaining only
 digests. Raw account fields and API keys never enter the model report or cache key.
 Tests cover self-updating initialization, one metadata subprocess per unchanged
 account, actual account changes, private fields, malformed data and retention.

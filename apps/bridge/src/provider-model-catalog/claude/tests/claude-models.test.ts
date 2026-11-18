@@ -3,7 +3,8 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { readClaudeModels, projectClaudeModels, cachedClaudeModels } from '../claude-models';
+import { readClaudeModels, projectClaudeModels } from '../claude-models';
+import { cachedClaudeModels } from '../claude-model-cache';
 
 test('Claude picker metadata comes from a no-prompt initialization with exact labels and effort levels', async t => {
   const root = mkdtempSync(join(tmpdir(), 'granttap-claude-models-'));
@@ -88,10 +89,12 @@ require('node:readline').createInterface({input:process.stdin}).on('line',line=>
  response:{models:[{value:'claude-'+config.oauthAccount.accountUuid,displayName:'Native model'}]}}}));
 });`); chmodSync(binary, 0o700);
   const env = { ...process.env, GRANTTAP_CLAUDE_BIN: binary, GRANTTAP_CLAUDE_DIR: root };
+  const options = { memory: join(root, 'memory.json') };
+  const read = () => cachedClaudeModels('fixture-account-scope', env, undefined, () => {}, options);
   const waitFor = async (model: string) => {
     const end = Date.now() + 4_000;
     while (Date.now() < end) {
-      const rows = cachedClaudeModels('fixture-account-scope', env);
+      const rows = read();
       if (rows.some(row => row.modelId === model)) return rows;
       await new Promise(resolve => setTimeout(resolve, 30));
     }
@@ -102,10 +105,10 @@ require('node:readline').createInterface({input:process.stdin}).on('line',line=>
   assert.equal(readFileSync(probes, 'utf8').length, 1, 'One initialization must not become a respawn loop');
   const saved = JSON.parse(readFileSync(config, 'utf8'));
   writeFileSync(config, JSON.stringify({ ...saved, numStartups: saved.numStartups + 1, theme: 'changed' }));
-  assert.equal(cachedClaudeModels('fixture-account-scope', env)[0]?.modelId, 'claude-account-a');
+  assert.equal(read()[0]?.modelId, 'claude-account-a');
   assert.equal(readFileSync(probes, 'utf8').length, 1);
   writeFileSync(config, JSON.stringify({ ...saved, oauthAccount: { ...saved.oauthAccount, accountUuid: 'account-b' } }));
-  assert.deepEqual(cachedClaudeModels('fixture-account-scope', env).map(row => row.modelId), ['opus', 'sonnet', 'haiku', 'fable'],
+  assert.deepEqual(read().map(row => row.modelId), ['opus', 'sonnet', 'haiku', 'fable'],
     'A different account must not inherit old model metadata; only the CLI aliases stand in until it answers');
   await waitFor('claude-account-b');
   assert.equal(readFileSync(probes, 'utf8').length, 2);

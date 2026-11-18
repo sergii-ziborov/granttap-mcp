@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AdvertisedModel, EndpointModelCatalog } from "../../../../packages/protocol/schema";
 
-import { cachedClaudeModels } from "./claude-models";
+import { cachedClaudeModels } from "./claude/claude-model-cache";
 import { cachedCLIModels } from "./cli-models";
 import { cachedNativeAccountUsage, cachedProviderAccount } from "../provider-account-status";
 

@@ -1,11 +1,7 @@
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { homedir } from 'node:os';
-import { statSync } from 'node:fs';
-import { join } from 'node:path';
-import type { AdvertisedModel } from '../../../../packages/protocol/schema';
-import { installedClaudeBinary } from '../providers/claude-bin';
-import { claudeAccountScope } from './claude-account-scope';
+import type { AdvertisedModel } from '../../../../../packages/protocol/schema';
 
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,159}$/;
 const EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
@@ -29,35 +25,19 @@ export function projectClaudeModels(value: unknown, endpointId: string, now: num
   });
 }
 
-/**
- * `--model` documents these aliases, and the installed CLI resolves each to a
- * concrete version, so none is invented here. The descriptions are the phone's
- * own localization keys.
- */
-const ALIASES: ReadonlyArray<{ modelId: string; label: string; description: string }> = [
-  { modelId: 'opus', label: 'Opus', description: 'Latest Opus alias · complex reasoning tasks.' },
-  { modelId: 'sonnet', label: 'Sonnet', description: 'Latest Sonnet alias · everyday coding tasks.' },
-  { modelId: 'haiku', label: 'Haiku', description: 'Latest Haiku alias · fast, efficient simple tasks.' },
-  { modelId: 'fable', label: 'Fable',
-    description: 'Fable alias · hardest and longest-running tasks. May require usage credits.' },
-];
-
-function claudeAliasRows(endpointId: string, now: number): AdvertisedModel[] {
-  return ALIASES.map((alias, priority) => ({ ...alias, provider: 'claude' as const, endpointId,
-    observedAt: now, source: 'advertised' as const, priority }));
-}
-
 export type ClaudeModelQuery = { timeoutMs?: number; cwd?: string; env?: NodeJS.ProcessEnv;
   onFailure?: (reason: string) => void };
 
+/** By hand it answered in 0.2–7 s; on 2–3 November the monitor's own query ran out of 30 s twice beside 89–140 Codex processes. */
+export const CLAUDE_MODEL_QUERY_TIMEOUT_MS = 60_000;
+
 /**
  * No prompt, saved session, hooks, MCP children or tools. Never persists the account payload.
- * Startup took 2–7 s by hand on an idle Mac; a busy monitor runs several CLIs beside it.
  */
 export async function readClaudeModels(binary: string, endpointId: string,
   options: ClaudeModelQuery = {}): Promise<AdvertisedModel[]> {
   return new Promise(resolve => {
-    const timeoutMs = options.timeoutMs ?? 30_000;
+    const timeoutMs = options.timeoutMs ?? CLAUDE_MODEL_QUERY_TIMEOUT_MS;
     const child = spawn(binary, ['--print', '--input-format', 'stream-json', '--output-format', 'stream-json',
       '--verbose', '--no-session-persistence', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}',
       '--settings', '{"disableAllHooks":true}', '--tools', ''],
@@ -74,7 +54,8 @@ export async function readClaudeModels(binary: string, endpointId: string,
       if (!rows.length) options.onFailure?.(said ? `${failure}: ${said}` : failure);
       resolve(rows);
     };
-    const timeout = setTimeout(() => stop([], `timed out after ${timeoutMs / 1000} s`), timeoutMs);
+    // A monitor whose event loop was held past the deadline reads the answer already waiting in the pipe first.
+    const timeout = setTimeout(() => setImmediate(() => stop([], `timed out after ${timeoutMs / 1000} s`)), timeoutMs);
     child.on('error', error => stop([], `could not start (${(error as NodeJS.ErrnoException).code ?? error.name})`));
     // `close` follows the last stderr bytes, so the reason a CLI gave on its way out is kept.
     child.on('close', (code, signal) => stop([], `exited with ${signal ?? `code ${code}`} before answering`));
@@ -95,42 +76,4 @@ export async function readClaudeModels(binary: string, endpointId: string,
     child.stdin.write(JSON.stringify({ type: 'control_request', request_id: 'granttap-model-catalog',
       request: { subtype: 'initialize' } }) + '\n');
   });
-}
-
-let scope = '', report: AdvertisedModel[] = [], checkedAt = 0, recorded = '';
-let pending: Promise<void> | undefined;
-const stderrLog = (line: string) => { process.stderr.write(`[granttap] ${line}\n`); };
-
-/**
- * Nonblocking, one bounded metadata process at a time, shared by all catalog readers.
- * Live picker rows win; an installed Claude Code without them still offers its aliases.
- */
-export function cachedClaudeModels(endpointId: string, env = process.env, home = homedir(),
-  log: (line: string) => void = stderrLog): AdvertisedModel[] {
-  const binary = installedClaudeBinary(home, env);
-  if (!binary) return [];
-  const config = env.GRANTTAP_CLAUDE_DIR ?? env.NODVOX_CLAUDE_DIR ?? env.CLAUDE_CONFIG_DIR;
-  const root = config ?? join(home, '.claude');
-  const key = [endpointId, binary.path, binary.version, root,
-    modified(join(root, '.credentials.json')), claudeAccountScope(config ? join(root, '.claude.json') : join(home, '.claude.json')),
-    modified(join(root, 'settings.json')), modified(join(root, 'settings.local.json'))].join('\u001f');
-  if (key !== scope) { scope = key; report = []; checkedAt = 0; }
-  if (!pending && Date.now() - checkedAt > (report.length ? 10 : 2) * 60_000) {
-    checkedAt = Date.now();
-    const onFailure = (reason: string) => {
-      if (reason !== recorded) log(`Claude Code model list unavailable, offering its aliases: ${reason}`);
-      recorded = reason;
-    };
-    pending = readClaudeModels(binary.path, endpointId, { env: config ? { ...env, CLAUDE_CONFIG_DIR: config } : env, onFailure })
-      .then(rows => {
-        if (rows.length) recorded = '';
-        if (scope === key) report = rows;
-      }).finally(() => { pending = undefined; });
-  }
-  const live = report.filter(row => Date.now() - row.observedAt <= 15 * 60_000);
-  return live.length ? live : claudeAliasRows(endpointId, Date.now());
-}
-
-function modified(path: string): string {
-  try { const info = statSync(path); return `${info.mtimeMs}:${info.ctimeMs}`; } catch { return ''; }
 }
