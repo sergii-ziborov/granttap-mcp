@@ -14,6 +14,13 @@ superseded; only a queue of controls refuses with "relay outbound queue is full"
 A burst of catalog and Mesh refreshes for hundreds of short runs once filled the
 queue and refused 103 Graph answers in a day; a Graph answer now also travels in
 the control lane.
+Every answer a phone waits on travels there too (`PHONE_ANSWERS`): a requested
+picture, a chat's changes and commit result, a computer's phones and cache
+(`device.manage.result`), files and schedules. A Mesh Task's result goes from
+computer to computer over its own transport and is not listed. On a Mac whose
+snapshot lane was dropping frames, the phones list and the Changes sheet waited
+until the phone gave up. `tests/phone-answers.test.ts` reads every `*.result`
+type from the protocol, so a new phone answer cannot be left in the snapshot lane.
 
 Disconnect rejects the current write as well as queued frames. Catalog and
 history publishers can retry on the next connection even if the previous
