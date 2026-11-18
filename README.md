@@ -1050,8 +1050,9 @@ metadata and ciphertext, not provider credentials or task plaintext. Pairing
 handoff uses a relay-visible random mailbox ID plus an independent transfer key
 that stays in the QR.
 
-APNs carries a content-neutral wake only. It contains no prompt, task title,
-command, path, request ID, or ciphertext. See [SECURITY.md](SECURITY.md) for the
+An APNs wake is content-neutral. It contains no prompt, task title, command,
+path, request ID, or ciphertext. A task Live Activity update carries its
+preview to APNs only as ciphertext, which the phone decrypts. See [SECURITY.md](SECURITY.md) for the
 complete boundary and reporting instructions.
 
 ## Troubleshooting and help
