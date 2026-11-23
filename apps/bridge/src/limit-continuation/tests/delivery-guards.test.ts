@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
-import {mkdirSync} from 'node:fs';
+import {mkdirSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import test from 'node:test';
+import {TaskJobHttpError} from '../../../../../packages/core/task-job-http';
 import type {UserMessage} from '../../../../../packages/protocol/schema';
 import {annotateLimitContinuations, LIMIT_CONTINUE_PROMPT, limitContinuationFor, limitContinuationUnwanted,
   scheduleLimitContinuations, setAutoContinue, type ContinuationQueue} from '..';
+import {logContinuation} from '../log';
+import {failureReason} from '../relay-copies';
 import {continuationLog, day, fakeRelay, goingChat, hour, isolatedComputer, limitedChat, machineConfig, minute,
   monitorProcess, offerDue} from './relay-fixture';
 
@@ -87,4 +90,35 @@ test('a copy the relay cannot be asked about is left alone until it answers', as
   await scheduleLimitContinuations([chat], monitor, refusal + 2 * hour + minute);
   assert.deepEqual(relay.queued(), [id], 'it was there all along');
   assert.deepEqual(offerDue(relay, sent, reset + 61_000, chat), [LIMIT_CONTINUE_PROMPT]);
+});
+
+test('a job an older monitor recorded keeps both its copies, and is queued again under a new id once the relay lost it', async t => {
+  const {root, relay, sent, monitor} = computer(t);
+  writeFileSync(join(root, 'limit-continuation.json'), JSON.stringify({off: [], tried: {'legacy-chat': reset},
+    scheduled: {'legacy-chat': {resetsAt: reset, messageId: 'limit-continue-legacy-regular', early: 'limit-continue-early-legacy',
+      scope: {sessionId: 'legacy-chat', provider: 'claude', projectId: 'project-legacy'}, scheduledAt: refusal}}}));
+  const chat = limitedChat('legacy-chat', reset, refusal, 'seven_day', {projectId: 'project-legacy'});
+  await scheduleLimitContinuations([chat], {submit: monitor.submit, cancel: monitor.cancel}, refusal + hour);
+  assert.deepEqual(relay.queued(), [], 'a queue that cannot be asked leaves the copies the old monitor put there');
+  assert.deepEqual(limitContinuationFor('legacy-chat').continuation, {dueAt: reset + minute, early: true});
+  await scheduleLimitContinuations([chat], {...monitor, status: async () => null}, refusal + 2 * hour);
+  const [again] = relay.queued();
+  assert.match(again ?? '', /^limit-continue-(?!legacy)/);
+  assert.equal(sent.get(again!)?.projectId, 'project-legacy');
+  const legacy = {type: 'user.message', messageId: 'limit-continue-legacy-regular', sessionId: 'legacy-chat', text: 'x',
+    createdAt: refusal} as UserMessage;
+  assert.equal(limitContinuationUnwanted(legacy, () => chat, reset + minute), true, 'the lost copy is not delivered');
+  assert.deepEqual(offerDue(relay, sent, reset + minute, chat), [LIMIT_CONTINUE_PROMPT]);
+});
+
+test('log lines name the limit by its kind and why a copy could not reach the relay', t => {
+  const lines = continuationLog(t), resetsAt = Date.UTC(2026, 10, 23, 11);
+  for (const window of ['five_hour', 'seven_day', 'seven_day_opus', 'something_new', undefined]) {
+    logContinuation({sessionId: 'abcdefgh-rest-of-id', window, resetsAt}, 'queued');
+  }
+  assert.deepEqual(lines.map(line => line.replace(/^\[monitor\] Continuation of chat abcdefgh after its /, '')), [
+    '5-hour limit', 'weekly limit', 'weekly opus limit', 'something_new limit', 'subscription limit']
+    .map(limit => `${limit} (reset 2026-11-23 11:00 UTC): queued.`));
+  assert.equal(failureReason(new TaskJobHttpError(429)), 'The relay did not confirm the queued task operation (HTTP 429)');
+  assert.equal(failureReason('no route'), 'no route');
 });
