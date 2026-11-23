@@ -1,5 +1,5 @@
 /** Which limit stopped the chat, as a person reads it. */
-function windowName(window: string | undefined): string {
+export function limitName(window: string | undefined): string {
   if (window === 'five_hour') return '5-hour limit';
   if (window === 'seven_day') return 'weekly limit';
   const model = /^seven_day_([a-z0-9]+)$/.exec(window ?? '')?.[1];
@@ -17,7 +17,7 @@ export function logTime(at: number): string {
  */
 export function logContinuation(limit: { sessionId: string; window?: string; resetsAt?: number }, event: string): void {
   const which = limit.resetsAt === undefined ? ''
-    : ` after its ${windowName(limit.window)} (reset ${logTime(limit.resetsAt)})`;
+    : ` after its ${limitName(limit.window)} (reset ${logTime(limit.resetsAt)})`;
   process.stderr.write(`[monitor] Continuation of chat ${limit.sessionId.slice(0, 8)}${which}: ${event}.\n`);
 }
 

@@ -47,11 +47,11 @@ import { startTaskActivities } from '../../task-activities';
 import { droppedRequestLog } from '../dropped-requests';
 import type { PeerConfig } from '../../../../../packages/core/relay-client';
 
-const HISTORY_INTERVAL_MS = 60_000;
-const resumedHeads = new WeakSet<RelayClient>();
+const HISTORY_INTERVAL_MS = 60_000, resumedHeads = new WeakSet<RelayClient>();
 import { publishMonitorMeshes, stopMonitorMeshes } from "../mesh-publication";
 import { publishMonitorCapabilities, stopMonitorCapabilities } from "../capability-publication";
 import { annotateLimitContinuations, scheduleLimitContinuations } from "../../limit-continuation";
+import { annotateQueueHolds } from "../../limit-queue-hold";
 import { keepNotedChatPictures } from "../../helper-runs/pictures/chats";
 import { attachWorkingTrees } from "../../working-tree";
 import { cachedNativeAccountUsage } from "../../provider-account-status";
@@ -175,7 +175,7 @@ async function publishMonitorTick(input: {
   const snapshot = await monitorSnapshot({ includeHistory, forceHistory, subscriptions, history });
   if (!input.active()) return { lastHistoryPublishedAt };
   const observed = decorateTaskOriginCatalog(refreshObservedCatalog(snapshot), client.room);
-  const status = { ...observed, sessions: attachWorkingTrees(annotateLimitContinuations(observed.sessions)) };
+  const status = { ...observed, sessions: attachWorkingTrees(annotateQueueHolds(annotateLimitContinuations(observed.sessions))) };
   rememberPublishedCatalog(client, status);
   await client.send(status, "phone", { ttlMs: INTERVAL_MS * 24, reliable: false });
   // Provider review is independent of task visibility; a hung hook RPC must

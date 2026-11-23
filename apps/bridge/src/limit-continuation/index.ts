@@ -7,8 +7,10 @@ import { continuationCopy, failureReason, isLimitContinuation, putOnRelay, relay
 import { readLimitContinuationState, writeLimitContinuationState, type ContinuationCopy, type LimitContinuationState,
   type ScheduledContinuation } from './store';
 
-export { LIFT_BELOW_PERCENT, LIFT_READING_MAX_AGE_MS } from './lift';
-export { LIMIT_CONTINUE_PROMPT, LIMIT_ROOM_PROMPT, type ContinuationQueue } from './relay-copies';
+export { LIFT_BELOW_PERCENT, LIFT_READING_MAX_AGE_MS, limitLifted } from './lift';
+export { limitName, logTime } from './log';
+export { REFUSED_AGAIN_MS } from './holding';
+export { isLimitContinuation, LIMIT_CONTINUE_PROMPT, LIMIT_ROOM_PROMPT, type ContinuationQueue } from './relay-copies';
 export { LIMIT_CONTINUE_GRACE_MS } from './store';
 export type { UsageReadings } from './holding';
 
@@ -65,6 +67,20 @@ export function limitContinuationFor(sessionId: string): { autoContinue: boolean
   const state = savedState(), job = state.scheduled[sessionId];
   return { autoContinue: !state.off.includes(sessionId),
     ...(job ? { continuation: { dueAt: Math.max(job.scheduledAt ?? 0, job.regular.notBefore), early: !!job.early } } : {}) };
+}
+
+/**
+ * For the chat's queued phone messages, which wait behind its continuation: the limit the continuation
+ * waiting for the chat is for, when the next of its copies not yet delivered is due, and when one was last
+ * delivered. Read only; nothing for a chat with no continuation.
+ */
+export function continuationAhead(sessionId: string): { resetsAt?: number; dueAt?: number; deliveredAt?: number } {
+  const state = savedState(), job = state.scheduled[sessionId], given = state.continued?.[sessionId];
+  const copies = job ? [job.early, job.regular].filter(copy => copy !== undefined) : [];
+  const due = copies.filter(copy => copy.deliveredAt === undefined).map(copy => copy.notBefore);
+  const delivered = [...copies.map(copy => copy.deliveredAt), given?.at].filter(at => at !== undefined);
+  return { ...(job ? { resetsAt: job.resetsAt } : {}), ...(due.length ? { dueAt: Math.min(...due) } : {}),
+    ...(delivered.length ? { deliveredAt: Math.max(...delivered) } : {}) };
 }
 
 function memoryOf(queue: ContinuationQueue): Memory {

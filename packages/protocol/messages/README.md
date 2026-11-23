@@ -32,6 +32,11 @@ the phone does not know is shown by `message`: the provider's own first sentence
 (`resetsAt` from the provider's "try again at …"); `autoContinue` is `false` for any agent this computer
 does not continue by itself (everything but Claude).
 
+`queueHold` (optional, strict: `{ reason: "usage_limit", until }`, a time in ms) says this computer holds the
+chat's queued phone messages for its usage limit until about `until`: the reset, or its next try after the chat
+was refused again. Send now still goes at once. Absent when nothing holds them; computers up to 0.8.200 never
+send it. See `apps/bridge/src/limit-queue-hold/README.md`.
+
 `workingTree` (optional, strict) and the `session.changes.query` / `session.changes.result` and
 `session.commit` / `session.commit.result` messages live in `sessions/working-tree.ts`; the contract
 is in `apps/bridge/src/working-tree/README.md`.

@@ -40,6 +40,13 @@ delivery counts as monitor work (`track`) from the moment it may start until its
 handler returns, so the update never exits between a relay claim and the provider
 taking the message. Regression case: `worker/tests/update-hold.test.ts`.
 
+A chat its usage limit refused holds its queued phone messages (`limitHeld`,
+[`limit-queue-hold`](../limit-queue-hold/README.md)): they stay staged here and queued on the relay until the
+reset and the chat's own continuation, then go one at a time. A held job does not take its chat's turn, so the
+continuation is not stuck behind an older message, and it is looked up on the relay only every ten minutes, so
+a cancellation from the phone still retires it. Send now, new tasks and continuations are never held.
+Regression cases: `../limit-queue-hold/tests/queue.test.ts`.
+
 ## License
 
 Licensed under the GrantTap Commercial Source License. See LICENSE and NOTICE.

@@ -93,6 +93,16 @@ export const SessionUsageLimit = z.object({
 export type SessionUsageLimit = z.infer<typeof SessionUsageLimit>;
 
 /**
+ * The chat's queued phone messages wait on this computer for its usage limit (`usage_limit`) until about
+ * `until`: the reset, or the computer's next try after a refusal. Send now still goes at once.
+ */
+export const SessionQueueHold = z.object({
+  reason: z.literal('usage_limit'),
+  until: z.number().int().positive(),
+}).strict();
+export type SessionQueueHold = z.infer<typeof SessionQueueHold>;
+
+/**
  * The chat's last turn ended on the provider's error instead of an answer. `reason` is for the phone
  * to word and may take values this reader does not know: `usage_limit`, `rate_limit`,
  * `context_window`, `sign_in`, `service`, `error`. `message` is the provider's own sentence without
@@ -156,6 +166,7 @@ export const SessionInfo = z.object({
   /** The subscription refused the chat's last request until `resetsAt`. */
   usageLimit: SessionUsageLimit.optional(),
   stopped: SessionStopped.optional(),
+  queueHold: SessionQueueHold.optional(),
   /**
    * Pictures the chat's own answer saved in its working folder, kept by the computer. Read with
    * `session.image.query` on this chat or on the chat that started it (`startedBy`).

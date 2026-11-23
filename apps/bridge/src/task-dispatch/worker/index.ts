@@ -17,6 +17,12 @@ export type WorkerOptions = {
   validationCode?: (job: TaskDispatch, peer: string) => string | undefined;
   ready: (job: TaskDispatch, peer: string) => boolean;
   /**
+   * True while a usage limit holds this queued job (`limit-queue-hold`). It stays here and on the relay,
+   * neither started nor refused, is looked up on the relay only now and then, and leaves its chat's turn
+   * to the chat's limit continuation.
+   */
+  limitHeld?: (job: TaskDispatch, peer: string) => boolean;
+  /**
    * `queued` counts the phone messages that reach the same chat after this one. It reads the queue
    * when called, so the count is the one at the moment the prompt is written.
    */
@@ -25,12 +31,14 @@ export type WorkerOptions = {
 };
 class DeferredLaunch extends Error {}
 const REFUSED_LOOKUP_MS = 10 * 60_000;
+/** Phases of a job that has not started; a limit holds only these. */
+const WAITING = new Set(['staged', 'claimed']);
 
 /** Server acceptance follows local fsync. Native submission is never replayed on a lease timer. */
 export class TaskDispatchWorker {
   private readonly active = new Map<string, Promise<void>>();
   private readonly conversations = new Set<string>();
-  /** When each refused job was last looked up on the relay; it only waits there to be cancelled or to expire. */
+  /** When each refused or limit-held job was last looked up on the relay, for a cancellation or an expiry. */
   private readonly refusedLookups = new Map<string, number>();
   constructor(private readonly options: WorkerOptions) {}
 
@@ -48,7 +56,7 @@ export class TaskDispatchWorker {
       if (record.phase !== 'rejected') continue;
       const key = keyOf(record);
       refusedAt.set(key, Math.max(refusedAt.get(key) ?? -Infinity, record.updatedAt));
-      if (!this.active.has(record.job.jobId)) launched.push(this.settleRefused(record, now));
+      if (!this.active.has(record.job.jobId)) launched.push(this.settleWaiting(record, now));
     }
     for (const record of records) {
       if (['completed', 'cancelled', 'rejected'].includes(record.phase) || this.active.has(record.job.jobId)) continue;
@@ -56,6 +64,10 @@ export class TaskDispatchWorker {
       // Staged before the refusal: a follow-up written for the message that failed. Staged after it: the
       // person saw the failure and sent this anyway.
       if (record.stagedAt <= (refusedAt.get(key) ?? -Infinity)) continue;
+      // Held by the chat's usage limit: its turn stays free for the continuation that goes first.
+      if (WAITING.has(record.phase) && this.options.limitHeld?.(record.job, record.peerPublicKey)) {
+        launched.push(this.settleWaiting(record, now)); continue;
+      }
       if (this.conversations.has(key)) continue;
       this.conversations.add(key);
       const work = this.process(record).catch(error => { this.options.onError?.(error); }).finally(() => {
@@ -124,8 +136,11 @@ export class TaskDispatchWorker {
     await this.finish(inbox.get(job.jobId));
   }
 
-  /** A refused job leaves once the relay cancelled or expired it. Asking every two seconds was only load. */
-  private async settleRefused(record: StoredTaskDispatch, now: number): Promise<void> {
+  /**
+   * A refused job, or one a limit holds, leaves once the relay cancelled or expired it. Asking every two
+   * seconds was only load; a held job is asked again before it starts.
+   */
+  private async settleWaiting(record: StoredTaskDispatch, now: number): Promise<void> {
     const { inbox, remote } = this.options, id = record.job.jobId;
     if (now - (this.refusedLookups.get(id) ?? -Infinity) < REFUSED_LOOKUP_MS) return;
     this.refusedLookups.set(id, now);

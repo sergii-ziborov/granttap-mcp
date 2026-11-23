@@ -56,6 +56,11 @@ The monitor log has one line each time a continuation is queued, queued again, d
 taken back (with why), or expires, naming the chat by the start of its id and never its words
 (`log.ts`). A state the disk cannot read stops the pass with one line and is never replaced unseen.
 
+Phone messages queued for a limited chat wait for its reset and then behind its continuation
+([`limit-queue-hold`](../limit-queue-hold/README.md)); `continuationAhead` tells that queue, read only, when
+the chat's next undelivered copy is due and when one was last delivered. Up to 0.8.200 the queue went first
+and spent itself on refusals.
+
 `limitContinuationFor` reads one chat's setting and waiting continuation for that chat's own MCP
 status. Tests live in `tests/`; `relay-fixture.ts` keeps the relay's rules for job ids.
 

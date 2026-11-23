@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import type { PeerConfig, RelayClient } from '../../../../../packages/core/relay-client';
+import type { TaskDispatch } from '../../../../../packages/protocol/schema';
 import { configDir, isSessionPaused } from '../../config';
 import { isDeliveryInFlight, newTaskDeliveryKey } from '../../reply';
 import { publishedCatalog } from '../../session-catalog';
@@ -15,6 +16,20 @@ import { dispatchSessionObservation, newTaskOperationKey, queuedCatalogRefreshDu
 import { localTaskOrigins, resolveTaskOriginJob } from '../../task-origins';
 import { queueFailureReporter } from './failure-report';
 import { limitContinuationUnwanted, registerLimitContinuationQueue } from '../../limit-continuation';
+import { limitCanHold, queueHeldByLimit } from '../../limit-queue-hold';
+
+/** The chat as this monitor last published it, from its live list or its history. */
+function listedSession(client: RelayClient, sessionId: string | undefined) {
+  const catalog = publishedCatalog(client);
+  const session = [...(catalog?.sessions ?? []), ...(catalog?.history ?? [])].find(item => item.sessionId === sessionId);
+  return { session, generatedAt: catalog?.generatedAt };
+}
+
+/** A queued phone message waits while its chat's usage limit holds the chat's queue (`limit-queue-hold`). */
+function heldByLimit(client: RelayClient, job: TaskDispatch | undefined): boolean {
+  return !!job?.sessionId && limitCanHold(job)
+    && queueHeldByLimit(job.sessionId, dispatchSessionObservation(listedSession(client, job.sessionId).session).session);
+}
 
 /** Only the persistent monitor advertises durable submission capability. */
 export function startTaskDispatchMonitor(input: {
@@ -37,11 +52,6 @@ export function startTaskDispatchMonitor(input: {
   const peerAllowed = (peer: string) => peer === input.config.myPublicKey || input.peerAllowed(peer);
   registerLimitContinuationQueue({ submit: (scope, message, notBefore, createdAt) => sender.submit(scope, message, notBefore, createdAt),
     cancel: (scope, id) => sender.cancel(scope, id), status: (scope, id) => sender.lookup(scope, id) });
-  const listedSession = (sessionId: string | undefined) => {
-    const catalog = publishedCatalog(input.client);
-    const session = [...(catalog?.sessions ?? []), ...(catalog?.history ?? [])].find(item => item.sessionId === sessionId);
-    return { session, generatedAt: catalog?.generatedAt };
-  };
   const worker = new TaskDispatchWorker({ inbox, remote: input.remote ?? relayTaskJobRemote(input.config),
     connected: () => !stopped && input.client.isConnected && input.isLeader(),
     authorized: peerAllowed,
@@ -53,10 +63,11 @@ export function startTaskDispatchMonitor(input: {
       return state === 'uncertain' ? 'confirmation_required'
         : state === 'failed' ? 'delivery_failed' : state === 'conflict' ? 'policy_denied' : undefined;
     },
+    limitHeld: (original, peer) => heldByLimit(input.client, resolve(original, peer).job),
     ready: (original, peer) => {
       const job = input.held?.() ? undefined : resolve(original, peer).job;
       if (!job) return false;
-      const { session, generatedAt } = listedSession(job.sessionId);
+      const { session, generatedAt } = listedSession(input.client, job.sessionId);
       const observation = { ...dispatchSessionObservation(session, generatedAt),
         inFlight: isDeliveryInFlight(job.sessionId
           ?? newTaskDeliveryKey(job.operation.agent ?? 'codex', newTaskOperationKey(job.operation))),
@@ -80,7 +91,7 @@ export function startTaskDispatchMonitor(input: {
       // A continuation goes only to a chat that has not gone on since its limit stopped it.
       const operation = original.operation;
       if (operation.type === 'user.message' && limitContinuationUnwanted(operation,
-        () => dispatchSessionObservation(listedSession(operation.sessionId).session).session)) return 'rejected';
+        () => dispatchSessionObservation(listedSession(input.client, operation.sessionId).session).session)) return 'rejected';
       if (input.deliver) return input.deliver(original, beforeStart, peer, queued);
       const job = resolve(original, peer).job;
       if (!job || job.operation.type === 'user.message.continue') return 'rejected';
