@@ -25,6 +25,8 @@ import { reportMessageAgentActivity } from '../message-delivery/activity';
 import { ACCEPTANCE_WINDOW_MS, acceptWhenStarted, PHONE_RUN_LIMIT_MS } from "../message-delivery/acceptance";
 import { chatReplyHandle, newTaskHandle, sentMessage, settleChatReply, settleNewTask } from "../message-delivery/late-results";
 import { withSurvivor } from "../../reply/survival";
+import { lineageAgent } from "../../started-by/headless";
+import { rememberStartedLinks } from "../../started-by/links";
 
 async function startNewAgentTask(input: {
   client: RelayClient;
@@ -87,6 +89,7 @@ async function startNewAgentTask(input: {
   // Claude, Grok and Cursor name the chat as it starts; Codex only when its run ends.
   const started = (sessionId: string) => {
     try { input.origin?.registry.started(input.origin.scope, sessionId); } catch { /* The run's end records it. */ }
+    linkStartedFromPhone(agent, sessionId, message.startedBy);
   };
   // Follow-ups written before this chat existed reach it after its first turn.
   const prompt = projectGuidancePrompt(admittedProjectId, withQueueNote(message.text, input.queuedBehind?.()));
@@ -109,7 +112,11 @@ async function startNewAgentTask(input: {
     await say(`Could not create a ${displayName} task on this computer.`, undefined, true);
     return 'rejected';
   }
-  const settle = (result: ReplyResult, late: boolean) => settleNewTask(client, outcome, result, late);
+  // Codex names its chat only when the run ends.
+  const settle = (result: ReplyResult, late: boolean) => {
+    if (result.ok && result.sessionId) linkStartedFromPhone(agent, result.sessionId, message.startedBy);
+    return settleNewTask(client, outcome, result, late);
+  };
   const early = await acceptWhenStarted(run, (result) => settle(result, true), ACCEPTANCE_WINDOW_MS, handle);
   if (early === "started") return "accepted";
   await settle(early, false);
@@ -190,4 +197,17 @@ export async function handleUserMessage(
   if (early === "started") return "accepted";
   await settle(early, false);
   return early.ok || early.delivery === 'native' ? "accepted" : "rejected";
+}
+
+/**
+ * A chat the phone started for another one ("Run in a sub-chat") is linked beneath it as soon as
+ * its provider names it, the way a run a chat started from its shell is: the phone then draws it
+ * in that chat's tree. The first link of a chat stands; a link to itself is ignored.
+ */
+export function linkStartedFromPhone(agent: string, sessionId: string, parent: UserMessage["startedBy"]): void {
+  if (!parent || !lineageAgent(agent) || (parent.agent === agent && parent.sessionId === sessionId)) return;
+  try {
+    rememberStartedLinks([{ agent, sessionId, parent: { agent: parent.agent, sessionId: parent.sessionId },
+      source: "process", at: Date.now() }]);
+  } catch { /* The chat still runs; it is only drawn on its own. */ }
 }

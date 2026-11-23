@@ -16,6 +16,13 @@ the phone decides how to show it. A short helper run in a folder made for it
 (see [helper runs](../helper-runs/README.md)) stays one of its chat's nested
 conversations in `childThreads`, not a chat with `startedBy`.
 
+**Started from the phone** (`monitor/handlers/user-message.ts`). The phone can start a
+new chat for another one ("Run in a sub-chat": a queued message handed to one or more other
+agents in the same folder). Its `user.message` then carries `startedBy` naming that chat, and
+the monitor writes the link (`source: "process"`) as soon as the provider names the new
+chat, Codex at the end of its run. The phone draws it in that chat's tree like any run. A
+computer before this ignores the field and the chat stands on its own.
+
 **What is a child** (`headless.ts`). Only a session started headless: `codex
 exec` (`originator: codex_exec` in its rollout), `claude -p`/`--print` or the
 SDK's stream-json input (`entrypoint: sdk-*` in its transcript), a headless Grok

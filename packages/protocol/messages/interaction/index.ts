@@ -61,6 +61,12 @@ export const UserMessage = z.object({
   skill: z.string().min(1).max(180).optional(),
   /** Project this new chat belongs to. Omitted on home compose and follow-ups. */
   projectId: z.string().trim().min(1).max(180).optional(),
+  /**
+   * A new chat the phone starts for another chat ("Run in a sub-chat"): the computer links it
+   * beneath that chat, as it links a run one chat started from its shell. Ignored on a follow-up.
+   */
+  startedBy: z.object({ agent: z.enum(["claude", "codex", "grok", "cursor"]),
+    sessionId: z.string().min(1).max(256) }).strict().optional(),
   model: z.string().min(1).max(120)
     .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/).optional(),
   // Spelled out as the CLI spells them. An unknown value is refused here rather
