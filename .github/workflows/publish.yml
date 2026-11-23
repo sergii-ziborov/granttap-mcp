@@ -12,7 +12,9 @@ jobs:
     # macOS: `prepublishOnly` enforces the coverage contract, and the helper,
     # OAuth service, and installer paths only execute on this platform.
     runs-on: macos-latest
-    timeout-minutes: 45
+    # The suite runs twice (npm test, then prepublishOnly's coverage run). On 23 November 2026 a slow
+    # runner spent 28 minutes on the first and was cancelled at 45 inside `npm publish`.
+    timeout-minutes: 75
     env:
       # V8's runner default heap is too small for the complete coverage merge.
       # Match the qualified sequential local gate and retain every check.
