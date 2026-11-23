@@ -25,6 +25,7 @@ import { startRuntimeWatchdog } from "../../runtime-watchdog";
 
 import { startTaskDispatchMonitor } from "../../task-dispatch/worker/monitor";
 import { startTaskNetworkMonitor } from '../../task-network/runtime';
+import { startTaskAutomations } from '../../task-automations';
 import { claimLinkRestart } from '../../monitor/relay-link';
 
 let client: RelayClient;
@@ -34,6 +35,7 @@ let stopping = false;
 let stopEndpointPublisher = () => {};
 let stopTaskDispatch = () => {};
 let stopTaskNetwork = () => {};
+let stopTaskAutomations = () => {};
 let stopEngineRecovery = () => {};
 let stopRuntimeUpdates = () => {};
 let stopUpdateReadiness = () => {};
@@ -70,6 +72,8 @@ try {
     held: () => updateDrain.holding(), track: monitor.track });
   stopTaskNetwork = startTaskNetworkMonitor({ config: cfg, client,
     isLeader: monitor.isLeader, peerAllowed: controllerPeerGate(cfg), publish: monitor.publish });
+  stopTaskAutomations = startTaskAutomations({ client, isLeader: monitor.isLeader, publish: monitor.publish,
+    held: () => updateDrain.holding(), track: monitor.track });
   stopEndpointPublisher = startEndpointPublisher(cfg);
   stopRuntimeUpdates = startRuntimeUpdates(monitor.canUpdate, updateDrain);
   stopUpdateReadiness = runtimeUpdateReadiness(monitor.canUpdate, updateDrain);
@@ -92,6 +96,7 @@ const stop = (exitCode = 0): void => {
   stopEngineRecovery();
   stopTaskDispatch();
   stopTaskNetwork();
+  stopTaskAutomations();
   monitor.close();
   stopEndpointPublisher();
   client.close();

@@ -905,6 +905,18 @@ appears, and Tasks an earlier runtime made for such chats (`codex task`, "Contin
 are left out of what the phone is sent. See [Codex outcomes](apps/bridge/src/sessions/scan/codex/README.md)
 and [chat pictures](apps/bridge/src/helper-runs/README.md#pictures-a-chat-saved).
 
+### Automations for any agent's chat
+
+The phone's Automations sheet adds GrantTap's own automations to a chat: a name, a message, and a
+schedule — once at a time, every N hours, daily at a time on chosen weekdays, or a five-field cron.
+When one is due, the persistent monitor sends the message into the chat as a phone turn, only once
+the chat is free (idle, nothing queued ahead of it) and not held by a usage limit; it waits for the
+reset instead of running into it. After sleep it runs the latest missed run at most once, and skips
+one more than 12 hours late. Pause, resume, edit, delete and Run now come from the phone, which shows
+the next run, a run waiting and why, and the last run or skip. They work in Claude Code, Cursor, Grok
+Build and Codex chats; Codex's own automations are listed beside them, unchanged. The monitor log has
+one line per run or skip. See [GrantTap automations](apps/bridge/src/task-automations/README.md).
+
 ### One computer, whatever the network calls it
 
 The Mesh keys a computer by an identity written down once, on first use, in
