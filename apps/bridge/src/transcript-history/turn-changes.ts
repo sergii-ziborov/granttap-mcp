@@ -1,8 +1,9 @@
-import { safeParse } from "../sessions/support/common";
+import { safeParse, ts } from "../sessions/support/common";
 import { nativeChanges, recordedFileChanges, type RecordedFileChange } from "./changes";
 import { nativeHistoryCursor, previousNativeLines, type NativeLine } from "./native-lines";
 
-type Summary = { files: RecordedFileChange[]; complete: boolean };
+/** `startedAt` is when the reply's turn began, when its boundary row was read. */
+type Summary = { files: RecordedFileChange[]; complete: boolean; startedAt?: number };
 const summaries = new Map<string, Summary>();
 
 function collectFiles(edits: RecordedFileChange[]): Summary {
@@ -35,6 +36,7 @@ export function completedTurnChanges(path: string, sessionId: string, finalId: s
   const native = new Map<string, RecordedFileChange[]>();
   const legacy: string[] = [];
   let legacyBytes = 0, complete = false, bounded = false;
+  let startedAt: number | undefined;
   let cursor = nativeHistoryCursor(path, sessionId, finalOffset);
   for (let page = 0; page < 32 && cursor; page++) {
     const window = previousNativeLines(path, sessionId, cursor);
@@ -46,6 +48,7 @@ export function completedTurnChanges(path: string, sessionId: string, finalId: s
         || row.type === "turn_context" && p.turn_id && p.turn_id !== turnId)
         || !turnId && (p.type === "user_message" || p.type === "message" && p.role === "user")) {
         complete = true;
+        startedAt = ts(row.timestamp) || undefined;
         break;
       }
       if (p.type === "item_completed" && (!turnId || p.turn_id === turnId)) {
@@ -63,7 +66,7 @@ export function completedTurnChanges(path: string, sessionId: string, finalId: s
   }
   const edits = native.size ? [...native.values()].reverse().flat()
     : [...recordedFileChanges(legacy).values()].flat();
-  const summary = collectFiles(edits);
+  const summary: Summary = { ...collectFiles(edits), ...(startedAt ? { startedAt } : {}) };
   summary.complete &&= complete && (!bounded || native.size > 0);
   summaries.set(key, summary);
   if (summaries.size > 64) summaries.delete(summaries.keys().next().value!);

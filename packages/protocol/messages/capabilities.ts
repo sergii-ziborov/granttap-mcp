@@ -96,6 +96,11 @@ export const ActivityEntry = z.object({
     path: z.string().max(2048), linesAdded: z.number().int().nonnegative(),
     linesRemoved: z.number().int().nonnegative(), diff: z.string().max(16_384),
     diffTruncated: z.boolean().optional(),
+    /** The nested agent that made the change; absent for the chat's own edits. */
+    agentThreadId: z.string().max(256).optional(),
+    agentTitle: z.string().max(160).optional(),
+    /** The Git checkout, or else the folder, the file belongs to: what a list groups it under. */
+    folder: z.string().max(2048).optional(),
   })).max(64).optional(),
 });
 export type ActivityEntry = z.infer<typeof ActivityEntry>;

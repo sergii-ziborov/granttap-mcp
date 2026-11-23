@@ -264,6 +264,7 @@ type EntryExtras = Partial<
       | "linesRemoved"
       | "diffPreview"
       | "fileChanges"
+      | "fileChangesComplete"
       | "summary"
     >
   >;

@@ -17,6 +17,9 @@ back to the native turn boundary so the completed reply includes edits outside
 the visible page. Reads, file lists and diff previews are bounded; partial
 summaries and truncated diffs carry explicit flags. `tool-details.ts` keeps
 readable bounded call/result text independently of the compact timeline label.
+[`recorded-edits/`](recorded-edits/README.md) adds Claude's own edits and every
+nested agent's edits (Claude and Codex) to the same lists, each marked with its
+agent and grouped by the checkout it is in.
 
 Behavior tests live in `tests/`. Licensed under the [GrantTap Commercial Source License](../../../../LICENSE).
 

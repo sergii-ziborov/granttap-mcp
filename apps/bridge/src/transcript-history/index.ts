@@ -8,6 +8,7 @@ import { previousNativeLines } from "./native-lines";
 import { recordedFileChanges } from "./changes";
 import { recordedToolDetails } from "./tool-details";
 import { completedTurnChanges } from "./turn-changes";
+import { claudeRecordedChanges, withCodexAgentChanges } from "./recorded-edits";
 import { cursorActivity, cursorConversationHistory } from "../sessions/cursor";
 export { nativeImageLines } from "./images";
 export { nativeTranscriptImage } from './images/native';
@@ -58,12 +59,13 @@ export function readTranscriptHistory(input: SessionInfo, cursor?: string): Sess
   const out: ActivityEntry[] = [];
   const seen = new Set<string>();
   const changes = recordedFileChanges(lines);
+  const recorded = session.agent === "claude" ? claudeRecordedChanges(session, lines) : undefined;
   const details = recordedToolDetails(lines);
   const offsets = new Map<string, number>();
   for (const line of window.lines) {
     const before = out.length;
     if (session.agent === "claude") {
-      appendClaudeActivity({ out, seen, session, lines: [line.text], observations, fullText: true });
+      appendClaudeActivity({ out, seen, session, lines: [line.text], observations, fullText: true, recorded });
     } else {
       appendCodexActivity({ out, seen, session, lines: [line.text], observations, changes, details, fullText: true });
     }
@@ -75,7 +77,8 @@ export function readTranscriptHistory(input: SessionInfo, cursor?: string): Sess
   let entries = out.slice(from);
   for (const entry of entries) {
     if (entry.kind !== "final") continue;
-    const summary = completedTurnChanges(path, session.sessionId, entry.id, offsets.get(entry.id)!, window.lines);
+    const summary = withCodexAgentChanges(session,
+      completedTurnChanges(path, session.sessionId, entry.id, offsets.get(entry.id)!, window.lines), entry.createdAt);
     entry.fileChanges = summary.files;
     entry.fileChangesComplete = summary.complete;
   }

@@ -8,6 +8,7 @@ import { childEntryFields } from "../../support/child-threads";
 import { diffPreviewFromInput, patchStatsByToolUse, sensitivePath, statsFromInput } from "../../support/edit-stats";
 import { redactSecrets } from "../../telemetry/command-preview";
 import { recordObservedWrite, writtenPaths } from "../../../mesh/observed/writes";
+import type { ListedChanges } from "../../../transcript-history/recorded-edits";
 import {
   activityTelemetry,
   observeCapability,
@@ -190,11 +191,13 @@ function appendClaudeToolUse(input: {
   createdAt: number;
   index: number;
   blockIndex: number;
+  recorded?: ReadonlyMap<string, ListedChanges>;
 }): void {
   const {
     out, seen, session, observations, patches, childFields, sourceThreadId,
     block, createdAt, index, blockIndex,
   } = input;
+  const recorded = typeof block.id === "string" ? input.recorded?.get(block.id) : undefined;
   const classified = classifyTool(block.name, block.input);
   const sourceId =
     typeof block.id === "string"
@@ -221,6 +224,9 @@ function appendClaudeToolUse(input: {
       ...classified,
       ...(stats ?? {}),
       ...(diffPreview ? { diffPreview } : {}),
+      // What the call changed, for the chat's Files list; an agent launch carries its agent's edits.
+      ...(recorded?.files.length ? { fileChanges: recorded.files } : {}),
+      ...(recorded?.files.length && !recorded.complete ? { fileChangesComplete: false } : {}),
       ...(toolDescription(block.input) ? { summary: toolDescription(block.input) } : {}),
       ...(observation
         ? activityTelemetry(observation)
@@ -236,6 +242,8 @@ export function appendClaudeActivity(input: {
   observations: Map<string, CapabilityObservation>;
   child?: ChildThreadInfo;
   fullText?: boolean;
+  /** Recorded edits by tool call, read over the whole page; see `transcript-history/recorded-edits`. */
+  recorded?: ReadonlyMap<string, ListedChanges>;
 }): void {
   const pushEntry = (entry: PushEntryInput) => appendEntry({ ...entry, fullText: input.fullText });
   const { out, seen, session, lines, observations, child } = input;
@@ -284,7 +292,7 @@ export function appendClaudeActivity(input: {
       } else if (block?.type === "tool_use") {
         appendClaudeToolUse({
           out, seen, session, observations, patches, childFields, sourceThreadId,
-          block, createdAt, index, blockIndex,
+          block, createdAt, index, blockIndex, recorded: input.recorded,
         });
       }
     });

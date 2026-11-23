@@ -3,7 +3,11 @@ import { sensitivePath } from "../sessions/support/edit-stats";
 import { statsFromPatchText } from "../sessions/support/edit-stats";
 import { redactSecrets } from "../sessions/telemetry/command-preview";
 
-export type RecordedFileChange = { path: string; linesAdded: number; linesRemoved: number; diff: string; diffTruncated?: boolean };
+export type RecordedFileChange = { path: string; linesAdded: number; linesRemoved: number; diff: string; diffTruncated?: boolean;
+  /** Set when a nested agent made the change: its thread and the description it was launched with. */
+  agentThreadId?: string; agentTitle?: string;
+  /** The Git checkout, or else the folder, the file belongs to. */
+  folder?: string };
 
 export function nativeChanges(item: any): RecordedFileChange[] {
   if (item?.type !== "FileChange" || item.status !== "completed" || !item.changes) return [];
