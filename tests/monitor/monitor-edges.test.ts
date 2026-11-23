@@ -74,13 +74,19 @@ else if(m.id===2){ thread=m.params.threadId; process.stdout.write(JSON.stringify
 else if(m.id===3){ if(thread.includes('fail')) process.stdout.write(JSON.stringify({id:3,error:{message:'compact denied'}})+'\\n');
 else process.stdout.write(JSON.stringify({method:'item/completed',params:{item:{type:'contextCompaction'}}})+'\\n'); } });
 `, { mode: 0o755 });
+  const claudeBin = join(root, "claude.mjs");
+  await writeFile(claudeBin, `#!/usr/bin/env node
+if (process.argv.includes('--version')) { console.log('2.1.330 (Claude Code)'); process.exit(0); }
+console.log(JSON.stringify({type:'system',subtype:'compact_boundary',compact_metadata:{trigger:'manual',pre_tokens:500000,post_tokens:20000}}));
+console.log(JSON.stringify({type:'result',subtype:'success',is_error:false,num_turns:0}));
+`, { mode: 0o755 });
   const grokBin = join(root, "grok.mjs");
   await writeFile(grokBin, `#!/usr/bin/env node
 const args=process.argv.slice(2); const prompt=args[args.indexOf('-p')+1] || ''; if(prompt.includes('fail')) { process.stderr.write('failed'); process.exit(7); }
 setTimeout(()=>{ const at=args.indexOf('--resume'); const id=at>=0?args[at+1]:'new-grok';
 process.stdout.write(JSON.stringify({type:'text',data:'done'})+'\\n'+JSON.stringify({type:'end',sessionId:id})+'\\n'); },80);
 `, { mode: 0o755 });
-  return { claude: join(root, "claude"), codex: join(root, "codex"), grok: join(root, "grok"), codexBin, grokBin };
+  return { claude: join(root, "claude"), codex: join(root, "codex"), grok: join(root, "grok"), codexBin, grokBin, claudeBin };
 }
 
 test("monitor compaction, delivery dedupe, failures, and leadership remain bounded", async (t) => {
@@ -93,6 +99,8 @@ test("monitor compaction, delivery dedupe, failures, and leadership remain bound
     GRANTTAP_GROK_SESSIONS_DIR: paths.grok!,
     GRANTTAP_CODEX_BIN: paths.codexBin!,
     GRANTTAP_GROK_BIN: paths.grokBin!,
+    GRANTTAP_CLAUDE_BIN: paths.claudeBin!,
+    GRANTTAP_CLAUDE_SESSIONS_DIR: join(root, "claude-running"),
   });
   const monitorModule = await import(`../../apps/bridge/src/monitor/index.ts?edges=${Date.now()}`);
   const firstRelay = new FakeRelay();
@@ -101,17 +109,20 @@ test("monitor compaction, delivery dedupe, failures, and leadership remain bound
   const second = monitorModule.startSessionMonitor(secondRelay as never);
   t.after(() => { second.close(); first.close(); });
 
-  const compact = (sessionId: string): Payload => ({
-    type: "session.compact", sessionId, createdAt: Date.now(),
-  });
-  assert.equal(await firstRelay.emit(compact("claude-idle")), true);
-  assert.match(JSON.stringify(firstRelay.sessionSent.at(-1)), /does not expose/);
-  assert.equal(await firstRelay.emit(compact("codex-working")), true);
-  assert.match(JSON.stringify(firstRelay.sessionSent.at(-1)), /active Codex turn/);
-  assert.equal(await firstRelay.emit(compact("codex-fail")), true);
-  assert.match(JSON.stringify(firstRelay.sessionSent.at(-1)), /compact denied/);
-  assert.equal(await firstRelay.emit(compact("codex-ok")), true);
-  assert.match(JSON.stringify(firstRelay.sessionSent.at(-1)), /completed/);
+  // The request is taken at once; its answer comes when the compaction ends.
+  const compacted = async (sessionId: string): Promise<string> => {
+    assert.equal(await firstRelay.emit({ type: "session.compact", sessionId, createdAt: Date.now() }), true);
+    for (let tries = 0; tries < 400; tries += 1) {
+      const answer = firstRelay.sessionSent.find(item => item.type === "session.compact.result" && item.sessionId === sessionId);
+      if (answer) return JSON.stringify(answer);
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    return "";
+  };
+  assert.match(await compacted("claude-idle"), /Claude Code compacted the context: 500k → 20k tokens/);
+  assert.match(await compacted("codex-working"), /active Codex turn/);
+  assert.match(await compacted("codex-fail"), /compact denied/);
+  assert.match(await compacted("codex-ok"), /completed/);
 
   const message = (messageId: string, text: string): Payload => ({
     type: "user.message", messageId, sessionId: "grok-existing", text, createdAt: Date.now(),

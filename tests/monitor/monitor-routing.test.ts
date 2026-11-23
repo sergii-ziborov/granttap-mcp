@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { readCompactionState } from "../../apps/bridge/src/context-compaction/store";
 import type { Payload } from "../../packages/protocol/schema";
 import { saveRuntimeConfig } from "../../apps/bridge/src/config";
 
@@ -93,6 +94,7 @@ test("monitor routes settings and task messages without weakening provider gates
     { type: "session.mcp.set", sessionId: "grok-existing", serverName: "github", allowed: false, createdAt: Date.now() },
     { type: "session.skill.set", sessionId: "grok-existing", skillName: "review", allowed: false, createdAt: Date.now() },
     { type: "session.shell.set", sessionId: "grok-existing", allowed: false, createdAt: Date.now() },
+    { type: "session.autocompact.set", sessionId: "claude-existing", enabled: true, atTokens: 250_000, createdAt: Date.now() },
     { type: "session.subscribe", sessionId: "grok-existing", active: true, createdAt: Date.now() },
     { type: "session.subscribe", sessionId: "grok-existing", active: true, createdAt: Date.now() },
     { type: "session.events", sessionId: "grok-existing", createdAt: Date.now() },
@@ -103,6 +105,7 @@ test("monitor routes settings and task messages without weakening provider gates
   ] as Payload[]) assert.equal(await emit(payload), true);
   assert.match(JSON.stringify(fake.sent.filter((item) => item.type === "session.control.result")),
     /not on this computer any more/);
+  assert.equal(readCompactionState().thresholds["claude-existing"], 250_000, "the phone's threshold is kept for the chat");
   assert.equal(await emit({
     type: "mesh.snapshot", sessionId: "project", projectId: "project",
     project: { projectId: "project", name: "Project", canonicalRepositoryId: "repo", createdAt: Date.now() },

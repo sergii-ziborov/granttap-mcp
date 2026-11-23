@@ -14,7 +14,6 @@ import { withCloudRunners } from "../../cloud-runners";
 import { currentConfigRevision } from "../../config/commands";
 import { currentInstanceEpoch } from "../../host/instance-epoch";
 import { localMeshStore } from "../../mesh/local-remote/local";
-import { refreshMcpLoad } from "../../machine-load/mcp/refresh";
 import { approvalsStatus } from "../../approvals/state";
 import { primeSessionKeys } from "../../host/session-keys";
 import { meshCatalog } from "../../mesh/runtime";
@@ -50,11 +49,11 @@ import type { PeerConfig } from '../../../../../packages/core/relay-client';
 const HISTORY_INTERVAL_MS = 60_000, resumedHeads = new WeakSet<RelayClient>();
 import { publishMonitorMeshes, stopMonitorMeshes } from "../mesh-publication";
 import { publishMonitorCapabilities, stopMonitorCapabilities } from "../capability-publication";
-import { annotateLimitContinuations, scheduleLimitContinuations } from "../../limit-continuation";
+import { annotateLimitContinuations } from "../../limit-continuation";
 import { annotateQueueHolds } from "../../limit-queue-hold";
-import { keepNotedChatPictures } from "../../helper-runs/pictures/chats";
+import { annotateCompactionCatalog } from "../../context-compaction";
+import { startCatalogFollowUps } from "../catalog-follow-ups";
 import { attachWorkingTrees } from "../../working-tree";
-import { cachedNativeAccountUsage } from "../../provider-account-status";
 import { stopLiveMap } from "../../live-map";
 
 export type SessionMonitor = {
@@ -175,7 +174,7 @@ async function publishMonitorTick(input: {
   const snapshot = await monitorSnapshot({ includeHistory, forceHistory, subscriptions, history });
   if (!input.active()) return { lastHistoryPublishedAt };
   const observed = decorateTaskOriginCatalog(refreshObservedCatalog(snapshot), client.room);
-  const status = { ...observed, sessions: attachWorkingTrees(annotateQueueHolds(annotateLimitContinuations(observed.sessions))) };
+  const status = annotateCompactionCatalog({ ...observed, sessions: attachWorkingTrees(annotateQueueHolds(annotateLimitContinuations(observed.sessions))) });
   rememberPublishedCatalog(client, status);
   await client.send(status, "phone", { ttlMs: INTERVAL_MS * 24, reliable: false });
   // Provider review is independent of task visibility; a hung hook RPC must
@@ -183,11 +182,7 @@ async function publishMonitorTick(input: {
   void refreshCodexHooks().catch(() => {});
   if (includeHistory || initial) lastHistoryPublishedAt = Date.now();
   loadLoop.updateStatus(status);
-  void refreshMcpLoad(status.sessions).catch(() => {});
-  // A weekly limit resets long after its chat has left the live list, so history is looked at too.
-  void scheduleLimitContinuations([...status.sessions, ...(status.history ?? [])], undefined, Date.now(),
-    cachedNativeAccountUsage).catch(() => {});
-  void keepNotedChatPictures().catch(() => {});
+  startCatalogFollowUps(status);
   publishCatalogHeads(client, status, subscriptions, publishSessionEvents);
   // Which chats each listed chat started, for chats the phone keeps from before; then runs past the window.
   void publishStartedChildren(client, status, Date.now(), INTERVAL_MS * 24).catch(() => {});

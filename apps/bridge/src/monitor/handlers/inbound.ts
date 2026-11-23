@@ -112,7 +112,7 @@ export async function handleMonitorMessage(
       void publish(true).catch(() => {});
       return true;
     } else if (payload.type === "session.compact") {
-      await handleCompact(client, payload);
+      void handleCompact(client, payload, () => { void publish().catch(() => {}); });
       void publish().catch(() => {});
       return true;
     } else if (payload.type === "session.control") {

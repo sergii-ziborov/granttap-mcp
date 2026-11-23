@@ -12,6 +12,7 @@ import type {
 } from "../../../../../packages/protocol/schema";
 import type { RelayClient } from "../../../../../packages/core/relay-client";
 import { setAutoContinue } from "../../limit-continuation";
+import { setAutoCompact } from "../../context-compaction";
 import {
   applyConfigSet,
   loadConfigCommandState,
@@ -54,6 +55,7 @@ export function applySessionSetting(payload: Payload): boolean {
   else if (payload.type === "session.skill.set") handleSkillSet(payload);
   else if (payload.type === "session.shell.set") handleShellSet(payload);
   else if (payload.type === "session.autocontinue.set") setAutoContinue(payload.sessionId, payload.enabled);
+  else if (payload.type === "session.autocompact.set") setAutoCompact(payload.sessionId, payload.enabled, payload.atTokens);
   else return false;
   return true;
 }
@@ -70,12 +72,16 @@ export async function handleSessionControl(client: RelayClient, message: Session
   }, afterContinue);
 }
 
-export async function handleCompact(client: RelayClient, message: SessionCompact): Promise<void> {
-  await compactTaskSession(message.sessionId, async (ok, text) => {
+/**
+ * Answers when the compaction ends, which for a Claude context near its window takes minutes; the
+ * request itself is taken at once, so the relay is not left waiting for it.
+ */
+export function handleCompact(client: RelayClient, message: SessionCompact, ended: () => void = () => {}): Promise<void> {
+  return compactTaskSession(message.sessionId, async (ok, text) => {
     await sendSessionPayload(client, { type: "session.compact.result", sessionId: message.sessionId,
-      ok, message: text, createdAt: Date.now(),
+      ok, message: text.slice(0, 1_000), createdAt: Date.now(),
     }, message.sessionId, "phone", { ttlMs: 15 * 60_000 });
-  });
+  }).catch(() => {}).finally(ended);
 }
 
 /**

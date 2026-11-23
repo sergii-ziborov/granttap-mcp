@@ -7,6 +7,7 @@ import { plainPreview } from '../../plain-preview';
 import { rememberCapabilityObservation } from "../../telemetry";
 import { claudeWaits, observeClaudeTurn, withClaudeWaits, type ClaudeTurnClock } from "./turn-state";
 import { claudeContextReport } from "../../context-usage";
+import { claudeCompactionOf, compactedContext, noteCompaction, type SeenCompactions } from "../../context-usage/compactions";
 import { LIVE_MS, safeParse, stateFor, ts } from "../../support/common";
 import { finishScan } from "../../cooperative-scan";
 import { claudeCapabilityUsage, createClaudeCapabilityCollector } from "./activity";
@@ -45,6 +46,8 @@ type ClaudeParseState = ClaudeTurnClock & {
   tokensLastTurn: number;
   contextTokensUsed?: number;
   contextUsage?: SessionInfo["contextUsage"];
+  /** The compactions the transcript records; the newest one's size after is what the window holds. */
+  compactions?: SeenCompactions;
   repositoryPaths: string[];
   changedPaths: string[];
   turnEnded: boolean;
@@ -122,6 +125,12 @@ function applyClaudeLine(d: any, state: ClaudeParseState): void {
     if (["user", "assistant"].includes(role) && visible) {
       state.lastMessageAt = Math.max(state.lastMessageAt, t);
     }
+  }
+  const compacted = claudeCompactionOf(d);
+  if (compacted) {
+    state.compactions = noteCompaction(state.compactions, compacted);
+    state.contextUsage = compactedContext(compacted, "claude") ?? state.contextUsage;
+    state.contextTokensUsed = compacted.postTokens ?? state.contextTokensUsed;
   }
   const usage = d?.message?.usage;
   if (usage) {
@@ -295,6 +304,7 @@ export function* parseClaudeFileSteps(file: string): Generator<void, ClaudeParse
     tokensLastTurn: state.tokensLastTurn,
     contextTokensUsed: state.contextTokensUsed,
     ...(state.contextUsage ? { contextUsage: state.contextUsage } : {}),
+    ...(state.compactions ? { compaction: state.compactions } : {}),
     ...claudeWaits(state, state.turnEnded),
   };
   const actualChildPaths =

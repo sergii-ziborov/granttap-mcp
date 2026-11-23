@@ -1,6 +1,6 @@
 import type { SessionControl } from "../../../../packages/protocol/schema";
 import { setSessionPaused } from "../config";
-import { compactCodexSession } from "../providers/codex-control";
+import { compactChat, compactedText } from "../context-compaction";
 import { deliverToSession, stopDeliveries } from "../reply";
 import { scanSessionHistory, scanSessions } from "../sessions";
 import { interruptCodexDesktop } from '../codex-desktop';
@@ -68,21 +68,16 @@ export async function controlTaskSession(
     .finally(() => { continuing.delete(sessionId); afterContinue(); });
 }
 
+/**
+ * Compacts one chat's context with its provider's own command, for the phone's Compact now and the
+ * desktop. Claude Code's `/compact` and Codex's app-server compaction run only between turns
+ * (`../context-compaction`); the provider's words come back when it refuses.
+ */
 export async function compactTaskSession(sessionId: string,
   resultMessage: (ok: boolean, text: string) => Promise<void>): Promise<void> {
-  const session = scanSessions().sessions.find((item) => item.sessionId === sessionId);
+  const session = scanSessions().sessions.find((item) => item.sessionId === sessionId)
+    ?? scanSessionHistory().find((item) => item.sessionId === sessionId);
   if (!session) return resultMessage(false, "This task is no longer available on the computer.");
-  if (session.agent !== "codex") {
-    return resultMessage(false, "Claude Code does not expose a supported remote compaction API.");
-  }
-  if (session.state === "working") {
-    return resultMessage(false, "Wait for the active Codex turn to finish before compacting it.");
-  }
-
-  const result = await compactCodexSession(session.sessionId);
-  await resultMessage(
-    result.ok,
-    result.ok ? "Codex context compaction completed." : `Context compaction failed: ${result.error}`,
-  );
+  const outcome = await compactChat(session, "phone");
+  await resultMessage(outcome.ok, compactedText(session, outcome));
 }
-

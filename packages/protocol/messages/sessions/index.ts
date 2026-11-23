@@ -4,8 +4,10 @@ import { z } from "zod";
 import { CodingAgent } from "../primitives";
 import { ActivityEntry, McpServerInfo, SkillInfo } from "../capabilities";
 import { SessionContextUsage } from "./context";
+import { SessionCompaction } from "./compaction";
 import { SessionWorkingTree } from "./working-tree";
 export { SessionContextUsage } from "./context";
+export * from "./compaction";
 import {
   AgentId,
   AutoAcceptLevel,
@@ -155,6 +157,8 @@ export const SessionInfo = z.object({
   contextTokensUsed: z.number().optional(),
   contextWindow: z.number().optional(),
   contextUsage: SessionContextUsage.optional(),
+  /** How often the chat's context was compacted, the newest one, and when GrantTap compacts it by itself. */
+  compaction: SessionCompaction.optional(),
   mcpServers: z.array(McpServerInfo).optional(),
   skills: z.array(SkillInfo).optional(),
   childThreads: z.array(ChildThreadInfo).max(32).optional(),

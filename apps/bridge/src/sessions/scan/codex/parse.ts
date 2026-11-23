@@ -18,6 +18,7 @@ import { visibleUserText } from "../../support/activity-helpers";
 import { codexHeadRequest, isProvisionalPageTitle } from "../../support/codex-head";
 import { heartbeatDisplayText } from '../../host-heartbeat';
 import { codexContextReport } from "../../context-usage";
+import { codexCompactionOf, noteCompaction, type SeenCompactions } from "../../context-usage/compactions";
 import { codexRequestTitle } from '../../native-task-titles';
 import { plainPreview } from '../../plain-preview';
 import { createCodexLineageCalls, promptLead, type LineageCalls, type LineageFact, type PromptLead } from '../../../started-by';
@@ -43,6 +44,8 @@ type CodexParseState = {
   contextTokensUsed?: number;
   contextWindow?: number;
   contextUsage?: SessionInfo["contextUsage"];
+  /** The compactions the rollout records. */
+  compactions?: SeenCompactions;
   workdirs: string[];
   turn: CodexTurnClock;
   /** `codex exec`: started by a command, not at a terminal. */
@@ -173,6 +176,8 @@ function applyCodexLine(d: any, state: CodexParseState): void {
     }
   }
 
+  const compacted = codexCompactionOf(d, state.contextUsage?.usedTokens);
+  if (compacted) state.compactions = noteCompaction(state.compactions, compacted);
   if (d.type === "event_msg" && d.payload?.type === "token_count") {
     const info = d.payload.info ?? {};
     const total = effectiveCodexUsage(info.total_token_usage);
@@ -256,6 +261,7 @@ export function parseCodexFile(file: string): CodexCandidate | undefined {
     contextTokensUsed: state.contextTokensUsed,
     contextWindow: state.contextWindow,
     ...(state.contextUsage ? { contextUsage: state.contextUsage } : {}),
+    ...(state.compactions ? { compaction: state.compactions } : {}),
     ...stoppedFields(state.outcome),
   };
   const observations = codexCapabilityUsage(session, lines);

@@ -1,4 +1,5 @@
 import { claudeMessageIdentity } from "./message-identity";
+import { claudeCompactionNotice } from "../../context-usage/compactions";
 import { createClaudeUsageRecorder } from './recorded-usage';
 import { readFileSync, statSync } from "node:fs";
 import type { ActivityEntry, ChildThreadInfo, SessionInfo } from "../../../../../../packages/protocol/schema";
@@ -257,6 +258,13 @@ export function appendClaudeActivity(input: {
     if (!d || !claudeTranscriptRecord(d)) return;
     const createdAt = ts(d.timestamp) || session.lastActivityAt;
     const content = d.message?.content;
+    // A compaction reads as one status line; the summary after it is Claude's note to itself.
+    const compaction = claudeCompactionNotice(d);
+    if (compaction !== undefined) {
+      if (compaction) pushEntry({ out, seen, sessionId: session.sessionId, kind: "status", text: compaction, createdAt,
+        ordinal: index, extras: childFields, idOverride: claudeMessageIdentity(sourceThreadId, d, line) });
+      return;
+    }
     if (d.type === "user" || d.message?.role === "user") {
       if (typeof content === "string") {
         pushEntry({ out: out, seen: seen, sessionId: session.sessionId, kind: "user", text: content, createdAt: createdAt, ordinal: index, extras: childFields,
