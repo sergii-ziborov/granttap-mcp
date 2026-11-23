@@ -37,6 +37,12 @@ at most 4,000 ids. It is sent once, again when the list changes (at most once a 
 still starts runs), and every quarter hour for a phone that was away; nothing in between. The course
 parent's list is 909 ids in 35.6 KB, against a 200 KB catalog sent every 30 s.
 
+**Drawn when asked** (`monitor/history/pages.ts`). The phone counts the rest under the chat ("12 earlier
+runs"); a tap asks for them with `sessions.history.query { startedBy: [chat ids] }`. The answer is a history
+page of only the runs those chats started, and the runs those started in turn, newest first, 20 at a time,
+read from the catalog's own window: a run older than that stays counted, and a tap never makes the
+computer read every transcript it has. The phone draws them as cards beneath the chat (GrantTap 315 on).
+
 Tests: `tests/ledger.test.ts` (outcomes, rewrites, caps, unreadable and unwritable files),
 `tests/beyond-window.test.ts` (a course of 230 runs, 30 past the window: linked, counted once, a run
 past two days, a person's chat and another folder left alone), `tests/publish.test.ts` (what is sent,

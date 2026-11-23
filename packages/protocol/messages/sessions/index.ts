@@ -261,6 +261,11 @@ export const SessionsHistoryQuery = z.object({
   requestId: z.string().uuid(),
   cursor: z.string().min(1).max(512).optional(),
   limit: z.number().int().min(1).max(40),
+  /**
+   * Only the runs these chats started, and the runs those started in turn, newest first: the earlier
+   * runs a phone counts beneath a chat (`startedChildren`) but has no rows for. Sent by GrantTap 315 on.
+   */
+  startedBy: z.array(z.string().regex(/^[A-Za-z0-9._-]{8,128}$/)).min(1).max(64).optional(),
   createdAt: z.number(),
 }).strict();
 export type SessionsHistoryQuery = z.infer<typeof SessionsHistoryQuery>;

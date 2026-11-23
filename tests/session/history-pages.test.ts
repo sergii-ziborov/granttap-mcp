@@ -53,3 +53,36 @@ test("the same native session id in two providers keeps both History rows", () =
   assert.notEqual(page.sessions[0]?.agent, next.sessions[0]?.agent);
   assert.equal(next.hasMore, false);
 });
+
+test("a chat's earlier runs come in pages of their own, with the runs they started in turn", () => {
+  // A chat that ran 45 headless runs is published with its newest three; the phone asks for the rest by the chat's id.
+  const parent = { ...session(500), sessionId: "parent-chat", agent: "claude" as const };
+  const runs = Array.from({ length: 45 }, (_, index) => ({ ...session(index),
+    startedBy: { agent: "claude" as const, sessionId: "parent-chat" } }));
+  const nested = { ...session(46), sessionId: "nested-run",
+    startedBy: { agent: "codex" as const, sessionId: runs[0]!.sessionId } };
+  const stranger = { ...session(47), sessionId: "someone-else",
+    startedBy: { agent: "claude" as const, sessionId: "another-chat" } };
+  const all = [parent, ...runs, nested, stranger, session(48)];
+  const ask = (cursor?: string): SessionsHistoryQuery => ({ ...query(cursor), limit: 20, startedBy: ["parent-chat"] });
+  const seen: string[] = [];
+  let cursor: string | undefined;
+  for (let count = 0; count < 3; count += 1) {
+    const page = historyPage(ask(cursor), all);
+    assert.equal(Payload.safeParse(page).success, true);
+    seen.push(...page.sessions.map((item) => item.sessionId));
+    assert.equal(page.hasMore, count < 2);
+    cursor = page.nextCursor;
+  }
+  assert.equal(seen.length, 46, "every run of the chat and the run one of them started");
+  assert.equal(seen[0], "nested-run", "newest first");
+  assert.ok(!seen.includes("parent-chat"), "the chat itself is the phone's already");
+  assert.ok(!seen.includes("someone-else") && !seen.includes("session-048"), "nothing another chat started, nothing else");
+});
+
+test("an earlier-runs query is checked like any other phone request", () => {
+  assert.equal(Payload.safeParse({ ...query(), startedBy: ["parent-chat"] }).success, true);
+  assert.equal(Payload.safeParse({ ...query(), startedBy: [] }).success, false);
+  assert.equal(Payload.safeParse({ ...query(), startedBy: ["../../etc"] }).success, false);
+  assert.equal(Payload.safeParse({ ...query(), startedBy: Array.from({ length: 65 }, (_, i) => `chat-${1000 + i}`) }).success, false);
+});
