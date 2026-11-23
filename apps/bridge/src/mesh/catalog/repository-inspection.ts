@@ -6,9 +6,13 @@ let running = 0;
 const waiting: Array<() => void> = [];
 const pending = new Map<string, Promise<RepositoryFacts>>();
 
-/** Native read-only Git work stays bounded without blocking relay callbacks. */
+/**
+ * Native read-only Git work stays bounded without blocking relay callbacks. An `urgent` read, one a
+ * person is waiting for on the phone, goes ahead of the background readings and may take a third
+ * slot: behind a queue of catalog and working-tree readings it came after the phone stopped waiting.
+ */
 export function readRepositoryGit(cwd: string, args: string[],
-  options: { timeoutMs?: number; maxBuffer?: number } = {}): Promise<string | undefined> {
+  options: { timeoutMs?: number; maxBuffer?: number; urgent?: boolean } = {}): Promise<string | undefined> {
   return new Promise(resolve => {
     const run = () => {
       running++;
@@ -24,7 +28,9 @@ export function readRepositoryGit(cwd: string, args: string[],
         }, done);
       } catch { done(new Error("Repository command could not start")); }
     };
-    if (running < 2) run(); else waiting.push(run);
+    if (running < (options.urgent ? 3 : 2)) run();
+    else if (options.urgent) waiting.unshift(run);
+    else waiting.push(run);
   });
 }
 

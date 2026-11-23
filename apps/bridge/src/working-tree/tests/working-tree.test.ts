@@ -8,7 +8,7 @@ import type { SessionInfo } from "../../../../../packages/protocol/schema";
 import { SessionInfo as SessionSchema } from "../../../../../packages/protocol/schema";
 import { attachWorkingTrees, forgetWorkingTrees, readFolder } from "..";
 import { commitChanges, listChanges } from "../relay";
-import { parseStatus } from "../status";
+import { parseStatus, parseWorktrees } from "../status";
 
 function repository(t: TestContext): { root: string; git: (...args: string[]) => string } {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "granttap-working-tree-")));
@@ -34,6 +34,40 @@ test("Git's porcelain status reads as paths with their two letters, renames with
     { status: " M", path: "src/a file.ts" }, { status: "R ", path: "new.ts", from: "old.ts" },
     { status: "UU", path: "both.ts" }, { status: "??", path: "notes.md" }] });
   assert.equal(parseStatus("# branch.head (detached)\0").detached, true);
+});
+
+test("Git's worktree list reads as checkouts with their branch, commit and lock; a bare repository is left out", () => {
+  const head = "a".repeat(40);
+  assert.deepEqual(parseWorktrees([`worktree /repo`, `HEAD ${head}`, "branch refs/heads/main", "",
+    `worktree /repo-agent`, `HEAD ${head}`, "detached", "locked reason", "", "worktree /bare.git", "bare", "", ""].join("\0")), [
+    { path: "/repo", head, branch: "main", detached: false, locked: false },
+    { path: "/repo-agent", head, detached: true, locked: true }]);
+});
+
+test("the phone sees every worktree of the chat's repository and lists another one read-only", async (t) => {
+  const { root, git } = repository(t);
+  const linked = `${root}-agent`;
+  t.after(() => rmSync(linked, { recursive: true, force: true }));
+  git("worktree", "add", "-q", "-b", "agent/work", linked);
+  writeFileSync(join(root, "kept.txt"), "two\n");
+  writeFileSync(join(linked, "agent.txt"), "made by an agent\n"); writeFileSync(join(linked, "kept.txt"), "three\n");
+
+  const own = await listChanges(chat(root), ask);
+  assert.equal(own.folder, root);
+  assert.equal(own.total, 1);
+  assert.ok(own.treeToken, "the chat's own checkout can be committed");
+  assert.deepEqual(own.worktrees?.map((tree) => [tree.path, tree.branch, tree.current === true]),
+    [[root, "main", true], [realpathSync(linked), "agent/work", false]]);
+
+  const other = await listChanges(chat(root), { ...ask, requestId: "list-2", worktree: linked });
+  assert.equal(other.folder, realpathSync(linked));
+  assert.equal(other.branch, "agent/work");
+  assert.deepEqual(other.files.map((file) => file.path).sort(), ["agent.txt", "kept.txt"]);
+  assert.equal(other.treeToken, undefined, "another checkout is listed read-only");
+  assert.equal(other.worktrees?.find((tree) => tree.current)?.path, root);
+
+  const stranger = await listChanges(chat(root), { ...ask, requestId: "list-3", worktree: "/tmp" });
+  assert.equal(stranger.unavailable, true, "only a worktree of the chat's repository is read");
 });
 
 test("a chat's card carries its folder's uncommitted count, read in the background and shared per folder", async (t) => {

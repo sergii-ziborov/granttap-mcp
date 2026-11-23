@@ -45,20 +45,60 @@ export function parseStatus(output: string): Pick<TreeReading, "branch" | "detac
   return { branch, detached, ahead, behind, files };
 }
 
-/** The checkout this folder is in and its status, or nothing when it is no checkout or Git did not answer. */
-export async function readTree(folder: string): Promise<TreeReading | undefined> {
+/**
+ * The checkout this folder is in and its status, or nothing when it is no checkout or Git did not answer.
+ * `urgent` for a reading the phone waits for (`readRepositoryGit`).
+ */
+export async function readTree(folder: string, options: { urgent?: boolean } = {}): Promise<TreeReading | undefined> {
   if (!isAbsolute(folder)) return undefined;
-  const root = (await readRepositoryGit(folder, ["rev-parse", "--show-toplevel"]))?.trim();
+  const urgent = options.urgent === true;
+  const root = (await readRepositoryGit(folder, ["rev-parse", "--show-toplevel"], { urgent }))?.trim();
   if (!root) return undefined;
   const [status, gitDir, head] = await Promise.all([
     readRepositoryGit(root, ["status", "--porcelain=v2", "--branch", "-z", "--untracked-files=normal"],
-      { timeoutMs: 5_000, maxBuffer: 4 * 1024 * 1024 }),
-    readRepositoryGit(root, ["rev-parse", "--absolute-git-dir"]),
-    readRepositoryGit(root, ["rev-parse", "--verify", "--quiet", "HEAD"]),
+      { timeoutMs: 5_000, maxBuffer: 4 * 1024 * 1024, urgent }),
+    readRepositoryGit(root, ["rev-parse", "--absolute-git-dir"], { urgent }),
+    readRepositoryGit(root, ["rev-parse", "--verify", "--quiet", "HEAD"], { urgent }),
   ]);
   if (status === undefined) return undefined;
   const directory = gitDir?.trim();
   const operation = directory ? OPERATIONS.find(([name]) => existsSync(join(directory, name)))?.[1] : undefined;
   const token = createHash("sha256").update(`${head?.trim() ?? ""}\0${status}`).digest("hex");
   return { root, ...parseStatus(status), ...(operation ? { operation } : {}), token };
+}
+
+export type Worktree = { path: string; branch?: string; detached: boolean; head?: string; locked: boolean };
+
+/** `git worktree list --porcelain -z`: one record per checkout, its attributes NUL-ended, an empty one between. */
+export function parseWorktrees(output: string): Worktree[] {
+  const list: Worktree[] = [];
+  let current: Worktree | undefined;
+  for (const field of output.split("\0")) {
+    if (field.startsWith("worktree ")) {
+      current = { path: field.slice("worktree ".length), detached: false, locked: false };
+      list.push(current);
+    } else if (!current) {
+      continue;
+    } else if (field.startsWith("HEAD ")) {
+      const head = field.slice("HEAD ".length);
+      if (/^[a-f0-9]{7,64}$/.test(head) && !/^0+$/.test(head)) current.head = head;
+    } else if (field.startsWith("branch ")) {
+      current.branch = field.slice("branch ".length).replace(/^refs\/heads\//, "");
+    } else if (field === "detached") {
+      current.detached = true;
+    } else if (field === "locked" || field.startsWith("locked ")) {
+      current.locked = true;
+    } else if (field === "bare") {
+      list.pop();
+      current = undefined;
+    }
+  }
+  return list;
+}
+
+/** Every checkout of the repository this root belongs to, the main one first; nothing when Git did not answer. */
+export async function readWorktrees(root: string, options: { urgent?: boolean } = {}): Promise<Worktree[] | undefined> {
+  const output = await readRepositoryGit(root, ["worktree", "list", "--porcelain", "-z"],
+    { timeoutMs: 5_000, urgent: options.urgent === true });
+  return output === undefined ? undefined : parseWorktrees(output);
 }

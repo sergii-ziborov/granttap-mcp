@@ -22,17 +22,34 @@ const scope = { sessionId: z.string().min(1).max(512), requestId: z.string().min
 const TreeToken = z.string().regex(/^[a-f0-9]{64}$/);
 const RepoPath = z.string().min(1).max(4096);
 
-/** The phone asks for a chat's uncommitted changes, answered only to the phone that asked. */
+/**
+ * The phone asks for a chat's uncommitted changes, answered only to the phone that asked. `worktree`,
+ * an absolute path a listing named among the repository's worktrees, asks for that checkout instead,
+ * read-only: its listing has no `treeToken`. A phone sends it only to a computer whose listing had
+ * `worktrees`; an older computer refuses the field.
+ */
 export const SessionChangesQuery = z.object({ type: z.literal('session.changes.query'), ...scope,
-  createdAt: z.number().finite() }).strict();
+  worktree: RepoPath.optional(), createdAt: z.number().finite() }).strict();
 export type SessionChangesQuery = z.infer<typeof SessionChangesQuery>;
+
+/**
+ * One checkout of the chat's repository, from `git worktree list`: the main one and each linked one.
+ * `current` marks the chat's own; `head` is the commit it has out.
+ */
+export const SessionWorktree = z.object({ path: RepoPath, branch: z.string().min(1).max(256).optional(),
+  detached: z.boolean().optional(), head: z.string().regex(/^[a-f0-9]{7,64}$/).optional(),
+  current: z.boolean().optional(), locked: z.boolean().optional() }).strict();
+export type SessionWorktree = z.infer<typeof SessionWorktree>;
 
 /**
  * Up to 200 changed paths, relative to the checkout's root, with Git's two status letters
  * (`XY` of `git status --porcelain`, e.g. ` M`, `A `, `??`, `R `); a rename names `from`.
+ * `folder` is the listed checkout's root; `worktrees`, at most 100, every checkout of its repository.
  */
 export const SessionChangesResult = z.object({ type: z.literal('session.changes.result'), ...scope,
   branch: z.string().min(1).max(256).optional(), detached: z.boolean().optional(),
+  ahead: z.number().int().nonnegative().optional(), behind: z.number().int().nonnegative().optional(),
+  folder: RepoPath.optional(), worktrees: z.array(SessionWorktree).max(100).optional(),
   operation: SessionWorkingTree.shape.operation,
   files: z.array(z.object({ path: RepoPath, status: z.string().regex(/^[ MADRCUT?!]{2}$/), from: RepoPath.optional() })
     .strict()).max(200),

@@ -24,7 +24,7 @@ function firstLine(output: string): string | undefined {
 export async function commitChosenPaths(session: SessionInfo, folder: string, request: SessionCommit,
   write: GitWrite = gitWrite): Promise<Outcome> {
   if (session.state === "working" && request.confirmWhileWorking !== true) return { ok: false, reason: "working" };
-  const tree = await readTree(folder);
+  const tree = await readTree(folder, { urgent: true });
   if (!tree) return { ok: false, reason: "unavailable" };
   if (tree.detached) return { ok: false, reason: "detached" };
   if (tree.operation) return { ok: false, reason: "operation" };
