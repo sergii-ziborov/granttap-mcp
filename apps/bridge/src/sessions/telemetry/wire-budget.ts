@@ -10,7 +10,7 @@ function richness(event: RemoteCapabilityUsageEvent): number {
   return (event.durationMs != null ? 4 : 0) + (event.outcome !== "unknown" ? 4 : 0) +
     (event.resource != null ? 3 : 0) +
     (event.estimatedBaselineTokens != null ? 2 : 0) +
-    (event.commandPreview != null ? 1 : 0) +
+    (event.commandPreview != null ? 1 : 0) + (event.inputPreview != null ? 1 : 0) +
     (event.estimatedContextTokens ?? 0) / MAX_TOKEN_ESTIMATE;
 }
 

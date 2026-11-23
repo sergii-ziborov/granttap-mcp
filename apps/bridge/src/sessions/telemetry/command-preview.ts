@@ -115,6 +115,51 @@ export function commandTextFromInput(input: unknown): string | null {
   return collapsed || null;
 }
 
+export const MAX_INPUT_PREVIEW_LENGTH = 120;
+const MAX_INPUT_VALUE_LENGTH = 60;
+
+/** One argument's value, short: a long string is cut, a list says how long it is, a nested object is elided. */
+function previewValue(value: unknown): string {
+  if (typeof value === "string") {
+    const flat = value.replace(/[\s\u0000-\u001f\u007f]+/g, " ").trim();
+    return flat.length > MAX_INPUT_VALUE_LENGTH ? `${flat.slice(0, MAX_INPUT_VALUE_LENGTH)}…` : flat;
+  }
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (value === null) return "null";
+  if (Array.isArray(value)) return value.length === 1 ? `[${previewValue(value[0])}]` : `[${value.length} items]`;
+  if (typeof value === "object") return "{…}";
+  return "";
+}
+
+/**
+ * What an MCP tool or a skill was asked, in one short line: `query: disk usage, host: web-1`.
+ * Arguments are read in order and cut early, so a call carrying a whole file costs nothing more;
+ * secrets come out as they do from a command (`redactSecrets`). Nothing for an empty call.
+ */
+export function inputPreviewFromInput(input: unknown): string | null {
+  let raw: string;
+  if (typeof input === "string") {
+    raw = previewValue(input);
+  } else if (input && typeof input === "object" && !Array.isArray(input)) {
+    const parts: string[] = [];
+    let length = 0;
+    for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+      if (length > MAX_INPUT_PREVIEW_LENGTH) break;
+      const shown = previewValue(value);
+      if (!shown) continue;
+      const part = `${key.slice(0, 40)}: ${shown}`;
+      parts.push(part);
+      length += part.length + 2;
+    }
+    raw = parts.join(", ");
+  } else {
+    raw = input === undefined ? "" : previewValue(input);
+  }
+  const clean = redactCommandSecrets(raw).replace(/[\s\u0000-\u001f\u007f]+/g, " ").trim();
+  if (!clean) return null;
+  return clean.length > MAX_INPUT_PREVIEW_LENGTH ? `${clean.slice(0, MAX_INPUT_PREVIEW_LENGTH - 1)}…` : clean;
+}
+
 export function commandPreviewFromInput(input: unknown): string | null {
   const collapsed = commandTextFromInput(input);
   return collapsed ? collapsed.slice(0, MAX_COMMAND_PREVIEW_LENGTH) : null;

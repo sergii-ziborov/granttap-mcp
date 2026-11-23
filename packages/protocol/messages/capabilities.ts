@@ -52,6 +52,8 @@ export const ObservedCapability = z.object({
   name: CapabilityName,
   toolName: z.string().min(1).max(240),
   commandPreview: z.string().trim().min(1).max(160).optional(),
+  /** What an MCP tool or a skill was asked: its arguments in one short line, secrets removed. */
+  inputPreview: z.string().trim().min(1).max(120).optional(),
   estimatedContextTokens: z.number().int().nonnegative().optional(),
   estimatedBaselineTokens: z.number().int().nonnegative().optional(),
   durationMs: z.number().int().nonnegative().optional(),
@@ -114,6 +116,7 @@ export const CapabilityUsageEvent = z.object({
   name: CapabilityName,
   toolName: z.string().min(1).max(240),
   commandPreview: z.string().trim().min(1).max(160).optional(),
+  inputPreview: z.string().trim().min(1).max(120).optional(),
   deepLinkTarget: CapabilityChatTarget.optional(),
   createdAt: z.number(),
   estimatedContextTokens: z.number().int().nonnegative().optional(),

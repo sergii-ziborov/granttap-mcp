@@ -102,6 +102,8 @@ test("Cursor indexes root and child MCP/skill/CLI usage without a second walk", 
   ]));
   setEnv(t, "GRANTTAP_CURSOR_TRANSCRIPTS_DIR", root);
   setEnv(t, "GRANTTAP_CURSOR_STATE_DB", join(root, "missing-state.vscdb"));
+  // GrantTap keeps the Cursor chats it ran in its own config folder; a computer that ran some lists them too.
+  setEnv(t, "GRANTTAP_CONFIG_DIR", join(root, "granttap-config"));
 
   const scan = scanCursor();
   assert.deepEqual(scan.sessions.map((session) => session.sessionId), [sessionId]);

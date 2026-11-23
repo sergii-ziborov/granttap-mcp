@@ -6,7 +6,7 @@ import type {
   ObservedCapability,
   RemoteCapabilityUsageEvent,
 } from "../../../../../packages/protocol/schema";
-import { commandPreviewFromInput, commandTextFromInput } from "./command-preview";
+import { commandPreviewFromInput, commandTextFromInput, inputPreviewFromInput, MAX_INPUT_PREVIEW_LENGTH } from "./command-preview";
 import {
   clampTokens,
   estimateBaselineTokens,
@@ -43,6 +43,8 @@ export type CapabilityObservation = {
   skill?: string;
   cli?: true;
   commandPreview?: string;
+  /** What an MCP tool or a skill was asked, short and without secrets (`inputPreviewFromInput`). */
+  inputPreview?: string;
   estimatedContextTokens?: number;
   estimatedBaselineTokens?: number;
   durationMs?: number;
@@ -103,6 +105,7 @@ export function pendingCapabilityObservation(
     createdAt: pending.createdAt,
     outcome: "unknown",
     ...identity,
+    ...(identity.cli ? {} : { inputPreview: inputPreviewFromInput(pending.input) ?? undefined }),
     estimatedContextTokens: clampTokens(estimateTokens(pending.input)) || undefined,
   };
 }
@@ -143,6 +146,12 @@ export function observeCapability(
           ?? attributedAgentResource(agent, pending.createdAt, resultAt)
         : undefined,
   };
+}
+
+/** An observation's preview as the wire takes it: trimmed, at most its length, or nothing. */
+function boundedInputPreview(value: string | undefined): string | undefined {
+  const clean = value?.trim();
+  return clean ? clean.slice(0, MAX_INPUT_PREVIEW_LENGTH) : undefined;
 }
 
 function inferredOutcome(value: unknown): CapabilityOutcome {
@@ -224,6 +233,7 @@ export function toObservedCapability(
     name: (observation.mcpServer ?? observation.skill ?? commandName(kind === "cli" ? commandTextFromInput(observation.commandPreview) : undefined) ?? toolName).trim().slice(0, 160),
     toolName,
     commandPreview,
+    inputPreview: kind === "cli" ? undefined : boundedInputPreview(observation.inputPreview),
     estimatedContextTokens: observation.estimatedContextTokens,
     estimatedBaselineTokens: observation.estimatedBaselineTokens,
     durationMs: observation.durationMs,
@@ -272,6 +282,7 @@ export function toRemoteCapabilityUsageEvent(
     toolName: toolName.slice(0, 240),
     commandPreview:
       kind === "cli" ? commandPreviewFromInput(observation.commandPreview) ?? undefined : undefined,
+    inputPreview: kind === "cli" ? undefined : boundedInputPreview(observation.inputPreview),
     createdAt: observation.createdAt,
     estimatedContextTokens: observation.estimatedContextTokens,
     estimatedBaselineTokens: observation.estimatedBaselineTokens,
