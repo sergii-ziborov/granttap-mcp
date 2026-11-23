@@ -4,6 +4,8 @@ import { DeviceManagementRequest, DeviceManagementResult } from './messages/devi
 export * from './messages/device/management';
 import { TaskSchedulesRequest, TaskSchedulesResult } from './task-schedules';
 export * from './task-schedules';
+import { TaskAutomationsRequest, TaskAutomationsResult } from './task-automations';
+export * from './task-automations';
 import { ProjectTransportSet, ProjectTransportAck } from './task-network';
 export * from './task-network';
 import { TaskTransferContinue, TaskTransferContinueResult } from "./task-transfer";
@@ -137,6 +139,8 @@ export const MachineHeartbeat = z.object({
   /** Continues a chat stopped by its subscription limit when the limit resets, and takes `session.autocontinue.set`. */
   limitAutoContinue: z.boolean().optional(),
   taskActivityPreviews: z.boolean().optional(),
+  /** Runs GrantTap's own automations in any agent's chat and answers `task.automations`. */
+  taskAutomations: z.boolean().optional(),
 });
 export type MachineHeartbeat = z.infer<typeof MachineHeartbeat>;
 
@@ -146,6 +150,8 @@ export type MachineHeartbeat = z.infer<typeof MachineHeartbeat>;
 export const Payload = z.union([
   TaskSchedulesRequest,
   TaskSchedulesResult,
+  TaskAutomationsRequest,
+  TaskAutomationsResult,
   DeviceManagementRequest,
   DeviceManagementResult,
   ApprovalRequest,
