@@ -66,8 +66,8 @@ async function status() {
 test('status tells the calling chat how many phone messages wait for it and how it continues after a limit', async t => {
   const f = fixture(t), resetsAt = Date.now() + 3_600_000;
   queue(f.root, f.room, [chat, chat, 'another-chat']);
-  writeLimitContinuationState({ off: [], scheduled: { [chat]: { resetsAt, messageId: 'limit-continue-fixture',
-    scope: { sessionId: chat, provider: 'claude' }, scheduledAt: Date.now() } } });
+  writeLimitContinuationState({ off: [], scheduled: { [chat]: { resetsAt, scope: { sessionId: chat, provider: 'claude' },
+    scheduledAt: Date.now(), regular: { messageId: 'limit-continue-fixture', notBefore: resetsAt + 60_000, onRelay: true } } } });
   const before = readdirSync(f.root, { recursive: true }).sort();
   const first = await status();
   assert.deepEqual(first.structured.chat, { sessionId: chat, provider: 'claude', identifiedBy: 'environment',

@@ -28,10 +28,16 @@ export class NativeTaskQueueSender {
   }
 
   async status(scope: NativeQueueScope, id: string): Promise<TaskJobReceipt> {
+    const receipt = await this.lookup(scope, id);
+    if (!receipt) throw new Error('Relay queue status is unavailable.');
+    return receipt;
+  }
+
+  /** What the relay holds under an id this computer queued; `null` when it holds nothing under it. */
+  async lookup(scope: NativeQueueScope, id: string): Promise<TaskJobReceipt | null> {
     this.store.header(id, scope);
     const receipt = await requestTaskJob(this.options.config, { id, method: 'GET' }, this.options.request);
-    if (!receipt) throw new Error('Relay queue status is unavailable.');
-    this.retireIfTerminal(receipt);
+    if (receipt) this.retireIfTerminal(receipt);
     return receipt;
   }
 

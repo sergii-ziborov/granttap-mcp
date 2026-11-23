@@ -124,9 +124,13 @@ test('a chat refused again for the same reset after an early try is not tried ea
   assert.deepEqual(relay.cancelled, [regular, early], 'the chat went on: both are taken back');
   await scheduleLimitContinuations([chat('seven_day')], relay, at + 20_000, () => [weekly(at + 15_000, 30)]);
   await scheduleLimitContinuations([chat('seven_day')], relay, at + minute, () => [weekly(at + 50_000, 30)]);
-  assert.deepEqual(ids(relay), [regular, early, regular], 'the continuation at the reset is queued again, not the early one');
+  assert.equal(relay.submitted.length, 3, 'the continuation at the reset is queued again, not the early one');
+  const again = ids(relay)[2]!;
+  assert.match(again, /^limit-continue-(?!early-)/);
+  assert.notEqual(again, regular, 'under a new id: the relay keeps the one it cancelled and refuses it for another message');
   assert.equal(relay.submitted[2]!.notBefore, weeklyReset + LIMIT_CONTINUE_GRACE_MS);
   assert.equal(limitContinuationUnwanted(relay.submitted[1]!.message), true, 'a copy of the early one is not delivered');
+  assert.equal(limitContinuationUnwanted(relay.submitted[0]!.message), true, 'nor the first one at the reset');
   assert.equal(limitContinuationUnwanted(relay.submitted[2]!.message), false);
 });
 
@@ -182,19 +186,22 @@ test('a continuation queued before its time was recorded counts from the first l
 
 test('an early continuation is wanted as soon as the relay has it, and one the relay refused is tried again', async t => {
   isolated(t);
-  const relay = queue(), at = refusedAt + 20 * minute, wantedOnArrival: boolean[] = [];
+  const relay = queue(), at = refusedAt + 20 * minute, wantedOnArrival: boolean[] = [], tried: string[] = [];
   let refuse = true;
   const flaky: ContinuationQueue = {cancel: relay.cancel, submit: async (scope, message, notBefore, createdAt) => {
     const early = message.messageId?.includes('early');
+    if (early) tried.push(`${message.messageId}:${notBefore}:${createdAt}`);
     if (early && refuse) { refuse = false; throw new Error('relay unavailable'); }
     if (early) wantedOnArrival.push(!limitContinuationUnwanted(message));
     return relay.submit(scope, message, notBefore, createdAt);
   }};
   await scheduleLimitContinuations([chat('seven_day')], flaky, refusedAt);
-  await assert.rejects(scheduleLimitContinuations([chat('seven_day')], flaky, at, () => [weekly(at - minute, 30)]));
-  assert.equal(relay.submitted.length, 1);
+  await scheduleLimitContinuations([chat('seven_day')], flaky, at, () => [weekly(at - minute, 30)]);
+  assert.equal(relay.submitted.length, 1, 'a relay that refused it does not stop the monitor');
   await scheduleLimitContinuations([chat('seven_day')], flaky, at + minute, () => [weekly(at, 30)]);
   assert.equal(relay.submitted.length, 2);
+  assert.equal(tried.length, 2);
+  assert.equal(tried[0], tried[1], 'the same copy is sent again, so the relay can never hold two');
   assert.deepEqual(wantedOnArrival, [true], 'delivery that comes back at once already finds it wanted');
 });
 

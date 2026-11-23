@@ -36,7 +36,12 @@ export function startTaskDispatchMonitor(input: {
   const sender = new NativeTaskQueueSender({ root: join(configDir(), 'native-task-queue'), config: input.config });
   const peerAllowed = (peer: string) => peer === input.config.myPublicKey || input.peerAllowed(peer);
   registerLimitContinuationQueue({ submit: (scope, message, notBefore, createdAt) => sender.submit(scope, message, notBefore, createdAt),
-    cancel: (scope, id) => sender.cancel(scope, id) });
+    cancel: (scope, id) => sender.cancel(scope, id), status: (scope, id) => sender.lookup(scope, id) });
+  const listedSession = (sessionId: string | undefined) => {
+    const catalog = publishedCatalog(input.client);
+    const session = [...(catalog?.sessions ?? []), ...(catalog?.history ?? [])].find(item => item.sessionId === sessionId);
+    return { session, generatedAt: catalog?.generatedAt };
+  };
   const worker = new TaskDispatchWorker({ inbox, remote: input.remote ?? relayTaskJobRemote(input.config),
     connected: () => !stopped && input.client.isConnected && input.isLeader(),
     authorized: peerAllowed,
@@ -51,10 +56,8 @@ export function startTaskDispatchMonitor(input: {
     ready: (original, peer) => {
       const job = input.held?.() ? undefined : resolve(original, peer).job;
       if (!job) return false;
-      const catalog = publishedCatalog(input.client);
-      const session = [...(catalog?.sessions ?? []), ...(catalog?.history ?? [])]
-        .find(item => item.sessionId === job.sessionId);
-      const observation = { ...dispatchSessionObservation(session, catalog?.generatedAt),
+      const { session, generatedAt } = listedSession(job.sessionId);
+      const observation = { ...dispatchSessionObservation(session, generatedAt),
         inFlight: isDeliveryInFlight(job.sessionId
           ?? newTaskDeliveryKey(job.operation.agent ?? 'codex', newTaskOperationKey(job.operation))),
         paused: !!job.sessionId && isSessionPaused(job.sessionId) };
@@ -74,7 +77,10 @@ export function startTaskDispatchMonitor(input: {
       return ready;
     },
     deliver: (original, beforeStart, peer, queued) => track(async () => {
-      if (original.operation.type === 'user.message' && limitContinuationUnwanted(original.operation)) return 'rejected';
+      // A continuation goes only to a chat that has not gone on since its limit stopped it.
+      const operation = original.operation;
+      if (operation.type === 'user.message' && limitContinuationUnwanted(operation,
+        () => dispatchSessionObservation(listedSession(operation.sessionId).session).session)) return 'rejected';
       if (input.deliver) return input.deliver(original, beforeStart, peer, queued);
       const job = resolve(original, peer).job;
       if (!job || job.operation.type === 'user.message.continue') return 'rejected';

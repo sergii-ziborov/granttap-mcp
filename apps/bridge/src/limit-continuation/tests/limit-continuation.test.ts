@@ -5,8 +5,8 @@ import {join} from 'node:path';
 import test from 'node:test';
 import type {SessionInfo, UserMessage} from '../../../../../packages/protocol/schema';
 import {
-  annotateLimitContinuations, LIMIT_CONTINUE_GRACE_MS, limitContinuationUnwanted, scheduleLimitContinuations,
-  setAutoContinue, type ContinuationQueue,
+  annotateLimitContinuations, LIMIT_CONTINUE_GRACE_MS, limitContinuationFor, limitContinuationUnwanted,
+  scheduleLimitContinuations, setAutoContinue, type ContinuationQueue,
 } from '..';
 
 const now = 1_800_000_000_000;
@@ -38,7 +38,8 @@ test('a chat stopped by its limit is continued once from the relay when the limi
   assert.equal(queued?.message.sessionId, 'limited-chat');
   assert.equal(queued?.message.cwd, '/work/app');
   assert.match(queued?.message.text ?? '', /limit .*reset/i);
-  assert.equal(limitContinuationUnwanted(queued!.message), false, 'it is delivered when it comes back');
+  assert.deepEqual(limitContinuationFor('limited-chat'),
+    {autoContinue: true, continuation: {dueAt: resetsAt + LIMIT_CONTINUE_GRACE_MS, early: false}});
 
   setAutoContinue('limited-chat', false);
   assert.equal(annotateLimitContinuations([chat(resetsAt)])[0]?.usageLimit?.autoContinue, false);
@@ -50,6 +51,10 @@ test('a chat stopped by its limit is continued once from the relay when the limi
   setAutoContinue('limited-chat', true);
   await scheduleLimitContinuations([chat(resetsAt)], relay, now + 3_000);
   assert.equal(relay.submitted.length, 2, 'turning it back on queues it again');
+  const again = relay.submitted[1]!.message;
+  assert.notEqual(again.messageId, queued!.message.messageId, 'under a new id: the relay keeps the one it cancelled');
+  assert.equal(limitContinuationUnwanted(again), false, 'that one is delivered when it comes back');
+  assert.equal(limitContinuationUnwanted(queued!.message), true, 'the cancelled one still is not');
 });
 
 test('a chat that went on by itself has its queued continuation taken back', async t => {
