@@ -37,21 +37,25 @@ test('a Codex reply lists the files its agents changed during that turn, each ma
     fileChange(10, 'c1', { [join(worktree, 'fix.ts')]: { type: 'update', unified_diff: '@@\n-a\n+b' } }),
     fileChange(60, 'c2', { [join(worktree, 'later.ts')]: { type: 'add', content: 'later\n' } }),
   ].join('\n') + '\n');
-  writeFileSync(quiet, JSON.stringify({ type: 'session_meta', timestamp: at(6), payload: { id: 'child-2' } }) + '\n');
+  writeFileSync(quiet, [JSON.stringify({ type: 'session_meta', timestamp: at(6), payload: { id: 'child-2' } }),
+    fileChange(20, 'q1', { [join(worktree, 'quiet.ts')]: { type: 'add', content: 'q\n' } })].join('\n') + '\n');
   const child = (threadId: string, extra: Partial<ChildThreadInfo>): ChildThreadInfo => ({ threadId,
     parentThreadId: session.sessionId, depth: 1, state: 'idle', startedAt: 5, lastActivityAt: 60,
     tokensSession: 0, tokensLastTurn: 0, ...extra });
   codexLogPathBySession.set(session.sessionId, parent);
   codexActivitySourcesBySession.set(session.sessionId, [{ path: parent },
     { path: childPath, child: child('child-1', { agentName: 'Reviewer' }) },
-    { path: quiet, child: child('child-2', { title: 'Quiet helper' }) },
+    { path: quiet, child: child('child-2', {}) },
     { path: join(root, 'removed.jsonl'), child: child('child-3', {}) }]);
 
-  const final = readTranscriptHistory(session)?.entries.find(entry => entry.kind === 'final');
-  assert.deepEqual(final?.fileChanges?.map(file => [file.path, file.linesAdded, file.agentThreadId, file.agentTitle, file.folder]), [
-    [join(chat, 'own.ts'), 1, undefined, undefined, chat],
-    [join(worktree, 'fix.ts'), 1, 'child-1', 'Reviewer', worktree],
-  ]);
-  assert.equal(final?.fileChangesComplete, true);
-  assert.match(final!.fileChanges![1]!.diff, /-a\n\+b/);
+  for (let read = 0; read < 2; read++) {
+    const final = readTranscriptHistory(session)?.entries.find(entry => entry.kind === 'final');
+    assert.deepEqual(final?.fileChanges?.map(file => [file.path, file.linesAdded, file.agentThreadId, file.agentTitle, file.folder]), [
+      [join(chat, 'own.ts'), 1, undefined, undefined, chat],
+      [join(worktree, 'fix.ts'), 1, 'child-1', 'Reviewer', worktree],
+      [join(worktree, 'quiet.ts'), 1, 'child-2', undefined, worktree],
+    ]);
+    assert.equal(final?.fileChangesComplete, true);
+    assert.match(final!.fileChanges![1]!.diff, /-a\n\+b/);
+  }
 });

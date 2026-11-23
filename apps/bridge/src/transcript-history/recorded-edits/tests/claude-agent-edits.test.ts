@@ -174,9 +174,13 @@ test('agents that are gone, unlinked or unreadable add no files', t => {
   writeFileSync(main, rows([said(0, 'user', 'Hi'),
     call(1, 'launch', 'Agent', { prompt: 'x' }), result(2, 'launch', { toolUseResult: { agentId: 'missing' } }),
     call(3, 'launch2', 'Agent', { prompt: 'y' }), result(4, 'launch2'),
-    call(5, 'edit', 'Edit', { file_path: 'relative.ts', old_string: 'a', new_string: 'b' }), result(6, 'edit')]));
+    call(5, 'edit', 'Edit', { file_path: 'relative.ts', old_string: 'a', new_string: 'b' }), result(6, 'edit'),
+    call(7, 'empty', 'Write', { file_path: join(chat, 'empty.ts'), content: '' }), result(8, 'empty')]));
   const entries = readTranscriptHistory(session)!.entries;
   assert.ok(entries.filter(entry => entry.toolName === 'Agent').every(entry => !entry.fileChanges));
   assert.deepEqual(entries.find(entry => entry.toolName === 'Edit')?.fileChanges?.map(file => [file.path, file.folder]),
     [['relative.ts', undefined]]);
+  // An emptied file is still a changed file, with nothing added or removed.
+  assert.deepEqual(entries.find(entry => entry.toolName === 'Write')?.fileChanges?.map(file =>
+    [file.path, file.linesAdded, file.linesRemoved, file.diff]), [[join(chat, 'empty.ts'), 0, 0, '']]);
 });

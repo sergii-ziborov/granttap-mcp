@@ -41,3 +41,5 @@ Tests in [`tests/`](tests/) use synthetic transcripts: Claude agents editing a
 second worktree, a plain folder and a removed worktree, nested agents, a failed
 and a secret edit, an agent still writing, the file and byte bounds, unreadable
 or missing agents, and a Codex agent's edits inside and after a turn.
+
+Licensed under the [GrantTap Commercial Source License](../../../../../LICENSE).
