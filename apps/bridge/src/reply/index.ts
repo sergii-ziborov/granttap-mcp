@@ -137,10 +137,12 @@ export function createClaudeSession(
   operationKey?: string,
   effort?: string,
   onNativeSession?: (sessionId: string) => void,
+  /** The mode the phone chose for this chat; its first turn runs in it, like every later one. */
+  permissionMode?: string,
 ): Promise<ReplyResult> {
   const workspace = resolveAgentWorkspace(cwd, "claude");
   return queued(newTaskDeliveryKey("claude", operationKey), () => withAttachments(attachments, text, (prepared) =>
-    runClaudeNew(prepared.claudePrompt, workspace, timeoutMs, model, operationKey, effort, onNativeSession),
+    runClaudeNew(prepared.claudePrompt, workspace, timeoutMs, model, operationKey, effort, onNativeSession, permissionMode),
   ));
 }
 
@@ -169,10 +171,11 @@ export function createGrokSession(
   operationKey?: string,
   effort?: string,
   onNativeSession?: (sessionId: string) => void,
+  permissionMode?: string,
 ): Promise<ReplyResult> {
   const workspace = resolveAgentWorkspace(cwd, "grok");
   return queued(newTaskDeliveryKey("grok", operationKey), () => withAttachments(attachments, text, (prepared) =>
-    runGrokNew(prepared.claudePrompt, workspace, timeoutMs, model, operationKey, effort, onNativeSession),
+    runGrokNew(prepared.claudePrompt, workspace, timeoutMs, model, operationKey, effort, onNativeSession, permissionMode),
   ));
 }
 
@@ -219,12 +222,13 @@ function runClaude(
 
 function runClaudeNew(
   text: string, cwd: string, timeoutMs: number, model?: string, operationKey?: string, effort?: string,
-  onNativeSession?: (sessionId: string) => void,
+  onNativeSession?: (sessionId: string) => void, permissionMode?: string,
 ): Promise<ReplyResult> {
   // The chat is given its id before it starts, so the phone can show the one chat it asked for
   // while the first answer is still being written, instead of a placeholder beside it.
   const sessionId = randomUUID();
-  const args = ["-p", "--session-id", sessionId, ...(model ? ["--model", model] : []), ...providerEffortArgs("claude", effort),
+  const args = ["-p", "--session-id", sessionId, ...(model ? ["--model", model] : []),
+    ...(permissionMode ? ["--permission-mode", permissionMode] : []), ...providerEffortArgs("claude", effort),
     "--output-format", "json", text];
   const claude = resolveClaudeBinary();
   onNativeSession?.(sessionId);

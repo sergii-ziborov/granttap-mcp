@@ -30,12 +30,14 @@ export async function runCursorResume(
 
 export function runGrokNew(
   text: string, cwd: string, timeoutMs: number, model?: string, operationKey?: string, effort?: string,
-  onNativeSession?: (sessionId: string) => void,
+  onNativeSession?: (sessionId: string) => void, permissionMode?: string,
 ): Promise<ReplyResult> {
   const sessionId = randomUUID();
+  const permission = permissionMode === "manual" ? "default" : permissionMode;
   const args = [
     "--no-auto-update", "--cwd", cwd, "--session-id", sessionId,
-    ...(model ? ["--model", model] : []), ...providerEffortArgs("grok", effort),
+    ...(model ? ["--model", model] : []), ...(permission ? ["--permission-mode", permission] : []),
+    ...providerEffortArgs("grok", effort),
     "-p", text, "--output-format", "streaming-json",
   ];
   return runProcess(grokBin(), args, cwd, timeoutMs, (stdout) => parseGrok(stdout, sessionId),

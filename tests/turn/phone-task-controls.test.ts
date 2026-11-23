@@ -73,6 +73,17 @@ test('a Claude Task created on the phone starts with its chosen model and effort
   assert.equal(switched, '-p --resume claude-chat --model sonnet --effort xhigh --output-format json');
 });
 
+test('a Claude Task created on the phone runs its first turn in the permission mode New Task chose', async t => {
+  // On 23 November 2026 a Task created with Bypass permissions started as `claude -p --session-id … --output-format
+  // json`: the first turn asked for every tool, and only the second ran with `--permission-mode bypassPermissions`.
+  const f = fixture(t);
+  const created = await f.send({ messageId: 'mode-new', taskOriginId: 'mode-new', agent: 'claude', text: 'Start',
+    permissionMode: 'bypassPermissions', effort: 'high' });
+  assert.match(created, /^-p --session-id [0-9a-f-]{36} --permission-mode bypassPermissions --effort high --output-format json$/);
+  const plain = await f.send({ messageId: 'mode-none', taskOriginId: 'mode-none', agent: 'claude', text: 'Start' });
+  assert.match(plain, /^-p --session-id [0-9a-f-]{36} --output-format json$/, 'a Task that chose nothing starts as before');
+});
+
 test('a Claude chat that reported no effort, or one Claude does not have, resumes as it always did', async t => {
   const f = fixture(t);
   f.publish({ sessionId: 'claude-chat', agent: 'claude', model: 'claude-opus-5-5' });

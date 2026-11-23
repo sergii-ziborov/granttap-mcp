@@ -102,8 +102,12 @@ async function startNewAgentTask(input: {
     run = withSurvivor(handle, () => agent === 'codex'
       ? createCodexSession(prompt, requestedCwd, PHONE_RUN_LIMIT_MS, resolved.attachments, message.model, message.messageId,
         message.effort)
-      : { claude: createClaudeSession, cursor: createCursorSession, grok: createGrokSession }[agent](prompt, requestedCwd,
-        PHONE_RUN_LIMIT_MS, resolved.attachments, message.model, message.messageId, message.effort, started)).catch(() => {
+      : agent === 'cursor'
+        ? createCursorSession(prompt, requestedCwd, PHONE_RUN_LIMIT_MS, resolved.attachments, message.model,
+          message.messageId, message.effort, started)
+        // The mode New Task chose holds from the chat's first turn, not only from its second.
+        : { claude: createClaudeSession, grok: createGrokSession }[agent](prompt, requestedCwd, PHONE_RUN_LIMIT_MS,
+          resolved.attachments, message.model, message.messageId, message.effort, started, message.permissionMode)).catch(() => {
       input.origin?.registry.complete(input.origin.scope, { ok: true });
       return { ok: false, error: 'The provider task stopped unexpectedly.' } as ReplyResult;
     });
