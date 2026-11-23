@@ -69,7 +69,10 @@ export function queueHeldByLimit(sessionId: string, session: SessionInfo | undef
   if (!session) return false;
   let state: LimitQueueState | undefined;
   try { state = readLimitQueueState(); } catch (error) { logFailure(error); }
-  const chat = state?.chats[sessionId], ahead = continuationAhead(sessionId);
+  const chat = state?.chats[sessionId];
+  // A chat without a limit and nothing recorded for it, such as one that is only busy: nothing to hold or end.
+  if (!chat && !chatLimit(session)) return false;
+  const ahead = continuationAhead(sessionId);
   const decision = decide(session, now, chat, readings, ahead);
   const next = recorded(chat, decision, session, now, ahead.deliveredAt);
   if (state && next !== undefined) {

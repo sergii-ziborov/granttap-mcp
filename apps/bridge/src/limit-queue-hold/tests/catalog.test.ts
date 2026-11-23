@@ -65,6 +65,9 @@ test('what the queue tried is read by the catalog: a chat refused again says whe
     + 'the chat was refused again; the next one goes at 2026-11-23 13:18 UTC\\.$'));
   assert.match(lines[3]!, /go on: the chat went on without the limit\.$/);
   assert.equal(queueHeldByLimit('catalog-chat-01', undefined, NOW, noReadings), false, 'an unknown chat is not held');
+  const busy: SessionInfo = { ...limited(), sessionId: 'busy-chat-0001', state: 'working', usageLimit: undefined };
+  assert.equal(queueHeldByLimit('busy-chat-0001', busy, NOW, noReadings), false, 'a chat that is only busy is not held');
+  assert.equal(lines.length, 5, 'and nothing is logged for it');
 });
 
 test('a hold store the disk cannot read is logged once and the queue still waits for the limit', t => {
