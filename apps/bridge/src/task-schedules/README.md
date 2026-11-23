@@ -2,7 +2,9 @@
 
 Public entry: `handleTaskSchedules`. The paired controller lists and edits existing
 Codex heartbeat automations attached to admitted executions of the same Task and
-Project. GrantTap does not create a scheduler or start provider turns here.
+Project. GrantTap does not create a scheduler or start provider turns here; its own
+automations, for any agent's chat, are `../task-automations`. A chat with no Codex execution
+gets an unavailable answer that tells an older app to update.
 
 The local Codex version-1 mirror and native scheduling row must agree. Updates
 preserve unknown fields and execution settings, use an expected revision, retain

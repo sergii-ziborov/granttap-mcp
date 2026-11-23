@@ -33,7 +33,9 @@ export async function handleTaskSchedules(client: RelayClient, input: TaskSchedu
   if (current?.root !== root) current = { root, controls: new TaskScheduleControls(createTaskScheduleRepository({
     root, backupRoot: join(configDir(), 'task-schedule-checkpoints'),
   })) };
-  return current.controls.handle(request, { controller: JSON.stringify([client.room, peer]), sessions,
+  // Apps that ask here in a Claude, Cursor or Grok chat predate GrantTap's own automations for it.
+  const unavailable = session.agent === 'codex' ? undefined : 'Update the GrantTap app to use automations in this chat.';
+  return current.controls.handle(request, { controller: JSON.stringify([client.room, peer]), sessions, unavailable,
     send: result => sendSessionPayload(client, result, request.sessionId, 'phone', {
       peerPublicKey: peer, reliable: false, urgent: true, ttlMs: 30_000,
     }),

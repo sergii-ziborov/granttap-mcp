@@ -4,7 +4,9 @@ import type { createTaskScheduleRepository } from '.';
 
 type Repository = ReturnType<typeof createTaskScheduleRepository>;
 type Delivery = { fingerprint: string; result: TaskSchedulesResult; at: number };
-type Context = { controller: string; sessions: readonly string[]; send: (result: TaskSchedulesResult) => Promise<void> };
+type Context = { controller: string; sessions: readonly string[]; send: (result: TaskSchedulesResult) => Promise<void>;
+  /** What an older app is told in a chat with no Codex execution, where GrantTap's own automations are. */
+  unavailable?: string };
 
 /** Edits are addressed to an existing native automation and idempotent per paired controller. */
 export class TaskScheduleControls {
@@ -28,16 +30,16 @@ export class TaskScheduleControls {
         message: 'Too many automation requests. Wait briefly and refresh status.' });
       return true;
     }
-    const result = this.prepare(request, context.sessions, at);
+    const result = this.prepare(request, context.sessions, at, context.unavailable);
     this.deliveries.set(key, { fingerprint, result, at });
     await context.send(result);
     return true;
   }
 
-  private prepare(request: TaskSchedulesRequest, sessions: readonly string[], at: number): TaskSchedulesResult {
+  private prepare(request: TaskSchedulesRequest, sessions: readonly string[], at: number,
+    unavailable = 'Codex automations are unavailable for this chat on this computer.'): TaskSchedulesResult {
     const base = this.base(request, at);
-    if (sessions.length === 0) return { ...base, phase: 'unavailable',
-      message: 'Codex automations are unavailable for this chat on this computer.' };
+    if (sessions.length === 0) return { ...base, phase: 'unavailable', message: unavailable };
     try {
       const change = request.change;
       const updated = change ? this.repository.change(change.id, change.revision, change.patch, sessions) : undefined;

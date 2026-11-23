@@ -33,7 +33,8 @@ test('only a paired controller can edit automations of admitted native execution
   const session = (id: string, agent: SessionInfo['agent'], projectId = 'project', taskId = 'task'): SessionInfo => ({
     sessionId: id, agent, projectId, taskId, state: 'idle', startedAt: 1, lastActivityAt: 2, tokensSession: 0, tokensLastTurn: 0,
   });
-  const sessions = [session('grok-root', 'grok'), session('codex-native', 'codex'), session('foreign-native', 'codex', 'other-project')];
+  const sessions = [session('grok-root', 'grok'), session('codex-native', 'codex'), session('foreign-native', 'codex', 'other-project'),
+    session('claude-alone', 'claude', 'claude-project')];
   rememberPublishedCatalog(client, { type: 'sessions.status', machine: 'QA Mac', sessions, generatedAt: Date.now() });
   const query = { type: 'task.schedules' as const, requestId: 'list', sessionId: 'grok-root', createdAt: Date.now() };
   assert.equal(await handleTaskSchedules(client, query, undefined), false);
@@ -58,6 +59,9 @@ test('only a paired controller can edit automations of admitted native execution
   await handleTaskSchedules(client, { ...pause, requestId: 'foreign-edit', change: { ...pause.change, id: 'foreign' } }, 'phone');
   assert.equal(results.at(-1)?.value.phase, 'failed');
   assert.doesNotMatch(JSON.stringify(results), /Private other Task/);
+  await handleTaskSchedules(client, { ...query, requestId: 'claude-alone', sessionId: 'claude-alone' }, 'phone');
+  assert.deepEqual([results.at(-1)?.value.phase, results.at(-1)?.value.message],
+    ['unavailable', 'Update the GrantTap app to use automations in this chat.'], 'an older app in a Claude chat learns why');
   rmSync(machine);
   assert.equal(await handleTaskSchedules(client, { ...query, requestId: 'revoked' }, 'phone'), false);
 });
