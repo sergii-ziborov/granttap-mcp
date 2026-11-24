@@ -16,6 +16,8 @@ const Record = z.object({ scope: Scope, digest: z.string().length(64),
   phase: z.enum(['creating', 'ready', 'failed', 'uncertain']),
   owner: z.number().int().positive(), createdAt: z.number().finite(), expiresAt: z.number().finite(),
   lastRetryId: z.string().optional(),
+  /** Refused before its provider started: a retry replaces it whatever it now carries. */
+  refused: z.literal(true).optional(),
   sessionId: z.string().min(1).max(180).optional() }).strict();
 type OriginRecord = z.infer<typeof Record>;
 export type OriginResolution = { state: 'started' | 'waiting' | 'ready' | 'failed' | 'uncertain' | 'conflict';
@@ -43,7 +45,8 @@ export class TaskOriginRegistry {
     const path = this.path(scope), digest = fingerprint(intent);
     return withStoreLock(path, () => {
       const existing = this.read(scope);
-      if (existing) {
+      const retriesRefusal = existing?.refused === true && !!message.retryId && message.retryId !== existing.lastRetryId;
+      if (existing && !retriesRefusal) {
         if (existing.digest !== digest) return { state: 'conflict' };
         if (existing.phase !== 'failed' || !message.retryId || message.retryId === existing.lastRetryId) {
           return this.resolve(existing, message.agent ?? 'codex', message.projectId);
@@ -84,6 +87,23 @@ export class TaskOriginRegistry {
       const sessionId = (candidate && candidate.length <= 180 ? candidate : undefined) ?? record.sessionId;
       const phase = !result.ok ? 'failed' : sessionId ? 'ready' : 'uncertain';
       writeOrigin(path, Record.parse({ ...record, phase, sessionId }));
+    });
+  }
+
+  /**
+   * The computer refused this creation before its provider started. A follow-up written for it then
+   * fails instead of waiting for a chat that will never exist; a retry from the phone starts afresh.
+   * A creation already on record is left as it is.
+   */
+  refuse(scope: TaskOriginScope, message: UserMessage): void {
+    mkdirSync(this.root, { recursive: true, mode: 0o700 });
+    const { createdAt: _time, retryId: _retry, ...intent } = message;
+    const path = this.path(scope);
+    withStoreLock(path, () => {
+      if (this.read(scope)) return;
+      writeOrigin(path, Record.parse({ scope, digest: fingerprint(intent), agent: message.agent ?? 'codex',
+        projectId: message.projectId, phase: 'failed', owner: process.pid, lastRetryId: message.retryId,
+        refused: true, createdAt: this.now(), expiresAt: this.now() + 37 * 86_400_000 }));
     });
   }
 

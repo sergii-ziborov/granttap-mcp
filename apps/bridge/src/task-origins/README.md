@@ -17,6 +17,15 @@ Transport timestamps and retries keep one origin. A definite failure can be
 retried with a new explicit controller retry generation; an interrupted or
 unknown native attempt requires confirmation instead of automatic replay.
 
+A new task the computer refuses before its provider starts (agent disabled, a
+folder or model it will not admit, a missing attachment) is recorded as a
+refused failure (`refuse`): a follow-up written into that task fails at once
+instead of waiting on the relay for a chat that will never exist, and a retry
+from the phone starts afresh. Up to 0.8.207 nothing was recorded, the phone got
+only a short-lived note without a chat, and follow-ups waited forever. The
+monitor's side is `../monitor/message-delivery/new-task-refusal.ts`: a rejection receipt
+with the reason for the person's message, and a monitor log line naming it.
+
 ## License
 
 Licensed under the GrantTap Commercial Source License. See LICENSE and NOTICE.

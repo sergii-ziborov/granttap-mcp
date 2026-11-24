@@ -21,6 +21,7 @@ import { publishedSession } from "../../session-catalog";
 import { localTaskOrigins, type TaskOriginRegistry, type TaskOriginScope } from '../../task-origins';
 import { agentEventForUserMessage, sendDeliveryReceipt } from "./receipts";
 import { resolveMessageAttachments } from "./receipts";
+import { refuseNewTask } from "../message-delivery/new-task-refusal";
 import { reportMessageAgentActivity } from '../message-delivery/activity';
 import { ACCEPTANCE_WINDOW_MS, acceptWhenStarted, PHONE_RUN_LIMIT_MS } from "../message-delivery/acceptance";
 import { chatReplyHandle, newTaskHandle, sentMessage, settleChatReply, settleNewTask } from "../message-delivery/late-results";
@@ -42,10 +43,9 @@ async function startNewAgentTask(input: {
   const displayName = {
     claude: "Claude Code", codex: "Codex", cursor: "Cursor", grok: "Grok Build",
   }[agent];
-  if (!loadRuntimeConfig().providerSettings[agent]) {
-    await say(`${displayName} is disabled in GrantTap Settings.`, undefined, true);
-    return "rejected";
-  }
+  const refuse = (reason: string) => refuseNewTask({ client, message, displayName, reason, say,
+    origin: input.origin, peerPublicKey: input.peerPublicKey });
+  if (!loadRuntimeConfig().providerSettings[agent]) return refuse(`${displayName} is disabled in GrantTap Settings.`);
   const requestedCwd = message.cwd?.trim();
   let admittedProjectId: string | undefined;
   if (requestedCwd) {
@@ -54,24 +54,17 @@ async function startNewAgentTask(input: {
       projectId: message.projectId,
       hostOnline: client.isConnected,
     });
-    if (!admitted.ok) {
-      await say(admitted.detail, undefined, true);
-      return "rejected";
-    }
+    if (!admitted.ok) return refuse(admitted.detail);
     admittedProjectId = admitted.projectId;
     if ("queued" in admitted && admitted.queued) {
       // The phone's durable outbox retries after reconnect. This monitor has
       // no worker for its separate pinned-task queue, so do not launch here.
+      process.stderr.write(`[monitor] A new ${displayName} task waits for its pinned host to come online.\n`);
       return "rejected";
     }
   }
   const resolved = resolveMessageAttachments(message, (attachmentId) => takeAttachment(attachmentId, client.room));
-  if (!resolved.ok) {
-    if (message.messageId) {
-      await sendDeliveryReceipt(client, message.messageId, "rejected", ATTACHMENT_MISSING_ERROR);
-    }
-    return "rejected";
-  }
+  if (!resolved.ok) return refuse(ATTACHMENT_MISSING_ERROR);
   const admission = input.origin?.registry.begin(input.origin.scope,
     { ...message, attachments: resolved.attachments, attachmentRefs: undefined });
   if (admission && admission.state !== 'started') {
@@ -113,8 +106,7 @@ async function startNewAgentTask(input: {
     });
   } catch {
     input.origin?.registry.complete(input.origin.scope, { ok: false });
-    await say(`Could not create a ${displayName} task on this computer.`, undefined, true);
-    return 'rejected';
+    return refuse(`Could not create a ${displayName} task on this computer.`);
   }
   // Codex names its chat only when the run ends.
   const settle = (result: ReplyResult, late: boolean) => {
