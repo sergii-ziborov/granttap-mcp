@@ -16,7 +16,7 @@ const APP = "/Users/someone/dev/applydjin";
 const REMOTE = "github.com/someone/applydjin";
 const PARENT = "38034755-03a1-429d-8db6-2aa351e64a0b";
 
-function freshStore(t: TestContext): { store: MeshStore; root: string } {
+function freshStore(t: TestContext, clock: () => number = () => now): { store: MeshStore; root: string } {
   const root = mkdtempSync(join(tmpdir(), "granttap-started-mesh-"));
   const previous = process.env.GRANTTAP_CONFIG_DIR;
   process.env.GRANTTAP_CONFIG_DIR = join(root, "config");
@@ -25,7 +25,7 @@ function freshStore(t: TestContext): { store: MeshStore; root: string } {
     if (previous === undefined) delete process.env.GRANTTAP_CONFIG_DIR; else process.env.GRANTTAP_CONFIG_DIR = previous;
     rmSync(root, { recursive: true, force: true });
   });
-  return { store: new MeshStore(join(root, "mesh.json"), () => now), root };
+  return { store: new MeshStore(join(root, "mesh.json"), clock), root };
 }
 
 /** The parent's checkout has a remote; a folder outside it has no Git; `own` is a checkout of its own. */
@@ -84,7 +84,10 @@ test("a child whose parent this computer does not know registers no Mesh; one in
 });
 
 test("a child follows a parent placed by an earlier catalog, and leaves a Mesh an older runtime made for its folder", (t) => {
-  const { store, root } = freshStore(t);
+  // The older runtime linked the child before this one moves it. With one frozen clock both links
+  // carried the same time, and the store's tie-break by content let the old link win now and then.
+  let at = now;
+  const { store, root } = freshStore(t, () => at);
   const child = "01a1e730-5e03-7140-944e-977f7e0a3c8d";
   const blogart = join(root, "blogart");
   mkdirSync(blogart);
@@ -93,6 +96,7 @@ test("a child follows a parent placed by an earlier catalog, and leaves a Mesh a
     COMPUTER, inspector(), []);
   const junk = projectIdentity(`local:${blogart}`);
   assert.deepEqual(store.projectIds().sort(), [projectIdentity(REMOTE), junk].sort());
+  at = now + 60_000;
   rememberStartedLinks([{ agent: "codex", sessionId: child, parent: byParent, source: "transcript", at: now }], [], now);
   const [moved] = linkSessionsToProjects(store, [session(child, "codex", blogart, byParent, 60_000)], COMPUTER, inspector(), []);
   assert.equal(moved?.projectId, projectIdentity(REMOTE));
