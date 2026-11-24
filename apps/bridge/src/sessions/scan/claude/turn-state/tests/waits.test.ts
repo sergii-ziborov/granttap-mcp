@@ -46,6 +46,25 @@ test("a turn that ended with its background command still running waits on it, n
   } finally { log.done(); }
 });
 
+test("a notification a subagent took after the turn ended leaves the chat waiting on its agents", () => {
+  const removed = (offsetMs: number, tags: string) => row("queue-operation", offsetMs, undefined,
+    { operation: "remove", reason: "absorbed_mid_turn", content: `<task-notification>\n${tags}\n</task-notification>` });
+  const log = transcript([
+    row("user", -15 * 60_000, { role: "user", content: "Synthetic request" }),
+    launch(-14 * 60_000, "toolu_agent", "Agent", {}),
+    result(-14 * 60_000 + 500, "toolu_agent", "Async agent launched successfully.\nagentId: a1b2c3d4 (internal)"),
+    ended(-13 * 60_000),
+    // A command the subagent started in the background finished; the subagent took its notification.
+    notification(-9 * 60_000, "<task-id>bsub1</task-id>\n<tool-use-id>toolu_sub</tool-use-id>\n<status>completed</status>"),
+    removed(-6 * 60_000, "<task-id>bsub1</task-id>\n<tool-use-id>toolu_sub</tool-use-id>\n<status>completed</status>"),
+  ]);
+  try {
+    const session = parseClaudeFile(log.file)?.session;
+    assert.equal(session?.state, "idle");
+    assert.equal(session?.backgroundTasks, 1, "the agent still works; the chat must not look free to compact or automate");
+  } finally { log.done(); }
+});
+
 test("a stopped task, a foreground agent, a failed launch and an expired command leave nothing outstanding", () => {
   const log = transcript([
     launch(-30_000, "toolu_agent", "Agent", {}),
