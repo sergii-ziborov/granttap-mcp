@@ -42,6 +42,9 @@ runs"); a tap asks for them with `sessions.history.query { startedBy: [chat ids]
 page of only the runs those chats started, and the runs those started in turn, newest first, 20 at a time,
 read from the catalog's own window: a run older than that stays counted, and a tap never makes the
 computer read every transcript it has. The phone draws them as cards beneath the chat (GrantTap 315 on).
+The window is read cooperatively (`scanSessionHistoryForPagingCooperatively`), sharing a read the
+catalog loop has running: read at once, a cold window held the monitor for 50 s on a computer with
+large Claude transcripts, and the phone, which waited 15 s then, showed nothing.
 
 Tests: `tests/ledger.test.ts` (outcomes, rewrites, caps, unreadable and unwritable files),
 `tests/beyond-window.test.ts` (a course of 230 runs, 30 past the window: linked, counted once, a run

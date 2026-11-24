@@ -46,7 +46,7 @@ import { claudeChildActivity, recordedClaudeUsage } from './scan/claude';
 export { MAX_ACTIVITY_ENTRIES, MAX_ACTIVITY_TEXT, TOKEN_WINDOW_HOURS };
 export { nativeTranscriptRoots, nativeTranscriptSource, restoreNativeTranscriptSource } from "./native-source";
 
-export { scanSessions, scanSessionHistory, scanSessionHistoryForPaging,
+export { scanSessions, scanSessionHistory, scanSessionHistoryForPaging, scanSessionHistoryForPagingCooperatively,
   scanSessionsCooperatively, scanSessionHistoryCooperatively, findSessionCooperatively, deliveryTarget } from "./catalog";
 import { scanSessions, scanSessionHistory } from "./catalog";
 

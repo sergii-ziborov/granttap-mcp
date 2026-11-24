@@ -125,9 +125,7 @@ function historyCatalog(sessions: SessionInfo[]): SessionInfo[] {
   return pickWithReserve(compactStartedChildren(sessions), Math.min(MAX_HISTORY, 200), 40);
 }
 
-/** The UI asks for older catalog rows only when its History list reaches the end. */
-export function scanSessionHistoryForPaging(maxFiles = MAX_FILES): { sessions: SessionInfo[]; sourceLimited: boolean } {
-  const scan = scanCatalog(maxFiles);
+function pagingCatalog(scan: ReturnType<typeof catalogFromScans>): { sessions: SessionInfo[]; sourceLimited: boolean } {
   return {
     sessions: countStartedChildren(scan.all).sort((left, right) =>
       right.lastActivityAt - left.lastActivityAt
@@ -136,5 +134,20 @@ export function scanSessionHistoryForPaging(maxFiles = MAX_FILES): { sessions: S
     ),
     sourceLimited: scan.sourceLimited,
   };
+}
+
+/** The UI asks for older catalog rows only when its History list reaches the end. */
+export function scanSessionHistoryForPaging(maxFiles = MAX_FILES): { sessions: SessionInfo[]; sourceLimited: boolean } {
+  return pagingCatalog(scanCatalog(maxFiles));
+}
+
+/**
+ * The same window, read without holding the monitor: it yields between files and shares a read the
+ * catalog loop has running. A chat's earlier runs are asked for from it; read at once, a cold window
+ * took 50 s on a computer with large Claude transcripts, the monitor answered nothing else meanwhile,
+ * and the phone had stopped waiting.
+ */
+export async function scanSessionHistoryForPagingCooperatively(): Promise<{ sessions: SessionInfo[]; sourceLimited: boolean }> {
+  return pagingCatalog(catalogFromScans(await cooperativeProviderScans()));
 }
 

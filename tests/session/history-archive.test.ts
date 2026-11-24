@@ -63,3 +63,36 @@ test("History reaches older native chats beyond the live catalog scan", async ()
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("a chat's earlier runs are read without holding the monitor", async () => {
+  const root = await mkdtemp(join(tmpdir(), "granttap-history-started-"));
+  const previous = process.env.GRANTTAP_CODEX_SESSIONS_DIR;
+  process.env.GRANTTAP_CODEX_SESSIONS_DIR = root;
+  try {
+    const now = Date.now();
+    for (let index = 0; index < 5; index += 1) {
+      const id = `started-${index}`;
+      await writeFile(join(root, `${id}.jsonl`), `${JSON.stringify({
+        type: "session_meta", timestamp: now - index * 1_000, payload: { id, cwd: root },
+      })}\n`);
+    }
+    const order: string[] = [];
+    let delivered: SessionsHistoryPage | undefined;
+    setImmediate(() => order.push("other monitor work"));
+    await publishHistoryPage({
+      send: async (payload: unknown) => { delivered = payload as SessionsHistoryPage; order.push("page"); },
+    } as unknown as RelayClient, {
+      type: "sessions.history.query", requestId: "00000000-0000-4000-8000-000000000002",
+      limit: 20, startedBy: ["parent-chat"], createdAt: 1,
+    });
+    // Read at once, a cold window held the monitor for 50 s on a real computer; nothing else ran meanwhile.
+    assert.deepEqual(order, ["other monitor work", "page"]);
+    assert.equal(delivered?.requestId, "00000000-0000-4000-8000-000000000002");
+    assert.deepEqual(delivered?.sessions, [], "none of these runs was started by the chat asked about");
+    assert.equal(delivered?.hasMore, false);
+  } finally {
+    if (previous === undefined) delete process.env.GRANTTAP_CODEX_SESSIONS_DIR;
+    else process.env.GRANTTAP_CODEX_SESSIONS_DIR = previous;
+    await rm(root, { recursive: true, force: true });
+  }
+});

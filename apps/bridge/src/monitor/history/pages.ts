@@ -1,7 +1,7 @@
 import type {
   SessionInfo, SessionsHistoryPage, SessionsHistoryQuery,
 } from "../../../../../packages/protocol/schema";
-import { scanSessionHistoryForPaging } from "../../sessions";
+import { scanSessionHistoryForPaging, scanSessionHistoryForPagingCooperatively } from "../../sessions";
 import { MAX_FILES } from "../../sessions/support/common";
 import { loadRuntimeConfig } from "../../config";
 import type { RelayClient } from "../../../../../packages/core/relay-client";
@@ -68,12 +68,17 @@ export function historyPage(
 let archiveScanLimit = MAX_FILES;
 
 export async function publishHistoryPage(client: RelayClient, query: SessionsHistoryQuery): Promise<void> {
+  // A chat's earlier runs are read from the catalog's own window: a run older than that is counted on its
+  // parent, and a tap on the phone does not make the computer read every transcript it has.
+  if (query.startedBy) {
+    const scan = await scanSessionHistoryForPagingCooperatively();
+    await client.send(historyPage(query, scan.sessions, scan.sourceLimited), "phone", { ttlMs: 60_000 });
+    return;
+  }
   for (;;) {
     const scan = scanSessionHistoryForPaging(archiveScanLimit);
     const page = historyPage(query, scan.sessions, scan.sourceLimited);
-    // A chat's earlier runs are read from the catalog's own window: a run older than that is counted
-    // on its parent, and a tap on the phone does not make the computer read every transcript it has.
-    if (query.startedBy || !scan.sourceLimited || (page.hasMore && !page.resetRequired)) {
+    if (!scan.sourceLimited || (page.hasMore && !page.resetRequired)) {
       await client.send(page, "phone", { ttlMs: 60_000 });
       return;
     }
