@@ -37,6 +37,10 @@ a monitor that takes the run over keeps it so. Up to 0.8.205 such a message star
 the second found that command without a result and told the person the session had broken off. Tests:
 [`tests/queue-readiness.test.ts`](tests/queue-readiness.test.ts).
 
+A Claude turn that leaves background agents running keeps its run, and so its chat, for up to two
+hours; a phone message waiting for the chat stops that work ten minutes after the turn, as Claude Code
+did itself before 0.8.207 ([`background-wait/`](background-wait/README.md)).
+
 On POSIX, a managed provider command owns a process group. Phone pause and
 timeouts signal that group, so local descendants that remain in it are also
 requested to stop. The stop count records accepted signals, not confirmed exit

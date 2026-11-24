@@ -2,8 +2,9 @@
 
 Public entry: `index.ts`. GrantTap runs a phone message to a Claude chat as `claude -p`. When the turn
 ends while background agents or commands it started still run, Claude Code keeps the process alive for
-them, but only up to its print-mode ceiling, ten minutes after the last turn by default
-(`CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS`). Past it Claude stops them, writes one line to stderr and exits:
+them, but only up to its print-mode ceiling (`CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS`): ten minutes after
+the last turn by default, two hours since 0.8.207, which sets it for the runs it starts
+(`../reply/background-wait`). Past it Claude stops them, writes one line to stderr and exits:
 
     Background tasks still running 10m after the last turn (…); stopping them. Set CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 to wait indefinitely.
 
@@ -27,6 +28,9 @@ The agent reads why its work stopped and that long work belongs inside the turn:
 foreground (several started in one message still run in parallel), long commands waited for.
 
 ## When not
+
+A run the monitor stops itself so that a waiting phone message can have the chat
+(`../reply/background-wait`) writes no such line and is never continued: the message resumes the chat.
 
 - a message from the phone already waits for the chat: it resumes the chat, and Claude tells that turn
   what it stopped;

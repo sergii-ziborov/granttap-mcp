@@ -21,8 +21,9 @@ const PREFIX = 'background-continue-';
 export function backgroundContinuePrompt(after: string): string {
   return `GrantTap: Claude Code stopped this chat's background work ${after} after your last turn ended, before it `
     + 'finished. Check what it left and finish the work. In a chat GrantTap runs, background agents and commands '
-    + `stop ${after} after a turn ends, so keep long work inside the turn: run agents in the foreground (several `
-    + 'started in one message still run in parallel) and wait for long commands before you end the turn.';
+    + `stop ${after} after a turn ends, and ten minutes after it once a new message waits for the chat, so keep `
+    + 'long work inside the turn: run agents in the foreground (several started in one message still run in '
+    + 'parallel) and wait for long commands before you end the turn.';
 }
 
 export function isBackgroundContinuation(message: Pick<UserMessage, 'messageId'>): boolean {

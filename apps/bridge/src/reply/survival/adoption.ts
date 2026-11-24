@@ -11,7 +11,7 @@
 import type { ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { chatRunsUnder, holdKey } from "../in-flight";
-import { signalOwnedProcess, STOPPED_ERROR, trackProviderProcess } from "../process";
+import { signalOwnedProcess, STOPPED_ERROR, trackProviderProcess, yieldedResult } from "../process";
 import type { ReplyResult } from "../payload/types";
 import { deferWhileFrozen, survivalFrozen, trackLiveRun } from ".";
 import { adoptedResult, deliverRun, runOutput } from "./answers";
@@ -79,8 +79,10 @@ function adopt(record: RunRecord, options: Required<Pick<AdoptionOptions, "conne
     child.emit("exit", child.exitCode, child.signalCode);
     untrack(); unlive(); finish();
     const stopped = (child as ChildProcess & { granttapStopped?: boolean }).granttapStopped;
-    const output = stopped ? undefined : runOutput(record, options.root);
-    const result: ReplyResult = !output ? { ok: false, error: STOPPED_ERROR } : adoptedResult(record, output, timedOut);
+    // Stopped for a waiting message: the turn's answer is in the chat's history, and nothing was stopped by Claude.
+    const yielded = stopped || timedOut ? undefined : yieldedResult(child);
+    const output = stopped || yielded ? undefined : runOutput(record, options.root);
+    const result: ReplyResult = yielded ?? (!output ? { ok: false, error: STOPPED_ERROR } : adoptedResult(record, output, timedOut));
     options.log(`A run this monitor took over has ended${result.ok ? "" : ` (${result.error.slice(0, 120)})`}.`);
     const send = () => { void deliver(result, output?.stderr); };
     if (adoptable && survivalFrozen()) deferWhileFrozen(send); else send();

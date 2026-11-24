@@ -37,6 +37,12 @@ export function chatRunsUnder(chatId: string, key: string): void {
   if (chatId && chatId !== key && inFlight.has(key)) firstRunOf.set(chatId, key);
 }
 
+/** The key whose run holds `chatId`: the chat's own, or that of the new task whose first run it is. */
+export function runKeyFor(chatId: string): string | undefined {
+  if (inFlight.has(chatId)) return chatId;
+  return firstRun(chatId) ? firstRunOf.get(chatId) : undefined;
+}
+
 export function isDeliveryInFlight(sessionId: string): boolean {
   return inFlight.has(sessionId) || firstRun(sessionId) !== undefined;
 }

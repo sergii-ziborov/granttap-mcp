@@ -10,7 +10,7 @@ import {
   withSurvivor, type SurvivorHandle,
 } from "..";
 import { blockingDeliveries, isDeliveryInFlight, queued } from "../../in-flight";
-import { abortProcesses, runProcess, STOPPED_ERROR } from "../../process";
+import { abortProcesses, runProcess, STOPPED_ERROR, yieldRun } from "../../process";
 import type { ReplyResult } from "../../payload/types";
 import { adoptSurvivingRuns, adoptedRunsSettling } from "../adoption";
 import { openRunFiles } from "../files";
@@ -120,6 +120,18 @@ test("a pause from the phone stops a run that was taken over, and its deadline s
   assert.deepEqual(by.get("chat-paused"), { ok: false, error: STOPPED_ERROR });
   assert.match((by.get("chat-overdue") as { error: string }).error, /did not respond within 0s\.$/);
   await until(() => !alive(paused.record.pid) && !alive(late.record.pid), "both processes were stopped");
+});
+
+test("a run taken over and stopped for a waiting message ends without an answer of its own", async t => {
+  const f = fixture(t);
+  const run = f.leftRunning("chat-yielded");
+  f.adopt();
+  await until(() => isDeliveryInFlight("chat-yielded"), "taken over");
+  assert.equal(yieldRun(["chat-yielded"], "chat-yielded"), 1);
+  await until(() => f.sent.length === 1, "it ends");
+  assert.deepEqual(f.sent[0]?.result, { ok: true, text: "", sessionId: "chat-yielded", delivery: "native" },
+    "its turn's answer is already in the chat's history, and it is not reported as stopped from the phone");
+  await until(() => !alive(run.record.pid), "the process was stopped");
 });
 
 test("a run whose monitor is still running is left to it", async t => {

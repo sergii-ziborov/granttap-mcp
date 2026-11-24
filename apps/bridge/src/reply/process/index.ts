@@ -11,6 +11,7 @@ import { survivalEnabled, type RunParser } from "../survival";
 import { prepareSurvivableRun, type SurvivableRun } from "../survival/run";
 import { watchRunProcess, type RunWatch } from "../run-watch";
 import { noteProviderRunEnded } from "../../background-continuation/detect";
+import { withBackgroundCeiling } from "../background-wait/ceiling";
 
 function projectEnvForCwd(cwd?: string): NodeJS.ProcessEnv {
   if (!cwd) return {};
@@ -25,10 +26,14 @@ function projectEnvForCwd(cwd?: string): NodeJS.ProcessEnv {
   }
 }
 
-/** A chat started from the phone is not the monitor, whatever the monitor's environment says. */
+/**
+ * A chat started from the phone is not the monitor, whatever the monitor's environment says. Claude Code
+ * keeps the run alive for the background agents its turn leaves for two hours, not ten minutes
+ * (`../background-wait`); other providers ignore that setting.
+ */
 export function providerProcessEnvironment(cwd?: string): NodeJS.ProcessEnv {
   const { GRANTTAP_MONITOR_PRIMARY: _monitorOnly, ...inherited } = process.env;
-  const env: NodeJS.ProcessEnv = { ...inherited, GRANTTAP_DELIVERY: "1", ...projectEnvForCwd(cwd) };
+  const env = withBackgroundCeiling({ ...inherited, GRANTTAP_DELIVERY: "1", ...projectEnvForCwd(cwd) });
   const nodeDirectory = dirname(process.execPath);
   env.PATH = [nodeDirectory, ...(env.PATH ?? '').split(delimiter)
     .filter(part => part && part !== nodeDirectory)].join(delimiter);
@@ -87,6 +92,27 @@ export function abortProcesses(key: string): number {
     }
   }
   return stopped;
+}
+
+type Owned = ChildProcess & { granttapStopped?: boolean; granttapYielded?: string };
+
+/**
+ * Stops the runs under `keys` so a waiting message can have chat `sessionId`: the turn has ended and only
+ * the background work it left keeps them going (`../background-wait`). The turn's answer is already in
+ * the chat's history, so the run ends without one of its own. Counts signals accepted.
+ */
+export function yieldRun(keys: string[], sessionId: string): number {
+  let stopped = 0;
+  for (const child of keys.flatMap(key => [...running.get(key) ?? []])) {
+    if (signalOwnedProcess(child, "SIGTERM")) { (child as Owned).granttapYielded = sessionId; stopped += 1; }
+  }
+  return stopped;
+}
+
+/** The outcome of a run stopped for a waiting message: answered through the chat's history. */
+export function yieldedResult(child: ChildProcess): ReplyResult | undefined {
+  const sessionId = (child as Owned).granttapYielded;
+  return sessionId ? { ok: true, text: "", sessionId, delivery: "native" } : undefined;
 }
 
 export function runningProcessCount(key: string): number {
@@ -232,10 +258,12 @@ function providerOutput(watched: Watched, state: { stdout: string; stderr: strin
   return { stdout, stderr, readFiles };
 }
 
-/** The answer of a provider process that exited by itself, or was stopped from the phone. */
+/** The answer of a provider process that exited by itself, was stopped from the phone, or for a waiting message. */
 function closedResult(watched: Watched, state: { stdout: string; stderr: string }, code: number | null): ReplyResult {
   const { command, child } = watched;
-  if ((child as ChildProcess & { granttapStopped?: boolean }).granttapStopped) return { ok: false, error: STOPPED_ERROR };
+  if ((child as Owned).granttapStopped) return { ok: false, error: STOPPED_ERROR };
+  const yielded = yieldedResult(child);
+  if (yielded) return yielded;
   if (code !== 0) {
     const error = providerExitFailure(command, state.stderr, state.stdout, code);
     if (isSignInFailure(error)) providerSignIns.refused(providerAgent(command));

@@ -19,6 +19,7 @@ import { limitContinuationUnwanted, registerLimitContinuationQueue } from '../..
 import { limitCanHold, queueHeldByLimit } from '../../limit-queue-hold';
 import { continueStoppedWork, registerStoppedWorkHandler } from '../../background-continuation';
 import { phoneMessagesWaiting } from '../../reply/in-flight';
+import { messageWaitsBehindRun } from '../../reply/background-wait';
 import { queuedPhoneMessages } from './queue-depth';
 
 /** The chat as this monitor last published it, from its live list or its history. */
@@ -32,6 +33,11 @@ function listedSession(client: RelayClient, sessionId: string | undefined) {
 function heldByLimit(client: RelayClient, job: TaskDispatch | undefined): boolean {
   return !!job?.sessionId && limitCanHold(job)
     && queueHeldByLimit(job.sessionId, dispatchSessionObservation(listedSession(client, job.sessionId).session).session);
+}
+
+/** A phone message takes its chat back from background work the chat's last turn left, as Claude Code did after ten minutes. */
+function waitsBehindRun(job: TaskDispatch, inFlight: boolean, session: ReturnType<typeof listedSession>['session']): void {
+  if (inFlight && job.sessionId && job.origin !== 'computer') messageWaitsBehindRun(job.sessionId, session);
 }
 
 /** Claude stopped background work a chat's turn left running: the chat is continued like a phone message. */
@@ -87,7 +93,7 @@ export function startTaskDispatchMonitor(input: {
           ?? newTaskDeliveryKey(job.operation.agent ?? 'codex', newTaskOperationKey(job.operation))),
         paused: !!job.sessionId && isSessionPaused(job.sessionId) };
       const ready = taskDispatchReady(job, observation);
-      if (!ready) { if (!waitingSince.has(job.jobId)) waitingSince.set(job.jobId, Date.now()); }
+      if (!ready) { waitsBehindRun(job, observation.inFlight, session); waitingSince.set(job.jobId, waitingSince.get(job.jobId) ?? Date.now()); }
       else {
         const waited = Date.now() - (waitingSince.get(job.jobId) ?? Date.now());
         waitingSince.delete(job.jobId);
