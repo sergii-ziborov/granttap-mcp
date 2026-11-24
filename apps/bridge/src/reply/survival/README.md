@@ -51,8 +51,12 @@ On start, before the task queue starts any message, the monitor calls `adoptSurv
 
 Without the old monitor's exit status, an answer counts only when the provider reported the end of its
 turn (Claude's final JSON, Codex's `turn.completed`/`turn.failed`, Grok's `result`/`error`); otherwise the
-chat is told the run stopped before it finished, while GrantTap was restarting. A run that ended while no
-monitor ran is delivered the same way. A record whose monitor is still alive (a second monitor) is left
+chat is told the run stopped before it finished, while GrantTap was restarting. A Claude run is first
+checked against its chat's transcript (`claudeTurnAnsweredSince`): `claude -p` prints its answer only as
+it exits, and on 24 November 2026 a run whose answer could not be written (a full disk) was reported to
+the phone as cut off though its turn had ended with an answer in the chat. A turn the transcript shows
+ended after the run started is answered through the chat's history (`delivery: "native"`). A run that
+ended while no monitor ran is delivered the same way. A record whose monitor is still alive (a second monitor) is left
 to it. A run without a continuation (a resume prompt, a moved Task's turn) is still held and watched, so
 its chat is not resumed twice, but its outcome is not sent.
 

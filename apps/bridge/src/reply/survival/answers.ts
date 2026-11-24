@@ -11,6 +11,8 @@ import { codexFinished, codexOwnerConflict, parseCodexJsonl } from "../process/c
 import { providerExitFailure } from "../process/auth-failure";
 import { grokFinished, parseGrok } from "../grok-response";
 import { resolveClaudeBinary } from "../../providers/claude-bin";
+import { claudeLogPath } from "../../sessions/scan/claude/shared";
+import { tailLines } from "../../live-map/readers/shared";
 import { join } from "node:path";
 import { runContinuation } from ".";
 import { readRunOutput } from "./files";
@@ -32,6 +34,33 @@ function finished(record: RunRecord, stdout: string): boolean {
   return kind === "codex" ? codexFinished(stdout) : kind === "grok" ? grokFinished(stdout) : claudeFinished(stdout);
 }
 
+/** How much of a chat's transcript is read to see whether the run's turn ended. */
+const TRANSCRIPT_TAIL_BYTES = 512 * 1024;
+
+/**
+ * Whether a Claude chat's own transcript shows a turn ended after the run started. `claude -p` prints
+ * its answer only when the process exits; a run whose answer could not be written then (a full disk
+ * on 24 November 2026) or whose exit no monitor saw had answered in the chat all the same.
+ */
+export function claudeTurnAnsweredSince(sessionId: string, since: number): boolean {
+  const path = claudeLogPath(sessionId);
+  const lines = path ? tailLines(path, TRANSCRIPT_TAIL_BYTES) ?? [] : [];
+  return lines.some((line) => {
+    let row: { isSidechain?: boolean; type?: string; timestamp?: string; message?: { stop_reason?: string } };
+    try { row = JSON.parse(line); } catch { return false; }
+    return row.isSidechain !== true && row.type === "assistant" && row.message?.stop_reason === "end_turn"
+      && Date.parse(row.timestamp ?? "") >= since;
+  });
+}
+
+/** A Claude run cut off without its answer, whose turn the chat shows answered: the answer is in the chat. */
+function answeredInChat(record: RunRecord): ReplyResult | undefined {
+  if (record.parser.kind !== "claude" && record.parser.kind !== "claude-new") return undefined;
+  const sessionId = record.parser.sessionId ?? (record.key.startsWith("__new_") ? undefined : record.key);
+  if (!sessionId || !claudeTurnAnsweredSince(sessionId, record.startedAt)) return undefined;
+  return { ok: true, text: "", sessionId, delivery: "native" };
+}
+
 /** The answer of a run that has ended, from what it wrote. */
 export function adoptedResult(record: RunRecord, output: { stdout: string; stderr: string }, timedOut: boolean): ReplyResult {
   if (timedOut) return { ok: false, error: `${record.command} did not respond within ${Math.round((record.deadline - record.startedAt) / 1000)}s.` };
@@ -40,6 +69,8 @@ export function adoptedResult(record: RunRecord, output: { stdout: string; stder
     return { ok: false, error: providerExitFailure(record.command, output.stderr, output.stdout, exit.code) };
   }
   if (!exit && !finished(record, output.stdout)) {
+    const answered = answeredInChat(record);
+    if (answered) return answered;
     return { ok: false, error: `${NAMES[record.parser.kind]} stopped before it finished this turn, while GrantTap `
       + "was restarting. Its work so far is in the chat." };
   }

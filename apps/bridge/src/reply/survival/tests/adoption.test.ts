@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test, { type TestContext } from "node:test";
@@ -164,6 +164,34 @@ test("a run that ends while its monitor is being replaced leaves its answer for 
   assert.deepEqual(f.sent[0]!.result, { ok: true, text: "Adopted answer", sessionId: "chat-frozen" });
   assert.deepEqual(runRecords(), []);
   assert.equal(runsRoot().startsWith(f.root), true);
+});
+
+test("a Claude run cut off without its answer, whose turn the chat shows answered, is not reported as stopped", async t => {
+  const f = fixture(t);
+  const projects = mkdtempSync(join(f.root, "claude-projects-"));
+  const prior = process.env.GRANTTAP_CLAUDE_PROJECTS_DIR;
+  process.env.GRANTTAP_CLAUDE_PROJECTS_DIR = projects;
+  t.after(() => { if (prior === undefined) delete process.env.GRANTTAP_CLAUDE_PROJECTS_DIR; else process.env.GRANTTAP_CLAUDE_PROJECTS_DIR = prior; });
+  mkdirSync(join(projects, "-work-app"), { recursive: true });
+  const startedAt = Date.now() - 60_000;
+  const row = (sessionId: string, at: number, stop: string) => JSON.stringify({ type: "assistant", sessionId,
+    timestamp: new Date(at).toISOString(), message: { role: "assistant", stop_reason: stop, content: [] } });
+  writeFileSync(join(projects, "-work-app", "chat-claude-answered.jsonl"),
+    [row("chat-claude-answered", startedAt - 600_000, "end_turn"), row("chat-claude-answered", startedAt + 30_000, "end_turn")].join("\n") + "\n");
+  writeFileSync(join(projects, "-work-app", "chat-claude-cut.jsonl"),
+    [row("chat-claude-cut", startedAt - 600_000, "end_turn"), row("chat-claude-cut", startedAt + 30_000, "tool_use")].join("\n") + "\n");
+  // `claude -p` prints its answer only as it exits: a full disk or an unseen exit left none.
+  const answered = f.leftRunning("chat-claude-answered", { parser: { kind: "claude" }, startedAt });
+  const cut = f.leftRunning("chat-claude-cut", { parser: { kind: "claude" }, startedAt });
+  for (const run of [answered, cut]) kill(run.record.pid);
+  await until(() => !alive(answered.record.pid) && !alive(cut.record.pid), "both processes are gone");
+  f.adopt();
+  await until(() => f.sent.length === 2, "both outcomes are sent");
+  const by = new Map(f.sent.map(item => [(item.data as { chat: string }).chat, item.result]));
+  assert.deepEqual(by.get("chat-claude-answered"), { ok: true, text: "", sessionId: "chat-claude-answered", delivery: "native" },
+    "the answer is in the chat; the phone is not told the turn broke off");
+  assert.match((by.get("chat-claude-cut") as { error: string }).error, /^Claude Code stopped before it finished this turn/,
+    "a turn the chat shows unfinished is still reported as cut off");
 });
 
 function alive(pid: number): boolean {
