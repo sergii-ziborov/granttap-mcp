@@ -17,6 +17,9 @@ import { localTaskOrigins, resolveTaskOriginJob } from '../../task-origins';
 import { queueFailureReporter } from './failure-report';
 import { limitContinuationUnwanted, registerLimitContinuationQueue } from '../../limit-continuation';
 import { limitCanHold, queueHeldByLimit } from '../../limit-queue-hold';
+import { continueStoppedWork, registerStoppedWorkHandler } from '../../background-continuation';
+import { phoneMessagesWaiting } from '../../reply/in-flight';
+import { queuedPhoneMessages } from './queue-depth';
 
 /** The chat as this monitor last published it, from its live list or its history. */
 function listedSession(client: RelayClient, sessionId: string | undefined) {
@@ -29,6 +32,16 @@ function listedSession(client: RelayClient, sessionId: string | undefined) {
 function heldByLimit(client: RelayClient, job: TaskDispatch | undefined): boolean {
   return !!job?.sessionId && limitCanHold(job)
     && queueHeldByLimit(job.sessionId, dispatchSessionObservation(listedSession(client, job.sessionId).session).session);
+}
+
+/** Claude stopped background work a chat's turn left running: the chat is continued like a phone message. */
+function continueStoppedChats(client: RelayClient, room: string, sender: NativeTaskQueueSender, live: () => boolean): void {
+  registerStoppedWorkHandler((sessionId, work, at) => {
+    if (!live()) return;
+    void continueStoppedWork((scope, message, notBefore, createdAt) => sender.submit(scope, message, notBefore, createdAt),
+      { sessionId, session: listedSession(client, sessionId).session,
+        phoneMessagesWaiting: phoneMessagesWaiting(sessionId) + queuedPhoneMessages(sessionId, room) }, work, at);
+  });
 }
 
 /** Only the persistent monitor advertises durable submission capability. */
@@ -52,6 +65,7 @@ export function startTaskDispatchMonitor(input: {
   const peerAllowed = (peer: string) => peer === input.config.myPublicKey || input.peerAllowed(peer);
   registerLimitContinuationQueue({ submit: (scope, message, notBefore, createdAt) => sender.submit(scope, message, notBefore, createdAt),
     cancel: (scope, id) => sender.cancel(scope, id), status: (scope, id) => sender.lookup(scope, id) });
+  continueStoppedChats(input.client, input.config.room, sender, () => !stopped);
   const worker = new TaskDispatchWorker({ inbox, remote: input.remote ?? relayTaskJobRemote(input.config),
     connected: () => !stopped && input.client.isConnected && input.isLeader(),
     authorized: peerAllowed,
@@ -126,5 +140,7 @@ export function startTaskDispatchMonitor(input: {
   });
   const interval = setInterval(tick, 2_000); interval.unref();
   tick();
-  return () => { stopped = true; clearInterval(interval); off(); registerLimitContinuationQueue(undefined); };
+  return () => {
+    stopped = true; clearInterval(interval); off(); registerLimitContinuationQueue(undefined); registerStoppedWorkHandler(undefined);
+  };
 }

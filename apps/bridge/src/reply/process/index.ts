@@ -10,6 +10,7 @@ import type { ReplyResult } from "../payload/types";
 import { survivalEnabled, type RunParser } from "../survival";
 import { prepareSurvivableRun, type SurvivableRun } from "../survival/run";
 import { watchRunProcess, type RunWatch } from "../run-watch";
+import { noteProviderRunEnded } from "../../background-continuation/detect";
 
 function projectEnvForCwd(cwd?: string): NodeJS.ProcessEnv {
   if (!cwd) return {};
@@ -158,10 +159,13 @@ function watchProvider(watched: Watched, resolve: (result: ReplyResult) => void)
     untrack();
     watch.release();
     const answer = !result.ok && admission?.confirmed(state.stdout) ? { ...result, delivery: 'native' as const } : result;
-    if (!run) { resolve(answer); return; }
-    // A run another monitor delivers is handed over: this one sends nothing for it.
-    run.ended({ code: child.exitCode, signal: child.signalCode }, owned => resolve(owned ? answer
-      : { ok: true, text: '', delivery: 'handed-over' }));
+    const ended = () => noteProviderRunEnded({ key: watched.key, stderr: state.stderr, result: answer });
+    if (!run) { ended(); resolve(answer); return; }
+    // A run another monitor delivers is handed over: this one sends nothing for it, and continues nothing.
+    run.ended({ code: child.exitCode, signal: child.signalCode }, owned => {
+      if (owned) ended();
+      resolve(owned ? answer : { ok: true, text: '', delivery: 'handed-over' });
+    });
   };
   const timer = setTimeout(() => {
     if (state.done) return;

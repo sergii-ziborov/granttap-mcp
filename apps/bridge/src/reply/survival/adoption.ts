@@ -15,6 +15,7 @@ import { signalOwnedProcess, STOPPED_ERROR, trackProviderProcess } from "../proc
 import type { ReplyResult } from "../payload/types";
 import { deferWhileFrozen, survivalFrozen, trackLiveRun } from ".";
 import { adoptedResult, deliverRun, runOutput } from "./answers";
+import { noteProviderRunEnded } from "../../background-continuation/detect";
 import { ownStartToken, processAlive, runRecords, runsRoot, type RunRecord } from "./records";
 
 export type AdoptionOptions = {
@@ -59,11 +60,14 @@ function adopt(record: RunRecord, options: Required<Pick<AdoptionOptions, "conne
   const unlive = trackLiveRun(record.runId, record.key, () => adoptable && !ended);
   let finish!: () => void;
   holdKey(record.key, new Promise<void>(resolve => { finish = resolve; }), record.startedAt);
-  const deliver = async (result: ReplyResult) => {
+  /** `stderr`: what the run wrote there; only the monitor that takes the record looks at it. */
+  const deliver = async (result: ReplyResult, stderr?: string) => {
     settling += 1;
     try {
       while (!options.connected()) await new Promise(resolve => setTimeout(resolve, options.pollMs));
-      await deliverRun(record, result, options.root);
+      if (await deliverRun(record, result, options.root) && stderr !== undefined) {
+        noteProviderRunEnded({ key: record.key, stderr, result });
+      }
     } finally { settling -= 1; watched.delete(record.runId); }
   };
   const done = (timedOut: boolean) => {
@@ -73,10 +77,10 @@ function adopt(record: RunRecord, options: Required<Pick<AdoptionOptions, "conne
     child.emit("exit", child.exitCode, child.signalCode);
     untrack(); unlive(); finish();
     const stopped = (child as ChildProcess & { granttapStopped?: boolean }).granttapStopped;
-    const result: ReplyResult = stopped ? { ok: false, error: STOPPED_ERROR }
-      : adoptedResult(record, runOutput(record, options.root), timedOut);
+    const output = stopped ? undefined : runOutput(record, options.root);
+    const result: ReplyResult = !output ? { ok: false, error: STOPPED_ERROR } : adoptedResult(record, output, timedOut);
     options.log(`A run this monitor took over has ended${result.ok ? "" : ` (${result.error.slice(0, 120)})`}.`);
-    const send = () => { void deliver(result); };
+    const send = () => { void deliver(result, output?.stderr); };
     if (adoptable && survivalFrozen()) deferWhileFrozen(send); else send();
   };
   // The process's start time is read again now and then, not every second: a pid is reused only once it is free.
