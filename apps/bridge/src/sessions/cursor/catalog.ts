@@ -50,6 +50,12 @@ function fileFingerprint(path: string): string {
   }
 }
 
+/**
+ * sqlite3 prints its own refusal ("file is not a database", a locked file) to stderr even though the
+ * caller handles the failure; inherited, those lines reached the monitor log and test output as errors.
+ */
+const SQLITE_STDIO: ["ignore", "pipe", "ignore"] = ["ignore", "pipe", "ignore"];
+
 let sidebarTitlesCache:
   | { path: string; fingerprint: string; titles: Map<string, string> }
   | undefined;
@@ -66,7 +72,7 @@ export function loadSidebarTitles(db = cursorSidebarDb()): Map<string, string> {
       "-json",
       db,
       "SELECT id, title FROM conversations WHERE title IS NOT NULL AND title != '';",
-    ], { encoding: "utf8", timeout: 5_000 });
+    ], { encoding: "utf8", timeout: 5_000, stdio: SQLITE_STDIO });
     const rows = (raw.trim() ? JSON.parse(raw) : []) as Array<{ id?: string; title?: string }>;
     for (const row of rows) {
       if (row.id && row.title?.trim()) out.set(row.id, row.title.trim().slice(0, 120));
@@ -170,6 +176,7 @@ export function loadComposerCatalog(dbPath = cursorStateDb()): ComposerRow[] {
       encoding: "utf8",
       timeout: 12_000,
       maxBuffer: 32 * 1024 * 1024,
+      stdio: SQLITE_STDIO,
     });
     const rows = composerRows(raw);
     composerCache = { at: Date.now(), path: dbPath, rows };
