@@ -180,6 +180,31 @@ export function slashCommandSkill(row: any): string | undefined {
   return name;
 }
 
+/** The error a failed call answered with, as the phone shows it: secrets removed, at most this long. */
+const FAILURE_TEXT_MAX = 4_000;
+type ToolFailure = { text: string; truncated: boolean };
+
+/**
+ * What each failed call answered, by its call: a hook's refusal, a command's error output, a file that
+ * was not there. Only failed calls: a call that worked keeps its output on the computer. A line is parsed
+ * only when it reports an error, so a long transcript is not read twice.
+ */
+export function failedToolResults(lines: readonly string[]): Map<string, ToolFailure> {
+  const failures = new Map<string, ToolFailure>();
+  for (const line of lines) {
+    if (!line.includes('"is_error":true')) continue;
+    const content = safeParse(line)?.message?.content;
+    for (const block of Array.isArray(content) ? content : []) {
+      if (block?.type !== "tool_result" || block.is_error !== true || typeof block.tool_use_id !== "string") continue;
+      const raw = typeof block.content === "string" ? block.content : Array.isArray(block.content)
+        ? block.content.map((part: any) => typeof part?.text === "string" ? part.text : "").join("\n") : "";
+      const clean = redactSecrets(raw).replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "").trim();
+      if (clean) failures.set(block.tool_use_id, { text: clean.slice(0, FAILURE_TEXT_MAX), truncated: clean.length > FAILURE_TEXT_MAX });
+    }
+  }
+  return failures;
+}
+
 function appendClaudeToolUse(input: {
   out: ActivityEntry[];
   seen: Set<string>;
@@ -193,12 +218,14 @@ function appendClaudeToolUse(input: {
   index: number;
   blockIndex: number;
   recorded?: ReadonlyMap<string, ListedChanges>;
+  failures?: ReadonlyMap<string, ToolFailure>;
 }): void {
   const {
     out, seen, session, observations, patches, childFields, sourceThreadId,
     block, createdAt, index, blockIndex,
   } = input;
   const recorded = typeof block.id === "string" ? input.recorded?.get(block.id) : undefined;
+  const failure = typeof block.id === "string" ? input.failures?.get(block.id) : undefined;
   const classified = classifyTool(block.name, block.input);
   const sourceId =
     typeof block.id === "string"
@@ -229,6 +256,8 @@ function appendClaudeToolUse(input: {
       ...(recorded?.files.length ? { fileChanges: recorded.files } : {}),
       ...(recorded?.files.length && !recorded.complete ? { fileChangesComplete: false } : {}),
       ...(toolDescription(block.input) ? { summary: toolDescription(block.input) } : {}),
+      // What went wrong, for the call's detail on the phone; a call that worked keeps its output here.
+      ...(failure ? { resultText: failure.text, ...(failure.truncated ? { detailTruncated: true } : {}) } : {}),
       ...(observation
         ? activityTelemetry(observation)
         : { estimatedContextTokens: estimateTokens(block.input) }),
@@ -253,6 +282,7 @@ export function appendClaudeActivity(input: {
   // The size of a file change, from the patch the host wrote beside the
   // result, so a Write reads "+12 −3" and not only as a path.
   const patches = patchStatsByToolUse(lines, safeParse, redactSecrets);
+  const failures = failedToolResults(lines);
   lines.forEach((line, index) => {
     const d = safeParse(line);
     if (!d || !claudeTranscriptRecord(d)) return;
@@ -300,7 +330,7 @@ export function appendClaudeActivity(input: {
       } else if (block?.type === "tool_use") {
         appendClaudeToolUse({
           out, seen, session, observations, patches, childFields, sourceThreadId,
-          block, createdAt, index, blockIndex, recorded: input.recorded,
+          block, createdAt, index, blockIndex, recorded: input.recorded, failures,
         });
       }
     });
