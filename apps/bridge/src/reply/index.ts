@@ -17,7 +17,7 @@ import { abortProcesses, runProcess } from "./process";
 import { routingPrompt } from "./payload/routing";
 import type { DeliveryOptions, ReplyResult } from "./payload/types";
 import { deliveryIntent } from './payload/identity';
-import { phoneMessagesWaiting, queued } from "./in-flight";
+import { chatRunsUnder, phoneMessagesWaiting, queued } from "./in-flight";
 import { withoutSurvivor } from "./survival";
 import { withQueueNote } from "../task-dispatch/queue-note";
 import {
@@ -42,6 +42,17 @@ export function resolveAgentWorkspace(cwd: string | undefined, agent: CodingAgen
 /** New tasks are separate conversations: one long run must not hold back the next. */
 export function newTaskDeliveryKey(agent: string, operationKey?: string): string {
   return `__new_${agent}_task__${operationKey ? `:${operationKey}` : ''}`;
+}
+
+/**
+ * Told the new chat's id once it is known: from then until this first run ends, a message to the chat
+ * waits for the run (`chatRunsUnder`), and the chat reads as working, also through a long silent command.
+ */
+function firstRunOfChat(key: string, onNativeSession?: (sessionId: string) => void): (sessionId: string) => void {
+  return sessionId => {
+    chatRunsUnder(sessionId, key);
+    onNativeSession?.(sessionId);
+  };
 }
 
 /** Request a stop for owned processes; confirmation arrives only on process exit. */
@@ -141,8 +152,10 @@ export function createClaudeSession(
   permissionMode?: string,
 ): Promise<ReplyResult> {
   const workspace = resolveAgentWorkspace(cwd, "claude");
-  return queued(newTaskDeliveryKey("claude", operationKey), () => withAttachments(attachments, text, (prepared) =>
-    runClaudeNew(prepared.claudePrompt, workspace, timeoutMs, model, operationKey, effort, onNativeSession, permissionMode),
+  const key = newTaskDeliveryKey("claude", operationKey);
+  return queued(key, () => withAttachments(attachments, text, (prepared) =>
+    runClaudeNew(prepared.claudePrompt, workspace, timeoutMs, model, operationKey, effort,
+      firstRunOfChat(key, onNativeSession), permissionMode),
   ));
 }
 
@@ -157,8 +170,9 @@ export function createCursorSession(
   onNativeSession?: (sessionId: string) => void,
 ): Promise<ReplyResult> {
   const workspace = resolveAgentWorkspace(cwd, "cursor");
-  return queued(newTaskDeliveryKey("cursor", operationKey), () => withAttachments(attachments, text, (prepared) =>
-    runCursorNew(prepared.claudePrompt, workspace, timeoutMs, model, operationKey, effort, onNativeSession),
+  const key = newTaskDeliveryKey("cursor", operationKey);
+  return queued(key, () => withAttachments(attachments, text, (prepared) =>
+    runCursorNew(prepared.claudePrompt, workspace, timeoutMs, model, operationKey, effort, firstRunOfChat(key, onNativeSession)),
   ));
 }
 
@@ -174,8 +188,10 @@ export function createGrokSession(
   permissionMode?: string,
 ): Promise<ReplyResult> {
   const workspace = resolveAgentWorkspace(cwd, "grok");
-  return queued(newTaskDeliveryKey("grok", operationKey), () => withAttachments(attachments, text, (prepared) =>
-    runGrokNew(prepared.claudePrompt, workspace, timeoutMs, model, operationKey, effort, onNativeSession, permissionMode),
+  const key = newTaskDeliveryKey("grok", operationKey);
+  return queued(key, () => withAttachments(attachments, text, (prepared) =>
+    runGrokNew(prepared.claudePrompt, workspace, timeoutMs, model, operationKey, effort, firstRunOfChat(key, onNativeSession),
+      permissionMode),
   ));
 }
 

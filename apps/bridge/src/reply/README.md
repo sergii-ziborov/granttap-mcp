@@ -28,6 +28,15 @@ that never started a provider process, such as a Codex desktop delivery, is neve
 moved Task's turn whose process went without its end being seen kept every update waiting until its
 deadline. Tests: [`tests/run-watch/stalled-run.test.ts`](tests/run-watch/stalled-run.test.ts).
 
+A new task's first run is queued under its provider's new-task key, yet the phone shows its chat, and
+can write to it, as soon as the chat's id is known (Claude's is chosen before it starts, Grok's and
+Cursor's come with their first output). From then until that run ends the chat's own key counts as in
+flight (`chatRunsUnder`): a message to the chat waits for the run, the catalog shows the chat working, and
+a monitor that takes the run over keeps it so. Up to 0.8.205 such a message started a second
+`claude -p --resume` on the same conversation while the first was in a long command that wrote nothing;
+the second found that command without a result and told the person the session had broken off. Tests:
+[`tests/queue-readiness.test.ts`](tests/queue-readiness.test.ts).
+
 On POSIX, a managed provider command owns a process group. Phone pause and
 timeouts signal that group, so local descendants that remain in it are also
 requested to stop. The stop count records accepted signals, not confirmed exit

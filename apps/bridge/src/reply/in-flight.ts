@@ -14,7 +14,32 @@ const depth = new Map<string, number>();
 /** Phone messages queued under a key that have not started yet: they wait in memory behind the run in progress. */
 const waiting = new Map<string, number>();
 
-export function isDeliveryInFlight(sessionId: string): boolean { return inFlight.has(sessionId); }
+/** A new task's chat, and the new-task key its first run is queued under, while that run lasts. */
+const firstRunOf = new Map<string, string>();
+
+/** The first run of the new task whose chat this is, while it lasts. */
+function firstRun(chatId: string): Promise<ReplyResult | null> | undefined {
+  const key = firstRunOf.get(chatId);
+  if (key === undefined) return undefined;
+  const run = inFlight.get(key);
+  if (!run) firstRunOf.delete(chatId);
+  return run;
+}
+
+/**
+ * A new task's first run is queued under the task's own key, yet the phone shows its chat, and can write
+ * to it, as soon as the chat's id is known. From then until that run ends the chat counts as in flight and
+ * a message to it waits for the run. Up to 0.8.205 such a message started a second provider process on the
+ * same conversation while the first was still in a long command: the second found that command without a
+ * result and told the person the session had broken off.
+ */
+export function chatRunsUnder(chatId: string, key: string): void {
+  if (chatId && chatId !== key && inFlight.has(key)) firstRunOf.set(chatId, key);
+}
+
+export function isDeliveryInFlight(sessionId: string): boolean {
+  return inFlight.has(sessionId) || firstRun(sessionId) !== undefined;
+}
 
 /** Acknowledging a message does not finish the provider turn or permit a runtime handoff. */
 export function hasPendingDeliveries(): boolean { return inFlight.size > 0; }
@@ -52,7 +77,7 @@ export function oldestBlockingDeliveryStartedAt(): number | undefined {
 export function phoneMessagesWaiting(key: string): number { return waiting.get(key) ?? 0; }
 
 function enqueue(key: string, start: () => Promise<ReplyResult | null>, since = Date.now()): Promise<ReplyResult | null> {
-  const previous = inFlight.get(key) ?? Promise.resolve(null);
+  const previous = inFlight.get(key) ?? firstRun(key) ?? Promise.resolve(null);
   if (!inFlight.has(key)) startedAt.set(key, since);
   depth.set(key, (depth.get(key) ?? 0) + 1);
   const settled = previous.then(() => withinDelivery(key, start)).finally(() => {

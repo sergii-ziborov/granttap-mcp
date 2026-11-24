@@ -10,7 +10,7 @@
  */
 import type { ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { holdKey } from "../in-flight";
+import { chatRunsUnder, holdKey } from "../in-flight";
 import { signalOwnedProcess, STOPPED_ERROR, trackProviderProcess } from "../process";
 import type { ReplyResult } from "../payload/types";
 import { deferWhileFrozen, survivalFrozen, trackLiveRun } from ".";
@@ -60,6 +60,8 @@ function adopt(record: RunRecord, options: Required<Pick<AdoptionOptions, "conne
   const unlive = trackLiveRun(record.runId, record.key, () => adoptable && !ended);
   let finish!: () => void;
   holdKey(record.key, new Promise<void>(resolve => { finish = resolve; }), record.startedAt);
+  // A new task's chat waits for its first run here too, as it did in the monitor that started it.
+  if (record.parser.sessionId) chatRunsUnder(record.parser.sessionId, record.key);
   /** `stderr`: what the run wrote there; only the monitor that takes the record looks at it. */
   const deliver = async (result: ReplyResult, stderr?: string) => {
     settling += 1;
