@@ -73,8 +73,11 @@ export function parseParents(stdout: string): Map<number, number> {
 function chainFrom(start: number, parents: (pid: number) => number | undefined): number[] {
   const chain: number[] = [];
   for (let pid: number | undefined = start; pid && pid > 1 && chain.length < MAX_DEPTH && !chain.includes(pid);) {
+    // A process with no record is gone: neither it nor anything above it is known.
+    const parent = parents(pid);
+    if (parent === undefined) break;
     chain.push(pid);
-    pid = parents(pid);
+    pid = parent;
   }
   return chain;
 }

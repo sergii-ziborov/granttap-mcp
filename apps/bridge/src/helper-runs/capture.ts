@@ -11,7 +11,7 @@
  * minutes ago that is not a checkout of its own.
  */
 import { execFile } from "node:child_process";
-import { existsSync, readlinkSync } from "node:fs";
+import { existsSync, readFileSync, readlinkSync } from "node:fs";
 import { promisify } from "node:util";
 import type { ProcessRow } from "../machine-load/host/process-sampler";
 import { freshRunFolder, helperRunFolder, helperRunFoldersNamed, helperRunLabel, plainFolder, type HelperRunFolder } from "./kinds";
@@ -58,10 +58,8 @@ export function parseProcessParents(stdout: string, uid?: number): Map<number, H
   for (const line of stdout.split("\n")) {
     const match = line.trim().match(/^(\d+)\s+(\d+)\s+(.*)$/);
     if (!match || (uid != null && Number(match[2]) !== uid)) continue;
-    for (const [agent, variable] of PARENT_VARIABLES) {
-      const sessionId = variable.exec(match[3]!)?.[1];
-      if (sessionId) { out.set(Number(match[1]), { agent, sessionId }); break; }
-    }
+    const parent = parentIn(match[3]!);
+    if (parent) out.set(Number(match[1]), parent);
   }
   return out;
 }
@@ -85,8 +83,46 @@ export async function readProcessDirectories(pids: readonly number[]): Promise<M
   }
 }
 
+/** The chat named in an environment, as the provider directly above the process set it. */
+function parentIn(environment: string): HelperRunParent | undefined {
+  for (const [agent, variable] of PARENT_VARIABLES) {
+    const sessionId = variable.exec(environment)?.[1];
+    if (sessionId) return { agent, sessionId };
+  }
+  return undefined;
+}
+
+/** The same, from exact `NAME=value` entries: a value that merely mentions a variable names nothing. */
+function parentInEntries(entries: readonly string[]): HelperRunParent | undefined {
+  for (const [agent, variable] of PARENT_VARIABLES) {
+    for (const entry of entries) {
+      const match = variable.exec(entry);
+      if (match?.index === 0 && match[0].length === entry.length) return { agent, sessionId: match[1]! };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Linux keeps each process's environment in `/proc/<pid>/environ`, readable for one's own
+ * processes only; `ps` there has no option that prints it. Another person's process is skipped.
+ */
+export function readLinuxProcessParents(pids: readonly number[], uid?: number, root = "/proc"): Map<number, HelperRunParent> {
+  const out = new Map<number, HelperRunParent>();
+  for (const pid of pids) {
+    try {
+      const owner = /^Uid:\s+(\d+)/m.exec(readFileSync(`${root}/${pid}/status`, "utf8"))?.[1];
+      if (uid != null && (owner == null || Number(owner) !== uid)) continue;
+      const parent = parentInEntries(readFileSync(`${root}/${pid}/environ`).toString("utf8").split("\0"));
+      if (parent) out.set(pid, parent);
+    } catch { /* Exited, or not this person's. */ }
+  }
+  return out;
+}
+
 export async function readProcessParents(pids: readonly number[]): Promise<Map<number, HelperRunParent>> {
   if (pids.length === 0) return new Map();
+  if (process.platform === "linux") return readLinuxProcessParents(pids, process.getuid?.());
   try {
     const { stdout } = await run("ps", ["-E", "-o", "pid=,uid=,command=", "-p", pids.join(",")],
       { encoding: "utf8", maxBuffer: 8_000_000, timeout: 5_000 });
