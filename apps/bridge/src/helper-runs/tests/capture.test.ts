@@ -189,6 +189,11 @@ test("this computer's own tools report a live process's folder and the chat in i
   assert.equal((await readProcessDirectories([pid, gone])).get(pid), folder,
     "a process that has exited does not hide the ones still running");
   assert.deepEqual([...await readProcessDirectories([gone])], []);
-  await assert.rejects(readProcessParents([gone]), /^Error: process environment unavailable$/,
-    "a failed listing says only that it failed");
+  if (process.platform === "linux") {
+    // /proc is read process by process: one that has exited has no environment left to read.
+    assert.deepEqual([...await readProcessParents([gone])], [], "an exited process names no chat");
+  } else {
+    await assert.rejects(readProcessParents([gone]), /^Error: process environment unavailable$/,
+      "a failed listing says only that it failed");
+  }
 });
