@@ -17,6 +17,8 @@ local offer. Scheduling does not imply that the controller phone is online.
 The first time a message reaches this computer, the phone gets a `delivery.arrival`,
 so it can say the message is here and waiting its turn instead of still on the relay.
 That is a type of its own: earlier apps read any other receipt status as a refusal.
+A follow-up written before its chat existed (`user.message.continue`) gets one too. Up to 0.8.209
+it did not, so the phone said "Saved on relay" even though the computer already held it.
 
 The native sender cancels an uploaded operation with DELETE directly, without
 waiting for a metadata GET. A claim conflict is reconciled by a subsequent read.

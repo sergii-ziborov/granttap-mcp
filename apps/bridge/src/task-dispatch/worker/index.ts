@@ -4,7 +4,8 @@ import { TaskDispatchInbox, type StoredTaskDispatch } from '../index';
 import { queuedBehind } from './queue-depth';
 
 export interface TaskJobRemote {
-  get(job: TaskDispatch): Promise<string>;
+  /** The relay state of a job; only its ID is read, so a job this computer never held can be asked about. */
+  get(job: Pick<TaskDispatch, 'jobId'>): Promise<string>;
   claim(job: TaskDispatch, claimId: string): Promise<boolean>;
   finish(job: TaskDispatch, state: 'completed' | 'failed', code?: string, claimId?: string): Promise<void>;
 }
@@ -14,7 +15,8 @@ export type WorkerOptions = {
   onError?: (error: unknown) => void;
   connected: () => boolean; authorized: (peer: string) => boolean;
   conversationKey?: (job: TaskDispatch, peer: string) => string;
-  validationCode?: (job: TaskDispatch, peer: string) => string | undefined;
+  /** A code refuses the job before it starts. `stagedAt` is when it first reached this computer. */
+  validationCode?: (job: TaskDispatch, peer: string, stagedAt: number) => string | undefined;
   ready: (job: TaskDispatch, peer: string) => boolean;
   /**
    * True while a usage limit holds this queued job (`limit-queue-hold`). It stays here and on the relay,
@@ -62,8 +64,10 @@ export class TaskDispatchWorker {
       if (['completed', 'cancelled', 'rejected'].includes(record.phase) || this.active.has(record.job.jobId)) continue;
       const key = keyOf(record);
       // Staged before the refusal: a follow-up written for the message that failed. Staged after it: the
-      // person saw the failure and sent this anyway.
-      if (record.stagedAt <= (refusedAt.get(key) ?? -Infinity)) continue;
+      // person saw the failure and sent this anyway. One its own task already refuses (a follow-up whose
+      // new task never started) is not held: it goes on to its own refusal instead of waiting for a cancel.
+      if (record.stagedAt <= (refusedAt.get(key) ?? -Infinity)
+        && !this.options.validationCode?.(record.job, record.peerPublicKey, record.stagedAt)) continue;
       // Held by the chat's usage limit: its turn stays free for the continuation that goes first.
       if (WAITING.has(record.phase) && this.options.limitHeld?.(record.job, record.peerPublicKey)) {
         launched.push(this.settleWaiting(record, now)); continue;
@@ -107,7 +111,7 @@ export class TaskDispatchWorker {
     }
     if (job.notBefore > Date.now()) return;
     if (!this.options.authorized(record.peerPublicKey)) return this.reject(record, 'policy_denied');
-    const validation = this.options.validationCode?.(job, record.peerPublicKey);
+    const validation = this.options.validationCode?.(job, record.peerPublicKey, record.stagedAt);
     if (validation) return this.reject(record, validation);
     if (!this.options.ready(job, record.peerPublicKey)) return;
     let started = false;

@@ -26,6 +26,18 @@ only a short-lived note without a chat, and follow-ups waited forever. The
 monitor's side is `../monitor/message-delivery/new-task-refusal.ts`: a rejection receipt
 with the reason for the person's message, and a monitor log line naming it.
 
+## Follow-ups whose task never started
+
+A follow-up still waits for a creation that left no record at all: one refused up to 0.8.207, or
+one lost to a full disk or a crash. `orphans.ts` ends that wait. After the follow-up has been
+on this computer for 30 minutes with no record of its task, the relay is asked about the task's
+own message (its job ID), at most every ten minutes. While the relay still has that message queued
+or being taken, the task can still come and the follow-up waits. Otherwise the follow-up is refused
+with `delivery_failed`, the only fitting code the relay records. The phone gets a rejection receipt
+under the follow-up that says the task never started and should be sent again, and the monitor log
+says how long it waited. Any record, even a creation still running for hours, keeps the registry's
+answer. Regression cases: `tests/orphans.test.ts`.
+
 ## License
 
 Licensed under the GrantTap Commercial Source License. See LICENSE and NOTICE.

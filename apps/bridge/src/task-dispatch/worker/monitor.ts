@@ -6,14 +6,14 @@ import { isDeliveryInFlight, newTaskDeliveryKey } from '../../reply';
 import { publishedCatalog } from '../../session-catalog';
 import { handleUserMessage } from '../../monitor/handlers/user-message';
 import { handleTaskCreate } from '../../monitor/handlers/task-create';
-import { sendDeliveryArrival } from '../../monitor/handlers/receipts';
+import { sendDeliveryArrival, sendDeliveryReceipt } from '../../monitor/handlers/receipts';
 import { TaskDispatchInbox } from '../index';
 import { TaskDispatchWorker, type TaskJobRemote, type WorkerOptions } from './index';
 import { relayTaskJobRemote } from './remote';
 import { conversationKeyOf } from './queue-depth';
 import { NativeTaskQueueSender } from '../sender';
 import { dispatchSessionObservation, newTaskOperationKey, queuedCatalogRefreshDue, taskDispatchReady } from './readiness';
-import { localTaskOrigins, resolveTaskOriginJob } from '../../task-origins';
+import { localTaskOrigins, OrphanFollowUps, ORPHAN_CODE, ORPHAN_REASON, resolveTaskOriginJob } from '../../task-origins';
 import { queueFailureReporter } from './failure-report';
 import { limitContinuationUnwanted, registerLimitContinuationQueue } from '../../limit-continuation';
 import { limitCanHold, queueHeldByLimit } from '../../limit-queue-hold';
@@ -50,6 +50,29 @@ function continueStoppedChats(client: RelayClient, room: string, sender: NativeT
   });
 }
 
+/**
+ * A job is refused before it starts when its own new task cannot settle it: the creation needs
+ * confirmation, failed, belongs to another chat, or never started here (`task-origins/orphans.ts`).
+ * The last one also tells the phone why under the person's message, once.
+ */
+function refusalCode(input: { client: RelayClient; room: string; orphans: OrphanFollowUps; told: Set<string> },
+  job: TaskDispatch, peer: string, stagedAt: number, state: string): string | undefined {
+  if (state !== 'waiting') {
+    return state === 'uncertain' ? 'confirmation_required'
+      : state === 'failed' ? 'delivery_failed' : state === 'conflict' ? 'policy_denied' : undefined;
+  }
+  const operation = job.operation;
+  if (operation.type !== 'user.message.continue'
+    || !input.orphans.orphaned(job, { room: input.room, peerPublicKey: peer }, stagedAt)) return undefined;
+  if (!input.told.has(job.jobId)) {
+    input.told.add(job.jobId);
+    process.stderr.write(`[monitor] A follow-up waited ${Math.round((Date.now() - stagedAt) / 60_000)} min for a new task `
+      + 'that never started on this computer; it was refused.\n');
+    void sendDeliveryReceipt(input.client, operation.messageId, 'rejected', ORPHAN_REASON, undefined, peer);
+  }
+  return ORPHAN_CODE;
+}
+
 /** Only the persistent monitor advertises durable submission capability. */
 export function startTaskDispatchMonitor(input: {
   config: PeerConfig; client: RelayClient; isLeader: () => boolean;
@@ -72,17 +95,16 @@ export function startTaskDispatchMonitor(input: {
   registerLimitContinuationQueue({ submit: (scope, message, notBefore, createdAt) => sender.submit(scope, message, notBefore, createdAt),
     cancel: (scope, id) => sender.cancel(scope, id), status: (scope, id) => sender.lookup(scope, id) });
   continueStoppedChats(input.client, input.config.room, sender, () => !stopped);
-  const worker = new TaskDispatchWorker({ inbox, remote: input.remote ?? relayTaskJobRemote(input.config),
+  const remote = input.remote ?? relayTaskJobRemote(input.config);
+  const refusal = { client: input.client, room: input.config.room, told: new Set<string>(), orphans: new OrphanFollowUps(
+    { registry: origins, relayState: jobId => remote.get({ jobId }), onError: error => reportFailure(error) }) };
+  const worker = new TaskDispatchWorker({ inbox, remote,
     connected: () => !stopped && input.client.isConnected && input.isLeader(),
     authorized: peerAllowed,
     onTerminal: job => sender.confirmReceiverOutcome(job),
     onError: error => reportFailure(error),
     conversationKey: conversationKeyOf((job, peer) => resolve(job, peer).job),
-    validationCode: (job, peer) => {
-      const state = resolve(job, peer).state;
-      return state === 'uncertain' ? 'confirmation_required'
-        : state === 'failed' ? 'delivery_failed' : state === 'conflict' ? 'policy_denied' : undefined;
-    },
+    validationCode: (job, peer, stagedAt) => refusalCode(refusal, job, peer, stagedAt, resolve(job, peer).state),
     limitHeld: (original, peer) => heldByLimit(input.client, resolve(original, peer).job),
     ready: (original, peer) => {
       const job = input.held?.() ? undefined : resolve(original, peer).job;
@@ -135,9 +157,11 @@ export function startTaskDispatchMonitor(input: {
     try {
       const staged = inbox.stage(job, peer);
       if (staged === 'conflict') return;
-      // The relay repeats its offer until a claim. Only the first one is news.
-      if (staged !== 'existing' && job.operation.type === 'user.message' && job.operation.messageId) {
-        void sendDeliveryArrival(input.client, job.operation.messageId, job.operation.sessionId,
+      // The relay repeats its offer until a claim. Only the first one is news. A follow-up written
+      // before its chat existed arrives too: up to 0.8.209 the phone never heard that it was here.
+      const operation = job.operation;
+      if (staged !== 'existing' && operation.type !== 'project.task.create' && operation.messageId) {
+        void sendDeliveryArrival(input.client, operation.messageId, job.sessionId,
           peer === input.config.myPublicKey ? undefined : peer);
       }
       tick();

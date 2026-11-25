@@ -7,6 +7,7 @@ import { fingerprint, readOrigin, syncDirectory, writeOrigin } from './storage';
 import { configDir } from '../config';
 export { resolveTaskOriginJob } from './continuation';
 export { decorateTaskOriginCatalog } from './projection';
+export { OrphanFollowUps, ORPHAN_CODE, ORPHAN_REASON } from './orphans';
 
 const Scope = z.object({ room: z.string().min(1).max(180), peerPublicKey: z.string().min(1).max(180),
   originMessageId: z.string().min(1).max(180) }).strict();
@@ -121,6 +122,12 @@ export class TaskOriginRegistry {
   lookup(scope: TaskOriginScope, agent: string, projectId?: string): OriginResolution {
     const record = this.read(scope);
     return record ? this.resolve(record, agent, projectId) : { state: 'waiting' };
+  }
+
+  /** Whether this creation is on record in any phase; an unreadable record counts as one. */
+  recorded(scope: TaskOriginScope): boolean {
+    try { return this.read(scope) !== undefined; }
+    catch { return true; }
   }
 
   readyInRoom(room: string) {
