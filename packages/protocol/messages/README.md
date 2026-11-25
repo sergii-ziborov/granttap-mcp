@@ -77,6 +77,11 @@ to the requester. It is device-network pairing, not Project membership.
 one computer. Its status snapshot lists the computer's paired phones (`phones`, by `id` = sha256 of the
 key, never the key), and `phones-remove`, `phones-remove-stale` and `phones-unpair-self` remove them;
 see `apps/bridge/src/paired-phones/README.md`.
+`device/workstation.ts` is the snapshot's optional `workstation`: load (memory, swap, CPU, the home
+volume, the heaviest apps), the last space summary with each entry marked `regenerable`, `history`,
+`protected`, `context`, `user-data` or `inspect`, whether one is running, and the settings that
+`workstation-settings` changes (`automaticScan: smart | off`, `lowSpaceAlert`); `workstation-scan`
+measures now. Nothing in it deletes; see `apps/bridge/src/workstation/README.md`.
 `mesh/knowledge/write.ts` carries a Task-bound human decision or correction and a
 separate Engine-confirmed result.
 `mesh/repositories/index.ts` carries `mesh.repository.query` and its

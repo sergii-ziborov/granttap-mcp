@@ -208,6 +208,7 @@ function expectedResultOperation(
   if (operation === "invocation.history") return "invocation.history";
   if (operation === "memory.record") return "memory.recorded";
   if (operation === "memory.history") return "memory.history";
+  if (operation === "workstation.load" || operation === "workstation.space") return operation;
   if (operation === "policy.get") return "policy.found";
   if (operation === "policy.apply") return "policy.applied";
   if (operation === "policy.coverage") return "policy.coverage";

@@ -32,6 +32,7 @@ import { publishedCatalog, rememberPublishedCatalog, resumePublishedChats,
 import { publishStartedChildren, settleRunsBeyondWindow } from "../../session-catalog/started-children";
 import { createMachineLoadPublisher } from "../../machine-load";
 import { startMachineLoadLoop } from "../../machine-load/host/loop";
+import { startWorkstationWatch } from "../../workstation";
 import { captureStartedRunsNow } from "../../machine-load/host/process-sampler";
 import { watchHeadlessRuns } from "../../started-by";
 import { scanSessionHistoryCooperatively, scanSessionsCooperatively, TOKEN_WINDOW_HOURS } from "../../sessions";
@@ -391,5 +392,9 @@ function monitorLoadLoop(client: RelayClient, leadership: ReturnType<typeof moni
       );
     },
   });
-  return { ...loop, stop: () => { runWatch.stop(); loop.stop(); } };
+  const stopWorkstation = startWorkstationWatch({
+    phone: () => client.isConnected ? client : undefined,
+    leader: () => leadership.acquire(),
+  });
+  return { ...loop, stop: () => { runWatch.stop(); loop.stop(); stopWorkstation(); } };
 }

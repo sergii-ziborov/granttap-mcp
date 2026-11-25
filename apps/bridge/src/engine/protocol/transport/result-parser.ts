@@ -1,6 +1,7 @@
 import { parseProjectRelationships } from "../project-relationships";
 import { parseInvocationResult } from "../engine-invocation-protocol";
 import { parseMemoryResult } from "../engine-memory-protocol";
+import { parseWorkstationResult } from "../workstation";
 import { parsePolicyResult } from "../engine-policy-protocol";
 import { parseImpactResult } from "../impact/engine-impact-protocol";
 import { parseEngineIdentityResult } from "./identity-result-parser";
@@ -56,6 +57,7 @@ function parseResult(value: unknown): EngineResult {
   }
   else if (!parseImpactResult(result)
     && !parseMemoryResult(result, invalidResult)
+    && !parseWorkstationResult(result, invalidResult)
     && !parsePolicyResult(result, invalidResult)
     && !parseInvocationResult(result, invalidResult)) {
     throw new EngineProtocolError("engine result operation is unsupported");

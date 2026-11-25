@@ -2,7 +2,7 @@
 
 The Personal MCP surface is an exact allowlist: `connection_status`, `connect`,
 `connect_with_passkey`, `reconnect`, `remove_phones`, `set_runtime_auto_update`, `notify`,
-`ask_yes_no`, `ask`, `request_sign_in`, and `offload_task`. Context compilation belongs
+`ask_yes_no`, `ask`, `request_sign_in`, `offload_task`, and `computer_load`. Context compilation belongs
 inside Project Mesh, not as extra tools. `relay.ts` owns one shared encrypted relay connection
 and the durable question lifecycle. `ask` and `ask_yes_no` mark their cards
 `questionDecline: decline-v1`; a phone reply carrying that marker ends the wait at once with
@@ -62,3 +62,7 @@ any phone heard from while the question was open, and the last phone. Removal go
 `set_runtime_auto_update` saves the user’s computer-wide runtime update choice
 from the connection card. It preserves pairing and capability policy, and cannot
 override a service-level disable. Status exposes the confirmed setting.
+
+`workstation/` owns `computer_load`: it reads the phone's computer screen data from
+`apps/bridge/src/workstation` (load, the last space summary, its settings) and with
+`scan: true` measures again first. It only reads and is declared read-only and idempotent.

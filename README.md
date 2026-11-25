@@ -738,6 +738,7 @@ trust.
 | Tool | Contract |
 | --- | --- |
 | `set_runtime_auto_update` | When the user asks, turn automatic GrantTap runtime updates on this computer on or off; saves the preference without restarting services or changing pairing, tasks, or provider policy, and returns the connection state |
+| `computer_load` | Read-only: this computer's memory, swap, CPU, free disk and heaviest apps, and the last summary of where its disk space went (agent folders, simulators and VM disks, package and build caches, project build output), each entry marked regenerable, history, protected or user data; `scan: true` measures again now. It deletes nothing |
 | `connection_status` | Read-only: saved pairing and every paired phone with its id and when it last reached this computer, QR expiry, relay observations, provider readiness, a newer runtime waiting to take over and why, and for the calling chat (Claude Code, Codex, Grok Build, Cursor) the phone messages queued behind its turn and its continuation after a subscription limit |
 | `connect_with_passkey` | Link this computer to the user's GrantTap account so a signed-in phone can connect without a QR; returns a 15-minute granttap.com link, the passkey is entered only there, and existing QR pairings stay unchanged |
 | `connect` | Show the existing pairing on the connection card, or on an unpaired computer create a one-time QR shown only on the card |

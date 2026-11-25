@@ -8,6 +8,7 @@ import type {
   InvocationEngineResult,
 } from "../engine-invocation-protocol";
 import type { MemoryEngineOperation, MemoryEngineResult } from "../engine-memory-protocol";
+import type { WorkstationEngineOperation, WorkstationEngineResult } from "../workstation";
 import type { EngineImpactOperation, EngineImpactResult } from "../impact/engine-impact-protocol";
 import { ENGINE_PROTOCOL_VERSION } from "./protocol-base";
 
@@ -97,6 +98,7 @@ export type EngineContextCompilation = {
 };
 
 export type EngineOperation = EnginePolicyOperation | InvocationEngineOperation | MemoryEngineOperation
+  | WorkstationEngineOperation
   | EngineImpactOperation
   | { operation: "engine.ping" }
   | { operation: "engine.version" }
@@ -125,6 +127,7 @@ export type EngineRequest = {
 } & EngineOperation;
 
 export type EngineResult = EnginePolicyResult | InvocationEngineResult | MemoryEngineResult
+  | WorkstationEngineResult
   | EngineImpactResult
   | { operation: "engine.pong"; engine_version: string }
   | { operation: "engine.version"; engine_version: string;

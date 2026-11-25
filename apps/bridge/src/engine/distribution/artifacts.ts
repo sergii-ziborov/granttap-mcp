@@ -8,8 +8,8 @@ export type EngineArtifact = {
 
 /** Release hashes are part of the reviewed MCP, never supplied by a remote manifest. */
 export const ENGINE_ARTIFACTS: readonly EngineArtifact[] = [
-  { version: "0.1.8", platform: "darwin", arch: "arm64",
-    sha256: "15cc6bd1d35ed19af06199603f4051ef28e8c03ebe40bff1c3febd1bb2a75279", bytes: 13059296 },
+  { version: "0.1.9", platform: "darwin", arch: "arm64",
+    sha256: "5a65470b1446ebfd78c2aec7864dc30f2e8dc7f0519a31cd8102a31164c44eea", bytes: 13604000 },
   // The 0.1.2 Intel Mac and Linux x64 builds are no longer published. Without a
   // pin, setup reports Graph as unavailable and the helper does not retry a 404;
   // an Engine already installed and verified on such a computer keeps working.

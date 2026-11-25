@@ -3,7 +3,8 @@ import type {
   MachineLoad,
   SessionsStatus,
 } from "../../../../packages/protocol/schema";
-import { createDiskUsageSampler, type AgentDiskUsage } from "./host/disk-usage";
+import type { AgentDiskUsage } from "./host/disk-usage";
+import { agentDiskSampler } from "../workstation";
 import type { AgentProcessLoad } from "./host/process-sampler";
 import { sampleAgentProcesses } from "./host/process-sampler";
 import { recordAgentLoad } from "./host/agent-load-history";
@@ -134,7 +135,9 @@ export function createMachineLoadPublisher(dependencies: {
 } = {}) {
   const sampleProcesses = dependencies.sampleProcesses ?? sampleAgentProcesses;
   const sampleSelf = dependencies.sampleSelf ?? monitorLoadSampler();
-  const sampleDisk = dependencies.sampleDisk ?? createDiskUsageSampler().sample;
+  // Agent folders come from the last space summary, measured when the workstation
+  // policy decides, rather than from a `du` of every folder every ten minutes.
+  const sampleDisk = dependencies.sampleDisk ?? agentDiskSampler();
   const now = dependencies.now ?? Date.now;
   let loggedAt: number | undefined;
   let active: Promise<MachineLoad | undefined> | undefined;

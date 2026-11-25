@@ -69,15 +69,16 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
 
   const tools = await client.listTools();
   assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
-    "ask", "ask_yes_no", "connect", "connect_with_passkey", "connection_status", "notify", "offload_task", "reconnect",
-    "remove_phones", "request_sign_in", "set_runtime_auto_update",
+    "ask", "ask_yes_no", "computer_load", "connect", "connect_with_passkey", "connection_status", "notify",
+    "offload_task", "reconnect", "remove_phones", "request_sign_in", "set_runtime_auto_update",
   ]);
   for (const tool of tools.tools) {
-    assert.equal(tool.annotations?.readOnlyHint, tool.name === "connection_status");
+    assert.equal(tool.annotations?.readOnlyHint, ["computer_load", "connection_status"].includes(tool.name));
     // A sign-in page is on the internet; everything else stays between this computer and the phone.
     assert.equal(tool.annotations?.openWorldHint, tool.name === "request_sign_in");
     assert.equal(tool.annotations?.destructiveHint, ["reconnect", "remove_phones"].includes(tool.name));
-    assert.equal(tool.annotations?.idempotentHint, ["connection_status", "set_runtime_auto_update"].includes(tool.name));
+    assert.equal(tool.annotations?.idempotentHint,
+      ["computer_load", "connection_status", "set_runtime_auto_update"].includes(tool.name));
   }
   const connectTool = tools.tools.find((tool) => tool.name === "connect");
   assert.deepEqual(Object.keys(connectTool?.inputSchema.properties ?? {}), []);

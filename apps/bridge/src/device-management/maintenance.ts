@@ -22,6 +22,7 @@ import { prepareRuntimeRestart, stopOwnedChildren } from './runtime-restart';
 import { approvalsStatus } from '../approvals/state';
 import { inspectTool, updateTool } from '../tools/updater';
 import { phonesFor } from '../paired-phones';
+import { workstationSnapshot } from '../workstation';
 
 export const runtimeRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 const runtimeEpoch = randomUUID();
@@ -79,7 +80,13 @@ export async function managementSnapshot(requester?: string): Promise<DeviceMana
     automaticUpdatesEnabled: automaticUpdatesAllowed(directory),
     runtimeUpdateSupported: runtimeRoot.includes('/node_modules/'), runtimeRestartSupported: runtimeRestartSupported(),
     cache: (await computerCache(runtimeRoot)).map(({ paths: _paths, ...category }) => category), providers,
-    ...(requester ? { phones: readPhones(requester) } : {}) };
+    ...(requester ? { phones: readPhones(requester) } : {}),
+    ...(await readWorkstation()) };
+}
+
+/** Load and the last space summary; a failure leaves the rest of the status intact. */
+async function readWorkstation(): Promise<Pick<DeviceManagementSnapshot, 'workstation'>> {
+  try { return { workstation: await workstationSnapshot() }; } catch { return {}; }
 }
 
 function readPhones(requester: string): DeviceManagementSnapshot['phones'] {

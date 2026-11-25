@@ -30,6 +30,9 @@ export type {
 } from "./engine-invocation-protocol";
 export type { KnowledgePage, KnowledgeRecord, KnowledgeRecordInput } from "./engine-memory-protocol";
 export type {
+  EngineWorkstationGroup, EngineWorkstationItem, EngineWorkstationLoad, EngineWorkstationSpace,
+} from "./workstation";
+export type {
   CapabilityFingerprint,
   CapabilityKind,
   EnforcementStatus,

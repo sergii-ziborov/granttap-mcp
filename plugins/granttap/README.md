@@ -118,6 +118,7 @@ healthy pairing merely to display a new QR.
 - `connect` pairs the computer or reuses its current pairing.
 - `reconnect` creates a fresh pairing only after explicit confirmation.
 - `remove_phones` asks the person on a phone to remove paired phones that are no longer used.
+- `computer_load` reads this computer's load and where its disk space went; it deletes nothing.
 - `connect_with_passkey` starts a one-time browser passkey request to link this Mac to an account.
 - `notify` sends a task update to GrantTap.
 - `ask_yes_no` asks for an explicit yes or no decision.

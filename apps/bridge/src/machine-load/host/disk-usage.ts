@@ -2,10 +2,9 @@
  * What each agent keeps on the disk.
  *
  * Every agent has a folder of its own — `~/.claude`, `~/.codex` — that grows
- * with transcripts, caches and installed skills and that nothing on the phone
- * could see. The numbers come from `du`, which is slow on a folder with a
- * year of transcripts, so a measurement is kept for ten minutes and refreshed
- * in the background: a load sample never waits for it.
+ * with transcripts, caches and installed skills. Without the Engine, a space
+ * summary measures these folders with `du`, only when the workstation policy
+ * asks for one (`workstation/`); the load sheet then reads that summary.
  */
 import { execFile } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
@@ -23,7 +22,6 @@ export type AgentDiskUsage = {
   entries: DiskUsageEntry[];
 };
 
-export const DISK_TTL_MS = 10 * 60_000;
 const MAX_ENTRIES = 8;
 
 /** Where each agent keeps its state, relative to the home folder. */
@@ -97,48 +95,4 @@ export async function measureAgentDisk(
   } catch {
     return undefined;
   }
-}
-
-type CacheEntry = { usage?: AgentDiskUsage; measuredAt: number; pending?: Promise<void> };
-
-/**
- * The last measurement per agent, refreshed in the background once it is
- * ten minutes old. Returns nothing for an agent that has never been measured;
- * the first sample kicks the measurement off and a later one carries it.
- */
-export function createDiskUsageSampler(
-  options: { home?: string; du?: DuRunner; now?: () => number; ttlMs?: number } = {},
-) {
-  const now = options.now ?? Date.now;
-  const ttl = options.ttlMs ?? DISK_TTL_MS;
-  const cache = new Map<string, CacheEntry>();
-  const refresh = (agent: string): void => {
-    const entry = cache.get(agent) ?? { measuredAt: 0 };
-    if (entry.pending) return;
-    entry.pending = measureAgentDisk(agent, options)
-      .then((usage) => {
-        cache.set(agent, { usage: usage ?? entry.usage, measuredAt: now() });
-      })
-      .catch(() => {
-        cache.set(agent, { usage: entry.usage, measuredAt: now() });
-      });
-    cache.set(agent, entry);
-  };
-  return {
-    sample(agents: readonly string[]): Record<string, AgentDiskUsage> {
-      const out: Record<string, AgentDiskUsage> = {};
-      for (const agent of agents) {
-        if (!(agent in AGENT_LOCATIONS)) continue;
-        const entry = cache.get(agent);
-        if (!entry || now() - entry.measuredAt >= ttl) refresh(agent);
-        const usage = cache.get(agent)?.usage;
-        if (usage) out[agent] = usage;
-      }
-      return out;
-    },
-    /** For tests: wait for any measurement in flight. */
-    async settle(): Promise<void> {
-      await Promise.all([...cache.values()].map((entry) => entry.pending ?? Promise.resolve()));
-    },
-  };
 }

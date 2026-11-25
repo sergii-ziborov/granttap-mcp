@@ -2,6 +2,7 @@
 import { z } from "zod";
 import { DeviceManagementRequest, DeviceManagementResult } from './messages/device/management';
 export * from './messages/device/management';
+export * from './messages/device/workstation';
 import { TaskSchedulesRequest, TaskSchedulesResult } from './task-schedules';
 export * from './task-schedules';
 import { TaskAutomationsRequest, TaskAutomationsResult } from './task-automations';

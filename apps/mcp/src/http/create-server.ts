@@ -7,6 +7,7 @@ import { registerMeshResource } from "../mcp-tools/mesh/resource";
 import { registerPhonesTool } from "../mcp-tools/phones";
 import { registerRoutingTool } from '../mcp-tools/routing';
 import { registerSignInTool } from "../mcp-tools/sign-in";
+import { registerWorkstationTool } from "../mcp-tools/workstation";
 import { packageVersion } from "../status/package-version";
 
 export { askOpenQuestion, askYesNo, relay, resetRelay } from "../mcp-tools/connect/relay";
@@ -24,6 +25,7 @@ export function createGrantTapServer(): McpServer {
   registerSignInTool(server);
   registerRoutingTool(server);
   registerPhonesTool(server);
+  registerWorkstationTool(server);
   registerMeshResource(server);
   registerConnectionWidget(server);
   return server;

@@ -7,6 +7,7 @@ import { clearComputerCache } from './cache';
 import { providerLogins } from './login';
 import { managementSnapshot, maintenanceIdle, prepareRestart, restartProvider, restartRuntime, runtimeRoot, updateRuntime, updateProvider } from './maintenance';
 import { isPhoneAction, planPhoneChange } from '../paired-phones';
+import { scanWorkstation, setWorkstationSettings } from '../workstation';
 
 type Send = (result: DeviceManagementResult) => Promise<void>;
 type Entry = { fingerprint: string; result?: DeviceManagementResult; pending?: Promise<void>; at: number; ttl: number };
@@ -57,7 +58,9 @@ async function execute(request: DeviceManagementRequest, origin: { room: string;
     action: request.action, agent: request.agent };
   const result = (phase: DeviceManagementResult['phase'], message: string): DeviceManagementResult =>
     ({ ...base, phase, message, createdAt: Date.now() });
-  const exclusive = request.action !== 'status' && !request.action.startsWith('provider-login');
+  // A space summary only reads, and may take minutes: it must not hold back an update or restart.
+  const exclusive = request.action !== 'status' && !request.action.startsWith('provider-login')
+    && !request.action.startsWith('workstation-');
   if (exclusive && mutating) { await send(result('failed', 'Another computer maintenance action is in progress.')); return; }
   if (exclusive) mutating = true;
   try {
@@ -84,6 +87,14 @@ async function execute(request: DeviceManagementRequest, origin: { room: string;
         change.commit(); return;
       }
       ({ message, removedPhoneIds } = change.commit());
+    } else if (request.action === 'workstation-scan') {
+      await send(result('running', 'Measuring where the space went…'));
+      const space = await scanWorkstation('manual');
+      message = space ? 'Disk space measured.' : 'This computer could not measure its disk now.';
+    } else if (request.action === 'workstation-settings') {
+      setWorkstationSettings(request.workstation!);
+      message = request.workstation!.automaticScan === 'off'
+        ? 'Automatic space checks are off; Measure now still works.' : 'Space is checked when it matters.';
     } else if (request.action === 'clear-cache') {
       if (!maintenanceIdle()) throw Error('Finish active requests and sign-in before clearing computer caches.');
       const bytes = await clearComputerCache(runtimeRoot);

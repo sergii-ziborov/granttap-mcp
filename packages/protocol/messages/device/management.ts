@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { CodingAgent } from '../primitives';
+import { WorkstationSettings, WorkstationSnapshot } from './workstation';
 
 const identifier = z.string().trim().min(1).max(160);
 /** sha256 of the phone's public key, hex: names a phone without sending its key. */
@@ -9,6 +10,8 @@ export const DeviceManagementAction = z.enum([
   'status', 'clear-cache', 'runtime-update', 'runtime-install', 'runtime-restart',
   'provider-login', 'provider-login-code', 'provider-login-cancel', 'provider-restart', 'provider-update',
   ...PHONE_ACTIONS,
+  // Measure where the space went now; change when this computer measures on its own.
+  'workstation-scan', 'workstation-settings',
 ]);
 export const DeviceManagementRequest = z.object({
   type: z.literal('device.manage'),
@@ -24,8 +27,13 @@ export const DeviceManagementRequest = z.object({
   phoneIds: z.array(PairedPhoneId).min(1).max(32).optional(),
   /** `phones-remove-stale`: remove the other phones idle for at least this many days. */
   notSeenForDays: z.number().int().min(1).max(3_650).optional(),
+  /** `workstation-settings`: the new settings. */
+  workstation: WorkstationSettings.optional(),
   createdAt: z.number().finite(),
 }).strict().superRefine((value, ctx) => {
+  if ((value.action === 'workstation-settings') !== (value.workstation != null)) {
+    ctx.addIssue({ code: 'custom', path: ['workstation'], message: 'workstation-settings names its settings, and only it does' });
+  }
   if ((value.action === 'phones-remove') !== (value.phoneIds != null)) {
     ctx.addIssue({ code: 'custom', path: ['phoneIds'], message: 'phones-remove names its phones, and only it does' });
   }
@@ -100,6 +108,8 @@ export const DeviceManagementSnapshot = z.object({
   cache: z.array(DeviceCacheCategory).max(12), providers: z.array(DeviceProviderState).max(4),
   /** Absent from a computer whose MCP predates phone management (0.8.187 and older). */
   phones: z.array(PairedPhoneEntry).max(32).optional(),
+  /** Load, where the space went and when it is measured; absent before 0.8.209. */
+  workstation: WorkstationSnapshot.optional(),
 });
 export type DeviceManagementSnapshot = z.infer<typeof DeviceManagementSnapshot>;
 
