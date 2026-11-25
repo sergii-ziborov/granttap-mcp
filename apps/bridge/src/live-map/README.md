@@ -49,6 +49,14 @@ a shell line for the command it runs (`curl` is Network, `rg` is Files), a path
 for Claude's or Codex's memory folder. A result is read only for an exit code or
 for words that say a hook or the person refused it.
 
+A Claude call started in the background (`run_in_background`: a build, a test run)
+answers at once and goes on working. It stays running on the map until the host
+writes its task notice. The notice names the call by id, is queued the moment the
+call ends (even while the agent is idle) and says `completed` or how it failed. A
+call whose notice never came, because the host stopped, stops counting as running
+two hours after it started. Before this the map said nothing was running while a
+build ran.
+
 What leaves is a tool's name (`Bash`, `exec command`, `github: create issue`), a
 skill's or agent type's name when it is a plain identifier, and a model's id.
 Never an argument, path, host, command line, description, prompt, result or

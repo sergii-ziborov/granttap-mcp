@@ -128,3 +128,34 @@ test("a tail read keeps whole lines from the end of the file", () => {
   assert.deepEqual(tailLines(path, 12), ["third"]);
   assert.equal(tailLines(join(path, "missing"), 10), undefined);
 });
+
+test("a Claude call started in the background runs until the host's notice that it is done", () => {
+  const notice = (id: string, status: string) =>
+    `<task-notification>\n<task-id>b${id}</task-id>\n<tool-use-id>${id}</tool-use-id>\n<status>${status}</status>\n`
+    + `<summary>Background command "${MARK}" ${status}</summary>\n</task-notification>`;
+  const started = rows(
+    assistant(1, "m1", [
+      { type: "tool_use", id: "build", name: "Bash", input: { command: `xcodebuild ${MARK}`, run_in_background: true } },
+      { type: "tool_use", id: "tests", name: "Bash", input: { command: "npm test", run_in_background: true } },
+      { type: "tool_use", id: "quick", name: "Bash", input: { command: "ls" } }]),
+    result(2, "build", false, "Command running in background with ID: bbuild."),
+    result(2, "tests", false, "Command running in background with ID: btests."),
+    result(2, "quick"),
+  );
+  const now = Date.parse(at(30));
+  const running = claudeObservation(started, [], now).calls.filter(call => call.status === "run").map(call => call.key);
+  assert.deepEqual(running, ["build", "tests"], "a background command is still at work after it answers");
+
+  const done = claudeObservation([...started,
+    JSON.stringify({ type: "queue-operation", operation: "enqueue", timestamp: at(40), content: notice("build", "completed") }),
+    JSON.stringify({ type: "user", timestamp: at(50), message: { role: "user", content: notice("tests", "failed") } }),
+  ], [], now);
+  const byKey = new Map(done.calls.map(call => [call.key, call]));
+  assert.equal(byKey.get("build")?.status, "ok");
+  assert.equal(byKey.get("build")!.endedAt! - byKey.get("build")!.startedAt, 39_000);
+  assert.equal(byKey.get("tests")?.status, "error");
+  assert.equal(JSON.stringify(done).includes(MARK), false);
+
+  const forgotten = claudeObservation(started, [], Date.parse(at(1)) + 3 * 60 * 60_000);
+  assert.deepEqual(forgotten.calls.filter(call => call.status === "run"), [], "a notice that never came stops counting after two hours");
+});
