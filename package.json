@@ -1,6 +1,6 @@
 {
   "name": "granttap-mcp",
-  "version": "0.8.211",
+  "version": "0.8.212",
   "description": "Approve, answer and steer Claude Code, Codex, Cursor and Grok Build from iPhone, iPad and Apple Watch: the local runtime, CLI and MCP server for GrantTap, a free App Store download.",
   "type": "module",
   "bin": {
