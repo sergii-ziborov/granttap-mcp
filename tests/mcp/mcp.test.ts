@@ -70,7 +70,7 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   const tools = await client.listTools();
   assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
     "ask", "ask_yes_no", "computer_load", "connect", "connect_with_passkey", "connection_status", "notify",
-    "offload_task", "reconnect", "remove_phones", "request_sign_in", "set_runtime_auto_update",
+    "offload_task", "reconnect", "remove_phones", "request_sign_in", "set_runtime_auto_update", "sign_in",
   ]);
   for (const tool of tools.tools) {
     assert.equal(tool.annotations?.readOnlyHint, ["computer_load", "connection_status"].includes(tool.name));
@@ -83,7 +83,7 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   const connectTool = tools.tools.find((tool) => tool.name === "connect");
   assert.deepEqual(Object.keys(connectTool?.inputSchema.properties ?? {}), []);
   const connectMeta = connectTool?._meta as { ui?: { resourceUri?: string } } | undefined;
-  assert.equal(connectMeta?.ui?.resourceUri, "ui://granttap/connection/v6.html");
+  assert.equal(connectMeta?.ui?.resourceUri, "ui://granttap/connection/v7.html");
   const reconnectTool = tools.tools.find((tool) => tool.name === "reconnect");
   assert.deepEqual(Object.keys(reconnectTool?.inputSchema.properties ?? {}), ["confirmed", "mode"]);
   const removePhones = tools.tools.find((tool) => tool.name === "remove_phones");
@@ -99,9 +99,9 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   assert.deepEqual(resources.resources.map((resource) => resource.uri), [
     "granttap://mesh/current",
     "granttap://mesh/map",
-    "ui://granttap/connection/v6.html",
+    "ui://granttap/connection/v7.html",
   ]);
-  const widget = await client.readResource({ uri: "ui://granttap/connection/v6.html" });
+  const widget = await client.readResource({ uri: "ui://granttap/connection/v7.html" });
   const widgetResource = widget.contents[0] as {
     mimeType?: string;
     text?: string;
@@ -140,7 +140,7 @@ test("published CLI starts the MCP server and exposes all GrantTap tools", async
   const content = result.content as Array<{ type: string; text?: string }>;
   const text = content.find((item) => item.type === "text");
   assert.equal(text?.type, "text");
-  if (text?.text) assert.match(text.text, /not paired/i);
+  if (text?.text) assert.match(text.text, /not connected on this computer yet\. Call connect/);
 
   const initialStatus = await client.callTool({ name: "connection_status", arguments: {} });
   assert.equal((initialStatus.structuredContent as { status: string }).status, "disconnected");

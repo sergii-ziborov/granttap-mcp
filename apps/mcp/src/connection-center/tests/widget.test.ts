@@ -84,33 +84,101 @@ test("widget initializes, checks status, and requires explicit reconnect confirm
   assert.equal((ui.calls.at(-1)?.arguments as { mode: string }).mode, "reconnect");
 });
 
-test("passkey action opens a fresh account-link request and shows the saved link separately from QR pairing", async (t) => {
+const PASSKEY_URL = "https://granttap.com/connect#request=11111111-1111-4111-8111-111111111111";
+const paired = { status: "paired", relay: "relay.granttap.com", phones: [], providers: [] };
+const link = (state: string, extra: Record<string, unknown> = {}) =>
+  ({ accountLink: { state, reason: "", checkedAt: 1_700_000_000_000, answeredBy: "monitor", ...extra } });
+
+test("a signed-out computer gets one prominent Sign in again that opens the passkey page", async (t) => {
   const ui = await fixture(t);
-  ui.set({ status: "paired", accountLinkSaved: false, phones: [], providers: [] },
-    { passkeyUrl: "https://granttap.com/connect#request=11111111-1111-4111-8111-111111111111" });
-  ui.button("passkey").click();
-  await ui.settle();
-  assert.equal(ui.calls.at(-1)?.name, "connect_with_passkey");
-  assert.equal(ui.el("passkey-link").getAttribute("href"),
-    "https://granttap.com/connect#request=11111111-1111-4111-8111-111111111111");
-  assert.equal(ui.el("passkey-link").classList.contains("hidden"), false);
-  assert.match(ui.el("account-status").textContent || "", /No account linked/);
-  ui.set({ status: "paired", accountLinkSaved: true, phones: [], providers: [] });
+  ui.set({ ...paired, ...link("revoked", { reason: "Machine access revoked." }) });
   ui.button("refresh").click();
   await ui.settle();
-  assert.match(ui.el("account-status").textContent || "", /Saved account link/);
-  assert.equal(ui.el("passkey-link").classList.contains("hidden"), true);
+  assert.equal(ui.el("status").textContent, "Signed out of GrantTap · phones cannot reach this computer");
+  assert.match(ui.el("card").className, /attention/);
+  assert.equal(ui.el("account-alert").classList.contains("hidden"), false);
+  assert.equal(ui.el("account-alert-title").textContent, "Signed out of GrantTap");
+  assert.match(ui.el("account-alert-detail").textContent || "", /no longer accepts this computer's sign-in \(Machine access revoked\)/);
+  assert.equal(ui.el("sign-in").textContent, "Sign in again");
+  const prominent = [...ui.window.document.querySelectorAll("#card button.primary")].filter(button => !button.closest(".hidden"));
+  assert.deepEqual(prominent.map(button => button.id), ["sign-in"], "one prominent action");
+  assert.equal(ui.el("account-status").textContent, "Signed out by GrantTap.");
+  ui.set({ ...paired, ...link("revoked") }, { passkeyUrl: PASSKEY_URL });
+  ui.button("sign-in").click();
+  await ui.settle();
+  assert.equal(ui.calls.at(-1)?.name, "sign_in");
+  assert.equal(ui.el("passkey-link").getAttribute("href"), PASSKEY_URL);
+  assert.equal(ui.el("passkey-link").classList.contains("hidden"), false);
+  assert.equal(ui.el("sign-in").classList.contains("hidden"), true, "the page link takes the button's place");
+  assert.match(ui.el("account-alert-detail").textContent || "", /valid for 15 minutes/);
+  // A host that strips MCP metadata still hands the link over in structured output.
+  ui.set({ ...paired, ...link("revoked"), passkeyUrl: PASSKEY_URL });
+  ui.button("refresh").click();
+  await ui.settle();
+  assert.equal(ui.el("passkey-link").getAttribute("href"), PASSKEY_URL);
+  ui.set({ ...paired, ...link("revoked"), passkeyUrl: "https://evil.example/connect#request=11111111-1111-4111-8111-111111111111" });
+  ui.button("refresh").click();
+  await ui.settle();
+  assert.equal(ui.el("passkey-link").classList.contains("hidden"), true, "only a granttap.com passkey page is linked");
 });
 
-test("saved account can reauthorize when the host strips MCP metadata", async (t) => {
+test("each account state reads plainly; a subscription problem is text with Managed computers, not a sign-in", async (t) => {
   const ui = await fixture(t);
-  const passkeyUrl = "https://granttap.com/connect#request=11111111-1111-4111-8111-111111111111";
-  ui.set({ status: "paired", accountLinkSaved: true, phones: [], providers: [], passkeyUrl });
-  ui.button("passkey").click();
+  const render = async (state: Record<string, unknown>) => { ui.set(state); ui.button("refresh").click(); await ui.settle(); };
+  await render({ ...paired, ...link("none", { checkedAt: null }) });
+  assert.equal(ui.el("status").textContent, "Not signed in to GrantTap · phones cannot reach this computer");
+  assert.equal(ui.el("account-alert-title").textContent, "This computer is not signed in");
+  assert.equal(ui.el("sign-in").textContent, "Sign in");
+  await render({ ...paired, ...link("seat_limit", { reason: "Every computer place is in use." }) });
+  assert.equal(ui.el("status").textContent, "Not covered by your subscription · phones cannot reach this computer");
+  assert.equal(ui.el("account-alert-title").textContent, "This computer is not covered by your subscription");
+  assert.match(ui.el("account-alert-detail").textContent || "", /Turn another computer off under Managed computers/);
+  assert.equal(ui.el("sign-in").classList.contains("hidden"), true);
+  assert.equal(ui.el("managed-computers").classList.contains("hidden"), false);
+  assert.equal(ui.el("managed-computers").getAttribute("href"), "https://granttap.com/account#managed-computers");
+  assert.match(ui.el("account-alert").className, /neutral/);
+  await render({ ...paired, ...link("no_subscription") });
+  assert.match(ui.el("account-alert-detail").textContent || "", /^Subscribe in GrantTap → Subscription/);
+  await render({ ...paired, ...link("unreachable", { checkedAt: Date.now() - 5 * 60_000 }) });
+  assert.equal(ui.el("account-alert-title").textContent, "GrantTap's account service is not answering");
+  assert.match(ui.el("account-alert-detail").textContent || "", /Last tried 5 min ago\. If it lasts, sign in again\./);
+  assert.equal(ui.el("sign-in").classList.contains("hidden"), false);
+  assert.equal(ui.el("status").textContent, "Paired · no phone has connected yet", "the relay may still admit it");
+  await render({ ...paired, ...link("ok") });
+  assert.equal(ui.el("account-alert").classList.contains("hidden"), true);
+  assert.match(ui.el("account-status").textContent || "", /^Signed in\. Phones signed in to the same account link this computer/);
+  await render({ ...paired, ...link("ok", { checkedAt: null }) });
+  assert.equal(ui.el("account-status").textContent, "Signed in; checking with GrantTap…");
+  await render({ ...paired, relay: "relay.example.net", ...link("none") });
+  assert.equal(ui.el("status").textContent, "Paired · no phone has connected yet", "an own relay does not need the account");
+  assert.equal(ui.el("account-alert-title").textContent, "Sign in to GrantTap");
+  // An older server sends only accountLinkSaved.
+  await render({ ...paired, accountLinkSaved: true });
+  assert.equal(ui.el("account-alert").classList.contains("hidden"), true);
+  await render({ ...paired, accountLinkSaved: false });
+  assert.equal(ui.el("status").textContent, "Paired · no phone has connected yet");
+});
+
+test("an unpaired computer that is signed in waits for the phone; the QR is the fallback", async (t) => {
+  const ui = await fixture(t);
+  ui.set({ status: "disconnected", relay: "", phones: [], providers: [], ...link("ok") });
+  ui.button("refresh").click();
   await ui.settle();
-  assert.equal(ui.calls.at(-1)?.name, "connect_with_passkey");
-  assert.equal(ui.el("passkey-link").getAttribute("href"), passkeyUrl);
-  assert.equal(ui.el("passkey-link").classList.contains("hidden"), false);
+  assert.equal(ui.el("heading").textContent, "Open GrantTap on your iPhone");
+  assert.match(ui.el("detail").textContent || "", /links this computer by itself\. A QR is only needed if it doesn't\./);
+  assert.equal(ui.el("connect").textContent, "Show a QR instead");
+  ui.button("connect").click();
+  await ui.settle();
+  assert.equal(JSON.stringify(ui.calls.at(-1)), JSON.stringify({ name: "reconnect", arguments: { confirmed: true, mode: "reconnect" } }));
+  ui.set({ status: "disconnected", relay: "", phones: [], providers: [], ...link("none") });
+  ui.button("refresh").click();
+  await ui.settle();
+  assert.equal(ui.el("heading").textContent, "Connect a phone");
+  assert.equal(ui.el("connect").textContent, "Add a phone");
+  assert.equal(ui.el("account-alert-title").textContent, "Sign in to GrantTap");
+  ui.button("connect").click();
+  await ui.settle();
+  assert.equal(ui.calls.at(-1)?.name, "connect");
 });
 
 test("widget clears secrets when paired or expired and ignores foreign messages", async (t) => {

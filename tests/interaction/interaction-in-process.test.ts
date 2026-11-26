@@ -53,13 +53,13 @@ test("in-process MCP covers unpaired interaction behavior", async (t) => {
   t.after(() => client.close());
   // Not paired is an error, not an outcome: nothing was sent, nothing was asked.
   const notify = await client.callTool({ name: "notify", arguments: { message: "hello" } });
-  assert.match(textResult(notify), /not paired/i);
+  assert.match(textResult(notify), /not connected on this computer yet/);
   assert.equal(notify.isError, true);
   const yesNo = await client.callTool({ name: "ask_yes_no", arguments: { question: "Ready?" } });
-  assert.match(textResult(yesNo), /not paired/i);
+  assert.match(textResult(yesNo), /not connected on this computer yet/);
   assert.equal(yesNo.isError, true);
   const open = await client.callTool({ name: "ask", arguments: { question: "Status?" } });
-  assert.match(textResult(open), /not paired/i);
+  assert.match(textResult(open), /not connected on this computer yet/);
   assert.equal(open.isError, true);
   const resource = await client.readResource({ uri: "granttap://mesh/current" });
   const value = JSON.parse((resource.contents[0] as { text: string }).text);

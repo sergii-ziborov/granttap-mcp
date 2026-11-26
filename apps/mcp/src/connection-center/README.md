@@ -3,15 +3,18 @@
 `../mcp-tools/connect` registers the public `connection_status`, `connect`,
 and confirmed `reconnect` tools. `state.ts` owns the process-local pending QR
 and sanitized connection snapshot. `../mcp-tools/connect/widget.ts` serves the card in `card/` as one
-self-contained MCP Apps resource (`ui://granttap/connection/v6.html`): `widget.html` with `card.css` and the
-scripts `bridge.js`, `phones.js`, `phones-view.js` and `view.js` inlined, in that order (`CARD_SCRIPTS`).
+self-contained MCP Apps resource (`ui://granttap/connection/v7.html`): `widget.html` with `card.css` and the
+scripts `bridge.js`, `phones.js`, `phones-view.js`, `account.js` and `view.js` inlined, in that order
+(`CARD_SCRIPTS`).
 
 ## The card
 
 From the top: the status line (Connected · iPhone is active now, Paired · last phone activity 3 h ago, Not
-paired, a QR waiting or expired) with Refresh; the QR panel when there is one to show; **This computer**: its
-name, the GrantTap MCP version and a newer one waiting (in a line of the card's own, the server's sentence as
-its tooltip), the Automatic updates switch and the account passkey; **Phones**; **Pairing**: Add another
+paired, a QR waiting or expired, or, on GrantTap's relay, Signed out of GrantTap · phones cannot reach this
+computer) with Refresh; the account callout whenever the sign-in is not ok; the QR panel when there is one to
+show; **This computer**: its name, the GrantTap MCP version and a newer one waiting (in a line of the card's
+own, the server's sentence as its tooltip), the Automatic updates switch and the GrantTap account line;
+**Phones**; **Pairing**: Add another
 phone and Reconnect a phone (each confirmed in place) and how to unpair this computer, which only
 `granttap reset` in Terminal does; then connection details and help.
 
@@ -39,7 +42,9 @@ phone export is absent. Reconnect requires explicit confirmation. A pending QR
 is reusable until expiry in this MCP process; restarting the process loses the
 transfer code but preserves the pairing. It never persists transfer secrets.
 
-Status also carries, read without writing: a summary sorting the paired phones by when each
+Status also carries, read without writing: `accountLink` (`state`, `reason`, `checkedAt` and `answeredBy`,
+the GrantTap process answering phones signing in with the account; `../status/account-status.ts`), with
+`accountLinkSaved` kept for older readers and true only while the sign-in is ok; a summary sorting the paired phones by when each
 last reached this computer, then one line per phone with its label and last-seen time, and how many
 were not seen for 30 days, the cue for `remove_phones` (keys stay paired until someone removes them, so
 old test installs stay listed). Each structured phone carries `id`, `label`, `primary`, `addedAt`, `mostRecent`
@@ -63,14 +68,26 @@ checks parent messages, refreshes pending pairing while visible, and keeps
 copyable transfer material out of model-visible text and persistent UI storage.
 Non-UI clients can still use the tools and display the returned QR image.
 
-Connect with passkey on the card creates a short-lived, authenticated website
-request. A fresh passkey assertion on granttap.com links this Mac to the user's
-account; the site returns a machine token only to the local MCP watcher, which
-saves it privately. The QR pairing room and provider runtime remain unchanged.
-The card keeps reauthorization available for an already linked Mac and reads
-the one-time URL from structured tool output when a host omits MCP metadata.
-The separate coding-app OAuth page can also use passkey to authorize that MCP
-client. The Codex-owned plugin management page is not this card.
+**The account callout** (`account.js`) reads `accountLink` and holds the card's only Sign in button:
+`none` shows **Sign in** (titled "This computer is not signed in" on GrantTap's relay, where phones cannot
+reach it without one), `revoked` shows "Signed out of GrantTap" with the server's reason and **Sign in
+again**, `unreachable` says the account service is not answering since when, with **Sign in again** for when
+it lasts. `seat_limit` and `no_subscription` are plain text, no button: "This computer is not covered by your
+subscription", what to change, and a **Managed computers** link (granttap.com/account#managed-computers).
+`ok` hides the callout; the account line says Signed in, or checking while no answer came yet. An older
+server's `accountLinkSaved` alone reads as ok or none. On an unpaired computer that is signed in, the pairing
+panel says to open GrantTap on the iPhone signed in to the same account and its button is **Show a QR
+instead** (`reconnect`); not signed in, **Add a phone** calls `connect`, which returns the sign-in page and
+the QR.
+
+Sign in calls `sign_in` (`passkey.ts`): a short-lived, authenticated website request. A fresh passkey
+assertion on granttap.com signs this computer in to the user's account; the site returns a machine token
+only to the local MCP watcher, which saves it privately, checks it once (`verifyAccountLink`) and, after
+the page moved on, tells `onAccountSignedIn` listeners (the tool process restarts its relay link). The QR
+pairing room and provider runtime remain unchanged. The callout links only a
+`https://granttap.com/connect#request=<uuid>` page, read from structured tool output when a host omits
+MCP metadata. The separate coding-app OAuth page can also use passkey to authorize that MCP client, which
+signs this computer in too. The Codex-owned plugin management page is not this card.
 
 The Automatic updates switch calls `set_runtime_auto_update` with an explicit
 boolean and displays the confirmed persisted result from the server. The setting
@@ -78,6 +95,9 @@ is computer-wide for the GrantTap runtime; marketplace plugin updates stay under
 the coding app's control. A service environment override locks it off. Failed
 saves do not optimistically change the switch. Pairing and capability policy are
 stored separately and preserved.
+
+`granttap sign-in` (`../bin/sign-in.ts`, logic in `../bin/sign-in-command.ts`) starts the same page, opens
+it on macOS from a terminal, waits for the sign-in, checks it and says what is next.
 
 Tests in `tests/` exercise isolated keys, a loopback encrypted phone connection,
 expiry, non-mutating status, and actual DOM button/host-message behavior; `tests/phones-card.test.ts` covers

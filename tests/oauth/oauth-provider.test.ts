@@ -43,7 +43,7 @@ test("OAuth provider completes consent, code exchange, verification, and revocat
   assert.throws(() => provider.completeConsent("missing", true), /expired/);
 
   const unpaired = provider.createPending(client, params);
-  assert.throws(() => provider.completeConsent(unpaired, true), /not paired/);
+  assert.throws(() => provider.completeConsent(unpaired, true), /not connected on this computer yet/);
   const paired = createPairing("wss://relay.example.test");
   saveConfig(machineConfigPath(), paired.machineCfg);
   saveConfig(phonePairingPath(), paired.phoneCfg);
@@ -114,7 +114,7 @@ test("verified Mac passkey can authorize local MCP before phone pairing", async 
   t.after(() => delete process.env.GRANTTAP_CONFIG_DIR);
   const provider = new GrantTapOAuthProvider(resource);
   const pendingId = provider.createPending(client, params);
-  assert.throws(() => provider.completeConsent(pendingId, true), /not paired/);
+  assert.throws(() => provider.completeConsent(pendingId, true), /not connected on this computer yet/);
   const approved = provider.completeConsent(pendingId, true, "passkey");
   const code = new URL(approved.redirectUrl).searchParams.get("code");
   assert.ok(code);

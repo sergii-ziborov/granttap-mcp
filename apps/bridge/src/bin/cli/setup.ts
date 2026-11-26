@@ -16,6 +16,7 @@ import { usableEngineBinary } from "../../engine/protocol/engine-declaration";
 import { isMachineConfigured } from "../../../../mcp/src/status/pairing-status";
 import { removeCursorUserGrantTap } from "../../../../mcp/src/cursor-config";
 import { installHttpMcpService, waitForHttpMcpHealth } from "../../../../mcp/src/http-service";
+import { accountLinkStatus, needsSignIn } from "../../account-link-state";
 
 const SETUP_USAGE = [
   "Usage: granttap setup [--engine <path>]",
@@ -53,6 +54,8 @@ function state(result: InstallResult): string {
 
 async function pairIfNeeded(): Promise<string | null> {
   if (isMachineConfigured()) return null;
+  // Signed in, the phone signed in to the same account links this computer: no QR is printed for it.
+  if (!needsSignIn(accountLinkStatus())) return "signed-in";
   const interactive = process.stdout.isTTY || process.env.GRANTTAP_SETUP_PAIRING === "1";
   if (!interactive || process.env.GRANTTAP_SKIP_PAIRING === "1") return null;
   try {
@@ -71,6 +74,8 @@ async function pairIfNeeded(): Promise<string | null> {
       "",
       qr,
       `Expires in ${PAIRING_CODE_TTL_MINUTES} minutes. The transfer key is not sent to the relay.`,
+      "On GrantTap's relay this computer must also be signed in to your GrantTap account: granttap sign-in.",
+      "Signed in, a phone signed in to the same account links this computer without a QR.",
       "",
     ].join("\n"));
     return "paired";
@@ -117,6 +122,7 @@ async function main(): Promise<void> {
   process.stdout.write([
     "GrantTap",
     "",
+    `GrantTap account    ${needsSignIn(accountLinkStatus()) ? "Not signed in (granttap sign-in)" : "Signed in"}`,
     `Phone pairing       ${paired ? "Ready" : pairingResult === "failed" ? "Relay unavailable" : "Needs connection"}`,
     `Background helper   ${state(helper)}`,
     "",
@@ -141,9 +147,12 @@ async function main(): Promise<void> {
         : `Next: review GrantTap hooks in GrantTap Settings → This Mac → Codex hooks, or ${CODEX_TRUST_INSTRUCTION}`
       : paired && before.cursor.installed
         ? "Next: keep the GrantTap plugin. Pair and change settings in the GrantTap app, not Cursor MCP settings."
-        : !paired
-          ? "Next: pair from the GrantTap plugin connection card or the GrantTap app."
-          : "Ready. Continue from GrantTap on your controller device.",
+        : !paired && pairingResult === "signed-in"
+          ? "Next: open GrantTap on your iPhone signed in to the same account; it links this computer by itself. "
+            + "granttap phone add shows a QR if it does not."
+          : !paired
+            ? "Next: sign this computer in with granttap sign-in, or pair from the GrantTap plugin connection card."
+            : "Ready. Continue from GrantTap on your controller device.",
     "",
   ].join("\n"));
 }

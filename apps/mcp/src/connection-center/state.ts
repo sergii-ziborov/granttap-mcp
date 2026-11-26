@@ -6,7 +6,7 @@ import { inspectProviderStatusSnapshot } from "../status/provider-status";
 import { packageVersion } from "../status/package-version";
 import { connectionRuntimeStatus } from "../mcp-tools/connect/relay";
 import { beginEnrollment, cancelEnrollment, enrollmentIsOpen } from "./enrollment";
-import { loadAccountLink } from "../../../bridge/src/account-recovery/link";
+import { accountLinkSnapshot, accountLinkOutput } from "../status/account-status";
 import { pendingRuntimeUpdate, runtimeUpdateSettings } from "../../../bridge/src/runtime-updates";
 import { UpdateHold } from "../../../bridge/src/runtime-updates/drain/state";
 import { chatStatus, serverChat, type CallingChat } from "../status/chat-status";
@@ -39,7 +39,8 @@ export const connectionOutput = {
   expiresInMinutes: z.number().int().positive().nullable(),
   providers: z.array(z.object({ id: z.string(), status: z.string(), detail: z.string() })),
   roomPrefix: z.string(),
-  accountLinkSaved: z.boolean(),
+  accountLinkSaved: z.boolean().describe("Compatibility: true when accountLink.state is ok (checked, or saved and not checked yet)"),
+  accountLink: accountLinkOutput,
   runtimeUpdates: z.object({ enabled: z.boolean(), lockedByEnvironment: z.boolean() }),
   pendingUpdate: z.object({
     version: z.string(),
@@ -117,7 +118,7 @@ export class ConnectionState {
         expiresInMinutes: code ? Math.max(1, Math.ceil((code.expiresAt - now) / 60_000)) : null,
         providers: inspectProviderStatusSnapshot().providers.map(({ id, status, detail }) => ({ id, status, detail })),
         roomPrefix: config?.room ? config.room.slice(0, 8) : "",
-        accountLinkSaved: loadAccountLink() !== null,
+        ...accountLinkSnapshot(now),
         runtimeUpdates: runtimeUpdateSettings(),
         pendingUpdate: pendingRuntimeUpdate(packageVersion()) ?? null,
         chat: chatStatus(config?.room, caller),

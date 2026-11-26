@@ -3,7 +3,7 @@ import { loadConfig } from "../../../bridge/src/config";
 import { connectionRuntimeStatus } from "../mcp-tools/connect/relay";
 import { packageVersion } from "./package-version";
 import { computerId } from "../../../bridge/src/mesh/identity/computer";
-import { loadAccountLink } from "../../../bridge/src/account-recovery/link";
+import { accountLinkSnapshot } from "./account-status";
 import {
   isMachineConfigured, listPairedPhones, phoneReachability, readOnlyMachineConfigPath,
 } from "./pairing-status";
@@ -21,7 +21,7 @@ export function desktopStatusSnapshot(desktopEngineSocket?: string) {
     service: "granttap-mcp" as const,
     computer: computerDisplayName(),
     endpointId: computerId(),
-    accountLinkSaved: loadAccountLink() !== null,
+    ...accountLinkSnapshot(),
     version: packageVersion(),
     paired: configured,
     phoneReachability: phoneReachability(phones),

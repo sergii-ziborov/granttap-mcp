@@ -21,7 +21,7 @@ export async function enrollMacAccount(accountToken: string, origin: string,
   const existing = loadAccountLink();
   if (existing) {
     if (existing.accountId !== me.accountId) {
-      throw new Error("This Mac is linked to a different account. Revoke it first.");
+      throw new Error("This computer is signed in to a different GrantTap account. Remove it from that account first.");
     }
     const linked = await request(`${origin}/api/account/machine/identity`, {
       headers: { authorization: `Bearer ${existing.machineToken}` },

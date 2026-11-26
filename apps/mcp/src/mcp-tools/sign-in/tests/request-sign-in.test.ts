@@ -128,7 +128,7 @@ test("only an https page is sent to the phone, and an unpaired computer says so"
   const alone = await unpairedSignIn(t);
   const unpaired = await alone.callTool({ name: "request_sign_in", arguments: { url, service: "Cloudflare" } });
   assert.equal(unpaired.isError, true);
-  assert.match(textResult(unpaired), /not paired/i);
+  assert.match(textResult(unpaired), /not connected on this computer yet/);
 });
 
 test("agents are told when to ask for a sign-in on the phone and what never goes through chat", async (t) => {

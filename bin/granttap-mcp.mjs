@@ -30,7 +30,8 @@ const usage = [
   "Usage:",
   "  granttap setup [--help]           Detect agents and install or repair GrantTap",
   "  granttap status [--json]          Show pairing, helper, and provider readiness",
-  "  granttap connect [--relay <url>]  Pair this computer with iPhone/Apple Watch",
+  "  granttap sign-in [--no-open]      Sign this computer in to your GrantTap account (passkey)",
+  "  granttap connect [--relay <url>]  Pair a phone with a one-time QR (the fallback)",
   "  granttap phone add              Show a QR for another controller phone",
   "  granttap phone reconnect        Show a QR to restore the same phone",
   "  granttap reset [--yes]            Reset this computer's phone pairing",
@@ -63,6 +64,8 @@ if (command === "mcp") {
   entry = join(root, "apps", "bridge", "src", "bin", "cli", "phone.ts");
 } else if (command === "status") {
   entry = join(root, "apps", "mcp", "src", "bin", "status.ts");
+} else if (command === "sign-in") {
+  entry = join(root, "apps", "mcp", "src", "bin", "sign-in.ts");
 } else if (command === "reset") {
   entry = join(root, "apps", "bridge", "src", "bin", "cli", "reset.ts");
 } else if (command === "cursor" && argument === "repair") {
@@ -126,7 +129,7 @@ if (!preflight || !loader) {
   process.exit(1);
 }
 
-const forwardedArgs = ["connect", "status", "reset", "mesh", "setup", "restrictions", "phone"].includes(command)
+const forwardedArgs = ["connect", "status", "reset", "mesh", "setup", "restrictions", "phone", "sign-in"].includes(command)
   ? (command === "mesh" || command === "restrictions" ? commandArgs.slice(1) : commandArgs)
   : [];
 const background = command === "internal" && ["monitor", "serve"].includes(argument);

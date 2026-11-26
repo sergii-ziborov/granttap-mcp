@@ -49,6 +49,8 @@ function clearCode() {
   show("copy", false);
 }
 function statusText(state) {
+  const blocked = accountBlockedText(state);
+  if (blocked) return blocked;
   const phones = state.phones || [];
   const active = phones.filter(phone => phone.status === "seen");
   if (state.status === "connected") {
@@ -69,16 +71,24 @@ function render(value) {
   clearCode();
   const meta = result._meta?.granttap ?? {};
   renderAccount(state, meta);
+  const account = accountOf(state);
   const pairingText = {
-    disconnected: ["Pair a phone", "Choose Add a phone, then scan the QR with the GrantTap app on your iPhone, iPad, or Android phone."],
+    disconnected: signedIn(account)
+      ? ["Open GrantTap on your iPhone", "When the iPhone is signed in to the same GrantTap account, it links this computer by itself. A QR is only needed if it doesn't."]
+      : ["Connect a phone", "Sign this computer in with your GrantTap passkey, then open GrantTap on your iPhone signed in to the same account. A one-time QR is the fallback."],
     pairing: ["Scan this QR", "Open GrantTap on the phone and scan it. Keep this card open; the QR is only here, never in chat."],
     expired: ["QR expired", "Create a new QR when you are ready. The saved pairing stays."],
   }[state.status];
   const paired = state.status !== "disconnected";
-  $("card").className = "card " + (state.status === "connected" ? "connected" : paired && state.status !== "expired" ? "paired" : "attention");
+  const blocked = Boolean(accountBlockedText(state));
+  $("card").className = "card " + (blocked ? "attention" : state.status === "connected" ? "connected"
+    : paired && state.status !== "expired" ? "paired" : "attention");
   $("status").textContent = statusText(state);
   show("pairing", Boolean(pairingText));
   if (pairingText) [$("heading").textContent, $("detail").textContent] = pairingText;
+  // Signed in, connect would only say to open the phone: the button offers the QR fallback itself.
+  $("connect").textContent = signedIn(account) ? "Show a QR instead" : "Add a phone";
+  $("connect").dataset.qr = signedIn(account) ? "1" : "";
   show("connect", state.status === "disconnected");
   show("new-qr", state.status === "expired");
   show("actions-section", paired);
@@ -103,17 +113,6 @@ function render(value) {
   }));
   renderPhones(state.phones || []);
   updateExpiry();
-}
-function renderAccount(state, meta) {
-  const candidate = state.passkeyUrl || meta.passkeyUrl;
-  const passkeyUrl = typeof candidate === "string" && /^https:\/\/granttap\.com\/connect#request=[0-9a-f-]{36}$/i.test(candidate)
-    ? candidate : "";
-  show("passkey-link", Boolean(passkeyUrl));
-  if (passkeyUrl) $("passkey-link").setAttribute("href", passkeyUrl);
-  else $("passkey-link").removeAttribute("href");
-  $("account-status").textContent = state.accountLinkSaved === true
-    ? "Saved account link on this computer." : "No account linked on this computer yet.";
-  $("passkey").textContent = state.accountLinkSaved === true ? "Reauthorize with passkey" : "Connect with passkey";
 }
 function updateExpiry() {
   const remaining = Math.ceil((current.expiresAt - Date.now()) / 1000);
@@ -153,7 +152,8 @@ async function call(name, args = {}) {
     setBusy(false);
   }
 }
-$("connect").addEventListener("click", () => call("connect"));
+$("connect").addEventListener("click", () => $("connect").dataset.qr
+  ? call("reconnect", { confirmed: true, mode: "reconnect" }) : call("connect"));
 $("add-device").addEventListener("click", () => askToConfirm("add_device",
   "Show a one-time QR for another phone or iPad. It gets its own key; phones already paired keep working.", "Show QR",
   $("pairing-tools")));
@@ -180,7 +180,7 @@ $("copy-reset").dataset.local = "1";
 $("copy-reset").addEventListener("click", () => copyText("granttap reset", "Command copied. Paste it in Terminal on this computer."));
 $("refresh").addEventListener("click", () => call("connection_status"));
 $("automatic-updates").addEventListener("click", () => call("set_runtime_auto_update", { enabled: !current.runtimeUpdates.enabled }));
-$("passkey").addEventListener("click", () => call("connect_with_passkey"));
+$("sign-in").addEventListener("click", () => call("sign_in"));
 $("copy").addEventListener("click", () => {
   updateExpiry();
   if (pairingUri) void copyText(pairingUri, "Pairing link copied.");

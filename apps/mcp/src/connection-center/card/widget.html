@@ -23,6 +23,12 @@
   <p class="message" id="message" role="status"></p>
   <p class="sr-only" id="announce" role="status"></p>
 
+  <section id="account-alert" class="account-alert hidden" aria-labelledby="account-alert-title">
+    <h2 class="account-alert-title" id="account-alert-title">Sign in to GrantTap</h2>
+    <p class="small" id="account-alert-detail"></p>
+    <div class="actions"><button class="primary" id="sign-in">Sign in again</button><a id="passkey-link" class="button-link primary-link hidden" target="_blank" rel="noopener noreferrer">Continue on granttap.com</a><a id="managed-computers" class="button-link hidden" target="_blank" rel="noopener noreferrer">Managed computers</a></div>
+  </section>
+
   <section id="pairing" class="pairing hidden" aria-labelledby="heading">
     <div class="pairing-copy">
       <h2 id="heading">Pair a phone</h2>
@@ -45,8 +51,7 @@
       <button id="automatic-updates" class="switch" role="switch" aria-checked="false" aria-labelledby="updates-label" aria-describedby="updates-detail" disabled><span class="track" aria-hidden="true"><span class="knob"></span></span><span id="updates-state" class="switch-state">…</span></button>
     </div>
     <div class="setting">
-      <div class="setting-text"><span class="setting-label" id="account-label">GrantTap account</span><span id="account-status" class="small muted">Checking account link…</span></div>
-      <div class="setting-actions"><button id="passkey" aria-describedby="account-status">Link with passkey</button><a id="passkey-link" class="button-link hidden" target="_blank" rel="noopener noreferrer">Continue on granttap.com</a></div>
+      <div class="setting-text"><span class="setting-label" id="account-label">GrantTap account</span><span id="account-status" class="small muted">Checking the sign-in…</span></div>
     </div>
   </section>
 
@@ -62,7 +67,7 @@
     <p class="empty muted" id="phones-empty">No phone is paired with this computer yet.</p>
     <button id="phones-toggle" class="link hidden" aria-controls="phones" aria-expanded="false">Show all</button>
     <p class="note" id="phones-message" role="status"></p>
-    <p class="small muted" id="phones-note">You confirm every removal on your phone. The phone you answer on, and the last phone, always stay. A removed phone needs a new QR to pair again.</p>
+    <p class="small muted" id="phones-note">You confirm every removal on your phone. The phone you answer on, and the last phone, always stay. A removed phone comes back by signing in with your GrantTap account again, or with a new QR.</p>
   </section>
 
   <section id="actions-section" class="section hidden" aria-labelledby="actions-title">
@@ -84,7 +89,7 @@
       <div><dt>Last message from a phone</dt><dd id="phone">Not observed</dd></div>
     </dl>
     <h3>Coding apps</h3><ul id="providers" class="providers"></ul>
-    <p class="small muted">A QR pairs a phone with this computer directly. A passkey links this computer to your GrantTap account, so your signed-in phone can find it. Signing in to a coding app is separate.</p>
+    <p class="small muted">Sign this computer in to your GrantTap account once: a phone signed in to the same account then links it by itself, without a QR. A one-time QR is the fallback for a phone that cannot. On GrantTap's relay this computer must stay signed in; with your own relay a QR alone is enough.</p>
     <p class="small muted">Missing hooks or background sync? Run <code>npm install -g granttap-mcp</code> and <code>granttap setup</code> in Terminal. A saved pairing alone does not prove your phone or the background helper is online.</p>
     <p class="small"><a href="https://granttap.com" target="_blank" rel="noopener noreferrer">Website</a> · <a href="https://granttap.com/privacy" target="_blank" rel="noopener noreferrer">Privacy</a> · <a href="mailto:support@granttap.com">Support</a></p>
   </details>

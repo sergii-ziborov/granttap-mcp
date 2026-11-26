@@ -38,7 +38,7 @@ export function registerPhonesTool(server: McpServer): void {
       + "labels), or both. Nothing is removed until the person answers yes on a phone, within "
       + "about three minutes; no answer removes nothing. The phone that answers, any phone that reaches this computer "
       + "while the question is open, and the last phone always stay. A removed phone stops receiving from this "
-      + "computer at once and needs a new QR to pair again.",
+      + "computer at once; it comes back by signing in to the same GrantTap account again, or with a new QR (reconnect).",
     inputSchema: {
       notSeenForDays: z.number().int().min(1).max(3_650).optional()
         .describe("Remove phones not heard from, and not added, for at least this many days; 30 is a good default"),

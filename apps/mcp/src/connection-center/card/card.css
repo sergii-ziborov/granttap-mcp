@@ -73,6 +73,14 @@ dd { margin: 0; text-align: right; overflow-wrap: anywhere; display: flex; flex-
 .setting-label { font-weight: 500; }
 .setting-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 
+/* Account sign-in: the card's only Sign in button lives here */
+.account-alert { margin-top: 12px; padding: 12px 14px; border-radius: var(--gt-r-lg); background: var(--gt-warn-bg); }
+.account-alert.neutral { background: var(--gt-bg-2); }
+.account-alert-title { font-size: 15px; font-weight: 650; margin-bottom: 2px; }
+#account-alert-detail:empty { display: none; }
+.account-alert .actions { margin-top: 10px; }
+.button-link.primary-link { background: var(--gt-brand); border-color: var(--gt-brand); color: var(--gt-on-brand); }
+
 /* Pairing panel */
 .pairing { margin-top: 14px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: center;
   padding: 14px; border-radius: var(--gt-r-lg); background: var(--gt-bg-2); }

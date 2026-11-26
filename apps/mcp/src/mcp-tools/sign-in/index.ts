@@ -12,7 +12,8 @@ const TOOL = "request_sign_in";
 const SIGN_IN_TIMEOUT_MS = Number(process.env.GRANTTAP_SIGN_IN_TIMEOUT_MS ?? 300_000);
 
 const DESCRIPTION =
-  "Ask the person to sign in to a service on their phone, in a browser inside GrantTap, and wait for the outcome. "
+  "Ask the person to sign in to an outside service (not GrantTap) on their phone, in a browser inside GrantTap, and wait "
+  + "for the outcome. To sign this computer in to GrantTap itself, use sign_in instead. "
   + "Use this whenever a CLI or service needs the person to sign in through a browser (wrangler login, gh auth login, "
   + "vercel login, an OAuth consent page, a device-code page): call it with the sign-in URL instead of opening a browser "
   + "on this computer, where nobody may be sitting. When the CLI waits for a redirect to http://localhost:<port>/…, pass "
@@ -61,6 +62,7 @@ export function registerSignInTool(server: McpServer, options: { timeoutMs?: num
   server.registerTool(
     TOOL,
     {
+      title: "Sign in to another service on the phone",
       description: DESCRIPTION,
       inputSchema: input,
       outputSchema: output,

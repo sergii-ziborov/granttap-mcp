@@ -1,8 +1,17 @@
 # MCP tools
 
-The Personal MCP surface is an exact allowlist: `connection_status`, `connect`,
-`connect_with_passkey`, `reconnect`, `remove_phones`, `set_runtime_auto_update`, `notify`,
-`ask_yes_no`, `ask`, `request_sign_in`, `offload_task`, and `computer_load`. Context compilation belongs
+The Personal MCP surface is an exact allowlist: `connection_status`, `sign_in`, `connect`,
+`connect_with_passkey` (the deprecated name of `sign_in`, same handler, for one release), `reconnect`,
+`remove_phones`, `set_runtime_auto_update`, `notify`, `ask_yes_no`, `ask`, `request_sign_in`, `offload_task`,
+and `computer_load`. `sign_in` is the one sign-in of this computer to the person's GrantTap account (a
+granttap.com passkey page); `connect` is account first (`connect/account-first.ts`): not signed in, it returns
+that page first with a one-time QR on the card as the fallback for an unpaired computer; signed in without a
+phone, it creates nothing and says the phone signed in to the same account links this computer; `reconnect`
+is the QR fallback. `request_sign_in` is unrelated to GrantTap's own account: it signs the person in to an
+outside service on the phone. When a tool has no relay link, `interaction/answers.ts` says why from this
+computer's [account-link state](../../../bridge/src/account-link-state/README.md) (signed out, not covered by
+the subscription) before it says not connected or relay unreachable. `connect/account-recovery.ts` starts the
+account poller in the MCP service and in each chat's stdio server, under the computer's one poller lease. Context compilation belongs
 inside Project Mesh, not as extra tools. `relay.ts` owns one shared encrypted relay connection
 and the durable question lifecycle. `ask` and `ask_yes_no` mark their cards
 `questionDecline: decline-v1`; a phone reply carrying that marker ends the wait at once with

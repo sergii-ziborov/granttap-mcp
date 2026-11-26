@@ -5,6 +5,20 @@ import {
 } from "../status/provider-status";
 import { inspectMonitorHelper } from "../../../bridge/src/install";
 import { isMachineConfigured } from "../status/pairing-status";
+import { accountLinkStatus } from "../../../bridge/src/account-link-state";
+
+/** The account line: what fixes it when it is not fine. */
+function accountState(): string {
+  const status = accountLinkStatus();
+  return {
+    ok: status.checkedAt === null ? "Signed in (not confirmed yet)" : "Signed in",
+    none: "Not signed in — granttap sign-in",
+    revoked: "Signed out by GrantTap — granttap sign-in",
+    seat_limit: `Not covered: ${status.reason}`,
+    no_subscription: `Not covered: ${status.reason}`,
+    unreachable: "Signed in; account service not answering",
+  }[status.state];
+}
 
 const args = process.argv.slice(2);
 async function main(): Promise<void> {
@@ -31,6 +45,7 @@ async function main(): Promise<void> {
       process.stdout.write([
         "GrantTap",
         "",
+        `GrantTap account    ${accountState()}`,
         `Phone pairing       ${isMachineConfigured() ? "Ready" : "Not paired"}`,
         `Background helper   ${inspectMonitorHelper().running ? "Running" : "Needs setup"}`,
         "",

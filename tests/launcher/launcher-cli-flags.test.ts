@@ -48,3 +48,18 @@ test("setup help explains setup and changes nothing on the computer", t => {
   }
   assert.deepEqual(tree(directory), before, "help must not write hooks, helpers or configuration");
 });
+
+test("sign-in help explains the account sign-in and starts nothing", t => {
+  const { directory, env } = isolated(t);
+  const before = tree(directory);
+  const result = spawnSync(process.execPath, [launcher, "sign-in", "--help"], { cwd: root, env, encoding: "utf8", timeout: 30_000 });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /^Usage: granttap sign-in \[--no-open\]/);
+  assert.match(result.stdout, /a phone\nsigned in to the same account links this computer by itself, without a QR/);
+  const wrong = spawnSync(process.execPath, [launcher, "sign-in", "--force"], { cwd: root, env, encoding: "utf8", timeout: 30_000 });
+  assert.equal(wrong.status, 1);
+  assert.match(wrong.stderr, /Usage: granttap sign-in \[--no-open\]/);
+  assert.deepEqual(tree(directory), before, "help must not start a sign-in or write configuration");
+  const usage = spawnSync(process.execPath, [launcher, "--help"], { cwd: root, env, encoding: "utf8", timeout: 20_000 });
+  assert.match(usage.stdout, /granttap sign-in \[--no-open\] +Sign this computer in to your GrantTap account \(passkey\)/);
+});

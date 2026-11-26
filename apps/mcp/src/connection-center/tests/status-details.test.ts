@@ -180,7 +180,12 @@ test('the tool descriptions say what each tool does and returns', async t => {
     assert.match(tools.get('reconnect')!, /mode=add_device enrolls one more phone or iPad/);
     assert.match(tools.get('connection_status')!, /pass ids of unused ones to remove_phones/);
     assert.match(tools.get('remove_phones')!, /The phone that answers, any phone that reaches this computer while the question is open, and the last phone always stay/);
-    assert.match(tools.get('connect_with_passkey')!, /Returns passkeyUrl/);
+    assert.match(tools.get('sign_in')!, /Returns passkeyUrl/);
+    assert.match(tools.get('sign_in')!, /links this computer by itself, without a QR/);
+    assert.match(tools.get('connect_with_passkey')!, /^Deprecated alias of sign_in/);
+    assert.match(tools.get('connect')!, /account first/);
+    assert.match(tools.get('reconnect')!, /^The QR fallback/);
+    assert.match(tools.get('request_sign_in')!, /not GrantTap/);
     assert.match(tools.get('set_runtime_auto_update')!, /only when the person asks/);
     assert.match(tools.get('notify')!, /Nobody answers a status: use ask or ask_yes_no/);
     for (const name of ['ask', 'ask_yes_no']) assert.match(tools.get(name)!, /about three minutes by default/);

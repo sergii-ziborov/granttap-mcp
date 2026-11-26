@@ -164,7 +164,7 @@ export class GrantTapOAuthProvider implements OAuthServerProvider {
       return { redirectUrl };
     }
     if (method !== "passkey" && !isMachineConfigured()) {
-      throw new Error("GrantTap is not paired on this Mac yet. Scan the QR in GrantTap.");
+      throw new Error("GrantTap is not connected on this computer yet. Sign it in with your GrantTap passkey (granttap sign-in), or scan its QR in GrantTap.");
     }
 
     this.pending.delete(pendingId);

@@ -29,7 +29,7 @@ function headers(secret?: string, json = false): Record<string, string> {
 
 function acceptAccountLink(row: ConnectRow): void {
   if (row.decision !== "passkey" || !row.accountId || !row.machineId) {
-    throw new Error("Passkey did not link this Mac to an account.");
+    throw new Error("The passkey did not sign this computer in to an account.");
   }
   const existing = loadAccountLink();
   if (row.machineToken) {
@@ -37,7 +37,7 @@ function acceptAccountLink(row: ConnectRow): void {
       machineToken: row.machineToken })) throw new Error("Account link could not be saved.");
   } else if (!existing || existing.accountId !== row.accountId
       || existing.machineId !== row.machineId) {
-    throw new Error("This account is not linked to this Mac.");
+    throw new Error("This computer is not signed in to that account.");
   }
 }
 
@@ -135,7 +135,7 @@ export function watchConnectDecision(
   requestId: string,
   snapshot: ConnectSnapshot | (() => ConnectSnapshot),
   complete: (approve: boolean, method: ConsentMethod) => { redirectUrl: string },
-  options: { pollMs?: number; requestSecret?: string } = {},
+  options: { pollMs?: number; requestSecret?: string; onRedirected?: () => void } = {},
 ): void {
   const current = (): ConnectSnapshot => (typeof snapshot === "function" ? snapshot() : snapshot);
   const pollMs = options.pollMs ?? 3_000;
@@ -155,6 +155,7 @@ export function watchConnectDecision(
             const { redirectUrl } = complete(row.decision !== "deny",
               row.decision === "passkey" ? "passkey" : "phone");
             await publishConnectRedirect(origin, requestId, redirectUrl);
+            try { options.onRedirected?.(); } catch { /* the decision is already published */ }
             return;
           } catch (error) {
             await publishConnectError(

@@ -2,10 +2,10 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { readFileSync } from "node:fs";
 
 /** The version in the name makes hosts that cache a card by its URI load the new one. */
-export const CONNECTION_WIDGET_URI = "ui://granttap/connection/v6.html";
+export const CONNECTION_WIDGET_URI = "ui://granttap/connection/v7.html";
 
 /** The card's scripts, in the order they share one module: helpers first, view.js last starts it. */
-export const CARD_SCRIPTS = ["bridge.js", "phones.js", "phones-view.js", "view.js"] as const;
+export const CARD_SCRIPTS = ["bridge.js", "phones.js", "phones-view.js", "account.js", "view.js"] as const;
 
 export const cardAsset = (name: string) =>
   readFileSync(new URL(`../../connection-center/card/${name}`, import.meta.url), "utf8");
@@ -25,8 +25,8 @@ export function registerConnectionWidget(server: McpServer): void {
     CONNECTION_WIDGET_URI,
     {
       title: "GrantTap connection center",
-      description: "GrantTap card: phones paired with this computer and their removal, QR device pairing, Mac account "
-        + "passkey linking, automatic updates, and connection status.",
+      description: "GrantTap card: this computer's GrantTap account sign-in with Sign in again, phones paired with this "
+        + "computer and their removal, the QR fallback, automatic updates, and connection status.",
       mimeType: "text/html;profile=mcp-app",
     },
     async (uri) => ({
@@ -36,7 +36,7 @@ export function registerConnectionWidget(server: McpServer): void {
         text: html,
         _meta: {
           ui: { prefersBorder: true, permissions: { clipboardWrite: {} }, csp: { connectDomains: [], resourceDomains: [] } },
-          "openai/widgetDescription": "Manage the phones paired with this computer, pair a device by QR, or link this Mac to your account with passkey.",
+          "openai/widgetDescription": "Manage the phones paired with this computer, pair a device by QR, sign this computer in to your GrantTap account with a passkey.",
           "openai/widgetPrefersBorder": true,
         },
       }],
