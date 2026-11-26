@@ -47,6 +47,7 @@ import {
   type CapabilityObservation,
   type PendingCapabilityTool,
 } from "../../telemetry";
+import type { TokenHour } from "../../token-usage";
 
 export type CachedClaudeSummary = {
   mtimeMs: number;
@@ -55,6 +56,8 @@ export type CachedClaudeSummary = {
   session: SessionInfo;
   tokensSession: number;
   observations: CapabilityObservation[];
+  /** The chat's and its subagents' spend per clock hour; see `../../token-usage`. */
+  tokenHours?: TokenHour[];
   /** The chat's own last turn ended; recent writes no longer mean it is working. */
   turnEnded?: boolean;
   /** What the ended turn waits on besides the person; deadlines are read against the clock at use. */
@@ -69,6 +72,12 @@ export const claudeSummaryCache = new Map<string, CachedClaudeSummary>();
 export const claudeLogPathBySession = new Map<string, string>();
 export const claudeChildLogPathsBySession = new Map<string, string[]>();
 export const claudeChildPathByThread = new Map<string, string>();
+
+/** What the last read of the chat counted per hour; never reads the transcript itself. */
+export function claudeTokenHours(sessionId: string): readonly TokenHour[] {
+  const cached = claudeSummaryCache.get(claudeLogPathBySession.get(sessionId) ?? "");
+  return cached?.session.sessionId === sessionId ? cached.tokenHours ?? [] : [];
+}
 
 export function claudeTranscriptPaths(sessionId: string): string[] {
   const parent = claudeLogPathBySession.get(sessionId) ?? claudeLogPath(sessionId);

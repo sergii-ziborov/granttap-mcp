@@ -20,16 +20,11 @@ import {
 import {
   TOKEN_WINDOW_HOURS,
 } from "./support/common";
-import {
-  claudeCapabilityUsage,
-} from "./scan/claude";
-import {
-  codexCapabilityUsage,
-} from "./scan/codex";
-import {
-  cursorCapabilityUsage,
-} from "./cursor";
-import { grokCapabilityUsage } from "./scan/grok";
+import { claudeCapabilityUsage, claudeTokenHours } from "./scan/claude";
+import { codexCapabilityUsage, codexTokenHoursBySession } from "./scan/codex";
+import { cursorCapabilityUsage, cursorTokenHours } from "./cursor";
+import { grokCapabilityUsage, grokTokenHours } from "./scan/grok";
+import { tokenUsageOf, type SessionTokenHours, type TokenHour } from "./token-usage";
 import { activityForSession } from './session-activity';
 import { localTaskTransfers } from "../task-transfer";
 export { MAX_THREAD_ENTRIES, scanThreadActivity } from './session-activity';
@@ -121,6 +116,14 @@ export function scanSessionActivity(session: SessionInfo): SessionActivity {
   };
 }
 
+/** What the provider reader's last pass counted per hour for this chat; nothing is read for it. */
+function tokenHoursOf(session: SessionInfo): readonly TokenHour[] {
+  return session.agent === "claude" ? claudeTokenHours(session.sessionId)
+    : session.agent === "codex" ? codexTokenHoursBySession.get(session.sessionId) ?? []
+      : session.agent === "cursor" ? cursorTokenHours(session.sessionId)
+        : session.agent === "grok" ? grokTokenHours(session.sessionId) : [];
+}
+
 /**
  * MCP/skill/CLI telemetry comes from observations cached during provider scans.
  * Calls without result rows remain explicitly input-only.
@@ -135,10 +138,13 @@ export function scanCapabilityUsage(
   const totals = createCapabilityTotals();
   const summaries = createExecutionSummaries();
   const seenSessions = new Set<string>();
+  const tokenHours: SessionTokenHours[] = [];
   for (const session of sessions) {
     const nativeScope = `${session.agent}\0${session.sessionId}`;
     if (seenSessions.has(nativeScope)) continue;
     seenSessions.add(nativeScope);
+    tokenHours.push({ agent: session.agent, sessionId: session.sessionId, model: session.model,
+      lastActivityAt: session.lastActivityAt, hours: tokenHoursOf(session) });
     const observations =
       session.agent === "claude" ? claudeCapabilityUsage(session)
         : session.agent === "codex" ? codexCapabilityUsage(session)
@@ -162,8 +168,9 @@ export function scanCapabilityUsage(
     for (const summary of claudeRecorded?.summaries ?? []) summaries.merge(summary);
     for (const total of claudeRecorded?.totals ?? []) totals.merge(total);
   }
+  // Token figures travel in the envelope, so the summaries and events after them fit around them.
   const metadata = { type: "capability.usage.status" as const,
-    totals: totals.rows(), generatedAt: Date.now() };
+    totals: totals.rows(), tokenUsage: tokenUsageOf(tokenHours), generatedAt: Date.now() };
   const executionSummaries = budgetExecutionSummaries(summaries.rows(), metadata);
   const envelope = { ...metadata, ...(executionSummaries.length ? { executionSummaries } : {}) };
   return { ...envelope, events: limitCapabilityUsageEvents(candidates, envelope) };

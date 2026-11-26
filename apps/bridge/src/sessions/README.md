@@ -45,6 +45,10 @@ start another provider headless (`Scan.lineage`). The catalog uses them to name
 the chat that started a chat (`startedBy`,
 [chats started by another chat](../started-by/README.md)).
 
+Each reader also counts a chat's tokens per clock hour in its cached state, never in `SessionInfo`;
+the usage status publishes what each period spent from those counts
+([token usage](token-usage/README.md)).
+
 Feature tests live in `tests/`; the reusable multi-provider conversation harness
 lives in the repository `tests/thread/` directory.
 

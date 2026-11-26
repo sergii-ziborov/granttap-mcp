@@ -24,6 +24,7 @@ import { plainPreview } from '../../plain-preview';
 import { createCodexLineageCalls, promptLead, type LineageCalls, type LineageFact, type PromptLead } from '../../../started-by';
 import { observeCodexOutcome, stoppedFields, stoppedText, withCurrentLimit, type CodexOutcome } from './outcome';
 import { pictureSavedText, savedPictures } from '../../../helper-runs/pictures/chats';
+import { addTokenHour, createTokenHours, tokenHourRows, type TokenHours } from '../../token-usage';
 
 type CodexParseState = {
   sessionId: string;
@@ -41,6 +42,8 @@ type CodexParseState = {
   lastMessageAt: number;
   tokensSession: number;
   tokensLastTurn: number;
+  /** What each `token_count` added to the rollout's running total, per clock hour and turn model. */
+  tokenHours: TokenHours;
   contextTokensUsed?: number;
   contextWindow?: number;
   contextUsage?: SessionInfo["contextUsage"];
@@ -182,6 +185,7 @@ function applyCodexLine(d: any, state: CodexParseState): void {
     const info = d.payload.info ?? {};
     const total = effectiveCodexUsage(info.total_token_usage);
     const last = effectiveCodexUsage(info.last_token_usage);
+    if (total != null) addTokenHour(state.tokenHours, ts(d.timestamp), total - state.tokensSession, state.model);
     if (total != null) state.tokensSession = total;
     if (last != null) state.tokensLastTurn = last;
     const input = info.last_token_usage?.input_tokens;
@@ -209,6 +213,7 @@ export function parseCodexFile(file: string): CodexCandidate | undefined {
       lineage: cached.lineage,
       pictures: cached.pictures,
       requested: cached.requested,
+      tokenHours: cached.tokenHours,
     };
   }
   let lines: string[];
@@ -219,7 +224,8 @@ export function parseCodexFile(file: string): CodexCandidate | undefined {
   }
   const state: CodexParseState = {
     sessionId: "", startedAt: 0, lastActivityAt: 0, lastMessageAt: 0,
-    tokensSession: 0, tokensLastTurn: 0, workdirs: [], turn: {}, calls: createCodexLineageCalls(), outcome: {},
+    tokensSession: 0, tokensLastTurn: 0, tokenHours: createTokenHours(), workdirs: [], turn: {},
+    calls: createCodexLineageCalls(), outcome: {},
   };
   for (const line of lines) {
     if (!line) continue;
@@ -267,6 +273,7 @@ export function parseCodexFile(file: string): CodexCandidate | undefined {
   const observations = codexCapabilityUsage(session, lines);
   const child = state.child;
   const lineage = child ? undefined : codexLineage(state, session);
+  const tokenHours = tokenHourRows(state.tokenHours);
   codexSummaryCache.set(file, {
     mtimeMs: fileStat.mtimeMs,
     size: fileStat.size,
@@ -278,8 +285,9 @@ export function parseCodexFile(file: string): CodexCandidate | undefined {
     lineage,
     pictures,
     requested,
+    tokenHours,
   });
-  return { file, session, observations, child, lineage, pictures, requested };
+  return { file, session, observations, child, lineage, pictures, requested, tokenHours };
 }
 
 /** Where the chat came from, for `startedBy`: never published itself. A forked agent is no chat. */

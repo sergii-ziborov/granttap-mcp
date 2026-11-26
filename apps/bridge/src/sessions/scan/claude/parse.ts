@@ -24,6 +24,8 @@ import {
 import { readTranscriptRows } from "./transcript-reading";
 import { readClaudeChild } from "./child-reading";
 import { createClaudeLineageCalls, promptLead, type LineageCalls, type LineageFact, type PromptLead } from "../../../started-by";
+import { addTokenHour, combineTokenHours, createTokenHours, tokenHourRows, uniqueChildTokenHours,
+  type TokenHour, type TokenHours } from "../../token-usage";
 
 type ClaudeParseState = ClaudeTurnClock & {
   sessionId: string;
@@ -44,6 +46,8 @@ type ClaudeParseState = ClaudeTurnClock & {
   lastMessageAt: number;
   tokensSession: number;
   tokensLastTurn: number;
+  /** `tokensSession` per clock hour and model, never published as rows. */
+  tokenHours: TokenHours;
   contextTokensUsed?: number;
   contextUsage?: SessionInfo["contextUsage"];
   /** The compactions the transcript records; the newest one's size after is what the window holds. */
@@ -138,6 +142,7 @@ function applyClaudeLine(d: any, state: ClaudeParseState): void {
     if (spent != null) {
       state.tokensSession += spent;
       state.tokensLastTurn = spent;
+      addTokenHour(state.tokenHours, ts(d.timestamp), spent, d.message?.model);
     }
     state.contextTokensUsed = claudeContextUsage(usage) ?? state.contextTokensUsed;
     if (d.isSidechain !== true) state.contextUsage = claudeContextReport(usage, ts(d.timestamp) ?? 0) ?? state.contextUsage;
@@ -176,13 +181,16 @@ export type ClaudeParseProgress = {
   capabilities: ReturnType<typeof createClaudeCapabilityCollector>;
   /** Commands the chat ran that start another provider's chat headless. */
   lineage: LineageCalls;
-  children: Map<string, { fingerprint: string; summary: ChildThreadInfo; observations: ReturnType<typeof claudeCapabilityUsage> }>;
+  children: Map<string, ClaudeChildRead>;
 };
+
+type ClaudeChildRead = { fingerprint: string; summary: ChildThreadInfo; observations: ReturnType<typeof claudeCapabilityUsage>;
+  hours?: TokenHour[] };
 
 function newProgress(device: number, inode: number, fallbackSessionId: string): ClaudeParseProgress {
   const state: ClaudeParseState = {
     sessionId: "", startedAt: 0, lastActivityAt: 0, lastMessageAt: 0,
-    tokensSession: 0, tokensLastTurn: 0, repositoryPaths: [], changedPaths: [], turnEnded: false,
+    tokensSession: 0, tokensLastTurn: 0, tokenHours: createTokenHours(), repositoryPaths: [], changedPaths: [], turnEnded: false,
   };
   return { device, inode, offset: 0, tail: Buffer.alloc(0), state, children: new Map(), lineage: createClaudeLineageCalls(),
     capabilities: createClaudeCapabilityCollector(() => ({ sessionId: state.sessionId || fallbackSessionId,
@@ -207,8 +215,8 @@ function applyRow(line: string, progress: ClaudeParseProgress): boolean {
 
 /** A subagent log is read again only when it changed, not whenever its parent chat did. */
 function* readChildren(paths: string[], ownSession: SessionInfo, progress: ClaudeParseProgress,
-  observations: ReturnType<typeof claudeCapabilityUsage>): Generator<void, ChildThreadInfo[]> {
-  const childThreads: ChildThreadInfo[] = [];
+  observations: ReturnType<typeof claudeCapabilityUsage>): Generator<void, ClaudeChildRead[]> {
+  const children: ClaudeChildRead[] = [];
   for (const childPath of paths) {
     const fingerprint = childLogsFingerprint([childPath]);
     let known = progress.children.get(childPath);
@@ -218,14 +226,14 @@ function* readChildren(paths: string[], ownSession: SessionInfo, progress: Claud
       known = { fingerprint, ...child };
       progress.children.set(childPath, known);
     }
-    childThreads.push(known.summary);
+    children.push(known);
     for (const observation of known.observations) {
       rememberCapabilityObservation(observations, observation);
     }
     mergeRecordedClaudeUsage(observations, known.observations);
     yield;
   }
-  return childThreads;
+  return children;
 }
 
 export function parseClaudeFile(file: string): ClaudeParseResult {
@@ -311,8 +319,8 @@ export function* parseClaudeFileSteps(file: string): Generator<void, ClaudeParse
     state.sessionId === cachedSessionId ? childPaths : claudeChildLogPaths(file, state.sessionId);
   const scannedChildFingerprint = childLogsFingerprint(actualChildPaths);
   const observations = progress.capabilities.snapshot();
-  const childThreads = yield* readChildren(actualChildPaths, ownSession, progress, observations);
-  const session = aggregateChildThreads(ownSession, childThreads);
+  const children = yield* readChildren(actualChildPaths, ownSession, progress, observations);
+  const session = aggregateChildThreads(ownSession, children.map((child) => child.summary));
   const lineage = claudeLineage(state, ownSession, progress.lineage.snapshot(), progress.lineage.launches());
   claudeSummaryCache.set(file, {
     mtimeMs: fileStat.mtimeMs,
@@ -322,6 +330,7 @@ export function* parseClaudeFileSteps(file: string): Generator<void, ClaudeParse
     session,
     tokensSession: session.tokensSession,
     observations,
+    tokenHours: combineTokenHours([tokenHourRows(state.tokenHours), ...uniqueChildTokenHours(children)]),
     turnEnded: state.turnEnded,
     waits: { background: state.background, limit: state.limit },
     lineage,

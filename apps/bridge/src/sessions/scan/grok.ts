@@ -24,6 +24,7 @@ import { captureGrokConversation, readGrokConversation } from '../../providers/g
 import { GrokCatalogCache, type GrokParsedContext } from '../../providers/grok-catalog-cache';
 import { recognizeHelperRun, type HelperRunSession } from '../../helper-runs';
 import { promptLead, type LineageFact } from '../../started-by';
+import { addTokenHour, createTokenHours, tokenHourRows, type TokenHour } from '../token-usage';
 
 type Summary = {
   info?: { id?: unknown; cwd?: unknown };
@@ -40,6 +41,7 @@ const catalogCache = new GrokCatalogCache();
 let activityBySession = new Map<string, ActivityEntry[]>();
 let logPaths = new Map<string, string>();
 let usageBySession = new Map<string, CapabilityObservation[]>();
+let tokenHoursBySession = new Map<string, readonly TokenHour[]>();
 
 function recentSummaries(root: string, limit: number): string[] {
   const found: Array<{ path: string; mtime: number }> = [];
@@ -96,6 +98,8 @@ function parseLog(path: string, sessionId: string, fallbackTime: number, fullTex
   let lastMessageAt = 0;
   let tokens = 0;
   let lastTurn = 0;
+  // Grok's history names no model per turn, and a turn without a native clock counts at the chat's last activity.
+  const hours = createTokenHours();
   const timeline = grokTimeline(dirname(path));
   const completions = grokToolCompletions(dirname(path));
   let prompt: { at: number; row: number } | undefined;
@@ -118,6 +122,7 @@ function parseLog(path: string, sessionId: string, fallbackTime: number, fullTex
       if (role === 'user' || at) prompt = at ? { at, row: index } : undefined;
     }
     const createdAt = messageAt || (prompt ? prompt.at + index - prompt.row : legacyTime);
+    const dated = messageAt || prompt ? createdAt : undefined;
     const texts = textBlocks(message.content);
     if (role === "user") {
       const text = texts.join("\n").trim();
@@ -126,7 +131,9 @@ function parseLog(path: string, sessionId: string, fallbackTime: number, fullTex
         firstUser ??= text.slice(0, 120);
         pushEntry({ fullText, out: entries, seen, sessionId, kind: "user", text, createdAt, ordinal: index,
           idOverride: `${sessionId}:${legacyTime}:${index}` });
-        tokens += estimateTokens(text);
+        const spent = estimateTokens(text);
+        tokens += spent;
+        addTokenHour(hours, dated, spent);
       }
       return;
     }
@@ -160,6 +167,7 @@ function parseLog(path: string, sessionId: string, fallbackTime: number, fullTex
       turnTokens += estimateTokens(input);
     });
     tokens += turnTokens;
+    addTokenHour(hours, dated, turnTokens);
     if (turnTokens > 0) lastTurn = turnTokens;
   });
   const last = entries.at(-1);
@@ -167,7 +175,8 @@ function parseLog(path: string, sessionId: string, fallbackTime: number, fullTex
     last.kind = 'final'; last.createdAt = timeline.completedAt;
     lastMessageAt = Math.max(lastMessageAt, timeline.completedAt);
   }
-  return { entries, usage, firstUser, lastMessageAt: lastMessageAt || undefined, tokens, lastTurn, cacheable };
+  return { entries, usage, firstUser, lastMessageAt: lastMessageAt || undefined, tokens, lastTurn, cacheable,
+    tokenHours: tokenHourRows(hours) };
 }
 
 /** Grok keeps the pictures a session generated beside its history. */
@@ -185,6 +194,7 @@ export function scanGrok(maxFiles = MAX_FILES): Scan {
   const lineage: LineageFact[] = [];
   const activities = new Map<string, ActivityEntry[]>();
   const usages = new Map<string, CapabilityObservation[]>();
+  const tokenHours = new Map<string, readonly TokenHour[]>();
   let tokensRecent = 0;
   const listed = recentSummaries(grokSessionsRoot(), maxFiles + 1);
   logPaths = new Map();
@@ -237,11 +247,13 @@ export function scanGrok(maxFiles = MAX_FILES): Scan {
     logPaths.set(sessionId, join(directory, "chat_history.jsonl"));
     activities.set(sessionId, parsed.entries);
     usages.set(sessionId, parsed.usage);
+    tokenHours.set(sessionId, parsed.tokenHours ?? []);
     if (Date.now() - updatedAt <= TOKEN_WINDOW_MS) tokensRecent += parsed.tokens;
   }
   activityBySession = activities;
   catalogCache.retain(admitted);
   usageBySession = usages;
+  tokenHoursBySession = tokenHours;
   return { sessions, tokensRecent, sourceLimited: listed.length > maxFiles,
     ...(helperRuns.length > 0 ? { helperRuns } : {}), lineage };
 }
@@ -261,6 +273,11 @@ export async function grokConversationForTransfer(session: SessionInfo) {
   if (!logPaths.has(session.sessionId)) scanGrok();
   const path = logPaths.get(session.sessionId);
   return path ? captureGrokConversation(dirname(path), session.sessionId) : undefined;
+}
+
+/** What the last scan counted per clock hour; never scans itself. */
+export function grokTokenHours(sessionId: string): readonly TokenHour[] {
+  return tokenHoursBySession.get(sessionId) ?? [];
 }
 
 export function grokCapabilityUsage(session: SessionInfo): CapabilityObservation[] {

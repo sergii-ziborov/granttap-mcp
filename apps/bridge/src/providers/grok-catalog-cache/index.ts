@@ -2,9 +2,12 @@ import { statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { ActivityEntry } from '../../../../../packages/protocol/schema';
 import type { CapabilityObservation } from '../../sessions/telemetry';
+import type { TokenHour } from '../../sessions/token-usage';
 
 export type GrokParsedContext = { entries: ActivityEntry[]; usage: CapabilityObservation[];
-  firstUser?: string; lastMessageAt?: number; tokens: number; lastTurn: number; cacheable?: boolean };
+  firstUser?: string; lastMessageAt?: number; tokens: number; lastTurn: number; cacheable?: boolean;
+  /** `tokens` per clock hour; see `sessions/token-usage`. */
+  tokenHours?: TokenHour[] };
 type Source = { fingerprint: string; present: boolean };
 type Entry = { contextFingerprint: string; updateFingerprint?: string; context: GrokParsedContext;
   omittedContextEntries: boolean; visible?: ActivityEntry[]; result: GrokParsedContext };

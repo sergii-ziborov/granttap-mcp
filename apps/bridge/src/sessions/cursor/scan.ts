@@ -3,6 +3,7 @@ import type { ChildThreadInfo, SessionInfo } from "../../../../../packages/proto
 import { aggregateChildThreads, childTitle } from "../support/child-threads";
 import { MAX_FILES, stateFor, TOKEN_WINDOW_MS, type Scan } from "../support/common";
 import type { CapabilityObservation } from "../telemetry";
+import { combineTokenHours, type TokenHour } from "../token-usage";
 import { mergeCursorConversations } from "./conversations";
 import {
   composerActivityAt,
@@ -27,6 +28,7 @@ import {
 
 let filesBySession = new Map<string, CursorLogFile[]>();
 let usageBySession = new Map<string, CapabilityObservation[]>();
+let tokenHoursBySession = new Map<string, TokenHour[]>();
 
 export function cursorFiles(sessionId: string): CursorLogFile[] | undefined {
   return filesBySession.get(sessionId);
@@ -34,6 +36,11 @@ export function cursorFiles(sessionId: string): CursorLogFile[] | undefined {
 
 export function cursorUsage(sessionId: string): CapabilityObservation[] | undefined {
   return usageBySession.get(sessionId);
+}
+
+/** A chat's and its subagents' spend per clock hour from the last scan; never scans itself. */
+export function cursorTokenHours(sessionId: string): readonly TokenHour[] {
+  return tokenHoursBySession.get(sessionId) ?? [];
 }
 
 function childFromComposer(composer: ComposerRow, parentThreadId: string): ChildThreadInfo {
@@ -117,6 +124,7 @@ type ScanContext = {
   sessions: SessionInfo[];
   files: Map<string, CursorLogFile[]>;
   usage: Map<string, CapabilityObservation[]>;
+  hours: Map<string, TokenHour[]>;
   tokensRecent: number;
 };
 
@@ -163,6 +171,7 @@ function addComposerSession(context: ScanContext, composer: ComposerRow): void {
     model: composer.model ?? root.model,
   }, child.children);
   context.usage.set(composer.id, mergeCapabilityUsage([root, ...child.summaries]));
+  context.hours.set(composer.id, combineTokenHours([root, ...child.summaries].map((item) => item.tokenHours)));
   if (context.now - lastActivityAt <= TOKEN_WINDOW_MS) context.tokensRecent += session.tokensSession;
   context.sessions.push(session);
 }
@@ -196,6 +205,7 @@ function addOrphanSession(context: ScanContext, file: CursorLogFile): void {
     model: root.model,
   }, child.children);
   context.usage.set(sessionId, mergeCapabilityUsage([root, ...child.summaries]));
+  context.hours.set(sessionId, combineTokenHours([root, ...child.summaries].map((item) => item.tokenHours)));
   if (context.now - lastActivityAt <= TOKEN_WINDOW_MS) context.tokensRecent += session.tokensSession;
   context.sessions.push(session);
 }
@@ -238,7 +248,7 @@ export function scanCursor(maxFiles = MAX_FILES): Scan {
     now: Date.now(), sidebar: loadSidebarTitles(), conversations: conversationIndex(snapshot),
     composers: byId, seen: new Set(), subagents,
     rootOf: (id) => rootComposerId(id, parentsByChild, byId),
-    sessions: [], files: new Map(), usage: new Map(), tokensRecent: 0,
+    sessions: [], files: new Map(), usage: new Map(), hours: new Map(), tokensRecent: 0,
   };
   const parents = composers.filter((composer) =>
     !subagents.has(composer.id) && !composer.isDraft && !composer.isArchived
@@ -247,6 +257,7 @@ export function scanCursor(maxFiles = MAX_FILES): Scan {
   for (const file of snapshot) addOrphanSession(context, file);
   filesBySession = context.files;
   usageBySession = context.usage;
+  tokenHoursBySession = context.hours;
   return {
     sessions: mergeCursorConversations(context.sessions), tokensRecent: context.tokensRecent,
     sourceLimited: listed.length > maxFiles,

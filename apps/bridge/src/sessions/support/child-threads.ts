@@ -21,16 +21,18 @@ export function boundChildThreads(children: ChildThreadInfo[]): ChildThreadInfo[
     .sort((a, b) => a.startedAt - b.startedAt || a.threadId.localeCompare(b.threadId));
 }
 
+/** Whether `child` stands for its thread id instead of `previous`: the later one, then the larger. */
+export function replacesChild(previous: ChildThreadInfo | undefined, child: ChildThreadInfo): boolean {
+  return !previous
+    || child.lastActivityAt > previous.lastActivityAt
+    || (child.lastActivityAt === previous.lastActivityAt
+      && child.tokensSession >= previous.tokensSession);
+}
+
 function uniqueChildThreads(children: ChildThreadInfo[]): ChildThreadInfo[] {
   const byId = new Map<string, ChildThreadInfo>();
   for (const child of children) {
-    const previous = byId.get(child.threadId);
-    if (!previous
-      || child.lastActivityAt > previous.lastActivityAt
-      || (child.lastActivityAt === previous.lastActivityAt
-        && child.tokensSession >= previous.tokensSession)) {
-      byId.set(child.threadId, child);
-    }
+    if (replacesChild(byId.get(child.threadId), child)) byId.set(child.threadId, child);
   }
   return [...byId.values()];
 }

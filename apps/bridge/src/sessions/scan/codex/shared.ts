@@ -48,6 +48,7 @@ import {
   type CapabilityObservation,
   type PendingCapabilityTool,
 } from "../../telemetry";
+import type { TokenHour } from "../../token-usage";
 
 export type CachedCodexSummary = {
   mtimeMs: number;
@@ -60,6 +61,7 @@ export type CachedCodexSummary = {
   lineage?: import("../../../started-by").LineageFact;
   pictures?: import("../../../helper-runs/pictures/chats").NamedPicture[];
   requested?: boolean;
+  tokenHours?: TokenHour[];
 };
 
 export type CodexChildSource = {
@@ -80,6 +82,8 @@ export type CodexCandidate = {
   pictures?: import("../../../helper-runs/pictures/chats").NamedPicture[];
   /** Whether the person's words appear in it at all; a chat without them is not published. */
   requested?: boolean;
+  /** Its spend per clock hour; see `../../token-usage`. */
+  tokenHours?: TokenHour[];
 };
 
 export type CodexActivitySource = {
@@ -91,6 +95,8 @@ export const codexSummaryCache = new Map<string, CachedCodexSummary>();
 export const codexLogPathBySession = new Map<string, string>();
 export const codexActivitySourcesBySession = new Map<string, CodexActivitySource[]>();
 export const codexAggregatedObservationsBySession = new Map<string, CapabilityObservation[]>();
+/** A chat's and its forked agents' spend per clock hour, from the last scan. */
+export const codexTokenHoursBySession = new Map<string, TokenHour[]>();
 
 export { workdirsFromCodexCall, observedCodexWorktree } from "./repository-observation";
 

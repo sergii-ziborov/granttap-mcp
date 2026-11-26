@@ -4,6 +4,7 @@ import {
   codexAggregatedObservationsBySession,
   codexLogPathBySession,
   codexSummaryCache,
+  codexTokenHoursBySession,
   type CodexCandidate,
 } from "./shared";
 import { parseCodexFile } from "./parse";
@@ -39,6 +40,7 @@ function* scanCodexCatalog(maxFiles: number): Generator<void, Scan> {
   codexLogPathBySession.clear();
   codexActivitySourcesBySession.clear();
   codexAggregatedObservationsBySession.clear();
+  codexTokenHoursBySession.clear();
   return { ...assembleCodexScan(candidates), sourceLimited: listed.length > maxFiles,
     lineage: candidates.flatMap((candidate) => candidate.lineage ?? []),
     pictures: candidates.flatMap(({ session, child, pictures }) => !child && session.cwd && pictures?.length

@@ -63,6 +63,14 @@ computer. Ids start `helper-image:` and are read with `session.image.query` on t
 `capabilities.ts` keeps resource evidence optional and bounded. CPU, RAM, I/O,
 and process counters carry an explicit measured, attributed, estimated, or
 unknown provenance instead of implying ownership the runtime cannot prove.
+`capability.usage.status` may carry `tokenUsage` (optional, strict: `{ windows, hours }`), when the
+computer's chats spent tokens and where they went. `windows` (at most 3, `windowHours` 24, 168 or 720)
+each hold `tokens`, every chat's spend in the period, and the heaviest chats (`chats`, at most 12 of
+`{ sessionId, agent, model?, tokens }`) and models (`models`, at most 16 of `{ agent, model, tokens }`,
+never an empty model), heaviest first. `hours` (at most 25, oldest first) are the clock hours of the
+last day with spend, `{ startedAt, tokens }`. Tokens are what each provider adds into a chat's
+`tokensSession`. Computers up to 0.8.211 never send it. See `apps/bridge/src/sessions/token-usage/README.md`;
+tests live in `tests/`.
 
 `project-policy.ts` carries explicit `project.policy.set`, status, and endpoint
 acknowledgement records. They are project-scoped, revisioned, size-bounded, and

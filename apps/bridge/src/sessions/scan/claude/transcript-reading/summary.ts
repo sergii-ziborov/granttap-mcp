@@ -4,6 +4,7 @@ import type { ChildThreadInfo } from '../../../../../../../packages/protocol/sch
 import { claudeTranscriptRecord, pastedImageLabel } from '../../../support/activity-helpers';
 import { childTitle } from '../../../support/child-threads';
 import { stateFor, ts } from '../../../support/common';
+import { addTokenHour, createTokenHours, tokenHourRows } from '../../../token-usage';
 
 type Options = { sumUsage: (usage: any) => number | null | undefined; remember: (threadId: string) => void };
 
@@ -12,6 +13,7 @@ export function createChildSummary(path: string, parentSessionId: string, option
   let threadId = basename(path, '.jsonl').replace(/^agent-/, '');
   let title: string | undefined;
   let startedAt = 0, lastActivityAt = 0, tokensSession = 0, tokensLastTurn = 0;
+  const hours = createTokenHours();
   return {
     add(row: any): void {
       if (!row || !claudeTranscriptRecord(row)) return;
@@ -29,8 +31,10 @@ export function createChildSummary(path: string, parentSessionId: string, option
           .map((block: any) => block.text).join('\n'));
       }
       const spent = options.sumUsage(row.message?.usage);
-      if (spent != null) { tokensSession += spent; tokensLastTurn = spent; }
+      if (spent != null) { tokensSession += spent; tokensLastTurn = spent; addTokenHour(hours, at, spent, row.message?.model); }
     },
+    /** The same spend per clock hour; never part of the published child. */
+    tokenHours: () => tokenHourRows(hours),
     finish(): ChildThreadInfo {
       try {
         const stat = statSync(path);

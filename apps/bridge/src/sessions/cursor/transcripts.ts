@@ -13,6 +13,7 @@ import {
   type CapabilityObservation,
   type PendingCapabilityTool,
 } from "../telemetry";
+import { addTokenHour, createTokenHours, tokenHourRows, type TokenHour, type TokenHours } from "../token-usage";
 
 export type CursorLogFile = {
   path: string;
@@ -33,6 +34,8 @@ export type CursorTranscriptSummary = {
   titleFromUser?: string;
   tokensSession: number;
   tokensLastTurn: number;
+  /** `tokensSession` per clock hour and model; see `../token-usage`. */
+  tokenHours: TokenHour[];
   observations: CapabilityObservation[];
 };
 
@@ -115,7 +118,8 @@ export function workspaceLabel(file: string): string | undefined {
   return index >= 0 ? parts[index + 1] : undefined;
 }
 
-type SummaryAccumulator = CursorTranscriptSummary & {
+type SummaryAccumulator = Omit<CursorTranscriptSummary, "tokenHours"> & {
+  hours: TokenHours;
   lastRole?: string;
   pending: Map<string, PendingCapabilityTool>;
 };
@@ -220,6 +224,7 @@ function summarizeFile(
     if (!spent && text) spent = estimateTokens(text);
     if (!spent) continue;
     acc.tokensSession += spent;
+    addTokenHour(acc.hours, ts(item.timestamp ?? item.message?.timestamp), spent, item.message?.model ?? item.model);
     if (item.role === "assistant" || acc.lastRole === "user") acc.tokensLastTurn = spent;
     acc.lastRole = item.role;
   }
@@ -239,7 +244,7 @@ export function transcriptSummary(
   if (cached?.fingerprint === fingerprint) return cached.summary;
   const acc: SummaryAccumulator = {
     lastActivityAt: 0, startedAt: 0, files: files.map((file) => file.path),
-    tokensSession: 0, tokensLastTurn: 0,
+    tokensSession: 0, tokensLastTurn: 0, hours: createTokenHours(),
     observations: [], pending: new Map(),
   };
   for (const file of files) summarizeFile(file, rootSessionId, cwd, acc);
@@ -247,7 +252,8 @@ export function transcriptSummary(
     const observation = pendingCapabilityObservation(pending);
     if (observation) rememberCapabilityObservation(acc.observations, observation);
   }
-  const { pending, lastRole, ...summary } = acc;
+  const { pending, lastRole, hours, ...counted } = acc;
+  const summary: CursorTranscriptSummary = { ...counted, tokenHours: tokenHourRows(hours) };
   summaryCache.delete(cacheKey);
   summaryCache.set(cacheKey, { fingerprint, summary });
   while (summaryCache.size > 512) summaryCache.delete(summaryCache.keys().next().value!);

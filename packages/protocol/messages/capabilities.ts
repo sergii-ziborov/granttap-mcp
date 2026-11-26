@@ -167,11 +167,59 @@ export const CapabilityExecutionSummary = z.object({
 }).strict();
 export type CapabilityExecutionSummary = z.infer<typeof CapabilityExecutionSummary>;
 
+const TokenCount = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+const TokenAgent = z.string().min(1).max(80);
+
+/** One chat's spend in a period; its `model` is the chat's own when it names one. */
+export const TokenUsageChat = z.object({
+  sessionId: z.string().min(1).max(256),
+  agent: TokenAgent,
+  model: z.string().max(160).optional(),
+  tokens: TokenCount,
+}).strict();
+export type TokenUsageChat = z.infer<typeof TokenUsageChat>;
+
+/** One model's spend in a period; turns without a model name count only toward chats and totals. */
+export const TokenUsageModel = z.object({
+  agent: TokenAgent,
+  model: z.string().min(1).max(160),
+  tokens: TokenCount,
+}).strict();
+export type TokenUsageModel = z.infer<typeof TokenUsageModel>;
+
+/** `tokens` is every chat's spend in the period, not only the heaviest chats listed. */
+export const TokenUsageWindow = z.object({
+  windowHours: z.union([z.literal(24), z.literal(168), z.literal(720)]),
+  tokens: TokenCount,
+  chats: z.array(TokenUsageChat).max(12),
+  models: z.array(TokenUsageModel).max(16),
+}).strict();
+export type TokenUsageWindow = z.infer<typeof TokenUsageWindow>;
+
+/** A clock hour with spend; `startedAt` is the hour's start in ms. */
+export const TokenUsageHour = z.object({
+  startedAt: z.number().nonnegative(),
+  tokens: TokenCount,
+}).strict();
+export type TokenUsageHour = z.infer<typeof TokenUsageHour>;
+
+/**
+ * When tokens were spent and where they went, counted per clock hour from each chat's transcript.
+ * Tokens are what each provider adds into a chat's `tokensSession`.
+ */
+export const TokenUsage = z.object({
+  windows: z.array(TokenUsageWindow).max(3),
+  hours: z.array(TokenUsageHour).max(25),
+}).strict();
+export type TokenUsage = z.infer<typeof TokenUsage>;
+
 export const CapabilityUsageStatus = z.object({
   type: z.literal("capability.usage.status"),
   events: z.array(CapabilityUsageEvent).max(200),
   totals: z.array(CapabilityUsageTotal).max(160).optional(),
   executionSummaries: z.array(CapabilityExecutionSummary).max(128).optional(),
+  /** Absent from computers before this field; see `apps/bridge/src/sessions/token-usage`. */
+  tokenUsage: TokenUsage.optional(),
   generatedAt: z.number(),
 });
 export type CapabilityUsageStatus = z.infer<typeof CapabilityUsageStatus>;

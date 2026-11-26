@@ -2,10 +2,12 @@ import type { ChildThreadInfo, SessionInfo } from "../../../../../../packages/pr
 import { aggregateChildThreads, childTitle } from "../../support/child-threads";
 import { rememberCapabilityObservation, type CapabilityObservation } from "../../telemetry";
 import { TOKEN_WINDOW_MS, type Scan } from "../../support/common";
+import { combineTokenHours } from "../../token-usage";
 import {
   codexActivitySourcesBySession,
   codexAggregatedObservationsBySession,
   codexLogPathBySession,
+  codexTokenHoursBySession,
   type CodexActivitySource,
   type CodexCandidate,
 } from "./shared";
@@ -145,6 +147,8 @@ export function assembleCodexScan(candidates: CodexCandidate[]): Scan {
       }
     }
     codexAggregatedObservationsBySession.set(rootId, observations);
+    // Forked agents are counted once each, as `aggregateChildThreads` adds their spend.
+    codexTokenHoursBySession.set(rootId, combineTokenHours([rootCandidate, ...descendants].map((item) => item.tokenHours)));
     if (Date.now() - session.lastActivityAt <= TOKEN_WINDOW_MS) {
       tokensRecent += session.tokensSession;
     }

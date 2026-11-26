@@ -4,8 +4,10 @@ import { safeParse } from '../../../support/common';
 import { createClaudeCapabilityCollector } from '../activity';
 import { createClaudeChildSummary } from '../shared';
 import { readTranscriptRows } from '../transcript-reading';
+import type { TokenHour } from '../../../token-usage';
 
-type ChildRead = { summary: ChildThreadInfo; observations: ReturnType<ReturnType<typeof createClaudeCapabilityCollector>['snapshot']> };
+type ChildRead = { summary: ChildThreadInfo; observations: ReturnType<ReturnType<typeof createClaudeCapabilityCollector>['snapshot']>;
+  hours: TokenHour[] };
 
 /** Two bounded passes preserve the native child identity without retaining its whole transcript. */
 export function* readClaudeChild(path: string, parent: SessionInfo): Generator<void, ChildRead | undefined> {
@@ -26,7 +28,7 @@ export function* readClaudeChild(path: string, parent: SessionInfo): Generator<v
       if (!row) return false;
       collector.add(row); return true;
     });
-    return { summary: child, observations: collector.snapshot() };
+    return { summary: child, observations: collector.snapshot(), hours: summary.tokenHours() };
   } catch { return undefined; }
   finally { closeSync(fd); }
 }
