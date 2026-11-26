@@ -35,23 +35,27 @@ codex plugin add granttap@granttap
 
 Codex **Connected accounts** does not list GrantTap phones. On the plugin page, click **Try now →
 Connect GrantTap to this computer** to open its connection card in a conversation.
-On a new computer, the card shows **Add a device** and a one-time QR. In the
-GrantTap iPhone app, open **Devices → Add a device → Scan QR** and scan it.
-For another iPhone or iPad, choose **Add another device** in the
-card; for the same phone after reinstall, choose **Reconnect**. Use **Connect
-with passkey** on the card to link this Mac to the same GrantTap account as
-your signed-in iPhone or Mac app. The passkey check happens on granttap.com and
-keeps the existing QR room unchanged. Repeating it reuses the Mac's machine
-identity and updates its user-assigned display name. A saved computer pairing
-does not automatically put a phone in Codex's account list.
-If a coding app cannot operate the card, run `granttap phone add` in your own
-interactive terminal, or `granttap phone reconnect` for the same phone. These
-commands refuse to print a private QR into redirected output or agent logs.
+On a new computer, the card offers **Sign in**: confirm with your GrantTap
+passkey on granttap.com, then open GrantTap on your iPhone signed in to the same
+account, and it links this computer by itself, without a QR. If GrantTap later
+signs this computer out, the card says so and offers **Sign in again**. The
+passkey check keeps the existing QR room unchanged; repeating it reuses the
+computer's machine identity and updates its user-assigned display name. The QR
+is the fallback: the card shows one under **Add a device** (in the GrantTap
+iPhone app, **Devices → Add a device → Scan QR**); for another iPhone or iPad,
+choose **Add another device**; for the same phone after reinstall, **Reconnect**.
+A saved computer pairing does not automatically put a phone in Codex's account
+list. If a coding app cannot operate the card, run `granttap sign-in` in your
+own terminal; for the QR, `granttap phone add`, or `granttap phone reconnect`
+for the same phone. These commands refuse to print a private QR into redirected
+output or agent logs.
 
 `codex mcp login granttap` authorizes Codex as an MCP client. Its browser page
 at `granttap.com/connect` offers approval through a fresh GrantTap account
 passkey on the Mac, or through the existing phone/QR flow. Passkey approval
-authorizes this coding app to use this Mac's local MCP; it does not pair a phone.
+authorizes this coding app to use this computer's local MCP and also signs this
+computer in to that GrantTap account, so a phone signed in to it links this
+computer without a QR.
 The page also shows phone observations;
 the connection card shows the pairing QR. The website does not receive pairing
 keys or task content. Provider sign-in remains separate. Never paste a pairing
@@ -107,23 +111,26 @@ grok plugin install granttap --trust
 Open `/mcps` and authenticate GrantTap, then run `/granttap-connect` or ask
 Grok for connection status.
 
-The `connect` tool reuses a healthy pairing. If this computer is not paired, it
-returns a one-time QR image and a manual fallback. GrantTap never rotates a
-healthy pairing merely to display a new QR.
+The `connect` tool is account first. A computer not signed in to GrantTap gets
+the `sign_in` passkey page as its first step (and, when unpaired, a one-time QR
+on the card as the fallback); a signed-in computer is linked by the phone signed
+in to the same account, with no QR. It reuses a healthy pairing and never rotates
+one merely to display a new QR.
 
 ## Included tools
 
 - `connection_status` opens read-only connection controls and diagnostics.
 - `set_runtime_auto_update` saves this computer's automatic runtime update setting.
-- `connect` pairs the computer or reuses its current pairing.
-- `reconnect` creates a fresh pairing only after explicit confirmation.
+- `sign_in` signs this computer in to your GrantTap account with your passkey on granttap.com.
+- `connect` connects this computer account first, or reuses its current pairing.
+- `reconnect` is the QR fallback; it creates a fresh pairing only after explicit confirmation.
 - `remove_phones` asks the person on a phone to remove paired phones that are no longer used.
 - `computer_load` reads this computer's load and where its disk space went; it deletes nothing.
-- `connect_with_passkey` starts a one-time browser passkey request to link this Mac to an account.
+- `connect_with_passkey` is the deprecated name of `sign_in`.
 - `notify` sends a task update to GrantTap.
 - `ask_yes_no` asks for an explicit yes or no decision.
 - `ask` asks for typed or spoken input.
-- `request_sign_in` sends a browser sign-in to the phone and waits for it.
+- `request_sign_in` sends a browser sign-in for an outside service (not GrantTap) to the phone and waits for it.
 
 Codex, Claude Code, Cursor, and Grok Build use the persistent local HTTP
 service installed by `granttap setup`. Get the iPhone and iPad app on the

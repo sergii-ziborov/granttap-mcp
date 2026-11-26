@@ -22,7 +22,7 @@
   "interface": {
     "displayName": "GrantTap",
     "shortDescription": "Control local coding agents",
-    "longDescription": "Try now / Connect GrantTap opens the connection card. Add a device, Add another device, or Reconnect shows a one-time QR for GrantTap on iPhone or iPad; QR pairing needs no account. Connect with passkey links this Mac to your GrantTap account through granttap.com without changing its QR room, chat, or Mesh routing. Authenticate opens granttap.com/connect to authorize this local MCP client separately. Pairing stays out of chat.",
+    "longDescription": "Try now / Connect GrantTap opens the connection card. Sign in signs this computer in to your GrantTap account with your passkey on granttap.com; a phone signed in to the same account then links it without a QR, and the card shows Sign in again if GrantTap signs it out. Add a device, Add another device, or Reconnect shows a one-time QR as the fallback for GrantTap on iPhone or iPad. Authenticate opens granttap.com/connect to authorize this local MCP client. Pairing stays out of chat.",
     "developerName": "GrantTap",
     "category": "Developer Tools",
     "capabilities": [
@@ -34,7 +34,7 @@
     "termsOfServiceURL": "https://granttap.com/terms",
     "defaultPrompt": [
       "Connect GrantTap to this computer.",
-      "Connect this Mac to my GrantTap account with passkey.",
+      "Sign this computer in to my GrantTap account.",
       "Check whether this computer is connected to GrantTap."
     ],
     "brandColor": "#E0612E",

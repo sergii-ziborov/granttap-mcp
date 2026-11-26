@@ -38,12 +38,18 @@ granttap setup
 ```
 
 1. `granttap setup` finds Claude Code, Codex, Cursor and Grok Build on this
-   computer, installs or repairs their GrantTap hooks, starts the background
-   helper and, in an interactive terminal, shows a one-time pairing QR.
-2. Install [GrantTap from the App Store](https://apps.apple.com/app/id6809739366)
-   and scan that QR in **Devices → Add a device → Scan QR**. QR pairing needs no
-   account. With a GrantTap account, sign in with your passkey instead and use
-   **Connect with passkey** on the connection card to link this computer.
+   computer, installs or repairs their GrantTap hooks and starts the background
+   helper. A computer not signed in yet also gets a one-time pairing QR in an
+   interactive terminal, as the fallback.
+2. Sign this computer in to your GrantTap account: run `granttap sign-in` (or
+   tap **Sign in** on the connection card, or ask the agent to `connect`) and
+   confirm with your passkey on the granttap.com page it opens. Then open
+   [GrantTap from the App Store](https://apps.apple.com/app/id6809739366) on
+   your iPhone signed in to the same account: it links this computer by itself,
+   no QR. GrantTap's relay admits only a signed-in computer. A one-time QR
+   (**Devices → Add a device → Scan QR**, from `granttap phone add` or the card)
+   is the fallback for a phone that cannot use the account; with your own relay a
+   QR alone is enough.
 3. Add the plugin for your coding app (see [Install](#install)) to get the
    connection card and the tools in chat, and run `granttap status` at any time
    for a read-only readiness check.
@@ -217,9 +223,11 @@ mobile approval, including workspace and native-tool restrictions.
 
 The passkey Account Mesh is the person's relay space. It exists with zero
 computers and can contain many computers and Project Meshes. Create or join it
-from **Devices** in the iPhone, iPad, or Mac app, then use the same passkey in
-the MCP connection card to attach this computer. A previously linked computer
-reuses its machine identity; reconnecting does not create a duplicate. The
+from **Devices** in the iPhone, iPad, or Mac app, then sign this computer in
+with the same passkey (`granttap sign-in`, `sign_in`, or **Sign in** on the MCP
+connection card). A previously linked computer reuses its machine identity;
+signing in again does not create a duplicate, and a computer removed from the
+account comes back as a new one. The
 local helper reports the Mac's user-assigned Computer Name and updates its
 account display name when that name changes. Device names are display labels,
 not routing keys: each Task keeps the computer route selected by its Mesh.
@@ -232,8 +240,23 @@ granttap setup
 ```
 
 The Mac app can join the Account Mesh before the helper is present and links it
-when the installed helper becomes available. A one-time QR still provides direct
-device pairing without a passkey account.
+when the installed helper becomes available. A one-time QR still pairs a phone
+directly; on GrantTap's relay the computer itself must still be signed in.
+
+**Signed in or not.** `connection_status`, the connection card, `granttap status`
+and the Mac app's desktop status all report the same `accountLink.state`: `ok`,
+`none`, `revoked` (GrantTap no longer accepts this computer's sign-in, for
+example after it was removed from the account: sign in again), `seat_limit` or
+`no_subscription` (signed in, but the subscription does not cover this
+computer; [Managed computers](https://granttap.com/account#managed-computers)
+shows which it covers), or `unreachable`. The state comes from the account
+service's own answers and is logged once per change in the helper log
+(`[account] …`). A tool that cannot reach the phone because of it says so and how
+to sign in, instead of "not paired", and the card shows one **Sign in again**.
+One GrantTap process at a time, whichever of the background helper, the MCP
+service or a chat's MCP server holds the computer's lease, answers phones
+signing in with the account, so a phone is answered whenever any of them runs.
+See [account link state](apps/bridge/src/account-link-state/README.md).
 
 ## Phones paired with a computer
 
@@ -244,7 +267,7 @@ every phone not seen for 30 days. Removing the phone in use is its own confirmed
 phone**, and the last phone always stays. On the computer, the GrantTap connection card in Claude, Codex, Grok
 Build or Cursor (`connection_status`) lists the same phones with **Remove** on each and **Remove N** for those
 not seen for 30 days; a removal there is confirmed on the card and then with a yes on a phone (`remove_phones`). A removed phone stops receiving from the computer at once, in every
-running GrantTap process, without a restart; it needs a new QR to pair again. Removing the first pairing hands
+running GrantTap process, without a restart; it comes back by signing in to the same account again, or with a new QR. Removing the first pairing hands
 its place to the phone heard from most recently.
 
 A computer accepts its first pairing plus 16 added phones. At the limit a new phone takes the place of the
@@ -303,8 +326,9 @@ Apple sandbox. Mac purchase terms, optional Personal subscriptions and required
 TLS/VPN reachability are documented in the Apple client repository.
 The local HTTP MCP OAuth flow can be approved with a fresh GrantTap account
 passkey on Mac. This authorizes the selected coding app to use this computer's
-MCP endpoint; it does not pair a phone. Direct QR pairing remains available
-without a GrantTap account.
+MCP endpoint and also signs this computer in to that account, so a phone signed
+in to the same account links it without a QR. Direct QR pairing remains
+available for a computer on its own relay without a GrantTap account.
 The iPhone and iPad app provides the mobile Project controller;
 Apple Watch carries the compact attention and reply flow through iPhone.
 The machine runtime and separately distributed Engine supply Project records,
@@ -650,8 +674,9 @@ Do not add GrantTap in Cursor Customize → MCPs. Cloud **Error · fetch
 failed** is leftover HTTP at `http://127.0.0.1:17342/mcp` — a user MCP row
 or an old plugin `mcp.json`. The Cursor plugin is stdio (`node -e`).
 
-Open GrantTap from the plugin connection card. Pairing status, a one-time QR
-when needed, and confirmed reconnect stay on that card, on
+Open GrantTap from the plugin connection card. The account sign-in with **Sign
+in again** when this computer is signed out, pairing status, a one-time QR when
+needed, and confirmed reconnect stay on that card, on
 `granttap.com/connect`, and in the GrantTap app. Do not ask an agent to print
 a pairing QR in chat. The same tools still return readable MCP content in
 clients that do not render app UI. Detailed plugin instructions are in
@@ -667,8 +692,10 @@ granttap setup
 
 `granttap setup` detects supported local agents, installs or repairs their
 hooks, installs the background helper, removes a leftover user GrantTap MCP
-entry when Cursor is present, and starts phone pairing when run in an
-interactive terminal. It ends with one exact next action.
+entry when Cursor is present, and, when this computer is not signed in to a
+GrantTap account yet, starts QR phone pairing in an interactive terminal; a
+signed-in computer gets no QR, since a phone signed in to the same account links
+it. It reports the account sign-in and ends with one exact next action.
 
 Setup also prepares the separately distributed GrantTap Engine, which Graph,
 Health and Project Governance need. It installs the release pinned for this
@@ -707,6 +734,7 @@ The normal CLI surface is intentionally small:
 granttap setup [--engine <path>]
 granttap setup --help
 granttap status [--json]
+granttap sign-in [--no-open]
 granttap connect [--relay <wss-url>]
 granttap reset [--yes]
 granttap mesh connect <one-time-invite>
@@ -718,8 +746,10 @@ runtime the other commands run, including an automatically updated one, and
 exits. `granttap setup --help` (or `-h`) prints setup usage without
 running setup or writing any configuration.
 
-`connect` reuses a valid pairing. If none exists, it creates a one-time QR.
-Custom relays are CLI-only and explicit. `reset` moves active pairing files to
+`granttap sign-in` signs this computer in to your GrantTap account: it prints a
+one-time granttap.com page (and opens it on macOS unless `--no-open`), waits for
+the passkey there, then says what is next. `connect` reuses a valid pairing. If
+none exists, it creates a one-time QR. Custom relays are CLI-only and explicit. `reset` moves active pairing files to
 recoverable local backups before a new pairing can be created.
 
 Cursor setup is automatic in the normal flow. The advanced repair command is:
@@ -734,21 +764,22 @@ trust.
 
 ## MCP contract
 
-`tools/list` returns exactly eleven public tools:
+`tools/list` returns exactly thirteen public tools:
 
 | Tool | Contract |
 | --- | --- |
 | `set_runtime_auto_update` | When the user asks, turn automatic GrantTap runtime updates on this computer on or off; saves the preference without restarting services or changing pairing, tasks, or provider policy, and returns the connection state |
 | `computer_load` | Read-only: this computer's memory, swap, CPU, free disk and heaviest apps, and the last summary of where its disk space went (agent folders, simulators and VM disks, package and build caches, project build output), each entry marked regenerable, history, protected or user data; `scan: true` measures again now. It deletes nothing |
-| `connection_status` | Read-only: saved pairing and every paired phone with its id and when it last reached this computer, QR expiry, relay observations, provider readiness, a newer runtime waiting to take over and why, and for the calling chat (Claude Code, Codex, Grok Build, Cursor) the phone messages queued behind its turn and its continuation after a subscription limit |
-| `connect_with_passkey` | Link this computer to the user's GrantTap account so a signed-in phone can connect without a QR; returns a 15-minute granttap.com link, the passkey is entered only there, and existing QR pairings stay unchanged |
-| `connect` | Show the existing pairing on the connection card, or on an unpaired computer create a one-time QR shown only on the card |
-| `reconnect` | After explicit confirmation, show a one-time QR to reconnect or add an independent controller device while retaining the current room |
+| `connection_status` | Read-only: this computer's GrantTap account sign-in (`accountLink`: `state` none, ok, revoked, seat_limit, no_subscription or unreachable, `reason`, `checkedAt`, and `answeredBy`, the process answering phones), saved pairing and every paired phone with its id and when it last reached this computer, QR expiry, relay observations, provider readiness, a newer runtime waiting to take over and why, and for the calling chat (Claude Code, Codex, Grok Build, Cursor) the phone messages queued behind its turn and its continuation after a subscription limit |
+| `sign_in` | Sign this computer in to the user's GrantTap account so a phone signed in to the same account links it without a QR; returns `passkeyUrl`, a one-use granttap.com page valid 15 minutes, the passkey is entered only there, and existing QR pairings stay unchanged |
+| `connect_with_passkey` | Deprecated alias of `sign_in`, kept for one release |
+| `connect` | Account first: not signed in (or signed out), returns the `sign_in` page as the first step, with a one-time QR on the card as the fallback on an unpaired computer; signed in without a phone, creates nothing and says the phone signed in to the same account links it; paired, shows the existing pairing on the connection card |
+| `reconnect` | The QR fallback: after explicit confirmation, show a one-time QR to reconnect or add an independent controller device while retaining the current room |
 | `remove_phones` | Ask the person to remove paired phones that are no longer used, by `notSeenForDays` (never the phone heard from most recently; `connection_status` marks the 30-day ones `stale`) and/or `phoneIds` from `connection_status`; nothing is removed without a yes on a phone, and the phone that answers, any phone heard from while the question is open, and the last phone stay |
 | `notify` | Send a non-blocking status of at most 2,000 characters that nobody answers, and/or one task-scoped Mesh event |
 | `ask_yes_no` | Ask a yes/no question and wait about three minutes for the explicit answer; a timeout, or the person declining to answer, is neither yes nor no |
 | `ask` | Ask an open question and wait about three minutes for typed or spoken text; the person may decline, and the agent hears so at once |
-| `request_sign_in` | Send an https sign-in page to the phone, wait for the person, and deliver the browser's loopback redirect once to the port the CLI listens on; returns `completed`, `cancelled` or `timed_out`, never the page or the redirect's contents |
+| `request_sign_in` | Sign in to an outside service, not GrantTap: send an https sign-in page to the phone, wait for the person, and deliver the browser's loopback redirect once to the port the CLI listens on; returns `completed`, `cancelled` or `timed_out`, never the page or the redirect's contents |
 | `offload_task` | Request moving the calling Task to a compatible computer in its Mesh, keeping provider, model, effort and visible conversation; requires Automatic computer transfers, and `action=status` or `action=cancel` acts only on the caller's own request |
 
 MCP `connect` accepts no custom routing, replacement, or key-rotation input.
@@ -1071,7 +1102,8 @@ complete boundary and reporting instructions.
 
 ## Troubleshooting and help
 
-- **Computer not visible:** run `granttap status`, check the helper is running,
+- **Computer not visible:** run `granttap status`, check the helper is running
+  and the **GrantTap account** line says Signed in (otherwise `granttap sign-in`),
   then check Devices in the controller. The same passkey links the same account;
   a display name or IP address is not a computer identity.
 - **Mac asks for local access:** complete GrantTap's local consent flow for the

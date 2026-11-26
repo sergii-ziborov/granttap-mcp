@@ -17,6 +17,18 @@ to an issue, or printed in logs. The active secret classes are endpoint NaCl
 keys, per-task keys, the one-time pairing transfer key, and the random room
 credential used for authenticated WebSocket and APNs registration.
 
+This computer's GrantTap account sign-in is a machine token in
+`account-link.json`, sent only to granttap.com over HTTPS: to answer phones
+signing in with the account and to obtain relay admission. It never enters MCP
+output or logs. `account-link-status.json` (the last answer: ok, revoked, not
+covered, unreachable) and `account-poller-lease.json` (which local process
+answers phones) are owner-only and hold no credential, only a short fingerprint
+of the sign-in and a process id. The sign-in page a computer offers
+(`granttap.com/connect#request=…`, from `sign_in`, `connect` or
+`granttap sign-in`) works once, for 15 minutes, and whoever confirms it with
+their passkey signs this computer in to their account; share it only with the
+person at this computer.
+
 Provider credentials remain in each provider's own local authentication flow.
 GrantTap does not send them to the relay.
 
