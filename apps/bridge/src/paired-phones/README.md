@@ -22,14 +22,17 @@ removing them, and the place a new phone takes when the computer is full.
 
 ## The limit and who gives way
 
-A computer accepts its first pairing plus 16 added phones. At the limit a new phone is no longer refused:
-the added phone idle longest gives its place, but only if it has not reached the computer, and was not added,
-for at least 30 days (`EVICTION_IDLE_DAYS`). A phone never seen with no recorded added-at counts as idle
-longest; among equals the one added earlier goes first. The first pairing, a phone seen or added within 30
-days, and a key whose QR is still open are never taken. When no phone qualifies the new phone is refused with
-a message pointing to Devices → this computer → Phones. Each eviction writes one helper-log line with the
-evicted phone's label and when it was last seen. The same rule applies to a QR from `reconnect mode=add_device`,
-`granttap phone add`, the phone app's "add a device" request and an account link.
+A computer accepts its first pairing plus 16 added phones. At the limit a new phone is no longer refused: the
+added phone idle longest gives its place, but only if it has not reached the computer, and was not added, for
+at least 24 hours (`EVICTION_IDLE_HOURS`). Reinstalling the phone app leaves the old install's key behind, so
+one phone reinstalled often can fill every place with its own old keys. A phone never seen with no recorded
+added-at counts as idle longest; among equals the one added earlier goes first. The first pairing, a phone
+seen or added within 24 hours, and a key whose QR is still open are never taken. When no phone qualifies the
+new phone is refused (`PhoneLimitReached`, carrying how many phones the computer accepts) with a message
+pointing to Devices → this computer → Phones. Each eviction writes one helper-log line with the evicted
+phone's label and when it was last seen. The same rule applies to a QR from `reconnect mode=add_device`,
+`granttap phone add`, the phone app's "add a device" request and an account sign-in with a passkey, which
+tells the phone it was refused (see `../account-recovery`).
 
 After the first pairing is removed, the phone half saved for `reconnect` belongs to a key the computer no
 longer accepts, so a reconnect QR enrolls a new added key instead of offering that half again.

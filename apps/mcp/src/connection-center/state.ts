@@ -34,7 +34,7 @@ export const connectionOutput = {
     stale: z.boolean().describe("Not heard from, and not added, for 30 days, and not mostRecent: what remove_phones with "
       + "notSeenForDays 30 would ask to remove"),
   })).describe("Every phone or iPad key allowed to control this computer: the first pairing, then added devices. "
-    + "At most 17; at the limit a new phone takes the place of an added phone not seen for 30 days"),
+    + "At most 17; at the limit a new phone takes the place of an added phone not seen for 24 hours"),
   expiresAt: z.number().nullable(),
   expiresInMinutes: z.number().int().positive().nullable(),
   providers: z.array(z.object({ id: z.string(), status: z.string(), detail: z.string() })),

@@ -248,9 +248,10 @@ running GrantTap process, without a restart; it needs a new QR to pair again. Re
 its place to the phone heard from most recently.
 
 A computer accepts its first pairing plus 16 added phones. At the limit a new phone takes the place of the
-added phone idle longest, provided that phone has not reached the computer, and was not added, for 30 days;
-the first pairing, a phone used in the last 30 days and an open QR are never taken. When every place is in
-use the new phone is refused with a pointer to the Phones screen.
+added phone idle longest, provided that phone has not reached the computer, and was not added, for 24 hours;
+the first pairing, a phone used in the last day and an open QR are never taken. When every place is in
+use the new phone is refused with a pointer to the Phones screen; a phone signing in with its passkey is told
+so instead of waiting, and the helper log says why.
 
 The phone asks over the encrypted `device.manage` request it already uses for the computer's MCP and agent
 controls, and the answer goes only to the phone that asked:

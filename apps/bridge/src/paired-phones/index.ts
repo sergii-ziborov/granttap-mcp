@@ -2,6 +2,6 @@
 export { DAY_MS, EXTRA_PHONE_LIMIT, idleFor, lastActivity, longestIdle, mostRecentPhone, phoneEntries, phoneId,
   phoneRoster, stalePhones, type PhoneRecord } from "./roster";
 export { LAST_PHONE, PhoneChangeRefused, removePhoneKeys, type PhoneRemoval } from "./removal";
-export { admitPhoneKey, EVICTION_IDLE_DAYS, evictionFor, PHONE_LIMIT_REACHED } from "./admission";
+export { admitPhoneKey, EVICTION_IDLE_HOURS, evictionFor, PHONE_LIMIT_REACHED, PhoneLimitReached } from "./admission";
 export { isPhoneAction, phonesFor, planPhoneChange, type PhoneChangeOutcome, type PlannedPhoneChange }
   from "./device-actions";

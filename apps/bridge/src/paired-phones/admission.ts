@@ -6,22 +6,30 @@ import { forgetControllers, recordControllerAdded } from "../pairing/presence";
 import { EXTRA_PHONE_LIMIT, idleFor, longestIdle, phoneRoster, type PhoneRecord } from "./roster";
 
 /** An added phone not heard from, and not added, for this long may give its place to a new phone. */
-export const EVICTION_IDLE_DAYS = 30;
+export const EVICTION_IDLE_HOURS = 24;
 
 export const PHONE_LIMIT_REACHED = `This computer already has ${EXTRA_PHONE_LIMIT + 1} phones, and each was used in the `
-  + `last ${EVICTION_IDLE_DAYS} days. Remove one in GrantTap → Devices → this computer → Phones, then add the new phone.`;
+  + "last day. Remove one in GrantTap → Devices → this computer → Phones, then add the new phone.";
+
+/** Every place is held by a phone that may not give it up; `phones` is how many this computer accepts now. */
+export class PhoneLimitReached extends Error {
+  constructor(readonly phones: number) {
+    super(PHONE_LIMIT_REACHED);
+  }
+}
 
 /**
  * At the limit, the added phone that has been idle longest gives its place to the new one, but only when it
- * has been idle for at least EVICTION_IDLE_DAYS. The first pairing, a phone heard from or added within that
- * time, and a key whose QR is still open are never taken. Returns null when there is room; throws when every
- * place is in use.
+ * has been idle for at least EVICTION_IDLE_HOURS. The first pairing, a phone heard from or added within that
+ * time, and a key whose QR is still open are never taken. Returns null when there is room; throws
+ * PhoneLimitReached when every place is in use.
  */
 export function evictionFor(machine: PeerConfig, now = Date.now()): PhoneRecord | null {
-  const added = phoneRoster(machine, { now }).filter((phone) => !phone.primary);
+  const phones = phoneRoster(machine, { now });
+  const added = phones.filter((phone) => !phone.primary);
   if (added.length < EXTRA_PHONE_LIMIT) return null;
-  const victim = longestIdle(added.filter((phone) => idleFor(phone, EVICTION_IDLE_DAYS, now)));
-  if (!victim) throw new Error(PHONE_LIMIT_REACHED);
+  const victim = longestIdle(added.filter((phone) => idleFor(phone, EVICTION_IDLE_HOURS / 24, now)));
+  if (!victim) throw new PhoneLimitReached(phones.length);
   return victim;
 }
 

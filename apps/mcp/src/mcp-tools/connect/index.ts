@@ -92,7 +92,7 @@ export function registerConnectTool(server: McpServer): void {
       description: "After the person confirms, show a new one-time pairing QR, valid 15 minutes, on the connection card. "
         + "mode=reconnect offers this computer's existing phone pairing again, for a phone that lost it; mode=add_device "
         + "enrolls one more phone or iPad with its own key (at most 16 added keys; at the limit the added phone longest "
-        + "unseen, if unseen for 30 days, gives its place; one never scanned is dropped). The current room and paired phones "
+        + "unseen, if unseen for 24 hours, gives its place; one never scanned is dropped). The current room and paired phones "
         + "keep working. Pass "
         + "confirmed=true only after the person agreed.",
       inputSchema: {

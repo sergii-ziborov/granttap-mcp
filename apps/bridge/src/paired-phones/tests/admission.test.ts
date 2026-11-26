@@ -8,23 +8,27 @@ import { createRecoveryOffer } from "../../account-recovery/offer";
 import { handleControllerPairRequest } from "../../monitor/controller-knowledge";
 import { createOneTimePairing } from "../../pairing";
 import { controllerPeerGate, rememberPendingController } from "../../pairing/controllers";
-import { readControllerAddedAt, readControllerLastSeenAt } from "../../pairing/presence";
-import { EVICTION_IDLE_DAYS, evictionFor, PHONE_LIMIT_REACHED } from "..";
-import { isolatedConfig, live, mailboxRelay, NOW, pairedComputer } from "./support";
+import { readControllerAddedAt, readControllerLastSeenAt, recordControllerAdded } from "../../pairing/presence";
+import { EVICTION_IDLE_HOURS, evictionFor, PHONE_LIMIT_REACHED, PhoneLimitReached } from "..";
+import { DAY, isolatedConfig, live, mailboxRelay, NOW, pairedComputer } from "./support";
 
 /** The first pairing idle 400 days, then sixteen added phones seen `days` ago. */
 function seen(days: Array<number | null>): Array<number | null> {
   return [400, ...days];
 }
 
+/** Refused at the limit, with how many phones the computer accepts. */
+function limitReached(error: unknown): boolean {
+  return error instanceof PhoneLimitReached && error.message === PHONE_LIMIT_REACHED && error.phones === 17;
+}
+
 test("at the limit a new phone takes the place of the added phone idle longest, never a recent one", async (t) => {
   t.mock.timers.enable({ apis: ["Date"], now: NOW });
   isolatedConfig(t);
   const relay = await mailboxRelay(t);
-  const days = Array.from({ length: 16 }, (_, index) => index + 1);
-  days[2] = 31; days[9] = 45;
+  const days = Array<number | null>(16).fill(0);
+  days[2] = 8; days[9] = 45;
   const f = pairedComputer(16, seen(days), { relayUrl: relay });
-  assert.equal(EVICTION_IDLE_DAYS, 30);
   assert.equal(evictionFor(live(), NOW)?.key, f.extras[9]);
 
   const first = await createOneTimePairing(relay, { installHooks: false, addController: true });
@@ -37,21 +41,34 @@ test("at the limit a new phone takes the place of the added phone idle longest, 
   assert.equal(readControllerLastSeenAt(f.extras[9]!), null);
 
   await createOneTimePairing(relay, { installHooks: false, addController: true });
-  assert.equal(live().extraPeerPublicKeys?.includes(f.extras[2]!), false, "then the one idle 31 days");
+  assert.equal(live().extraPeerPublicKeys?.includes(f.extras[2]!), false, "then the one idle 8 days");
 
   const before = live();
-  await assert.rejects(createOneTimePairing(relay, { installHooks: false, addController: true }),
-    (error: Error) => error.message === PHONE_LIMIT_REACHED);
+  await assert.rejects(createOneTimePairing(relay, { installHooks: false, addController: true }), limitReached);
   assert.deepEqual(live(), before, "a refused phone changes nothing");
+  assert.match(PHONE_LIMIT_REACHED, /^This computer already has 17 phones, and each was used in the last day\. /);
 });
 
-test("a phone whose QR is still open and a phone added this month keep their places", (t) => {
+test("an added phone gives its place once it has been idle 24 hours, not a moment sooner", (t) => {
   t.mock.timers.enable({ apis: ["Date"], now: NOW });
   isolatedConfig(t);
-  const f = pairedComputer(16, seen(Array(16).fill(2)));
-  const open = f.extras[0]!;
+  const f = pairedComputer(16, seen([...Array<number>(15).fill(0), 1]));
+  assert.equal(EVICTION_IDLE_HOURS, 24);
+  assert.equal(evictionFor(live(), NOW)?.key, f.extras[15], "seen exactly 24 hours ago");
+  assert.throws(() => evictionFor(live(), NOW - 1), limitReached, "seen 1 ms less than 24 hours ago");
+});
+
+test("the first pairing, a phone whose QR is still open and a phone added within a day keep their places", (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: NOW });
+  isolatedConfig(t);
+  const days = Array<number | null>(16).fill(0);
+  days[0] = 30; days[1] = null;
+  const f = pairedComputer(16, seen(days));
+  const open = f.extras[0]!, added = f.extras[1]!;
   rememberPendingController(f.machine.room, open, NOW + 5 * 60_000);
-  assert.throws(() => evictionFor(live(), NOW), { message: PHONE_LIMIT_REACHED });
+  recordControllerAdded(added, NOW - DAY + 1);
+  assert.throws(() => evictionFor(live(), NOW), limitReached, "idle 400 days, the first pairing still stays");
+  assert.equal(evictionFor(live(), NOW + 1)?.key, added, "added 24 hours ago and never seen since");
   assert.equal(evictionFor({ ...live(), extraPeerPublicKeys: f.extras.slice(1) }, NOW), null, "below the limit");
 });
 
@@ -59,9 +76,9 @@ test("the phone app's request for another code and an account link both make roo
   t.mock.timers.enable({ apis: ["Date"], now: NOW });
   isolatedConfig(t);
   const relay = await mailboxRelay(t);
-  const days = Array<number | null>(16).fill(3);
+  const days = Array<number | null>(16).fill(0);
   days[7] = null;
-  days[11] = 90;
+  days[11] = 8;
   const f = pairedComputer(16, seen(days), { relayUrl: relay });
   const running = new RelayClient({ ...f.machine }, { peerAllowed: controllerPeerGate(f.machine) });
   const offers: ControllerPairOffer[] = [];
@@ -75,6 +92,7 @@ test("the phone app's request for another code and an account link both make roo
 
   const phone = Buffer.from(generateKeyPair().publicKey, "base64").toString("base64url");
   createRecoveryOffer({ id: randomUUID(), phonePublicKey: phone, expiresAt: NOW + 60_000 }, randomUUID());
-  assert.equal(live().extraPeerPublicKeys?.includes(f.extras[11]!), false, "then the one away 90 days");
+  assert.equal(live().extraPeerPublicKeys?.includes(f.extras[11]!), false,
+    "then the one away 8 days, as a reinstalled phone's old key is");
   assert.equal(live().extraPeerPublicKeys?.length, 16);
 });

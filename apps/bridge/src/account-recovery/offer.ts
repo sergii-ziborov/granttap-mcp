@@ -13,16 +13,33 @@ export type RecoveryRequest = { id: string; phonePublicKey: string; expiresAt: n
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const KEY = /^[A-Za-z0-9_-]{43}$/;
 
-/** The account server sees this envelope but has no key that can open it. */
-export function createRecoveryOffer(request: RecoveryRequest, machineId: string): string {
-  if (!UUID.test(request.id) || !UUID.test(machineId) || !KEY.test(request.phonePublicKey)
-    || Buffer.from(request.phonePublicKey, "base64url").length !== 32
-    || request.expiresAt <= Date.now() || request.expiresAt > Date.now() + 5 * 60_000) {
-    throw new Error("Invalid or expired account recovery request.");
+/** This computer has a pairing on disk but not the parked phone half an account sign-in builds on. */
+export class PairingIncomplete extends Error {
+  constructor() {
+    super("Existing pairing is incomplete; repair it before account recovery.");
   }
+}
+
+/** Well formed, sealed to a 32-byte phone key, and still open: a request this computer can answer at all. */
+export function answerableRequest(request: RecoveryRequest, machineId: string, now = Date.now()): boolean {
+  return UUID.test(request.id) && UUID.test(machineId) && KEY.test(request.phonePublicKey)
+    && Buffer.from(request.phonePublicKey, "base64url").length === 32
+    && request.expiresAt > now && request.expiresAt <= now + 5 * 60_000;
+}
+
+/** The account server sees this envelope but has no key that can open it. */
+export function sealForPhone(payload: unknown, phonePublicKey: string): string {
+  const ephemeral = generateKeyPair();
+  const recipient = Buffer.from(phonePublicKey, "base64url").toString("base64");
+  const box = seal(payload, recipient, ephemeral.secretKey);
+  return JSON.stringify({ senderPublicKey: ephemeral.publicKey, ...box });
+}
+
+export function createRecoveryOffer(request: RecoveryRequest, machineId: string): string {
+  if (!answerableRequest(request, machineId)) throw new Error("Invalid or expired account recovery request.");
   const existing = parkedPairingHalves();
   if (!existing && (existsSync(machineConfigPath()) || existsSync(phonePairingPath()))) {
-    throw new Error("Existing pairing is incomplete; repair it before account recovery.");
+    throw new PairingIncomplete();
   }
   const network = readNetworkSettings();
   const relayUrl = network.mode === "managed" ? DEFAULT_RELAY_URL : network.endpoint;
@@ -36,11 +53,9 @@ export function createRecoveryOffer(request: RecoveryRequest, machineId: string)
       mySecretKey: keys.secretKey };
   }
   const routedPhone = applyNetworkRoute(phoneCfg);
-  const ephemeral = generateKeyPair();
   const payload = { schema: "granttap.account-offer.v1", requestId: request.id,
     machineId, pairing: routedPhone };
-  const recipient = Buffer.from(request.phonePublicKey, "base64url").toString("base64");
-  const box = seal(payload, recipient, ephemeral.secretKey);
+  const offer = sealForPhone(payload, request.phonePublicKey);
   // Persist authorization before the server can deliver the phone half.
   if (!existing) {
     saveConfig(machineConfigPath(), machineCfg);
@@ -49,5 +64,5 @@ export function createRecoveryOffer(request: RecoveryRequest, machineId: string)
   } else {
     admitPhoneKey(machineCfg.room, phoneCfg.myPublicKey, request.expiresAt);
   }
-  return JSON.stringify({ senderPublicKey: ephemeral.publicKey, ...box });
+  return offer;
 }

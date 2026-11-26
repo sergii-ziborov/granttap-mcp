@@ -110,7 +110,7 @@ computer → Phones**; `remove_phones` lets an agent ask, and removes nothing un
 phone, never the phone that answered, any phone heard from while the question was open, or the last phone.
 Every relay link rereads the pairing file before each send and each received message, so a removed key gets
 no new ciphertext at once. Ciphertext the relay already holds for it, such as a bounded read cache, is not
-recalled. At the 17-phone limit only an added phone idle for 30 days gives its place to a new one.
+recalled. At the 17-phone limit only an added phone idle for 24 hours gives its place to a new one.
 
 `request_sign_in` sends an https page to the phone and may deliver one loopback
 redirect back. That delivery is a single `GET` to `127.0.0.1` or `::1` on the
