@@ -29,7 +29,7 @@ Explicit Graph builds also invoke the Engine's `graph.analyze_project` for two
 to eight admitted local repositories. The projection labels these shared static
 contracts and keeps their runtime destination unverified. They do not become
 verified Backbone dependencies or merge Project grants. The Apple Silicon
-artifact pins Engine 0.1.9 with Weavatrix 2.17.17, Cortex Loom 0.1.1 and SweepLoom `sweeploom-workstation`
+artifact pins Engine 0.1.10 with Weavatrix 2.17.18, Cortex Loom 0.1.1 and SweepLoom `sweeploom-workstation`
 (MPL-2.0; `workstation.load` and `workstation.space`, see `../workstation/README.md`), injective package
 import identities and per-file function extent reuse during metrics analysis; unsupported Engine
 operations leave this analysis unavailable. The Engine keeps a search index of the repositories it
