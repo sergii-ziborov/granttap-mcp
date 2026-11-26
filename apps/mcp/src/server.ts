@@ -7,6 +7,7 @@
  */
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createGrantTapServer, relay } from "./http/create-server";
+import { startComputerAccountRecovery } from "./mcp-tools/connect/account-recovery";
 
 /**
  * Leave when the agent that started this server is gone.
@@ -41,6 +42,8 @@ async function main(): Promise<void> {
   // Start task publishing as soon as the MCP process starts. If the machine is
   // not paired yet, the `connect` tool resets and starts it after onboarding.
   void relay();
+  // One of the processes that may answer a phone signing in with the account; the lease keeps it to one.
+  startComputerAccountRecovery("chat");
 }
 
 if (process.env.GRANTTAP_MCP_NO_MAIN !== "1") main().catch((err) => {

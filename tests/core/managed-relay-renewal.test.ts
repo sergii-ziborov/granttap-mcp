@@ -42,3 +42,18 @@ test("a long-lived computer renews managed admission without dropping its socket
   await new Promise(resolve => setTimeout(resolve, 250));
   assert.equal(calls, stoppedCalls, "Closing a client must cancel authorization renewal");
 });
+
+test("an admission refused before any socket opens reaches the link watch and the log once", async t => {
+  const own = generateKeyPair(), peer = generateKeyPair();
+  const log: string[] = [];
+  t.mock.method(process.stderr, "write", (chunk: unknown) => { log.push(String(chunk)); return true; });
+  const client = new RelayClient({ relayUrl: "ws://127.0.0.1:9", room: "fixture-room", role: "machine",
+    deviceName: "fixture", senderId: "fixture", myPublicKey: own.publicKey, mySecretKey: own.secretKey,
+    peerPublicKey: peer.publicKey }, { upgradeHeaders: async () => { throw new Error("This computer is signed out."); } });
+  t.after(() => client.close());
+  const stuck: string[] = [];
+  client.onLinkStuck(report => { stuck.push(`${report.failures} ${report.reason}`); });
+  for (let attempt = 0; attempt < 7; attempt++) await assert.rejects(client.connect(), /signed out/);
+  assert.deepEqual(log, ["[relay] admission refused: This computer is signed out.\n"]);
+  assert.deepEqual(stuck, ["6 admission: This computer is signed out."]);
+});

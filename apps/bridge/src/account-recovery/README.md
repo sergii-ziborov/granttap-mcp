@@ -10,7 +10,13 @@ replace a machine enrolled through passkey. The Mac verifies the credential
 against the account service before saving and never receives the phone's
 account session token. The credential lets
 `poller.ts` answer
-short-lived, account-authorized phone requests. `offer.ts` creates a new phone
+short-lived, account-authorized phone requests. The poller runs in every GrantTap process on the computer
+(the monitor, the local MCP service, a chat's MCP server), and the lease in [`lease/`](lease/README.md)
+lets exactly one of them poll, so a phone is answered whenever any of them runs and never twice. Each
+poll's answer is this computer's [account-link state](../account-link-state/README.md): 200 confirms the
+sign-in, 401 means GrantTap no longer accepts it. The processes that relay to phones hear of a new phone
+key after its offer was posted: the monitor adds it to its running link, the MCP service and a chat's
+server restart the monitor and their own link. `offer.ts` creates a new phone
 controller key in the current room and seals its pairing half to the phone's
 ephemeral public key. The website stores only the machine token hash and sealed
 offer; it never receives a pairing key in plaintext.

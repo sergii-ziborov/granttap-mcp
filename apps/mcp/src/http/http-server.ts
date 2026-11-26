@@ -17,7 +17,7 @@ import express from "express";
 import { relay, resetRelay } from "./create-server";
 import { resetPairingWatches } from "../oauth/consent/pairing-view";
 import { GrantTapOAuthProvider } from "../oauth-provider";
-import { resetConnectWatchers, websiteOrigin } from "../oauth/consent/website-session";
+import { resetConnectWatchers } from "../oauth/consent/website-session";
 import { isMachineConfigured, phoneReachability } from "../status/pairing-status";
 import { packageVersion } from "../status/package-version";
 import { desktopStatusSnapshot } from "../status/desktop-status";
@@ -26,8 +26,7 @@ import { createMcpSessionHandler } from "./mcp-handler";
 import { startDesktopEngineBridgeProcess } from "../desktop/process/bridge-process";
 
 import { installDesktopNativeRoutes } from "../desktop/native-access/routes";
-import { startAccountRecoveryPoller } from "../../../bridge/src/account-recovery/poller";
-import { reloadMonitorHelper } from "../../../bridge/src/install";
+import { startComputerAccountRecovery } from "../mcp-tools/connect/account-recovery";
 
 export const DEFAULT_HTTP_HOST = "127.0.0.1";
 export const DEFAULT_HTTP_PORT = 17342;
@@ -36,12 +35,6 @@ type ServeOptions = {
   host?: string;
   port?: number;
 };
-
-function refreshRecoveredPairing(): void {
-  reloadMonitorHelper();
-  resetRelay();
-  void relay();
-}
 
 export async function startHttpMcpServer(options: ServeOptions = {}): Promise<{
   host: string;
@@ -120,9 +113,7 @@ export async function startHttpMcpServer(options: ServeOptions = {}): Promise<{
 
   provider.resumeConnectWatches();
   void relay();
-  const accountOrigin = websiteOrigin();
-  const stopAccountRecovery = accountOrigin
-    ? startAccountRecoveryPoller(accountOrigin, refreshRecoveredPairing) : () => {};
+  const stopAccountRecovery = startComputerAccountRecovery("service");
 
   const stopUpdateReadiness=runtimeUpdateReadiness(()=>httpIdle() && approvalsStatus().pending.length===0);
   return {

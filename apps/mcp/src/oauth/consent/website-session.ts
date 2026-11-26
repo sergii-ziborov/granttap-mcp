@@ -8,6 +8,7 @@
 import { PENDING_TTL_MS } from "./pending";
 import type { ConnectSnapshot } from "../session/connect-snapshot";
 import { loadAccountLink, saveAccountLink } from "../../../../bridge/src/account-recovery/link";
+import { accountServiceOrigin } from "../../../../bridge/src/account-link-state/origin";
 
 export type ConnectDecision = "approve" | "deny" | "passkey";
 export type ConsentMethod = "phone" | "passkey";
@@ -42,15 +43,8 @@ function acceptAccountLink(row: ConnectRow): void {
 
 const watchers = new Map<string, AbortController>();
 
-export function websiteOrigin(): string | undefined {
-  const raw = process.env.GRANTTAP_WEBSITE_ORIGIN;
-  if (raw === "") return undefined;
-  if (raw) return raw.replace(/\/$/, "");
-  if (process.env.GRANTTAP_SKIP_WEBSITE === "1" || process.env.NODE_TEST_CONTEXT) {
-    return undefined;
-  }
-  return "https://granttap.com";
-}
+/** The same account-service origin every GrantTap process uses (`account-link-state/origin.ts`). */
+export const websiteOrigin = accountServiceOrigin;
 
 export async function publishConnectRequest(
   origin: string,

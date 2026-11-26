@@ -4,7 +4,10 @@ Public entry point: `index.ts`. `RelayClient` uses this module for network healt
 and short managed admission leases. Admission refresh stays on the existing
 socket and does not rotate task keys or reload transcript state. A failed lookup
 cannot extend the server's signed expiry. Closing or replacing a socket cancels
-only its own timers.
+only its own timers. An admission that fails before a socket exists (the
+`upgradeHeaders` lookup throws: a signed-out or uncovered computer, an unreachable
+account service) counts as a failure for the link watch, like a refused upgrade,
+and is logged once per ten minutes per reason as `[relay] admission refused: …`.
 
 Network health honors the configured pong deadline independently of ping cadence.
 Pongs, relay pings and inbound frames prove transport liveness. Deadline checks

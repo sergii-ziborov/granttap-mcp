@@ -80,6 +80,7 @@ export class RelayClient {
     this.recipientRouting = false;
     this.retainedState = false;
     const pending = Promise.resolve().then(() => this.opts.upgradeHeaders?.() ?? {})
+      .catch(error => { this.noteAdmissionRefusal(error); throw error; })
       .then(headers => new Promise<void>((resolve, reject) => {
       // The room rides in the URL: the Cloudflare relay must pick a Durable
       // Object before the socket upgrades. The Node relay simply ignores it.
@@ -305,10 +306,26 @@ export class RelayClient {
   private noteRefusal(status: number | undefined, limit: string | string[] | undefined): void {
     const reason = `${status ?? "?"} ${typeof limit === "string" && /^[a-z-]{1,40}$/.test(limit) ? limit : ""}`.trim();
     this.linkWatch.failed(reason);
+    this.logRefusalOnce(reason, `[relay] upgrade refused: ${reason}`);
+  }
+
+  /**
+   * An admission that failed before a socket existed (a signed-out or uncovered computer, an unreachable
+   * account service) goes the same way as a refused upgrade: a failure for the watch, logged once per ten
+   * minutes. It used to vanish, and every tool then said the computer was not paired.
+   */
+  private noteAdmissionRefusal(error: unknown): void {
+    const said = (error instanceof Error ? error.message : String(error)).replace(/\s+/g, " ").slice(0, 160);
+    const reason = `admission: ${said}`;
+    this.linkWatch.failed(reason);
+    this.logRefusalOnce(reason, `[relay] admission refused: ${said}`);
+  }
+
+  private logRefusalOnce(reason: string, line: string): void {
     const now = Date.now();
     if (now - (this.refusalLoggedAt.get(reason) ?? -Infinity) < 10 * 60_000) return;
     this.refusalLoggedAt.set(reason, now);
-    process.stderr.write(`[relay] upgrade refused: ${reason}\n`);
+    process.stderr.write(`${line}\n`);
   }
 
   onConnected(listener: () => void | Promise<void>): () => void {

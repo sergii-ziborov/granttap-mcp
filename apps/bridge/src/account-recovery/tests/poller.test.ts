@@ -7,6 +7,7 @@ import { generateKeyPair, open } from "../../../../../packages/core/crypto";
 import { live, pairedComputer } from "../../paired-phones/tests/support";
 import { saveAccountLink } from "../link";
 import { pollAccountRecoveryOnce } from "../poller";
+import { accountLinkStatus } from "../../account-link-state";
 
 test("linked Mac answers a phone recovery request with ciphertext only", async t => {
   const root = await mkdtemp(join(tmpdir(), "granttap-recovery-poller-"));
@@ -110,4 +111,15 @@ test("a network failure retries the same sealed offer, logs once and never refus
   const payload = open(envelope.nonce, envelope.box, envelope.senderPublicKey, phone.secretKey) as { schema: string };
   assert.equal(payload.schema, "granttap.account-offer.v1");
   assert.deepEqual(log, ["[account] could not answer a phone's account sign-in: fetch failed\n"]);
+});
+
+test("the poll's answer is this computer's account-link state: 200 confirms it, 401 is a revoked sign-in", async t => {
+  const { log } = await linkedMac(t, "66666666-6666-4666-8666-666666666666");
+  await pollAccountRecoveryOnce("https://granttap.com", async () => Response.json({ requests: [] }));
+  assert.equal(accountLinkStatus().state, "ok");
+  assert.equal(typeof accountLinkStatus().checkedAt, "number");
+  await assert.rejects(pollAccountRecoveryOnce("https://granttap.com",
+    async () => Response.json({ error: "Machine access revoked." }, { status: 401 })), /poll failed \(401\)/);
+  assert.deepEqual(accountLinkStatus().state, "revoked");
+  assert.deepEqual(log, ["[account] this computer's GrantTap sign-in is revoked (was ok): Machine access revoked.\n"]);
 });

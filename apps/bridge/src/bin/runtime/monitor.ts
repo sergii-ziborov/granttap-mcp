@@ -27,6 +27,7 @@ import { startTaskDispatchMonitor } from "../../task-dispatch/worker/monitor";
 import { startTaskNetworkMonitor } from '../../task-network/runtime';
 import { startTaskAutomations } from '../../task-automations';
 import { claimLinkRestart } from '../../monitor/relay-link';
+import { accountRefusalHint, startMonitorAccountRecovery } from '../../monitor/relay-link/account-phones';
 
 let client: RelayClient;
 let monitor: ReturnType<typeof startSessionMonitor>;
@@ -41,6 +42,7 @@ let stopRuntimeUpdates = () => {};
 let stopUpdateReadiness = () => {};
 const stopWatchdog = startRuntimeWatchdog();
 let stopAdoption = () => {};
+let stopAccountRecovery = () => {};
 const updateDirectory = join(configDir(), "runtime-updates");
 // What a waiting update waits for is told to status views in other processes; a monitor starts with none.
 writeHoldState(updateDirectory, undefined);
@@ -75,6 +77,8 @@ try {
   stopTaskAutomations = startTaskAutomations({ client, isLeader: monitor.isLeader, publish: monitor.publish,
     held: () => updateDrain.holding(), track: monitor.track });
   stopEndpointPublisher = startEndpointPublisher(cfg);
+  // Phones signing in with the account reach this computer while the monitor runs, whether or not a chat does.
+  stopAccountRecovery = startMonitorAccountRecovery(client, () => monitor.publish());
   stopRuntimeUpdates = startRuntimeUpdates(monitor.canUpdate, updateDrain);
   stopUpdateReadiness = runtimeUpdateReadiness(monitor.canUpdate, updateDrain);
 } catch (error) {
@@ -97,6 +101,7 @@ const stop = (exitCode = 0): void => {
   stopTaskDispatch();
   stopTaskNetwork();
   stopTaskAutomations();
+  stopAccountRecovery();
   monitor.close();
   stopEndpointPublisher();
   client.close();
@@ -108,6 +113,12 @@ process.on("SIGTERM", () => stop());
 // A monitor that cannot stay on the relay looks online on the phone while no message reaches it.
 client.onLinkStuck(report => {
   process.stderr.write(`[monitor] cannot stay on the relay: ${report.failures} failures in five minutes, last ${report.reason}\n`);
+  // A signed-out or uncovered computer is refused by the account service; a fresh monitor would be refused too.
+  const account = report.reason.startsWith("admission:") ? accountRefusalHint() : null;
+  if (account) {
+    process.stderr.write(`[monitor] not restarting: ${account}\n`);
+    return;
+  }
   if (claimLinkRestart()) {
     process.stderr.write("[monitor] restarting for a fresh relay link\n");
     stop(75);
