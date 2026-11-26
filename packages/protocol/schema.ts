@@ -18,6 +18,8 @@ import { SessionPulses, SessionPulsesSubscription } from './messages/live-map';
 export * from './messages/live-map';
 import { SessionWorkspaceQuery, SessionWorkspaceResult } from './messages/sessions/workspace';
 export { SessionWorkspaceQuery, SessionWorkspaceResult } from './messages/sessions/workspace';
+import { ProjectCodeFileQuery, ProjectCodeFileResult } from './messages/mesh/graph/code-file';
+export * from './messages/mesh/graph/code-file';
 import { SessionChangesQuery, SessionChangesResult, SessionCommit, SessionCommitResult } from './messages/sessions/working-tree';
 export { SessionWorkingTree, SessionWorktree, SessionChangesQuery, SessionChangesResult, SessionCommit, SessionCommitResult } from './messages/sessions/working-tree';
 export { SessionImageQuery, SessionImageChunk } from './messages/session-images';
@@ -177,6 +179,8 @@ export const Payload = z.union([
   SessionImageChunk,
   SessionWorkspaceQuery,
   SessionWorkspaceResult,
+  ProjectCodeFileQuery,
+  ProjectCodeFileResult,
   SessionChangesQuery,
   SessionChangesResult,
   SessionCommit,

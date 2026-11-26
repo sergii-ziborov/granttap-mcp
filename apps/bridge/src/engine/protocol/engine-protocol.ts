@@ -29,6 +29,7 @@ export type {
   InvocationSource,
 } from "./engine-invocation-protocol";
 export type { KnowledgePage, KnowledgeRecord, KnowledgeRecordInput } from "./engine-memory-protocol";
+export type { EngineCodeFile, EngineCodeSymbol } from "./code-file";
 export type {
   EngineWorkstationGroup, EngineWorkstationItem, EngineWorkstationLoad, EngineWorkstationSpace,
 } from "./workstation";

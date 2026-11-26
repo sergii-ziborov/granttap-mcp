@@ -115,7 +115,8 @@ export class OutboundFrameQueue {
  * newer traffic, and an answer behind a backed-up upload arrives after the phone stopped waiting.
  */
 const PHONE_ANSWERS = new Set<Payload["type"]>(["session.image.chunk", "session.changes.result", "session.commit.result",
-  "device.manage.result", "session.workspace.result", "task.schedules.result", "task.automations.result"]);
+  "device.manage.result", "session.workspace.result", "task.schedules.result", "task.automations.result",
+  "project.code_file.result"]);
 
 export const priorityControlPayload = (type: Payload["type"]) => type === "hello" || PHONE_ANSWERS.has(type)
   || type.startsWith("approval.") || type.startsWith("config.") || type.startsWith("pairing.") || type === "session.key.grant"

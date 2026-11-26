@@ -5,7 +5,7 @@ import type {
 } from "../../../../../packages/protocol/schema";
 import { configDir } from "../../config/runtime/paths";
 import { EngineClient } from "./engine-client";
-import { EngineProtocolError, EngineRemoteError } from "../protocol/transport/protocol-base";
+import { EngineProtocolError } from "../protocol/transport/protocol-base";
 import { engineFeatureEnabled, type EngineClientLike } from "./engine-supervisor";
 import { sanitizedRepositoryRemote } from "../../mesh/identity";
 import type { ProjectBackbone } from "../../../../../packages/protocol/schema";
@@ -14,11 +14,11 @@ import type {
   EngineContextCompilation,
   EngineContextEvidence,
 } from "../protocol/engine-protocol";
-import { RepositoryGraphJobs } from "./repository-graph-jobs";
 import { fitRepositoryGraph } from "./repository-graph/fit";
-import { RepositoryGraphCache } from "./repository-graph/cache";
-import { repositorySourceMap } from "./repository-graph/source-map";
-import { repositorySourceFingerprint } from "./repository-graph/source-state";
+import {
+  BACKGROUND_ANALYSIS_MS, EXPLICIT_ANALYSIS_MS, analyzeRepositoryGraph, repositoryGraphJobs, repositoryGraphKey,
+  repositoryObservation,
+} from "./repository-graph/analysis";
 
 export type LocalProjectBinding = {
   summary: ProjectBindingSummary;
@@ -33,10 +33,6 @@ const pendingBindingSyncs = new Map<string, Promise<boolean>>();
 // The Apple Mesh envelope is 256KiB; leave room for Tasks, bindings and receipts.
 const MAX_REPOSITORY_GRAPH_WIRE_BYTES = 192 * 1_024 - 128;
 const MAX_SINGLE_GRAPH_WIRE_BYTES = 192 * 1_024;
-/** A person asked for this build; a repository the size of pytorch did not finish in two minutes. */
-const EXPLICIT_ANALYSIS_MS = 600_000;
-const repositoryGraphJobs = new RepositoryGraphJobs<ProjectRepositoryGraph>(Date.now,120_000,300_000,32,
-  new RepositoryGraphCache(()=>join(configDir(),"repository-graph-cache")));
 
 export async function syncProjectBinding(
   project: Project,
@@ -196,77 +192,19 @@ export async function projectRepositoryGraphs(
   if (!engineFeatureEnabled(options.env ?? process.env)) return [];
   const client = options.client;
   const repositories = [...new Map(bindings.map((item) => [item.repositoryId, item])).values()].slice(0, 64);
-  const observations = await Promise.all(repositories.map(async binding => {
-    const fingerprint = binding.localPathHint
-      ? await repositorySourceFingerprint(binding.localPathHint, binding.revision, { fresh: !options.background })
-      : undefined;
-    return fingerprint ? { fingerprint, reusable: (graph: ProjectRepositoryGraph) =>
-      ['COMPLETE', 'INCOMPLETE'].includes(graph.analysisStatus ?? '') } : undefined;
-  }));
+  const observations = await Promise.all(repositories.map(binding =>
+    repositoryObservation(binding, !options.background)));
   const graphs = options.background
-    ? repositories.map((binding, index) => repositoryGraphJobs.read(
-      JSON.stringify([projectId, binding.repositoryId, binding.revision]),
-      () => analyzeRepositoryGraph(client, projectId, binding.repositoryId, 120_000, binding.revision),
+    ? repositories.map((binding, index) => repositoryGraphJobs.read(repositoryGraphKey(projectId, binding),
+      () => analyzeRepositoryGraph(client, projectId, binding.repositoryId, BACKGROUND_ANALYSIS_MS, binding.revision),
       options.priority ?? 0, false, observations[index],
     ))
     : await Promise.all(repositories.map((binding, index) => repositoryGraphJobs.refresh(
-      JSON.stringify([projectId, binding.repositoryId, binding.revision]),
+      repositoryGraphKey(projectId, binding),
       () => analyzeRepositoryGraph(client, projectId, binding.repositoryId, EXPLICIT_ANALYSIS_MS, binding.revision),
       Number.MAX_SAFE_INTEGER, observations[index],
     )));
   return boundRepositoryGraphs(graphs.filter((item): item is ProjectRepositoryGraph => item != null));
-}
-
-async function analyzeRepositoryGraph(
-  client: EngineClientLike | undefined, projectId: string, repositoryId: string, timeoutMs: number,
-  sourceRevision?: string,
-): Promise<ProjectRepositoryGraph | undefined> {
-  // The daemon serves a socket serially. Analysis must not occupy the channel
-  // used for policy, bindings and Backbone reads while a repository is scanned.
-  const channel = client ?? new EngineClient({
-    socketPath: join(configDir(), "engine.sock"), connectTimeoutMs: 10_000,
-  });
-  try {
-    const result = await channel.request({
-      operation: "graph.analyze_repository", input: {
-        project_id: projectId, repository_id: repositoryId,
-      },
-    }, { timeoutMs });
-    if (result.operation !== "graph.repository") return undefined;
-    const graph = result.graph;
-    return {
-      projectId: graph.project_id, repositoryId: graph.repository_id,
-      revision: graph.revision, weavatrixVersion: graph.weavatrix_version,
-      sourceRevision,
-      analysisId: graph.analysis_id ?? undefined,
-      analysisStatus: graph.analysis_status,
-      architectureHypotheses: graph.architecture_hypotheses,
-      codeMap: repositorySourceMap(graph),
-      nodes: graph.nodes,
-      relations: graph.relations.map((edge) => ({
-        source: edge.source, target: edge.target, relation: edge.relation,
-        evidenceCount: edge.evidence_count,
-      })),
-      totalNodes: graph.total_nodes, totalRelations: graph.total_relations,
-      truncated: graph.truncated,
-    };
-  } catch (error) {
-    const known = new Set([
-      "REPOSITORY_IDENTITY_MISMATCH", "REPOSITORY_IDENTITY_UNVERIFIED",
-      "REPOSITORY_NOT_BOUND", "REPOSITORY_NOT_LOCAL", "WEAVATRIX_REPOSITORY_REQUIRED",
-      "WEAVATRIX_ANALYSIS_FAILED", "WEAVATRIX_ANALYSIS_PANICKED",
-      "WEAVATRIX_ARCHITECTURE_FAILED", "WEAVATRIX_REPORT_INVALID",
-    ]);
-    const code = error instanceof EngineRemoteError && known.has(error.code)
-      ? error.code : "ENGINE_UNAVAILABLE";
-    return {
-      projectId, repositoryId, revision: "unverified", weavatrixVersion: "unknown",
-      analysisStatus: "UNAVAILABLE", analysisErrorCode: code,
-      nodes: [], relations: [], totalNodes: 0, totalRelations: 0, truncated: false,
-    };
-  } finally {
-    if (!client) channel.close();
-  }
 }
 
 function boundRepositoryGraphs(graphs: ProjectRepositoryGraph[]): ProjectRepositoryGraph[] {

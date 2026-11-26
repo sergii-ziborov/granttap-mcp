@@ -7,6 +7,7 @@ import { parseImpactResult } from "../impact/engine-impact-protocol";
 import { parseEngineIdentityResult } from "./identity-result-parser";
 import { parseProjectCatalog } from "./project-catalog-parser";
 import { parseCodeChecks } from "./code-checks";
+import { parseCodeFileResult } from "../code-file";
 import {
   ENGINE_PROTOCOL_VERSION,
   EngineProtocolError,
@@ -52,6 +53,7 @@ function parseResult(value: unknown): EngineResult {
   else if (operation === "graph.project_relationships") parseProjectRelationships(result.graph);
   else if (operation === "graph.backbone") parseBackbone(result.backbone);
   else if (operation === "graph.repository") parseRepositoryGraph(result.graph);
+  else if (operation === "graph.code_file") return parseCodeFileResult(result)!;
   else if (operation === "context.compiled") {
     return { operation, compilation: parseContextCompilation(result.compilation) };
   }

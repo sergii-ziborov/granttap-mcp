@@ -42,6 +42,10 @@ Normal selected reads remain asynchronous and bounded. Local process samples
 include bounded native chat attribution so shared host load is not assigned to
 unrelated projects. Worker/socket regression tests live in `projection/tests`.
 
+`desktop.code_file` gives the Mac app the same `project.code_file.result` the phone receives for
+one file's sections. It never waits for an analysis: a miss starts one and answers `analyzing`, and
+the app asks again. See `code-file/README.md`.
+
 Before enrichment, both the phone publisher and Mac reader verify local checkout
 identity. Historical local aliases or changed origins receive an explicit
 identity error, rather than a second architecture report for the same checkout.

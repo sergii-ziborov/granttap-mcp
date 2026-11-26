@@ -1,26 +1,30 @@
 import { z } from "zod";
 
-const CodePath = z.string().trim().min(1).max(512).refine((value) =>
+export const CodePath = z.string().trim().min(1).max(512).refine((value) =>
   !value.startsWith("/") && !value.split("/").includes(".."), "repository-relative path required");
+
+/** One source section of a file: the same object in the Mesh code map and in `project.code_file.result`. */
+export const CodeSymbol = z.object({
+  id: z.string().trim().min(1).max(512),
+  label: z.string().max(160),
+  kind: z.string().trim().min(1).max(64),
+  startLine: z.number().int().positive(),
+  lineCount: z.number().int().positive(),
+  metrics: z.object({
+    measured: z.literal(true), sourceLines: z.number().int().positive().max(0xffff_ffff),
+    cyclomatic: z.number().int().positive().max(0xffff_ffff),
+    maxLoopDepth: z.number().int().nonnegative().max(0xffff_ffff),
+    callers: z.number().int().nonnegative().max(0xffff_ffff),
+  }).strict().optional(),
+}).strict();
+export type CodeSymbol = z.infer<typeof CodeSymbol>;
 
 export const ProjectCodeMap = z.object({
   files: z.array(z.object({
     path: CodePath,
     language: z.string().trim().min(1).max(64).nullable(),
     lineCount: z.number().int().positive().nullable(),
-    symbols: z.array(z.object({
-      id: z.string().trim().min(1).max(512),
-      label: z.string().max(160),
-      kind: z.string().trim().min(1).max(64),
-      startLine: z.number().int().positive(),
-      lineCount: z.number().int().positive(),
-      metrics: z.object({
-        measured: z.literal(true), sourceLines: z.number().int().positive().max(0xffff_ffff),
-        cyclomatic: z.number().int().positive().max(0xffff_ffff),
-        maxLoopDepth: z.number().int().nonnegative().max(0xffff_ffff),
-        callers: z.number().int().nonnegative().max(0xffff_ffff),
-      }).strict().optional(),
-    }).strict()).max(72),
+    symbols: z.array(CodeSymbol).max(72),
   }).strict()).max(650),
   externals: z.array(z.object({
     id: z.string().startsWith("ext:").min(5).max(512),

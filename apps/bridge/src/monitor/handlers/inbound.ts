@@ -13,12 +13,7 @@ import { handleToolUpdate } from "../../tools/update-handler";
 import { loadRuntimeConfig } from "../../config";
 import { localMeshStore } from "../../mesh/local-remote/local";
 import { sendProjectPayload } from "../../host/session-keys";
-import {
-  handleMeshPayload,
-  prepareMeshHandoff,
-  requestProjectCapability,
-  invalidateMeshSessionHistory,
-} from "../../mesh/runtime";
+import { handleMeshPayload, requestProjectCapability, invalidateMeshSessionHistory } from "../../mesh/runtime";
 import { releaseClaimByPerson, releaseResult } from "../../mesh/admin";
 import { handleMeshRepositoryRequest } from "../../mesh/repositories";
 import { handleInvocationQuery } from "../../engine/invocation/query";
@@ -52,6 +47,7 @@ import { handleClaudeOpenQuestionReply, publishClaudeOpenQuestions, replayClaude
   from '../../claude-open-questions';
 import { publishedCatalog } from '../../session-catalog';
 import { handleLiveMapSubscription } from '../../live-map';
+import { handleCodeFileQuery } from '../../code-file-sections/relay';
 
 export async function handleMonitorMessage(
   client: RelayClient,
@@ -101,6 +97,8 @@ export async function handleMonitorMessage(
       return handleLiveMapSubscription(client, payload, input.peerPublicKey);
     } else if (payload.type === "session.events" || payload.type === "session.image.query" || payload.type === "session.workspace.query") {
       return handleSessionRead(client, payload, input.peerPublicKey);
+    } else if (payload.type === "project.code_file.query") {
+      return handleCodeFileQuery(client, payload, input.peerPublicKey);
     } else if (payload.type === "session.changes.query" || payload.type === "session.commit") {
       const answered = await handleWorkingTreeRequest(client, payload, input.peerPublicKey);
       if (payload.type === "session.commit") void publish().catch(() => {});

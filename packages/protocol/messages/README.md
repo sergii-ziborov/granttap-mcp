@@ -99,6 +99,13 @@ first), and `mesh.repository.edit` (`add` a checkout by absolute path,
 `mesh.repository.edit.result`. Each is Project-scoped (`sessionId` is the
 `projectId`); a refusal always names its reason.
 
+`mesh/graph/code-file.ts` carries `project.code_file.query` and its `project.code_file.result`: every
+section of one file of a repository's code map, which the Mesh snapshot's bounded `codeMap` may list
+only in part. The result's sections are the code map's own `CodeSymbol` objects; it is at most 2,000
+sections and 160 KiB, and its `status` is `ok`, `analyzing` (keep waiting), `not_found`, `not_bound`,
+`engine_unavailable` or `analysis_failed`. The snapshot gains no field for it. See
+`mesh/graph/README.md`.
+
 `sign-in/index.ts` carries a browser sign-in done on the phone: `signin.request`
 names an https page, the service, and optionally the loopback port a command
 listens on; `signin.result` says `completed` or `cancelled` and may carry the

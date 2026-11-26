@@ -16,6 +16,7 @@ import type { EngineClient } from "../../../../bridge/src/engine/runtime/engine-
 import type { EngineOperation } from "../../../../bridge/src/engine/protocol/engine-protocol";
 import { desktopTaskSend } from "../delivery/task-send";
 import { desktopTaskWorkspace } from "../workspace/task-files";
+import { desktopCodeFile } from "../code-file";
 import { desktopTaskHandoff } from "../delivery/task-handoff";
 import { desktopTaskCreate } from "../delivery/task-create";
 import { desktopMeshCreate } from "../delivery/mesh-create";
@@ -65,6 +66,7 @@ export function desktopReadOperation(input: {
   if (operation === "desktop.task_activity") return activity.read(queryInput, storePath);
   if (operation === "desktop.task_image") return activity.image(queryInput, storePath);
   if (operation === "desktop.task_workspace") return Promise.resolve(desktopTaskWorkspace(queryInput, storePath));
+  if (operation === "desktop.code_file") return desktopCodeFile(queryInput, { engine, storePath });
   if (operation === "desktop.transfer_continue") return Promise.resolve(desktopTransferContinue(queryInput, { storePath }));
   if (operation === "desktop.task_queue") return desktopTaskQueue(queryInput, { storePath });
   if (operation === "desktop.project_transport") return desktopProjectTransport(queryInput);

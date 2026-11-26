@@ -10,6 +10,7 @@ import type {
 import type { MemoryEngineOperation, MemoryEngineResult } from "../engine-memory-protocol";
 import type { WorkstationEngineOperation, WorkstationEngineResult } from "../workstation";
 import type { EngineImpactOperation, EngineImpactResult } from "../impact/engine-impact-protocol";
+import type { CodeFileEngineOperation, CodeFileEngineResult } from "../code-file";
 import { ENGINE_PROTOCOL_VERSION } from "./protocol-base";
 
 export type ProjectBindingRole = "primary" | "dependency" | "supporting";
@@ -100,6 +101,7 @@ export type EngineContextCompilation = {
 export type EngineOperation = EnginePolicyOperation | InvocationEngineOperation | MemoryEngineOperation
   | WorkstationEngineOperation
   | EngineImpactOperation
+  | CodeFileEngineOperation
   | { operation: "engine.ping" }
   | { operation: "engine.version" }
   | { operation: "project.resolve"; input: {
@@ -129,6 +131,7 @@ export type EngineRequest = {
 export type EngineResult = EnginePolicyResult | InvocationEngineResult | MemoryEngineResult
   | WorkstationEngineResult
   | EngineImpactResult
+  | CodeFileEngineResult
   | { operation: "engine.pong"; engine_version: string }
   | { operation: "engine.version"; engine_version: string;
     protocol_version: typeof ENGINE_PROTOCOL_VERSION; cortex_version: string;

@@ -62,6 +62,11 @@ Engine history to the phone under the Project key, while
 opaque Mesh capability. The Engine, not this bridge or Usage telemetry, owns
 the durable journal.
 
+When a person opens one file of the phone's code map, `graph.code_file` (Engine 0.1.10) reads that
+file's sections from the memory `graph.analyze_repository` filled; a repository it has not analysed
+since it started is analysed through the same queue, and an older Engine leaves the read unavailable.
+See `protocol/code-file/README.md` and `../code-file-sections/README.md`.
+
 The proprietary engine source and Project database do not live in this package.
 
 Every CLI entry point loads the persisted Engine declaration before importing

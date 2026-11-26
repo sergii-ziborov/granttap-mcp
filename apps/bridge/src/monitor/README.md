@@ -14,6 +14,10 @@ retain every controller's receipt; periodic cached reports remain ordinary Mesh
 snapshots. Repository analysis uses its own Engine socket to keep policy and
 Backbone requests responsive.
 
+`project.code_file.query` is answered by `../code-file-sections/relay.ts`: the first answer
+(the file's sections, why there are none, or `analyzing`) goes to the asking phone before the
+handler returns, and an analysis it needs runs on without holding the relay loop.
+
 Integration tests remain in `tests/monitor`; background publication tests live
 beside `mesh-publication`. This module uses the repository GrantTap Commercial Source License.
 
